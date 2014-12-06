@@ -30,6 +30,8 @@ import Control.Applicative
 import Control.Monad.State
 import Numeric
 
+import Debug.Trace
+
 literals :: Pattern PrinterState JS String
 literals = mkPattern' match
   where
@@ -66,11 +68,29 @@ literals = mkPattern' match
     , return "}"
     ]
   match (JSVar ident) = return ident
-  match (JSVariableIntroduction ident value) = fmap concat $ sequence
-    [ return "var "
-    , return ident
-    , maybe (return "") (fmap (" = " ++) . prettyPrintJS') value
-    ]
+  match (JSVariableIntroduction ident value) = fmap concat $ sequence $
+    case value of
+      (Just (JSFunction' Nothing [(arg,aty)] (ret,rty))) ->
+          if '.' `elem` ident then [return "func ",
+                                    return (unqual ident),
+                                    return (parens $ arg ++ " " ++ aty),
+                                    return " ",
+                                    return rty,
+                                    return " ",
+                                    maybe (return "") prettyPrintJS' (Just ret)]
+                              else [return "var ",
+                                    return ident,
+                                    return " func ",
+                                    return (parens aty),
+                                    return " ",
+                                    return rty,
+                                    return "; ",
+                                    return ident,
+                                     maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+      _ -> [return "var ",
+            return ident,
+            maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+
   match (JSAssignment target value) = fmap concat $ sequence
     [ prettyPrintJS' target
     , return " = "
@@ -108,8 +128,9 @@ literals = mkPattern' match
     , prettyPrintJS' value
     ]
   match (JSThrow value) = fmap concat $ sequence
-    [ return "throw "
+    [ return "panic ("
     , prettyPrintJS' value
+    , return ")"
     ]
   match (JSBreak lbl) = return $ "break " ++ lbl
   match (JSContinue lbl) = return $ "continue " ++ lbl
@@ -160,10 +181,30 @@ lam = mkPattern match
   match (JSFunction name args ret) = Just ((name, args), ret)
   match _ = Nothing
 
+lam' :: Pattern PrinterState JS ((Maybe String, [(String,String)], String), JS)
+lam' = mkPattern match
+  where
+  match (JSFunction' Nothing args (ret,rty)) = Just ((Nothing, args, rty), ret)
+  match _ = Nothing
+
+dat' :: Pattern PrinterState JS (String, JS)
+dat' = mkPattern match
+  where
+  match (JSData' name fields) = Just (name, fields)
+  match _ = Nothing
+
 app :: Pattern PrinterState JS (String, JS)
 app = mkPattern' match
   where
   match (JSApp val args) = do
+    jss <- mapM prettyPrintJS' args
+    return (intercalate ", " jss, val)
+  match _ = mzero
+
+init' :: Pattern PrinterState JS (String, JS)
+init' = mkPattern' match
+  where
+  match (JSInit val args) = do
     jss <- mapM prettyPrintJS' args
     return (intercalate ", " jss, val)
   match _ = mzero
@@ -202,7 +243,7 @@ prettyStatements :: [JS] -> StateT PrinterState Maybe String
 prettyStatements sts = do
   jss <- forM sts prettyPrintJS'
   indentString <- currentIndent
-  return $ intercalate "\n" $ map ((++ ";") . (indentString ++)) jss
+  return $ intercalate "\n" $ map (indentString ++) jss
 
 -- |
 -- Generate a pretty-printed string representing a Javascript expression
@@ -229,17 +270,28 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "." ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
+                  , [ Wrap init' $ \args val -> val ++ "{" ++ args ++ "}" ]
                   , [ unary JSNew "new " ]
                   , [ Wrap lam $ \(name, args) ret -> "function "
                         ++ fromMaybe "" name
                         ++ "(" ++ intercalate ", " args ++ ") "
                         ++ ret ]
+                  , [ Wrap lam' $ \(name, [(arg,aty)], rty) ret -> "func "
+                        ++ fromMaybe "" name
+                        ++ "(" ++ arg ++ " " ++ aty ++ ") " ++ rty ++ " "
+                        ++ ret ]
+                  , [ Wrap dat' $ \name fields -> "\n"
+                        ++ "type "
+                        ++ name
+                        ++ " struct "
+                        ++ fields ]
                   , [ binary    LessThan             "<" ]
                   , [ binary    LessThanOrEqualTo    "<=" ]
                   , [ binary    GreaterThan          ">" ]
                   , [ binary    GreaterThanOrEqualTo ">=" ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
-                  , [ AssocR instanceOf $ \v1 v2 -> v1 ++ " instanceof " ++ v2 ]
+                  , [ AssocR instanceOf $ \v1 v2 -> "reflect.TypeOf(" ++ v1 ++ ") == reflect.TypeOf(" ++ v2 ++ "_ctor)" ]
+
                   , [ unary     Not                  "!" ]
                   , [ unary     BitwiseNot           "~" ]
                   , [ unary     Negate               "-" ]
@@ -252,7 +304,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ binary    ShiftLeft            "<<" ]
                   , [ binary    ShiftRight           ">>" ]
                   , [ binary    ZeroFillShiftRight   ">>>" ]
-                  , [ binary    EqualTo              "===" ]
+                  , [ binary    EqualTo              "==" ]
                   , [ binary    NotEqualTo           "!==" ]
                   , [ binary    BitwiseAnd           "&" ]
                   , [ binary    BitwiseXor           "^" ]
@@ -261,3 +313,6 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ binary    Or                   "||" ]
                   , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintJS1 th ++ " : " ++ prettyPrintJS1 el ]
                     ]
+
+unqual :: String -> String
+unqual s = drop (fromMaybe (-1) (elemIndex '.' s) + 1) s

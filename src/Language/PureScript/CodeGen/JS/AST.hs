@@ -170,9 +170,21 @@ data JS
   --
   | JSFunction (Maybe String) [String] JS
   -- |
+  -- A function introduction (optional name, arguments, body)
+  --
+  | JSFunction' (Maybe String) [(String,String)] (JS,String)
+  -- |
+  -- A function introduction (optional name, arguments, body)
+  --
+  | JSData' String JS
+  -- |
   -- Function application
   --
   | JSApp JS [JS]
+  -- |
+  -- Init struct
+  --
+  | JSInit JS [JS]
   -- |
   -- Variable
   --
@@ -257,7 +269,10 @@ everywhereOnJS f = go
   go (JSObjectLiteral js) = f (JSObjectLiteral (map (fmap go) js))
   go (JSAccessor prop j) = f (JSAccessor prop (go j))
   go (JSFunction name args j) = f (JSFunction name args (go j))
+  go (JSFunction' name args (j,rty)) = f (JSFunction' name args (go j,rty))
+  go (JSData' name fields) = f (JSData' name fields)
   go (JSApp j js) = f (JSApp (go j) (map go js))
+  go (JSInit j js) = f (JSInit (go j) (map go js))
   go (JSConditional j1 j2 j3) = f (JSConditional (go j1) (go j2) (go j3))
   go (JSBlock js) = f (JSBlock (map go js))
   go (JSVariableIntroduction name j) = f (JSVariableIntroduction name (fmap go j))
@@ -284,7 +299,10 @@ everywhereOnJSTopDown f = go . f
   go (JSObjectLiteral js) = JSObjectLiteral (map (fmap (go . f)) js)
   go (JSAccessor prop j) = JSAccessor prop (go (f j))
   go (JSFunction name args j) = JSFunction name args (go (f j))
+  go (JSFunction' name args (j,rty)) = JSFunction' name args (go (f j),rty)
+  go (JSData' name fields) = JSData' name fields
   go (JSApp j js) = JSApp (go (f j)) (map (go . f) js)
+  go (JSInit j js) = JSInit (go (f j)) (map (go . f) js)
   go (JSConditional j1 j2 j3) = JSConditional (go (f j1)) (go (f j2)) (go (f j3))
   go (JSBlock js) = JSBlock (map (go . f) js)
   go (JSVariableIntroduction name j) = JSVariableIntroduction name (fmap (go . f) j)
@@ -310,7 +328,10 @@ everythingOnJS (<>) f = go
   go j@(JSObjectLiteral js) = foldl (<>) (f j) (map (go . snd) js)
   go j@(JSAccessor _ j1) = f j <> go j1
   go j@(JSFunction _ _ j1) = f j <> go j1
+  go j@(JSFunction' _ _ (j1,_)) = f j <> go j1
+  go j@(JSData' _ j1) = f j <> go j1
   go j@(JSApp j1 js) = foldl (<>) (f j <> go j1) (map go js)
+  go j@(JSInit j1 js) = foldl (<>) (f j <> go j1) (map go js)
   go j@(JSConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(JSBlock js) = foldl (<>) (f j) (map go js)
   go j@(JSVariableIntroduction _ (Just j1)) = f j <> go j1
