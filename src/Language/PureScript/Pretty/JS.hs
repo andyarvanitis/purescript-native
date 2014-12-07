@@ -15,6 +15,7 @@
 
 module Language.PureScript.Pretty.JS (
     prettyPrintJS
+  , unqual
 ) where
 
 import Language.PureScript.Pretty.Common
