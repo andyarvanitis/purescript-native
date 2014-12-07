@@ -8,14 +8,14 @@ instance numNumber :: Num Number where
   (+) = numAdd
   (-) = numSub
 
-foreign import numAdd "function numAdd(n1) {\
-                      \  return function(n2) {\
-                      \    return n1 + n2;\
-                      \  };\
+foreign import numAdd "func numAdd(n1 int) func (int) int {\
+                      \  return func(n2 int) int {\
+                      \    return n1 + n2\
+                      \  }\
                       \}" :: Number -> Number -> Number
 
-foreign import numSub "function numSub(n1) {\
-                      \  return function(n2) {\
-                      \    return n1 - n2;\
-                      \  };\
+foreign import numSub "func numSub(n1 int) func (int) int {\
+                      \  return func(n2 int) int {\
+                      \    return n1 - n2\
+                      \  }\
                       \}" :: Number -> Number -> Number

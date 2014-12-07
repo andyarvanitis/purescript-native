@@ -36,7 +36,7 @@ import Language.PureScript.Types
 --  * Symbols are prefixed with '$' followed by a symbol name or their ordinal value.
 --
 identToJs :: Ident -> String
-identToJs (Ident name) | nameIsJsReserved name = "$$" ++ name
+identToJs (Ident name) | nameIsJsReserved name = "__" ++ name
 identToJs (Ident name) = concatMap identCharToString name
 identToJs (Op op) = concatMap identCharToString op
 
@@ -46,35 +46,35 @@ identToJs (Op op) = concatMap identCharToString op
 identNeedsEscaping :: String -> Bool
 identNeedsEscaping s = s /= identToJs (Ident s)
 
--- |
+-- |"_
 -- Attempts to find a human-readable name for a symbol, if none has been specified returns the
 -- ordinal value.
 --
 identCharToString :: Char -> String
 identCharToString c | isAlphaNum c = [c]
 identCharToString '_' = "_"
-identCharToString '.' = "$dot"
-identCharToString '$' = "$dollar"
-identCharToString '~' = "$tilde"
-identCharToString '=' = "$eq"
-identCharToString '<' = "$less"
-identCharToString '>' = "$greater"
-identCharToString '!' = "$bang"
-identCharToString '#' = "$hash"
-identCharToString '%' = "$percent"
-identCharToString '^' = "$up"
-identCharToString '&' = "$amp"
-identCharToString '|' = "$bar"
-identCharToString '*' = "$times"
-identCharToString '/' = "$div"
-identCharToString '+' = "$plus"
-identCharToString '-' = "$minus"
-identCharToString ':' = "$colon"
-identCharToString '\\' = "$bslash"
-identCharToString '?' = "$qmark"
-identCharToString '@' = "$at"
-identCharToString '\'' = "$prime"
-identCharToString c = '$' : show (ord c)
+identCharToString '.' = "_dot_"
+identCharToString '$' = "_dollar_"
+identCharToString '~' = "_tilde_"
+identCharToString '=' = "_eq_"
+identCharToString '<' = "_less_"
+identCharToString '>' = "_greater_"
+identCharToString '!' = "_bang_"
+identCharToString '#' = "_hash_"
+identCharToString '%' = "_percent_"
+identCharToString '^' = "_up_"
+identCharToString '&' = "_amp_"
+identCharToString '|' = "_bar_"
+identCharToString '*' = "_times_"
+identCharToString '/' = "_div_"
+identCharToString '+' = "_plus_"
+identCharToString '-' = "_minus_"
+identCharToString ':' = "_colon_"
+identCharToString '\\' = "_bslash_"
+identCharToString '?' = "_qmark_"
+identCharToString '@' = "_at_"
+identCharToString '\'' = "_prime_"
+identCharToString c = '_' : show (ord c)
 
 -- |
 -- Checks whether an identifier name is reserved in Javascript.

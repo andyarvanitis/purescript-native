@@ -218,7 +218,7 @@ valueToJs opts m e (Case values binders) = do
   vals <- mapM (valueToJs opts m e) values
   bindersToJs opts m e binders vals
 valueToJs opts m e (IfThenElse cond th el) = JSConditional <$> valueToJs opts m e cond <*> valueToJs opts m e th <*> valueToJs opts m e el
-valueToJs opts m e (Accessor prop val) = accessorString prop <$> valueToJs opts m e val
+valueToJs opts m e (Accessor prop val) = (JSAccessor (identToJs . Ident $ prop)) <$> valueToJs opts m e val
 
 valueToJs opts m e v@App{} = do
   let (f, args, argts, rty) = unApp v [] [] Nothing

@@ -87,6 +87,11 @@ literals = mkPattern' match
                                     return "; ",
                                     return ident,
                                      maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+      (Just (JSInit _ _)) ->
+           [return "var ",
+            return (unqual ident),
+            maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+
       _ -> [return "var ",
             return ident,
             maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
