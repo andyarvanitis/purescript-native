@@ -33,10 +33,10 @@ import Language.PureScript.Types
 --
 --  * Reserved javascript identifiers are prefixed with '$$'.
 --
---  * Symbols are prefixed with '$' followed by a symbol name or their ordinal value.
+--  * Symbols are given a "__" suffix following their name or ordinal value.
 --
 identToJs :: Ident -> String
-identToJs (Ident name) | nameIsJsReserved name = "__" ++ name
+identToJs (Ident name) | nameIsJsReserved name = name ++ "__"
 identToJs (Ident name) = concatMap identCharToString name
 identToJs (Op op) = concatMap identCharToString op
 
@@ -52,29 +52,29 @@ identNeedsEscaping s = s /= identToJs (Ident s)
 --
 identCharToString :: Char -> String
 identCharToString c | isAlphaNum c = [c]
-identCharToString '_' = "_"
-identCharToString '.' = "_dot_"
-identCharToString '$' = "_dollar_"
-identCharToString '~' = "_tilde_"
-identCharToString '=' = "_eq_"
-identCharToString '<' = "_less_"
-identCharToString '>' = "_greater_"
-identCharToString '!' = "_bang_"
-identCharToString '#' = "_hash_"
-identCharToString '%' = "_percent_"
-identCharToString '^' = "_up_"
-identCharToString '&' = "_amp_"
-identCharToString '|' = "_bar_"
-identCharToString '*' = "_times_"
-identCharToString '/' = "_div_"
-identCharToString '+' = "_plus_"
-identCharToString '-' = "_minus_"
-identCharToString ':' = "_colon_"
-identCharToString '\\' = "_bslash_"
-identCharToString '?' = "_qmark_"
-identCharToString '@' = "_at_"
-identCharToString '\'' = "_prime_"
-identCharToString c = '_' : show (ord c)
+identCharToString '_' = "_symbol_"
+identCharToString '.' = "dot_symbol_"
+identCharToString '$' = "dollar_symbol_"
+identCharToString '~' = "tilde_symbol_"
+identCharToString '=' = "eq_symbol_"
+identCharToString '<' = "less_symbol_"
+identCharToString '>' = "greater_symbol_"
+identCharToString '!' = "bang_symbol_"
+identCharToString '#' = "hash_symbol_"
+identCharToString '%' = "percent_symbol_"
+identCharToString '^' = "up_symbol_"
+identCharToString '&' = "amp_symbol_"
+identCharToString '|' = "bar_symbol_"
+identCharToString '*' = "times_symbol_"
+identCharToString '/' = "div_symbol_"
+identCharToString '+' = "plus_symbol_"
+identCharToString '-' = "minus_symbol_"
+identCharToString ':' = "colon_symbol_"
+identCharToString '\\' = "bslash_symbol_"
+identCharToString '?' = "qmark_symbol_"
+identCharToString '@' = "at_symbol_"
+identCharToString '\'' = "_"
+identCharToString c = show (ord c) ++ "__"
 
 -- |
 -- Checks whether an identifier name is reserved in Javascript.

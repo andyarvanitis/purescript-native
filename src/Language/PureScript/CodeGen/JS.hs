@@ -25,6 +25,7 @@ module Language.PureScript.CodeGen.JS (
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Function (on)
 import Data.List (nub, (\\), delete, sortBy, intercalate, elemIndex)
+import Data.Char (isUpper, toUpper)
 
 import qualified Data.Map as M
 
@@ -57,6 +58,7 @@ moduleToJs opts (Module name decls (Just exps)) env = do
   let optimized = concat $ map (map $ optimize opts) $ catMaybes jsDecls
   let isModuleEmpty = null exps
   let moduleBody = optimized
+  let moduleExports = map (exportSymbol . identToJs . snd) $ M.toList . M.unions $ map exportToJs exps
   return $ [ JSRaw ("package " ++ moduleNameToJs name)
            , JSRaw ("")
            , JSRaw ("import \"reflect\"")
@@ -66,6 +68,12 @@ moduleToJs opts (Module name decls (Just exps)) env = do
            , JSRaw ("var _ fmt.Formatter //")
            , JSRaw ("")
            ] ++ moduleBody
+             ++ [JSRaw "\n// Package exports"]
+             ++ moduleExports
+  where
+    exportSymbol :: String -> JS
+    exportSymbol s@(x:xs) = if not (isUpper x) then JSVariableIntroduction (toUpper x : xs) (Just $ JSVar s)
+                                               else JSRaw ("// '" ++ s ++ "' automatically exported")
 
 moduleToJs _ _ _ = error "Exports should have been elaborated in name desugaring"
 
