@@ -59,7 +59,7 @@ moduleToJs opts (Module name decls (Just exps)) env = do
   let isModuleEmpty = null exps
   let moduleBody = optimized
   let moduleExports = map (exportSymbol . identToJs . snd) $ M.toList . M.unions $ map exportToJs exps
-  return $ [ JSRaw ("package " ++ moduleNameToJs name)
+  return $ [ JSRaw ("package " ++ moduleName)
            , JSRaw ("")
            , JSRaw ("import \"reflect\"")
            , JSRaw ("import \"fmt\"")
@@ -74,6 +74,9 @@ moduleToJs opts (Module name decls (Just exps)) env = do
     exportSymbol :: String -> JS
     exportSymbol s@(x:xs) = if not (isUpper x) then JSVariableIntroduction (toUpper x : xs) (Just $ JSVar s)
                                                else JSRaw ("// '" ++ s ++ "' automatically exported")
+
+    moduleName = case name of (ModuleName [ProperName "Main"]) -> "main"
+                              _ -> moduleNameToJs name
 
 moduleToJs _ _ _ = error "Exports should have been elaborated in name desugaring"
 
