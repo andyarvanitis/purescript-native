@@ -253,7 +253,7 @@ valueToJs opts m e v@App{} = do
   atype atys _ = atys
 
   castFn :: JS -> String -> JS
-  castFn (JSApp fn@(JSVar _) ags) ty = JSAccessor (parens ty) (JSAccessor "Interface()" (JSApp (JSRaw "reflect.ValueOf") [JSApp fn ags]))
+  castFn (JSApp fn@(JSVar _) ags) ty = JSAccessor (parens ty) (JSApp fn ags)
   castFn x _ = x
 
   goType :: Maybe Type -> String
