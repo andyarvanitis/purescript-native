@@ -254,11 +254,7 @@ valueToJs opts m e (Abs (Left arg) val) = do
   return $ JSFunction Nothing [identToJs arg] (JSBlock [JSReturn ret])
 valueToJs _ m _ (Var ident) = return $ varToJs m ident
 
-valueToJs opts m e (TypedValue _
-                              (Abs (Left arg) val)
-                              (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                                                (aty))
-                                       (rty))) = do
+valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (TypeApp (TypeApp _ aty) rty)) = do
   ret <- valueToJs opts m e val
   return $ JSFunction' Nothing [(identToJs arg, toGoType aty)] (JSBlock [JSReturn ret], toGoType rty)
 
@@ -430,13 +426,7 @@ binderToJs m e varName done (PositionedBinder _ binder) =
   binderToJs m e varName done binder
 
 toGoType :: Type -> String
-toGoType (TypeApp
-           (TypeApp
-             (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-             aty
-           )
-           rty
-         ) = "func " ++ "(" ++ toGoType aty ++ ") " ++ toGoType rty
+toGoType (TypeApp (TypeApp _ aty) rty) = "func " ++ "(" ++ toGoType aty ++ ") " ++ toGoType rty
 toGoType (ConstrainedType _ ty) = toGoType ty
 toGoType (ForAll _ ty _) = toGoType ty
 toGoType _ = "interface{}"
