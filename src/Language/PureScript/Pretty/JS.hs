@@ -94,7 +94,7 @@ literals = mkPattern' match
             maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
 
       _ -> [return "var ",
-            return ident,
+            return (unqual ident),
             maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
 
   match (JSAssignment target value) = fmap concat $ sequence

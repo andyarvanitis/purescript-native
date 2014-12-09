@@ -262,9 +262,21 @@ valueToJs opts m e (TypedValue _
   ret <- valueToJs opts m e val
   return $ JSFunction' Nothing [(identToJs arg, toGoType aty)] (JSBlock [JSReturn ret], toGoType rty)
 
-valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ForAll _ (ConstrainedType [((Qualified _ (ProperName cls)),_)] rty) _)) = do
+valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ForAll _ fty _)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, cls)] (JSBlock [JSReturn ret], toGoType rty)
+  return $ JSFunction' Nothing [(identToJs arg, fst $ forallFn fty)] (JSBlock [JSReturn ret], toGoType . snd $ forallFn fty)
+  where
+    forallFn :: Type -> (String, Type)
+    forallFn (ConstrainedType [((Qualified _ (ProperName cls)),_)] rty) = (cls,rty)
+    forallFn (ForAll _ fty _) = forallFn fty
+
+valueToJs opts m e (TypedValue _ (Abs (Left arg) val) fty) = do
+  ret <- valueToJs opts m e val
+  return $ JSFunction' Nothing [(identToJs arg, fst $ classFn fty)] (JSBlock [JSReturn ret], toGoType . snd $ classFn fty)
+  where
+    classFn :: Type -> (String, Type)
+    classFn (ConstrainedType [((Qualified _ (ProperName cls)),_)] rty) = (cls,rty)
+    classFn (ConstrainedType _ fty) = classFn fty
 
 valueToJs opts m e (TypedValue _ val _) = valueToJs opts m e val
 
@@ -425,6 +437,8 @@ toGoType (TypeApp
            )
            rty
          ) = "func " ++ "(" ++ toGoType aty ++ ") " ++ toGoType rty
+toGoType (ConstrainedType _ ty) = toGoType ty
+toGoType (ForAll _ ty _) = toGoType ty
 toGoType _ = "interface{}"
 
 toGoTypes :: [Type] -> String
