@@ -150,11 +150,10 @@ declToJs _ _ (TypeClassDeclaration name _ supers members) _ =
   return $ Just $ [
     JSData' (runProperName name) (JSBlock $ map assn args)]
   where
-  assn :: Ident -> JS
-  assn arg =  JSRaw $ identToJs arg ++ " interface{}"
-  args :: [Ident]
-  args = sortBy (compare `on` runIdent) $ memberNames ++ superNames
-  memberNames :: [Ident]
+  assn :: (Ident, Maybe Type) -> JS
+  assn arg =  JSRaw $ identToJs (fst arg) ++ " " ++ (toGoType $ fromMaybe (TypeVar "a") (snd arg))
+  args :: [(Ident, Maybe Type)]
+  args = sortBy (compare `on` (runIdent . fst)) $ memberNames ++ (zip superNames (repeat Nothing))
   memberNames = memberToName `map` members
   superNames :: [Ident]
   superNames = [ toSuperName superclass index
@@ -162,8 +161,8 @@ declToJs _ _ (TypeClassDeclaration name _ supers members) _ =
                ]
   toSuperName :: Qualified ProperName -> Integer -> Ident
   toSuperName pn index = Ident $ C.__superclass_ ++ show pn ++ "_" ++ show index
-  memberToName :: Declaration -> Ident
-  memberToName (TypeDeclaration ident _) = ident
+  memberToName :: Declaration -> (Ident, Maybe Type)
+  memberToName (TypeDeclaration ident t) = (ident, Just t)
   memberToName (PositionedDeclaration _ d) = memberToName d
   memberToName _ = error "Invalid declaration in type class definition"
 declToJs _ _ (ExternDeclaration _ _ (Just js) _) _ = return $ Just [js]
@@ -232,45 +231,19 @@ valueToJs opts m e (IfThenElse cond th el) = JSConditional <$> valueToJs opts m 
 valueToJs opts m e (Accessor prop val) = (JSAccessor (identToJs . Ident $ prop)) <$> valueToJs opts m e val
 
 valueToJs opts m e v@App{} = do
-  let (f, args, argts, rty) = unApp v [] [] Nothing
+  let (f, args) = unApp v []
   args' <- mapM (valueToJs opts m e) args
   case f of
     Constructor name | isNewtypeConstructor e name && length args == 1 -> return (head args')
     Constructor name | getConstructorArity e name == length args ->
       return $ JSInit (qualifiedToJS m (Ident . runProperName) name) args'
-    _ -> flip (foldl (\fn a -> JSApp (castFn fn (ftype (atype Nothing (last args)) rty)) [a])) args' <$> valueToJs opts m e f
+    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> valueToJs opts m e f
   where
-  unApp :: Expr -> [Expr] -> [Type] -> Maybe Type -> (Expr, [Expr], [Type], Maybe Type)
-  unApp (App val arg) args _ _ = unApp val (arg : args) [] Nothing
-  unApp (PositionedValue _ val) args _ _ = unApp val args [] Nothing
-  unApp (TypedValue _ val rty) args _ _ = unApp val args [] (Just rty)
-  unApp other args atys rty = (other, args, atys, rty)
-
-  atype :: Maybe Type -> Expr -> Maybe Type
-  atype atys (App _ arg) = atype atys arg
-  atype atys (PositionedValue _ arg) = atype atys arg
-  atype atys (TypedValue _ arg aty) = atype (Just aty) arg
-  atype atys _ = atys
-
-  castFn :: JS -> String -> JS
-  castFn (JSApp fn@(JSVar _) ags) ty = JSAccessor (parens ty) (JSApp fn ags)
-  castFn x _ = x
-
-  goType :: Maybe Type -> String
-  goType (Just (ForAll _ (ConstrainedType _ ty) _)) = toGoType ty
-  goType (Just ty) = toGoType ty
-  goType Nothing = "_"
-
-  ftype :: Maybe Type -> Maybe Type -> String
-  ftype Nothing rt = replace '?' "" (goType rt)
-  ftype at rt = replace '?' (goType at) (goType rt)
-  ftype _ _ = "_"
-
-  replace c ss xs = case idx of Nothing -> xs
-                                Just i -> fst (parts i) ++ ss ++ snd (parts i)
-    where
-      idx = elemIndex c xs
-      parts n = (take n xs, drop (n+1) xs)
+    unApp :: Expr -> [Expr] -> (Expr, [Expr])
+    unApp (App val arg) args = unApp val (arg : args)
+    unApp (PositionedValue _ val) args = unApp val args
+    unApp (TypedValue _ val _) args = unApp val args
+    unApp other args = (other, args)
 
 valueToJs opts m e (Let ds val) = do
   decls <- concat . catMaybes <$> mapM (flip (declToJs opts m) e) ds
@@ -289,9 +262,9 @@ valueToJs opts m e (TypedValue _
   ret <- valueToJs opts m e val
   return $ JSFunction' Nothing [(identToJs arg, toGoType aty)] (JSBlock [JSReturn ret], toGoType rty)
 
-valueToJs opts m e (TypedValue z (Abs (Left arg) val) (ForAll _ (ConstrainedType [((Qualified _ (ProperName cls)),_)] _) _)) = do
+valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ForAll _ (ConstrainedType [((Qualified _ (ProperName cls)),_)] rty) _)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, cls)] (JSBlock [JSReturn ret], "interface{}")
+  return $ JSFunction' Nothing [(identToJs arg, cls)] (JSBlock [JSReturn ret], toGoType rty)
 
 valueToJs opts m e (TypedValue _ val _) = valueToJs opts m e val
 
@@ -445,14 +418,14 @@ binderToJs m e varName done (PositionedBinder _ binder) =
   binderToJs m e varName done binder
 
 toGoType :: Type -> String
-toGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"
-toGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
-toGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = "bool"
-toGoType (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                           (aty))
-                  (rty)) = "func " ++ "(" ++ toGoType aty ++ ") " ++ toGoType rty
-toGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName _])) (ProperName _))) = "interface{}"
-toGoType x = "?"
+toGoType (TypeApp
+           (TypeApp
+             (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+             aty
+           )
+           rty
+         ) = "func " ++ "(" ++ toGoType aty ++ ") " ++ toGoType rty
+toGoType _ = "interface{}"
 
 toGoTypes :: [Type] -> String
 toGoTypes ts = intercalate " " $ map toGoType ts
