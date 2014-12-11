@@ -25,7 +25,7 @@ module Language.PureScript.CodeGen.JS (
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Function (on)
 import Data.List (nub, (\\), delete, sortBy, intercalate, elemIndex)
-import Data.Char (isUpper, toUpper)
+import Data.Char (isUpper)
 
 import qualified Data.Map as M
 
@@ -72,7 +72,7 @@ moduleToJs opts (Module name decls (Just exps)) env = do
              ++ moduleExports
   where
     exportSymbol :: String -> JS
-    exportSymbol s@(x:xs) = if not (isUpper x) then JSVariableIntroduction (toUpper x : xs) (Just $ JSVar s)
+    exportSymbol s@(x:xs) = if not (isUpper x) then JSVariableIntroduction (exportPrefix ++ s) (Just $ JSVar s)
                                                else JSRaw ("// '" ++ s ++ "' automatically exported")
 
     moduleName = case name of (ModuleName [ProperName "Main"]) -> "main"
@@ -392,7 +392,7 @@ binderToJs m e varName done (ObjectBinder bs) = go done bs
     return (JSVariableIntroduction propVar (Just (accessorString prop (JSVar varName))) : js)
 binderToJs m e varName done (ArrayBinder bs) = do
   js <- go done 0 bs
-  return [JSIfElse (JSBinary EqualTo (JSAccessor "length" (JSVar varName)) (JSNumericLiteral (Left (fromIntegral $ length bs)))) (JSBlock js) Nothing]
+  return [JSIfElse (JSBinary EqualTo (JSApp (JSVar "len") [JSVar varName]) (JSNumericLiteral (Left (fromIntegral $ length bs)))) (JSBlock js) Nothing]
   where
   go :: (Functor m, Applicative m, Monad m) => [JS] -> Integer -> [Binder] -> SupplyT m [JS]
   go done' _ [] = return done'
@@ -410,8 +410,8 @@ binderToJs m e varName done binder@(ConsBinder _ _) = do
     return (JSVariableIntroduction headVar (Just (JSIndexer (JSNumericLiteral (Left index)) (JSVar varName))) : jss)) done (zip headBinders [0..])
   tailVar <- freshName
   js2 <- binderToJs m e tailVar js1 tailBinder
-  return [JSIfElse (JSBinary GreaterThanOrEqualTo (JSAccessor "length" (JSVar varName)) (JSNumericLiteral (Left numberOfHeadBinders))) (JSBlock
-    ( JSVariableIntroduction tailVar (Just (JSApp (JSAccessor "slice" (JSVar varName)) [JSNumericLiteral (Left numberOfHeadBinders)])) :
+  return [JSIfElse (JSBinary GreaterThanOrEqualTo (JSApp (JSVar "len") [JSVar varName]) (JSNumericLiteral (Left numberOfHeadBinders))) (JSBlock
+    ( JSVariableIntroduction tailVar (Just (JSIndexer (JSVar (show numberOfHeadBinders ++ ":")) (JSVar varName))) :
       js2
     )) Nothing]
   where
@@ -429,7 +429,12 @@ toGoType :: Type -> String
 toGoType (TypeApp (TypeApp _ aty) rty) = "func " ++ "(" ++ toGoType aty ++ ") " ++ toGoType rty
 toGoType (ConstrainedType _ ty) = toGoType ty
 toGoType (ForAll _ ty _) = toGoType ty
+toGoType (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
+                                                    (ProperName "Array")))
+                  ty) = "[]" ++ toGoType ty
 toGoType _ = "interface{}"
 
 toGoTypes :: [Type] -> String
 toGoTypes ts = intercalate " " $ map toGoType ts
+
+exportPrefix = "E_"
