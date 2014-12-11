@@ -172,7 +172,7 @@ data JS
   -- |
   -- A function introduction (optional name, arguments, body)
   --
-  | JSFunction' (Maybe String) [(String,String)] (JS,String)
+  | JSFunction' (Maybe String) [(String,String, Maybe String)] (JS,String)
   -- |
   -- A function introduction (optional name, arguments, body)
   --

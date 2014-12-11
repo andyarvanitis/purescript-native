@@ -23,6 +23,7 @@ import Language.PureScript.CodeGen.JS (identNeedsEscaping)
 import Language.PureScript.CodeGen.JS.AST
 
 import Data.List
+import Data.Char (isSpace)
 import Data.Maybe (fromMaybe)
 import qualified Control.Arrow as A
 import Control.Arrow ((<+>))
@@ -71,14 +72,14 @@ literals = mkPattern' match
   match (JSVar ident) = return ident
   match (JSVariableIntroduction ident value) = fmap concat $ sequence $
     case value of
-      (Just (JSFunction' Nothing [(arg,aty)] (ret,rty))) ->
+      (Just (JSFunction' Nothing [(arg,aty,pty)] (ret,rty))) ->
           if '.' `elem` ident then [return "func ",
                                     return (unqual ident),
-                                    return (parens $ arg ++ " " ++ aty),
+                                    return (parens $ argWithTy arg aty pty),
                                     return " ",
                                     return rty,
                                     return " ",
-                                    maybe (return "") prettyPrintJS' (Just ret)]
+                                    maybe (return "") prettyPrintJS' (Just (body arg pty ret))]
                               else [return "var ",
                                     return ident,
                                     return " func ",
@@ -87,11 +88,23 @@ literals = mkPattern' match
                                     return rty,
                                     return "; ",
                                     return ident,
-                                     maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+                                    maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+                              where
+                                body arg Nothing ret = ret
+                                body arg pty (JSBlock stmts) =
+                                    JSBlock (JSVariableIntroduction arg (Just (JSVar $ arg ++ "_")) : stmts)
+                                body _ _ ret = ret
       (Just (JSInit _ _)) ->
            [return "var ",
             return (unqual ident),
             maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+
+      (Just (JSObjectLiteral [])) ->
+           [return "var ",
+            return (unqual ident),
+            return " ",
+            return "struct",
+            maybe (return "") prettyPrintJS' value]
 
       _ -> [return "var ",
             return (unqual ident),
@@ -187,7 +200,7 @@ lam = mkPattern match
   match (JSFunction name args ret) = Just ((name, args), ret)
   match _ = Nothing
 
-lam' :: Pattern PrinterState JS ((Maybe String, [(String,String)], String), JS)
+lam' :: Pattern PrinterState JS ((Maybe String, [(String,String, Maybe String)], String), JS)
 lam' = mkPattern match
   where
   match (JSFunction' Nothing args (ret,rty)) = Just ((Nothing, args, rty), ret)
@@ -282,10 +295,10 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                         ++ fromMaybe "" name
                         ++ "(" ++ intercalate ", " args ++ ") "
                         ++ ret ]
-                  , [ Wrap lam' $ \(name, [(arg,aty)], rty) ret -> "func "
+                  , [ Wrap lam' $ \(name, [(arg,aty,pty)], rty) ret -> "func "
                         ++ fromMaybe "" name
-                        ++ "(" ++ arg ++ " " ++ aty ++ ") " ++ rty ++ " "
-                        ++ ret ]
+                        ++ (parens $ argWithTy arg aty pty) ++ rty ++ " "
+                        ++ (body arg pty ret) ]
                   , [ Wrap dat' $ \name fields -> "\n"
                         ++ "type "
                         ++ name
@@ -319,6 +332,15 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ binary    Or                   "||" ]
                   , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintJS1 th ++ " : " ++ prettyPrintJS1 el ]
                     ]
+                  where
+                    body arg pty ret = case pty of Nothing -> ret
+                                                   _       -> (take 2 ret)
+                                                           ++ (takeWhile (\c -> isSpace c) (drop 2 ret))
+                                                           ++ arg ++ " := " ++ arg ++ "_." ++ parens (fromMaybe "" pty)
+                                                           ++ (drop 1 ret)
 
 unqual :: String -> String
 unqual s = drop (fromMaybe (-1) (elemIndex '.' s) + 1) s
+
+argWithTy arg aty pty = arg ++ (case pty of Nothing -> " "
+                                            _       -> "_ ") ++ aty

@@ -89,7 +89,7 @@ importToJs opts mn =
     CompileOptions ns _ _ -> JSAccessor (moduleNameToJs mn) (JSVar ns)
 
 imports :: Declaration -> [ModuleName]
-imports (ImportDeclaration mn _ _) = [mn]
+imports (ImportDeclaration mn _ _) = [mn
 imports other =
   let (f, _, _, _, _) = everythingOnValues (++) (const []) collectV collectB (const []) (const [])
   in f other
@@ -120,10 +120,7 @@ declToJs opts mp (BindingGroupDeclaration vals) e = do
     return $ JSVariableIntroduction (qname mp e ident) (Just js)
   return $ Just jss
 declToJs _ _ (DataDeclaration Newtype _ _ [((ProperName ctor), _)]) _ =
-  return $ Just $ [JSVariableIntroduction ctor (Just $
-                    JSObjectLiteral [("create-",
-                      JSFunction Nothing ["value+"]
-                        (JSBlock [JSReturn $ JSVar "value-"]))])]
+  return Nothing -- Trying generating nothing for now
 declToJs _ _ (DataDeclaration Newtype _ _ _) _ =
   error "newtype has multiple constructors"
 declToJs _ mp (DataDeclaration Data _ _ ctors) e = do
@@ -256,11 +253,11 @@ valueToJs _ m _ (Var ident) = return $ varToJs m ident
 
 valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (TypeApp (TypeApp _ aty) rty)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, toGoType aty)] (JSBlock [JSReturn ret], toGoType rty)
+  return $ JSFunction' Nothing [(identToJs arg, toGoType aty, primToGoType aty)] (JSBlock [JSReturn ret], toGoType rty)
 
 valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ForAll _ fty _)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, fst $ forallFn fty)] (JSBlock [JSReturn ret], toGoType . snd $ forallFn fty)
+  return $ JSFunction' Nothing [(identToJs arg, fst $ forallFn fty, Nothing)] (JSBlock [JSReturn ret], toGoType . snd $ forallFn fty)
   where
     forallFn :: Type -> (String, Type)
     forallFn (ConstrainedType [((Qualified _ (ProperName cls)),_)] rty) = (cls,rty)
@@ -268,7 +265,7 @@ valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ForAll _ fty _)) = do
 
 valueToJs opts m e (TypedValue _ (Abs (Left arg) val) fty) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, fst $ classFn fty)] (JSBlock [JSReturn ret], toGoType . snd $ classFn fty)
+  return $ JSFunction' Nothing [(identToJs arg, fst $ classFn fty, Nothing)] (JSBlock [JSReturn ret], toGoType . snd $ classFn fty)
   where
     classFn :: Type -> (String, Type)
     classFn (ConstrainedType [((Qualified _ (ProperName cls)),_)] rty) = (cls,rty)
@@ -433,6 +430,12 @@ toGoType (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Pri
                                                     (ProperName "Array")))
                   ty) = "[]" ++ toGoType ty
 toGoType _ = "interface{}"
+
+primToGoType :: Type -> Maybe String
+primToGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just "int"
+primToGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just "string"
+primToGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just "bool"
+primToGoType _ = Nothing
 
 toGoTypes :: [Type] -> String
 toGoTypes ts = intercalate " " $ map toGoType ts
