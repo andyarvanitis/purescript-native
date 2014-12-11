@@ -89,7 +89,7 @@ importToJs opts mn =
     CompileOptions ns _ _ -> JSAccessor (moduleNameToJs mn) (JSVar ns)
 
 imports :: Declaration -> [ModuleName]
-imports (ImportDeclaration mn _ _) = [mn
+imports (ImportDeclaration mn _ _) = [mn]
 imports other =
   let (f, _, _, _, _) = everythingOnValues (++) (const []) collectV collectB (const []) (const [])
   in f other
@@ -148,9 +148,9 @@ declToJs _ _ (TypeClassDeclaration name _ supers members) _ =
     JSData' (runProperName name) (JSBlock $ map assn args)]
   where
   assn :: (Ident, Maybe Type) -> JS
-  assn arg =  JSRaw $ identToJs (fst arg) ++ " " ++ (toGoType $ fromMaybe (TypeVar "a") (snd arg))
+  assn arg =  JSRaw $ identToJs (fst arg) ++ " " ++ (toGoType $ fromMaybe (TypeVar "{superclass}") (snd arg))
   args :: [(Ident, Maybe Type)]
-  args = sortBy (compare `on` (runIdent . fst)) $ memberNames ++ (zip superNames (repeat Nothing))
+  args = sortBy (compare `on` (runIdent . fst)) $ memberNames ++ (zip superNames (repeat (Nothing)))
   memberNames = memberToName `map` members
   superNames :: [Ident]
   superNames = [ toSuperName superclass index
@@ -429,7 +429,8 @@ toGoType (ForAll _ ty _) = toGoType ty
 toGoType (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
                                                     (ProperName "Array")))
                   ty) = "[]" ++ toGoType ty
-toGoType _ = "interface{}"
+toGoType (TypeVar "{superclass}") = "func () interface{}"
+toGoType t = "interface{}"
 
 primToGoType :: Type -> Maybe String
 primToGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just "int"

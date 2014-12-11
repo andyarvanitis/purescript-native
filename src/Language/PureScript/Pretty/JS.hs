@@ -342,5 +342,6 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
 unqual :: String -> String
 unqual s = drop (fromMaybe (-1) (elemIndex '.' s) + 1) s
 
+argWithTy "__unused" aty pty = ""
 argWithTy arg aty pty = arg ++ (case pty of Nothing -> " "
                                             _       -> "_ ") ++ aty
