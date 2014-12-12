@@ -133,7 +133,7 @@ declToJs _ mp (DataDeclaration Data _ _ ctors) e = do
     makeConstructor ctorName types =
       let
         args = [ "value" ++ show index | index <- [0..(length types)-1] ]
-        body = [(JSVar (arg ++ " " ++ toGoTypes types)) | arg <- args ]
+        body = [(JSVar (arg ++ " " ++ typestrs types)) | arg <- args ]
       in JSData' ctorName (JSBlock body)
     go :: ProperName -> Int -> Int -> [JS] -> JS
     go pn _ 0 values = JSInit (JSVar $ runProperName pn) (reverse values)
@@ -148,7 +148,7 @@ declToJs _ _ (TypeClassDeclaration name _ supers members) _ =
     JSData' (runProperName name) (JSBlock $ map assn args)]
   where
   assn :: (Ident, Maybe Type) -> JS
-  assn arg =  JSRaw $ identToJs (fst arg) ++ " " ++ (toGoType $ fromMaybe (TypeVar "{superclass}") (snd arg))
+  assn arg =  JSRaw $ identToJs (fst arg) ++ " " ++ (typestr $ fromMaybe (TypeVar "{superclass}") (snd arg))
   args :: [(Ident, Maybe Type)]
   args = sortBy (compare `on` (runIdent . fst)) $ memberNames ++ (zip superNames (repeat (Nothing)))
   memberNames = memberToName `map` members
@@ -253,23 +253,16 @@ valueToJs _ m _ (Var ident) = return $ varToJs m ident
 
 valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (TypeApp (TypeApp _ aty) rty)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, toGoType aty, primToGoType aty)] (JSBlock [JSReturn ret], toGoType rty)
+  return $ JSFunction' Nothing [(identToJs arg, typestr aty, primstr aty)] (JSBlock [JSReturn ret], typestr rty)
 
-valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ForAll _ fty _)) = do
+valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ConstrainedType cls fty)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, boxedType, Just . fst $ forallFn fty)] (JSBlock [JSReturn ret], toGoType . snd $ forallFn fty)
+  return $ JSFunction' Nothing [(identToJs arg, boxedType, Just $ constraint cls)] (JSBlock [JSReturn ret], typestr fty)
   where
-    forallFn :: Type -> (String, Type)
-    forallFn (ConstrainedType [((Qualified _ (ProperName cls)),_)] rty) = (cls,rty)
-    forallFn (ForAll _ fty _) = forallFn fty
+    constraint [((Qualified _ (ProperName name)),_)] = name
+    constraint c = error $ "constraint assumption error: " ++ show c
 
-valueToJs opts m e (TypedValue _ (Abs (Left arg) val) fty) = do
-  ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, fst $ classFn fty, Nothing)] (JSBlock [JSReturn ret], toGoType . snd $ classFn fty)
-  where
-    classFn :: Type -> (String, Type)
-    classFn (ConstrainedType [((Qualified _ (ProperName cls)),_)] rty) = (cls,rty)
-    classFn (ConstrainedType _ fty) = classFn fty
+valueToJs opts m e (TypedValue a v@(Abs (Left _) _) (ForAll _ t _)) = valueToJs opts m e (TypedValue a v t)
 
 valueToJs opts m e (TypedValue _ val _) = valueToJs opts m e val
 
@@ -422,24 +415,29 @@ binderToJs m e varName done (NamedBinder ident binder) = do
 binderToJs m e varName done (PositionedBinder _ binder) =
   binderToJs m e varName done binder
 
-toGoType :: Type -> String
-toGoType (TypeApp (TypeApp _ aty) rty) = "func " ++ "(" ++ toGoType aty ++ ") " ++ toGoType rty
-toGoType (ConstrainedType _ ty) = toGoType ty
-toGoType (ForAll _ ty _) = toGoType ty
-toGoType (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
-                                                    (ProperName "Array")))
-                  ty) = "[]" ++ toGoType ty
-toGoType (TypeVar "{superclass}") = "func () " ++ boxedType
-toGoType t = boxedType
+typestr :: Type -> String
+typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
+                                                   (ProperName "Array")))
+                  (Skolem _ _ _)) = boxedType
+typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
+                                                   (ProperName "Array")))
+                 (ty)) = "[]" ++ typestr ty
+typestr (TypeApp (TypeConstructor _) ty) = typestr ty
+typestr (TypeApp (TypeVar _) (TypeVar _)) = boxedType
+typestr (TypeApp a b) = "func " ++ parens (typestr a) ++ " " ++ typestr b
+typestr (ForAll _ ty _) = typestr ty
+typestr (TypeVar "{superclass}") = "func () " ++ boxedType
+typestr t = boxedType
 
-primToGoType :: Type -> Maybe String
-primToGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just "int"
-primToGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just "string"
-primToGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just "bool"
-primToGoType _ = Nothing
+primstr :: Type -> Maybe String
+primstr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just "int"
+primstr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just "string"
+primstr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just "bool"
+primstr (ForAll _ ty _) = primstr ty
+primstr _ = Nothing
 
-toGoTypes :: [Type] -> String
-toGoTypes ts = intercalate " " $ map toGoType ts
+typestrs :: [Type] -> String
+typestrs ts = intercalate " " $ map typestr ts
 
 boxedType = "interface{}"
 exportPrefix = "E_"

@@ -298,7 +298,9 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                         ++ ret ]
                   , [ Wrap lam' $ \(name, [(arg,aty,pty)], rty) ret -> "func "
                         ++ fromMaybe "" name
-                        ++ (parens $ argWithTy arg aty pty) ++ rty ++ " "
+                        ++ (parens $ argWithTy arg aty pty)
+                        ++ " "
+                        ++ rty ++ " "
                         ++ (body arg pty ret) ]
                   , [ Wrap dat' $ \name fields -> "\n"
                         ++ "type "
