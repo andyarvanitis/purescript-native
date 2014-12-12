@@ -92,7 +92,8 @@ literals = mkPattern' match
                               where
                                 body arg Nothing ret = ret
                                 body arg pty (JSBlock stmts) =
-                                    JSBlock (JSVariableIntroduction arg (Just (JSVar $ arg ++ "_")) : stmts)
+                                    JSBlock (JSVariableIntroduction
+                                               arg (Just (JSVar $ arg ++ "_." ++ parens (fromMaybe "" pty))) : stmts)
                                 body _ _ ret = ret
       (Just (JSInit _ _)) ->
            [return "var ",

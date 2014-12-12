@@ -257,7 +257,7 @@ valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (TypeApp (TypeApp _ aty) r
 
 valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ForAll _ fty _)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, fst $ forallFn fty, Nothing)] (JSBlock [JSReturn ret], toGoType . snd $ forallFn fty)
+  return $ JSFunction' Nothing [(identToJs arg, boxedType, Just . fst $ forallFn fty)] (JSBlock [JSReturn ret], toGoType . snd $ forallFn fty)
   where
     forallFn :: Type -> (String, Type)
     forallFn (ConstrainedType [((Qualified _ (ProperName cls)),_)] rty) = (cls,rty)
@@ -429,8 +429,8 @@ toGoType (ForAll _ ty _) = toGoType ty
 toGoType (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
                                                     (ProperName "Array")))
                   ty) = "[]" ++ toGoType ty
-toGoType (TypeVar "{superclass}") = "func () interface{}"
-toGoType t = "interface{}"
+toGoType (TypeVar "{superclass}") = "func () " ++ boxedType
+toGoType t = boxedType
 
 primToGoType :: Type -> Maybe String
 primToGoType (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just "int"
@@ -441,4 +441,5 @@ primToGoType _ = Nothing
 toGoTypes :: [Type] -> String
 toGoTypes ts = intercalate " " $ map toGoType ts
 
+boxedType = "interface{}"
 exportPrefix = "E_"
