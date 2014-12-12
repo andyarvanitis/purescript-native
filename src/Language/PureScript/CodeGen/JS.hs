@@ -416,6 +416,8 @@ binderToJs m e varName done (PositionedBinder _ binder) =
   binderToJs m e varName done binder
 
 typestr :: Type -> String
+typestr (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b) =
+    "func " ++ parens (typestr a) ++ " " ++ typestr b
 typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
                                                    (ProperName "Array")))
                   (Skolem _ _ _)) = boxedType
@@ -423,8 +425,8 @@ typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim
                                                    (ProperName "Array")))
                  (ty)) = "[]" ++ typestr ty
 typestr (TypeApp (TypeConstructor _) ty) = typestr ty
-typestr (TypeApp (TypeVar _) (TypeVar _)) = boxedType
-typestr (TypeApp a b) = "func " ++ parens (typestr a) ++ " " ++ typestr b
+typestr (TypeApp _ (TypeVar _)) = boxedType
+typestr (TypeApp _ (Skolem _ ___ _)) = boxedType
 typestr (ForAll _ ty _) = typestr ty
 typestr (TypeVar "{superclass}") = "func () " ++ boxedType
 typestr t = boxedType
