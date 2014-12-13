@@ -67,10 +67,12 @@ moduleToJs opts (Module name decls (Just exps)) env = do
            , JSRaw ("var _ reflect.Value // ignore unused package errors")
            , JSRaw ("var _ fmt.Formatter //")
            , JSRaw ("")
-           , if moduleName == "Prelude" then JSRaw ("type " ++ anyType ++ " interface{} // Type alias for readability")
-                                        else JSRaw ""
-           , JSRaw ("")
-           ] ++ moduleBody
+           ]
+             ++ (if moduleName == "Prelude" then [JSRaw ("type " ++ anyType ++ " interface{} // Type aliase for readability"),
+                                                  JSRaw ("type " ++ funcType ++ " " ++ anyFunc),
+                                                  JSRaw ("")]
+                                            else [JSRaw ("")])
+             ++ moduleBody
              ++ [JSRaw "\n// Package exports"]
              ++ moduleExports
   where
@@ -248,7 +250,7 @@ valueToJs opts m e v@App{} = do
 
     castIfNeeded e@(JSVar _) _       = e
     castIfNeeded e           Nothing = e
-    castIfNeeded e           _       = JSAccessor (parens anyFunc) e
+    castIfNeeded e           _       = JSAccessor (parens funcType) e
 
 valueToJs opts m e (Let ds val) = do
   decls <- concat . catMaybes <$> mapM (flip (declToJs opts m) e) ds
@@ -430,7 +432,7 @@ typestr :: Type -> String
 typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"
 typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
 typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = "bool"
-typestr (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b) = anyFunc
+typestr (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b) = funcType
 typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
                                                    (ProperName "Array")))
                  (ty)) = "[]" ++ typestr ty
@@ -439,8 +441,9 @@ typestr (TypeApp _ (TypeVar _)) = anyType
 typestr (ForAll _ ty _) = typestr ty
 typestr t = anyType
 
-anyType = "Any"
-anyFunc = "func (" ++ anyType ++ ") " ++ anyType
+anyType  = "Any"
+anyFunc  = "func (" ++ anyType ++ ") " ++ anyType
+funcType = "Function"
 getSuper = "func () " ++ anyType
 
 exportPrefix = "E_"
