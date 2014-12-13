@@ -136,7 +136,7 @@ declToJs _ mp (DataDeclaration Data _ _ ctors) e = do
     makeConstructor ctorName types =
       let
         args = [ "value" ++ show index | index <- [0..(length types)-1] ]
-        body = [(JSVar (arg ++ " " ++ typestrs types)) | arg <- args ]
+        body = [(JSVar (arg ++ " " ++ "???")) | arg <- args ]
       in JSData' ctorName (JSBlock body)
     go :: ProperName -> Int -> Int -> [JS] -> JS
     go pn _ 0 values = JSInit (JSVar $ runProperName pn) (reverse values)
@@ -151,7 +151,8 @@ declToJs _ _ (TypeClassDeclaration name _ supers members) _ =
     JSData' (runProperName name) (JSBlock $ map assn args)]
   where
   assn :: (Ident, Maybe Type) -> JS
-  assn arg =  JSRaw $ identToJs (fst arg) ++ " " ++ (typestr $ fromMaybe (TypeVar "{superclass}") (snd arg))
+  assn arg =  JSRaw $ identToJs (fst arg) ++ " " ++ if snd arg == Nothing then getSuper
+                                                                          else anyType
   args :: [(Ident, Maybe Type)]
   args = sortBy (compare `on` (runIdent . fst)) $ memberNames ++ (zip superNames (repeat (Nothing)))
   memberNames = memberToName `map` members
@@ -231,19 +232,23 @@ valueToJs opts m e (IfThenElse cond th el) = JSConditional <$> valueToJs opts m 
 valueToJs opts m e (Accessor prop val) = (JSAccessor (identToJs . Ident $ prop)) <$> valueToJs opts m e val
 
 valueToJs opts m e v@App{} = do
-  let (f, args) = unApp v []
+  let (f, args, fty) = unApp v [] Nothing
   args' <- mapM (valueToJs opts m e) args
   case f of
     Constructor name | isNewtypeConstructor e name && length args == 1 -> return (head args')
     Constructor name | getConstructorArity e name == length args ->
       return $ JSInit (qualifiedToJS m (Ident . runProperName) name) args'
-    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> valueToJs opts m e f
+    _ -> flip (foldl (\fn a -> JSApp (castIfNeeded fn fty) [a])) args' <$> valueToJs opts m e f
   where
-    unApp :: Expr -> [Expr] -> (Expr, [Expr])
-    unApp (App val arg) args = unApp val (arg : args)
-    unApp (PositionedValue _ val) args = unApp val args
-    unApp (TypedValue _ val _) args = unApp val args
-    unApp other args = (other, args)
+    unApp :: Expr -> [Expr] -> Maybe String -> (Expr, [Expr], Maybe String)
+    unApp (App val arg) args t = unApp val (arg : args) t
+    unApp (PositionedValue _ val) args t = unApp val args t
+    unApp (TypedValue _ val ty) args t = unApp val args (if t == Nothing then (Just $ typestr ty) else t)
+    unApp other args t = (other, args, t)
+
+    castIfNeeded e@(JSVar _) _       = e
+    castIfNeeded e           Nothing = e
+    castIfNeeded e           _       = JSAccessor (parens anyFunc) e
 
 valueToJs opts m e (Let ds val) = do
   decls <- concat . catMaybes <$> mapM (flip (declToJs opts m) e) ds
@@ -256,19 +261,22 @@ valueToJs _ m _ (Var ident) = return $ varToJs m ident
 
 valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (TypeApp (TypeApp _ aty) rty)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, typestr aty, primstr aty)] (JSBlock [JSReturn ret], typestr rty)
+  return $ JSFunction' Nothing [(identToJs arg, anyType, trueType aty)] (JSBlock [JSReturn ret], anyType)
+    where
+      trueType :: Type -> Maybe String
+      trueType t
+        | typestr t == anyType = Nothing
+        | otherwise            = Just $ typestr t
 
 valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ConstrainedType cls fty)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, anyType, Just $ constraint cls)] (JSBlock [JSReturn ret], typestr fty)
+  return $ JSFunction' Nothing [(identToJs arg, anyType, Just $ constraint cls)] (JSBlock [JSReturn ret], anyType)
   where
     constraint [((Qualified _ (ProperName name)),_)] = name
     constraint c = error $ "constraint assumption error: " ++ show c
 
 valueToJs opts m e (TypedValue a v@(Abs (Left _) _) (ForAll _ t _)) = valueToJs opts m e (TypedValue a v t)
-
 valueToJs opts m e (TypedValue _ val _) = valueToJs opts m e val
-
 valueToJs opts m e (PositionedValue _ val) = valueToJs opts m e val
 valueToJs _ _ _ (TypeClassDictionary _ _ _) = error "Type class dictionary was not replaced"
 valueToJs _ _ _ _ = error "Invalid argument to valueToJs"
@@ -419,30 +427,20 @@ binderToJs m e varName done (PositionedBinder _ binder) =
   binderToJs m e varName done binder
 
 typestr :: Type -> String
-typestr (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b) =
-    "func " ++ parens (typestr a) ++ " " ++ typestr b
-typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
-                                                   (ProperName "Array")))
-                 (Skolem _ _ _)) = anyType
+typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"
+typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
+typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = "bool"
+typestr (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b) = anyFunc
 typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
                                                    (ProperName "Array")))
                  (ty)) = "[]" ++ typestr ty
 typestr (TypeApp (TypeConstructor _) ty) = typestr ty
 typestr (TypeApp _ (TypeVar _)) = anyType
-typestr (TypeApp _ (Skolem _ ___ _)) = anyType
 typestr (ForAll _ ty _) = typestr ty
-typestr (TypeVar "{superclass}") = "func () " ++ anyType
 typestr t = anyType
 
-primstr :: Type -> Maybe String
-primstr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just "int"
-primstr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just "string"
-primstr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just "bool"
-primstr (ForAll _ ty _) = primstr ty
-primstr _ = Nothing
-
-typestrs :: [Type] -> String
-typestrs ts = intercalate " " $ map typestr ts
-
 anyType = "Any"
+anyFunc = "func (" ++ anyType ++ ") " ++ anyType
+getSuper = "func () " ++ anyType
+
 exportPrefix = "E_"

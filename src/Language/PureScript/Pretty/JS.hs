@@ -201,7 +201,7 @@ lam = mkPattern match
   match (JSFunction name args ret) = Just ((name, args), ret)
   match _ = Nothing
 
-lam' :: Pattern PrinterState JS ((Maybe String, [(String,String, Maybe String)], String), JS)
+lam' :: Pattern PrinterState JS ((Maybe String, [(String, String, Maybe String)], String), JS)
 lam' = mkPattern match
   where
   match (JSFunction' Nothing args (ret,rty)) = Just ((Nothing, args, rty), ret)
