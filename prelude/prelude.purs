@@ -69,19 +69,19 @@ module Prelude
   (:) = cons
 
   foreign import cons
-    "function cons(e) {\
-    \  return function(l) {\
-    \    return [e].concat(l);\
+    "func cons(e Any) Any {\
+    \  return func(l Any) Any {\
+    \    return append(l.([]Any), e);\
     \  };\
     \}" :: forall a. a -> [a] -> [a]
 
   class Show a where
     show :: a -> String
 
-  foreign import showStringImpl
-    "function showStringImpl(s) {\
-    \  return JSON.stringify(s);\
-    \}" :: String -> String
+  foreign import showStringImpl """
+    func showStringImpl(s Any) Any {
+      return fmt.Sprintf("\"%s\"", s);
+    }""" :: String -> String
 
   instance showUnit :: Show Unit where
     show (Unit {}) = "Unit {}"
@@ -93,23 +93,29 @@ module Prelude
     show true = "true"
     show false = "false"
 
-  foreign import showNumberImpl "function showNumberImpl(n) {\
-                                \  return n.toString();\
+  foreign import showNumberImpl "func showNumberImpl(n Any) Any {\
+                                \  return fmt.Sprint(n);\
                                 \}" :: Number -> String
 
   instance showNumber :: Show Number where
     show = showNumberImpl
 
-  foreign import showArrayImpl
-    "function showArrayImpl(f) {\
-    \  return function(xs) {\
-    \    var ss = [];\
-    \    for (var i = 0, l = xs.length; i < l; i++) {\
-    \      ss[i] = f(xs[i]);\
-    \    }\
-    \    return '[' + ss.join(',') + ']';\
-    \  };\
-    \}" :: forall a. (a -> String) -> [a] -> String
+  foreign import showArrayImpl """
+  func showArrayImpl(f_ Any) Any {
+    f := f_.(func (Any) Any)
+    return func(xs_ Any) Any {
+      xs := xs_.([]Any)
+      last := len(xs) - 1
+      var ss string
+      for i, x := range xs {
+        ss += f(x).(string)
+        if last > 0 && i < last {
+          ss += ","
+        }
+      }
+      return "[" + ss + "]"
+    }
+  }""" :: forall a. (a -> String) -> [a] -> String
 
   instance showArray :: (Show a) => Show [a] where
     show = showArrayImpl show
@@ -187,37 +193,37 @@ module Prelude
     (%) :: a -> a -> a
     negate :: a -> a
 
-  foreign import numAdd "function numAdd(n1) {\
-                        \  return function(n2) {\
+  foreign import numAdd "func numAdd(n1 Any) Any {\
+                        \  return func(n2 Any) Any {\
                         \    return n1 + n2;\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import numSub "function numSub(n1) {\
-                        \  return function(n2) {\
+  foreign import numSub "func numSub(n1 Any) Any {\
+                        \  return func(n2 Any) Any {\
                         \    return n1 - n2;\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import numMul "function numMul(n1) {\
-                        \  return function(n2) {\
+  foreign import numMul "func numMul(n1 Any) Any {\
+                        \  return func(n2 Any) Any {\
                         \    return n1 * n2;\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import numDiv "function numDiv(n1) {\
-                        \  return function(n2) {\
+  foreign import numDiv "func numDiv(n1 Any) Any {\
+                        \  return func(n2 Any) Any {\
                         \    return n1 / n2;\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import numMod "function numMod(n1) {\
-                        \  return function(n2) {\
+  foreign import numMod "func numMod(n1 Any) Any {\
+                        \  return func(n2 Any) Any {\
                         \    return n1 % n2;\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import numNegate "function numNegate(n) {\
+  foreign import numNegate "func numNegate(n Any) Any {\
                            \  return -n;\
                            \}" :: Number -> Number
 
@@ -242,16 +248,16 @@ module Prelude
     (/=) :: a -> a -> Boolean
 
   foreign import refEq
-    "function refEq(r1) {\
-    \  return function(r2) {\
-    \    return r1 === r2;\
+    "func refEq(r1 Any) Any {\
+    \  return func(r2 Any) Any {\
+    \    return r1 == r2;\
     \  };\
     \}" :: forall a. a -> a -> Boolean
 
   foreign import refIneq
-    "function refIneq(r1) {\
-    \  return function(r2) {\
-    \    return r1 !== r2;\
+    "func refIneq(r1 Any) Any {\
+    \  return func(r2 Any) Any {\
+    \    return r1 != r2;\
     \  };\
     \}" :: forall a. a -> a -> Boolean
 
@@ -271,18 +277,24 @@ module Prelude
     (==) = refEq
     (/=) = refIneq
 
-  foreign import eqArrayImpl
-    "function eqArrayImpl(f) {\
-    \  return function(xs) {\
-    \    return function(ys) {\
-    \      if (xs.length !== ys.length) return false;\
-    \      for (var i = 0; i < xs.length; i++) {\
-    \        if (!f(xs[i])(ys[i])) return false;\
-    \      }\
-    \      return true;\
-    \    };\
-    \  };\
-    \}" :: forall a. (a -> a -> Boolean) -> [a] -> [a] -> Boolean
+  foreign import eqArrayImpl"""
+  func eqArrayImpl(f Any) Any {
+    return func(xs_ Any) Any {
+      xs := xs_.([]Any)
+      return func(ys_ Any) Any {
+        ys := ys_.([]Any)
+        if (len(xs) != len(ys)) {
+          return false;
+        }
+        for i := 0; i < len(xs); i++ {
+          if (!f(xs[i])(ys[i])) {
+            return false;
+          }
+        }
+        return true;
+      };
+    };
+  }""" :: forall a. (a -> a -> Boolean) -> [a] -> [a] -> Boolean
 
   instance eqArray :: (Eq a) => Eq [a] where
     (==) xs ys = eqArrayImpl (==) xs ys
@@ -333,18 +345,24 @@ module Prelude
     LT -> false
     _ -> true
 
-  foreign import unsafeCompareImpl
-    "function unsafeCompareImpl(lt) {\
-    \  return function(eq) {\
-    \    return function(gt) {\
-    \      return function(x) {\
-    \        return function(y) {\
-    \          return x < y ? lt : x > y ? gt : eq;\
-    \        };\
-    \      };\
-    \    };\
-    \  };\
-    \}" :: forall a. Ordering -> Ordering -> Ordering -> a -> a -> Ordering
+  foreign import unsafeCompareImpl """
+    func unsafeCompareImpl(lt Any) Any {
+      return func(eq Any) Any {
+        return func(gt Any) Any {
+          return func(x Any) Any {
+            return func(y Any) Any {
+              if x < y {
+                return lt
+              } else if x > y {
+                return gt
+              } else {
+                return eq
+              }
+            };
+          };
+        };
+      };
+    }""" :: forall a. Ordering -> Ordering -> Ordering -> a -> a -> Ordering
 
   unsafeCompare :: forall a. a -> a -> Ordering
   unsafeCompare = unsafeCompareImpl LT EQ GT
@@ -385,44 +403,44 @@ module Prelude
     zshr :: b -> Number -> b
     complement :: b -> b
 
-  foreign import numShl "function numShl(n1) {\
-                        \  return function(n2) {\
+  foreign import numShl "func numShl(n1 Any) Any {\
+                        \  return func(n2 Any) Any {\
                         \    return n1 << n2;\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import numShr "function numShr(n1) {\
-                        \  return function(n2) {\
+  foreign import numShr "func numShr(n1 Any) Any {\
+                        \  return func(n2 Any) Any {\
                         \    return n1 >> n2;\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import numZshr "function numZshr(n1) {\
-                          \  return function(n2) {\
-                          \    return n1 >>> n2;\
+  foreign import numZshr "func numZshr(n1 Any) Any {\
+                          \  return func(n2 Any) Any {\
+                          \    panic(\"n1 >>> n2\");\
                           \  };\
                           \}" :: Number -> Number -> Number
 
-  foreign import numAnd "function numAnd(n1) {\
-                        \  return function(n2) {\
+  foreign import numAnd "func numAnd(n1 Any) Any {\
+                        \  return func(n2 Any) Any {\
                         \    return n1 & n2;\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import numOr "function numOr(n1) {\
-                       \  return function(n2) {\
+  foreign import numOr "func numOr(n1 Any) Any {\
+                       \  return func(n2 Any) Any {\
                        \    return n1 | n2;\
                        \  };\
                        \}" :: Number -> Number -> Number
 
-  foreign import numXor "function numXor(n1) {\
-                        \  return function(n2) {\
+  foreign import numXor "func numXor(n1 Any) Any {\
+                        \  return func(n2 Any) Any {\
                         \    return n1 ^ n2;\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import numComplement "function numComplement(n) {\
-                               \  return ~n;\
+  foreign import numComplement "func numComplement(n Any) Any {\
+                               \  return ^n;\
                                \}" :: Number -> Number
 
   instance bitsNumber :: Bits Number where
@@ -442,19 +460,19 @@ module Prelude
     (||) :: b -> b -> b
     not :: b -> b
 
-  foreign import boolAnd "function boolAnd(b1) {\
-                         \  return function(b2) {\
+  foreign import boolAnd "func boolAnd(b1 Any) Any {\
+                         \  return func(b2 Any) Any {\
                          \    return b1 && b2;\
                          \  };\
                          \}"  :: Boolean -> Boolean -> Boolean
 
-  foreign import boolOr "function boolOr(b1) {\
-                        \  return function(b2) {\
+  foreign import boolOr "func boolOr(b1 Any) Any {\
+                        \  return func(b2 Any) Any {\
                         \    return b1 || b2;\
                         \  };\
                         \}" :: Boolean -> Boolean -> Boolean
 
-  foreign import boolNot "function boolNot(b) {\
+  foreign import boolNot "func boolNot(b Any) Any {\
                          \  return !b;\
                          \}" :: Boolean -> Boolean
 
@@ -469,8 +487,8 @@ module Prelude
     (<>) :: a -> a -> a
 
   foreign import concatString
-    "function concatString(s1) {\
-    \  return function(s2) {\
+    "func concatString(s1 Any) Any {\
+    \  return func(s2 Any) Any {\
     \    return s1 + s2;\
     \  };\
     \}" :: String -> String -> String
@@ -507,108 +525,108 @@ module Data.Function where
   foreign import data Fn10 :: * -> * -> * -> * -> * -> * -> * -> * -> * -> * -> * -> *
 
   foreign import mkFn0
-    "function mkFn0(fn) {\
-    \  return function() {\
-    \    return fn({});\
+    "func mkFn0(fn Any) Any {\
+    \  return func( Any) Any {\
+    \    return fn(nil);\
     \  };\
     \}" :: forall a. (Unit -> a) -> Fn0 a
 
   foreign import mkFn1
-    "function mkFn1(fn) {\
-    \  return function(a) {\
+    "func mkFn1(fn Any) Any {\
+    \  return func(a Any) Any {\
     \    return fn(a);\
     \  };\
     \}" :: forall a b. (a -> b) -> Fn1 a b
 
   foreign import mkFn2
-    "function mkFn2(fn) {\
-    \  return function(a, b) {\
+    "func mkFn2(fn Any) Any {\
+    \  return func(a, b Any) Any {\
     \    return fn(a)(b);\
     \  };\
     \}" :: forall a b c. (a -> b -> c) -> Fn2 a b c
 
   foreign import mkFn3
-    "function mkFn3(fn) {\
-    \  return function(a, b, c) {\
+    "func mkFn3(fn Any) Any {\
+    \  return func(a, b, c Any) Any {\
     \    return fn(a)(b)(c);\
     \  };\
     \}" :: forall a b c d. (a -> b -> c -> d) -> Fn3 a b c d
 
   foreign import mkFn4
-    "function mkFn4(fn) {\
-    \  return function(a, b, c, d) {\
+    "func mkFn4(fn Any) Any {\
+    \  return func(a, b, c, d Any) Any {\
     \    return fn(a)(b)(c)(d);\
     \  };\
     \}" :: forall a b c d e. (a -> b -> c -> d -> e) -> Fn4 a b c d e
 
   foreign import mkFn5
-    "function mkFn5(fn) {\
-    \  return function(a, b, c, d, e) {\
+    "func mkFn5(fn Any) Any {\
+    \  return func(a, b, c, d, e Any) Any {\
     \    return fn(a)(b)(c)(d)(e);\
     \  };\
     \}" :: forall a b c d e f. (a -> b -> c -> d -> e -> f) -> Fn5 a b c d e f
 
   foreign import mkFn6
-    "function mkFn6(fn) {\
-    \  return function(a, b, c, d, e, f) {\
+    "func mkFn6(fn Any) Any {\
+    \  return func(a, b, c, d, e, f Any) Any {\
     \    return fn(a)(b)(c)(d)(e)(f);\
     \  };\
     \}" :: forall a b c d e f g. (a -> b -> c -> d -> e -> f -> g) -> Fn6 a b c d e f g
 
   foreign import mkFn7
-    "function mkFn7(fn) {\
-    \  return function(a, b, c, d, e, f, g) {\
+    "func mkFn7(fn Any) Any {\
+    \  return func(a, b, c, d, e, f, g Any) Any {\
     \    return fn(a)(b)(c)(d)(e)(f)(g);\
     \  };\
     \}" :: forall a b c d e f g h. (a -> b -> c -> d -> e -> f -> g -> h) -> Fn7 a b c d e f g h
 
   foreign import mkFn8
-    "function mkFn8(fn) {\
-    \  return function(a, b, c, d, e, f, g, h) {\
+    "func mkFn8(fn Any) Any {\
+    \  return func(a, b, c, d, e, f, g, h Any) Any {\
     \    return fn(a)(b)(c)(d)(e)(f)(g)(h);\
     \  };\
     \}" :: forall a b c d e f g h i. (a -> b -> c -> d -> e -> f -> g -> h -> i) -> Fn8 a b c d e f g h i
 
   foreign import mkFn9
-    "function mkFn9(fn) {\
-    \  return function(a, b, c, d, e, f, g, h, i) {\
+    "func mkFn9(fn Any) Any {\
+    \  return func(a, b, c, d, e, f, g, h, i Any) Any {\
     \    return fn(a)(b)(c)(d)(e)(f)(g)(h)(i);\
     \  };\
     \}" :: forall a b c d e f g h i j. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j) -> Fn9 a b c d e f g h i j
 
   foreign import mkFn10
-    "function mkFn10(fn) {\
-    \  return function(a, b, c, d, e, f, g, h, i, j) {\
+    "func mkFn10(fn Any) Any {\
+    \  return func(a, b, c, d, e, f, g, h, i, j Any) Any {\
     \    return fn(a)(b)(c)(d)(e)(f)(g)(h)(i)(j);\
     \  };\
     \}" :: forall a b c d e f g h i j k. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> k) -> Fn10 a b c d e f g h i j k
 
   foreign import runFn0
-    "function runFn0(fn) {\
+    "func runFn0(fn Any) Any {\
     \  return fn();\
     \}" :: forall a. Fn0 a -> a
 
   foreign import runFn1
-    "function runFn1(fn) {\
-    \  return function(a) {\
+    "func runFn1(fn Any) Any {\
+    \  return func(a Any) Any {\
     \    return fn(a);\
     \  };\
     \}" :: forall a b. Fn1 a b -> a -> b
 
   foreign import runFn2
-    "function runFn2(fn) {\
-    \  return function(a) {\
-    \    return function(b) {\
+    "func runFn2(fn Any) Any {\
+    \  return func(a Any) Any {\
+    \    return func(b Any) Any {\
     \      return fn(a, b);\
     \    };\
     \  };\
     \}" :: forall a b c. Fn2 a b c -> a -> b -> c
 
   foreign import runFn3
-    "function runFn3(fn) {\
-    \  return function(a) {\
-    \    return function(b) {\
-    \      return function(c) {\
+    "func runFn3(fn Any) Any {\
+    \  return func(a Any) Any {\
+    \    return func(b Any) Any {\
+    \      return func(c Any) Any {\
     \        return fn(a, b, c);\
     \      };\
     \    };\
@@ -616,11 +634,11 @@ module Data.Function where
     \}" :: forall a b c d. Fn3 a b c d -> a -> b -> c -> d
 
   foreign import runFn4
-    "function runFn4(fn) {\
-    \  return function(a) {\
-    \    return function(b) {\
-    \      return function(c) {\
-    \        return function(d) {\
+    "func runFn4(fn Any) Any {\
+    \  return func(a Any) Any {\
+    \    return func(b Any) Any {\
+    \      return func(c Any) Any {\
+    \        return func(d Any) Any {\
     \          return fn(a, b, c, d);\
     \        };\
     \      };\
@@ -629,12 +647,12 @@ module Data.Function where
     \}" :: forall a b c d e. Fn4 a b c d e -> a -> b -> c -> d -> e
 
   foreign import runFn5
-    "function runFn5(fn) {\
-    \  return function(a) {\
-    \    return function(b) {\
-    \      return function(c) {\
-    \        return function(d) {\
-    \          return function(e) {\
+    "func runFn5(fn Any) Any {\
+    \  return func(a Any) Any {\
+    \    return func(b Any) Any {\
+    \      return func(c Any) Any {\
+    \        return func(d Any) Any {\
+    \          return func(e Any) Any {\
     \            return fn(a, b, c, d, e);\
     \          };\
     \        };\
@@ -644,13 +662,13 @@ module Data.Function where
     \}" :: forall a b c d e f. Fn5 a b c d e f -> a -> b -> c -> d -> e -> f
 
   foreign import runFn6
-    "function runFn6(fn) {\
-    \  return function(a) {\
-    \    return function(b) {\
-    \      return function(c) {\
-    \        return function(d) {\
-    \          return function(e) {\
-    \            return function(f) {\
+    "func runFn6(fn Any) Any {\
+    \  return func(a Any) Any {\
+    \    return func(b Any) Any {\
+    \      return func(c Any) Any {\
+    \        return func(d Any) Any {\
+    \          return func(e Any) Any {\
+    \            return func(f Any) Any {\
     \              return fn(a, b, c, d, e, f);\
     \            };\
     \          };\
@@ -661,14 +679,14 @@ module Data.Function where
     \}" :: forall a b c d e f g. Fn6 a b c d e f g -> a -> b -> c -> d -> e -> f -> g
 
   foreign import runFn7
-    "function runFn7(fn) {\
-    \  return function(a) {\
-    \    return function(b) {\
-    \      return function(c) {\
-    \        return function(d) {\
-    \          return function(e) {\
-    \            return function(f) {\
-    \              return function(g) {\
+    "func runFn7(fn Any) Any {\
+    \  return func(a Any) Any {\
+    \    return func(b Any) Any {\
+    \      return func(c Any) Any {\
+    \        return func(d Any) Any {\
+    \          return func(e Any) Any {\
+    \            return func(f Any) Any {\
+    \              return func(g Any) Any {\
     \                return fn(a, b, c, d, e, f, g);\
     \              };\
     \            };\
@@ -680,15 +698,15 @@ module Data.Function where
     \}" :: forall a b c d e f g h. Fn7 a b c d e f g h -> a -> b -> c -> d -> e -> f -> g -> h
 
   foreign import runFn8
-    "function runFn8(fn) {\
-    \  return function(a) {\
-    \    return function(b) {\
-    \      return function(c) {\
-    \        return function(d) {\
-    \          return function(e) {\
-    \            return function(f) {\
-    \              return function(g) {\
-    \                return function(h) {\
+    "func runFn8(fn Any) Any {\
+    \  return func(a Any) Any {\
+    \    return func(b Any) Any {\
+    \      return func(c Any) Any {\
+    \        return func(d Any) Any {\
+    \          return func(e Any) Any {\
+    \            return func(f Any) Any {\
+    \              return func(g Any) Any {\
+    \                return func(h Any) Any {\
     \                  return fn(a, b, c, d, e, f, g, h);\
     \                };\
     \              };\
@@ -701,16 +719,16 @@ module Data.Function where
     \}" :: forall a b c d e f g h i. Fn8 a b c d e f g h i -> a -> b -> c -> d -> e -> f -> g -> h -> i
 
   foreign import runFn9
-    "function runFn9(fn) {\
-    \  return function(a) {\
-    \    return function(b) {\
-    \      return function(c) {\
-    \        return function(d) {\
-    \          return function(e) {\
-    \            return function(f) {\
-    \              return function(g) {\
-    \                return function(h) {\
-    \                  return function(i) {\
+    "func runFn9(fn Any) Any {\
+    \  return func(a Any) Any {\
+    \    return func(b Any) Any {\
+    \      return func(c Any) Any {\
+    \        return func(d Any) Any {\
+    \          return func(e Any) Any {\
+    \            return func(f Any) Any {\
+    \              return func(g Any) Any {\
+    \                return func(h Any) Any {\
+    \                  return func(i Any) Any {\
     \                    return fn(a, b, c, d, e, f, g, h, i);\
     \                  };\
     \                };\
@@ -724,17 +742,17 @@ module Data.Function where
     \}" :: forall a b c d e f g h i j. Fn9 a b c d e f g h i j -> a -> b -> c -> d -> e -> f -> g -> h -> i -> j
 
   foreign import runFn10
-    "function runFn10(fn) {\
-    \  return function(a) {\
-    \    return function(b) {\
-    \      return function(c) {\
-    \        return function(d) {\
-    \          return function(e) {\
-    \            return function(f) {\
-    \              return function(g) {\
-    \                return function(h) {\
-    \                  return function(i) {\
-    \                    return function(j) {\
+    "func runFn10(fn Any) Any {\
+    \  return func(a Any) Any {\
+    \    return func(b Any) Any {\
+    \      return func(c Any) Any {\
+    \        return func(d Any) Any {\
+    \          return func(e Any) Any {\
+    \            return func(f Any) Any {\
+    \              return func(g Any) Any {\
+    \                return func(h Any) Any {\
+    \                  return func(i Any) Any {\
+    \                    return func(j Any) Any {\
     \                      return fn(a, b, c, d, e, f, g, h, i, j);\
     \                    };\
     \                  };\
@@ -765,8 +783,8 @@ module Data.Eq where
 module Prelude.Unsafe where
 
   foreign import unsafeIndex
-    "function unsafeIndex(xs) {\
-    \  return function(n) {\
+    "func unsafeIndex(xs Any) Any {\
+    \  return func(n Any) Any {\
     \    return xs[n];\
     \  };\
     \}" :: forall a. [a] -> Number -> a
@@ -775,15 +793,15 @@ module Control.Monad.Eff where
 
   foreign import data Eff :: # ! -> * -> *
 
-  foreign import returnE "function returnE(a) {\
-                         \  return function() {\
+  foreign import returnE "func returnE(a Any) Any {\
+                         \  return func( Any) Any {\
                          \    return a;\
                          \  };\
                          \}" :: forall e a. a -> Eff e a
 
-  foreign import bindE "function bindE(a) {\
-                       \  return function(f) {\
-                       \    return function() {\
+  foreign import bindE "func bindE(a Any) Any {\
+                       \  return func(f Any) Any {\
+                       \    return func( Any) Any {\
                        \      return f(a())();\
                        \    };\
                        \  };\
@@ -791,7 +809,7 @@ module Control.Monad.Eff where
 
   type Pure a = forall e. Eff e a
 
-  foreign import runPure "function runPure(f) {\
+  foreign import runPure "func runPure(f Any) Any {\
                          \  return f();\
                          \}" :: forall a. Pure a -> a
 
@@ -809,29 +827,29 @@ module Control.Monad.Eff where
 
   instance monadEff :: Monad (Eff e)
 
-  foreign import untilE "function untilE(f) {\
-                        \  return function() {\
+  foreign import untilE "func untilE(f Any) Any {\
+                        \  return func( Any) Any {\
                         \    while (!f());\
-                        \    return {};\
+                        \    return nil;\
                         \  };\
                         \}" :: forall e. Eff e Boolean -> Eff e Unit
 
-  foreign import whileE "function whileE(f) {\
-                        \  return function(a) {\
-                        \    return function() {\
+  foreign import whileE "func whileE(f Any) Any {\
+                        \  return func(a Any) Any {\
+                        \    return func( Any) Any {\
                         \      while (f()) {\
                         \        a();\
                         \      }\
-                        \      return {};\
+                        \      return nil;\
                         \    };\
                         \  };\
                         \}" :: forall e a. Eff e Boolean -> Eff e a -> Eff e Unit
 
-  foreign import forE "function forE(lo) {\
-                      \  return function(hi) {\
-                      \    return function(f) {\
-                      \      return function() {\
-                      \        for (var i = lo; i < hi; i++) {\
+  foreign import forE "func forE(lo Any) Any {\
+                      \  return func(hi Any) Any {\
+                      \    return func(f Any) Any {\
+                      \      return func( Any) Any {\
+                      \        for i := lo; i < hi; i++ {\
                       \          f(i)();\
                       \        }\
                       \      };\
@@ -840,10 +858,10 @@ module Control.Monad.Eff where
                       \}" :: forall e. Number -> Number -> (Number -> Eff e Unit) -> Eff e Unit
 
 
-  foreign import foreachE "function foreachE(as) {\
-                          \  return function(f) {\
-                          \    return function() {\
-                          \      for (var i = 0; i < as.length; i++) {\
+  foreign import foreachE "func foreachE(as Any) Any {\
+                          \  return func(f Any) Any {\
+                          \    return func( Any) Any {\
+                          \      for i := 0; i < as.length; i++ {\
                           \        f(as[i])();\
                           \      }\
                           \    };\
@@ -855,7 +873,7 @@ module Control.Monad.Eff.Unsafe where
   import Control.Monad.Eff
 
   foreign import unsafeInterleaveEff
-    "function unsafeInterleaveEff(f) {\
+    "func unsafeInterleaveEff(f Any) Any {\
     \  return f;\
     \}" :: forall eff1 eff2 a. Eff eff1 a -> Eff eff2 a
 
@@ -865,10 +883,10 @@ module Debug.Trace where
 
   foreign import data Trace :: !
 
-  foreign import trace "function trace(s) {\
-                       \  return function() {\
+  foreign import trace "func trace(s Any) Any {\
+                       \  return func( Any) Any {\
                        \    console.log(s);\
-                       \    return {};\
+                       \    return nil;\
                        \  };\
                        \}" :: forall r. String -> Eff (trace :: Trace | r) Unit
 
@@ -883,35 +901,35 @@ module Control.Monad.ST where
 
   foreign import data STRef :: * -> * -> *
 
-  foreign import newSTRef "function newSTRef(val) {\
-                          \  return function() {\
+  foreign import newSTRef "func newSTRef(val Any) Any {\
+                          \  return func( Any) Any {\
                           \    return { value: val };\
                           \  };\
                           \}" :: forall a h r. a -> Eff (st :: ST h | r) (STRef h a)
 
-  foreign import readSTRef "function readSTRef(ref) {\
-                           \  return function() {\
+  foreign import readSTRef "func readSTRef(ref Any) Any {\
+                           \  return func( Any) Any {\
                            \    return ref.value;\
                            \  };\
                            \}" :: forall a h r. STRef h a -> Eff (st :: ST h | r) a
 
-  foreign import modifySTRef "function modifySTRef(ref) {\
-                             \  return function(f) {\
-                             \    return function() {\
+  foreign import modifySTRef "func modifySTRef(ref Any) Any {\
+                             \  return func(f Any) Any {\
+                             \    return func( Any) Any {\
                              \      return ref.value = f(ref.value);\
                              \    };\
                              \  };\
                              \}" :: forall a h r. STRef h a -> (a -> a) -> Eff (st :: ST h | r) a
 
-  foreign import writeSTRef "function writeSTRef(ref) {\
-                            \  return function(a) {\
-                            \    return function() {\
+  foreign import writeSTRef "func writeSTRef(ref Any) Any {\
+                            \  return func(a Any) Any {\
+                            \    return func( Any) Any {\
                             \      return ref.value = a;\
                             \    };\
                             \  };\
                             \}" :: forall a h r. STRef h a -> a -> Eff (st :: ST h | r) a
 
-  foreign import runST "function runST(f) {\
+  foreign import runST "func runST(f Any) Any {\
                        \  return f;\
                        \}" :: forall a r. (forall h. Eff (st :: ST h | r) a) -> Eff r a
 
