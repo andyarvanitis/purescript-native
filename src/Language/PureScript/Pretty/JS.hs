@@ -47,7 +47,7 @@ literals = mkPattern' match
     , fmap (intercalate ", ") $ forM xs prettyPrintJS'
     , return " ]"
     ]
-  match (JSObjectLiteral []) = return "{}"
+  match (JSObjectLiteral []) = return "nil"
   match (JSObjectLiteral ps) = fmap concat $ sequence
     [ return "{\n"
     , withIndent $ do
@@ -104,8 +104,7 @@ literals = mkPattern' match
            [return "var ",
             return (unqual ident),
             return " ",
-            return "struct",
-            maybe (return "") prettyPrintJS' value]
+            return "struct{}"]
 
       _ -> [return "var ",
             return (unqual ident),
