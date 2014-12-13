@@ -195,36 +195,36 @@ module Prelude
 
   foreign import numAdd "func numAdd(n1 Any) Any {\
                         \  return func(n2 Any) Any {\
-                        \    return n1 + n2;\
+                        \    return n1.(int) + n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
   foreign import numSub "func numSub(n1 Any) Any {\
                         \  return func(n2 Any) Any {\
-                        \    return n1 - n2;\
+                        \    return n1.(int) - n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
   foreign import numMul "func numMul(n1 Any) Any {\
                         \  return func(n2 Any) Any {\
-                        \    return n1 * n2;\
+                        \    return n1.(int) * n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
   foreign import numDiv "func numDiv(n1 Any) Any {\
                         \  return func(n2 Any) Any {\
-                        \    return n1 / n2;\
+                        \    return n1.(int) / n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
   foreign import numMod "func numMod(n1 Any) Any {\
                         \  return func(n2 Any) Any {\
-                        \    return n1 % n2;\
+                        \    return n1.(int) % n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
   foreign import numNegate "func numNegate(n Any) Any {\
-                           \  return -n;\
+                           \  return -(n.(int));\
                            \}" :: Number -> Number
 
   instance numNumber :: Num Number where
@@ -287,9 +287,10 @@ module Prelude
           return false;
         }
         for i := 0; i < len(xs); i++ {
-          if (!f(xs[i])(ys[i])) {
-            return false;
-          }
+          panic("eqArrayImpl")
+          // if (!f(xs[i])(ys[i])) {
+          //   return false;
+          // }
         }
         return true;
       };
@@ -351,13 +352,14 @@ module Prelude
         return func(gt Any) Any {
           return func(x Any) Any {
             return func(y Any) Any {
-              if x < y {
-                return lt
-              } else if x > y {
-                return gt
-              } else {
-                return eq
-              }
+              panic("unsafeCompareImpl")
+              // if x < y {
+              //   return lt
+              // } else if x > y {
+              //   return gt
+              // } else {
+              //   return eq
+              // }
             };
           };
         };
@@ -405,13 +407,13 @@ module Prelude
 
   foreign import numShl "func numShl(n1 Any) Any {\
                         \  return func(n2 Any) Any {\
-                        \    return n1 << n2;\
+                        \    return n1.(uint) << n2.(uint);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
   foreign import numShr "func numShr(n1 Any) Any {\
                         \  return func(n2 Any) Any {\
-                        \    return n1 >> n2;\
+                        \    return n1.(uint) >> n2.(uint);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
@@ -423,24 +425,24 @@ module Prelude
 
   foreign import numAnd "func numAnd(n1 Any) Any {\
                         \  return func(n2 Any) Any {\
-                        \    return n1 & n2;\
+                        \    return n1.(uint) & n2.(uint);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
   foreign import numOr "func numOr(n1 Any) Any {\
                        \  return func(n2 Any) Any {\
-                       \    return n1 | n2;\
+                       \    return n1.(uint) | n2.(uint);\
                        \  };\
                        \}" :: Number -> Number -> Number
 
   foreign import numXor "func numXor(n1 Any) Any {\
                         \  return func(n2 Any) Any {\
-                        \    return n1 ^ n2;\
+                        \    return n1.(uint) ^ n2.(uint);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
   foreign import numComplement "func numComplement(n Any) Any {\
-                               \  return ^n;\
+                               \  return ^(n.(uint));\
                                \}" :: Number -> Number
 
   instance bitsNumber :: Bits Number where
@@ -462,18 +464,18 @@ module Prelude
 
   foreign import boolAnd "func boolAnd(b1 Any) Any {\
                          \  return func(b2 Any) Any {\
-                         \    return b1 && b2;\
+                         \    return b1.(bool) && b2.(bool);\
                          \  };\
                          \}"  :: Boolean -> Boolean -> Boolean
 
   foreign import boolOr "func boolOr(b1 Any) Any {\
                         \  return func(b2 Any) Any {\
-                        \    return b1 || b2;\
+                        \    return b1.(bool) || b2.(bool);\
                         \  };\
                         \}" :: Boolean -> Boolean -> Boolean
 
   foreign import boolNot "func boolNot(b Any) Any {\
-                         \  return !b;\
+                         \  return !(b.(bool));\
                          \}" :: Boolean -> Boolean
 
   instance boolLikeBoolean :: BoolLike Boolean where
@@ -489,7 +491,7 @@ module Prelude
   foreign import concatString
     "func concatString(s1 Any) Any {\
     \  return func(s2 Any) Any {\
-    \    return s1 + s2;\
+    \    return s1.(string) + s2.(string);\
     \  };\
     \}" :: String -> String -> String
 
@@ -885,7 +887,7 @@ module Debug.Trace where
 
   foreign import trace "func trace(s Any) Any {\
                        \  return func( Any) Any {\
-                       \    console.log(s);\
+                       \    fmt.Print(s);\
                        \    return nil;\
                        \  };\
                        \}" :: forall r. String -> Eff (trace :: Trace | r) Unit
