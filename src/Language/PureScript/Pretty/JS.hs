@@ -95,10 +95,20 @@ literals = mkPattern' match
                                     JSBlock (JSVariableIntroduction
                                                arg (Just (JSVar $ arg ++ "_." ++ parens (fromMaybe "" pty))) : stmts)
                                 body _ _ ret = ret
-      (Just (JSInit _ _)) ->
+      (Just (JSInit a b)) ->
            [return "var ",
             return (unqual ident),
-            maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+            return " ",
+            prettyPrintJS' a,
+            return "\n",
+            return "func init() { ",
+            return "\n",
+            return (unqual ident),
+            return " = ",
+            maybe (return "") prettyPrintJS' value,
+            return "\n",
+            return "}",
+            return "\n"]
 
       (Just (JSObjectLiteral [])) ->
            [return "var ",
@@ -289,7 +299,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "." ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
-                  , [ Wrap init' $ \args val -> val ++ "{" ++ args ++ "}" ]
+                  , [ Wrap init' $ \args val -> val ++ "{\n" ++ args ++ "}" ]
                   , [ unary JSNew "new " ]
                   , [ Wrap lam $ \(name, args) ret -> "function "
                         ++ fromMaybe "" name
