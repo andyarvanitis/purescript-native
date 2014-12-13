@@ -67,13 +67,16 @@ moduleToJs opts (Module name decls (Just exps)) env = do
            , JSRaw ("var _ reflect.Value // ignore unused package errors")
            , JSRaw ("var _ fmt.Formatter //")
            , JSRaw ("")
+           , if moduleName == "Prelude" then JSRaw ("type " ++ anyType ++ " interface{} // Type alias for readability")
+                                        else JSRaw ""
+           , JSRaw ("")
            ] ++ moduleBody
              ++ [JSRaw "\n// Package exports"]
              ++ moduleExports
   where
     exportSymbol :: String -> JS
-    exportSymbol s@(x:xs) = if not (isUpper x) then JSVariableIntroduction (exportPrefix ++ s) (Just $ JSVar s)
-                                               else JSRaw ("// '" ++ s ++ "' automatically exported")
+    exportSymbol s@(x:xs) = if isUpper x then JSRaw ("// '" ++ s ++ "' automatically exported")
+                                         else JSVariableIntroduction (exportPrefix ++ s) (Just $ JSVar s)
 
     moduleName = case name of (ModuleName [ProperName "Main"]) -> "main"
                               _ -> moduleNameToJs name
@@ -257,7 +260,7 @@ valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (TypeApp (TypeApp _ aty) r
 
 valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ConstrainedType cls fty)) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction' Nothing [(identToJs arg, boxedType, Just $ constraint cls)] (JSBlock [JSReturn ret], typestr fty)
+  return $ JSFunction' Nothing [(identToJs arg, anyType, Just $ constraint cls)] (JSBlock [JSReturn ret], typestr fty)
   where
     constraint [((Qualified _ (ProperName name)),_)] = name
     constraint c = error $ "constraint assumption error: " ++ show c
@@ -420,16 +423,16 @@ typestr (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperN
     "func " ++ parens (typestr a) ++ " " ++ typestr b
 typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
                                                    (ProperName "Array")))
-                  (Skolem _ _ _)) = boxedType
+                 (Skolem _ _ _)) = anyType
 typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
                                                    (ProperName "Array")))
                  (ty)) = "[]" ++ typestr ty
 typestr (TypeApp (TypeConstructor _) ty) = typestr ty
-typestr (TypeApp _ (TypeVar _)) = boxedType
-typestr (TypeApp _ (Skolem _ ___ _)) = boxedType
+typestr (TypeApp _ (TypeVar _)) = anyType
+typestr (TypeApp _ (Skolem _ ___ _)) = anyType
 typestr (ForAll _ ty _) = typestr ty
-typestr (TypeVar "{superclass}") = "func () " ++ boxedType
-typestr t = boxedType
+typestr (TypeVar "{superclass}") = "func () " ++ anyType
+typestr t = anyType
 
 primstr :: Type -> Maybe String
 primstr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just "int"
@@ -441,5 +444,5 @@ primstr _ = Nothing
 typestrs :: [Type] -> String
 typestrs ts = intercalate " " $ map typestr ts
 
-boxedType = "interface{}"
+anyType = "Any"
 exportPrefix = "E_"
