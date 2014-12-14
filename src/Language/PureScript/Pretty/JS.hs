@@ -70,7 +70,12 @@ literals = mkPattern' match
     ]
   match (JSVar ident) = return ident
   match (JSVariableIntroduction ident value) = fmap concat $ sequence $
-    case value of
+    if ident == "Main.main" then [return "func main() {",
+                                  return "\n",
+                                  maybe (return "") (fmap ("  " ++) . prettyPrintJS') value,
+                                  return "\n",
+                                  return $ "}"]
+    else case value of
       (Just (JSFunction' Nothing [(arg,aty,pty)] (ret,rty))) ->
           if '.' `elem` ident then [return "func ",
                                     return (unqual ident),

@@ -70,7 +70,6 @@ moduleToJs opts (Module name decls (Just exps)) env = do
            ]
              ++ jsImports
              ++ (if moduleName == "Prelude" then [JSRaw ("type " ++ anyType ++ " interface{} // Type aliase for readability")
-                                                , JSRaw ("type " ++ funcType ++ " " ++ anyFunc)
                                                 , JSRaw ("")]
                                             else [JSRaw ("import . \"Prelude\"")
                                                 , JSRaw ("")
@@ -84,8 +83,10 @@ moduleToJs opts (Module name decls (Just exps)) env = do
              ++ moduleExports
   where
     exportSymbol :: String -> JS
-    exportSymbol s@(x:xs) = if isUpper x then JSRaw ("// '" ++ s ++ "' automatically exported")
-                                         else JSVariableIntroduction (exportPrefix ++ s) (Just $ JSVar s)
+    exportSymbol s@(x:xs)
+      | isUpper x = JSRaw ("// '" ++ s ++ "' automatically exported")
+      | moduleName == "main" && s == "main" = JSRaw ""
+      | otherwise = JSVariableIntroduction (exportPrefix ++ s) (Just $ JSVar s)
 
     moduleName = case name of (ModuleName [ProperName "Main"]) -> "main"
                               _ -> unqual $ moduleNameToJs' name
@@ -457,7 +458,7 @@ typestr t = anyType
 
 anyType  = "Any"
 anyFunc  = "func (" ++ anyType ++ ") " ++ anyType
-funcType = "Fn"
+funcType = anyFunc
 getSuper = "func () " ++ anyType
 
 exportPrefix = "I_"
