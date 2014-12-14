@@ -71,7 +71,7 @@ moduleToJs opts (Module name decls (Just exps)) env = do
              ++ (if moduleName == "Prelude" then [JSRaw ("type " ++ anyType ++ " interface{} // Type aliase for readability"),
                                                   JSRaw ("type " ++ funcType ++ " " ++ anyFunc),
                                                   JSRaw ("")]
-                                            else [JSRaw ("")])
+                                            else [JSRaw ("import . \"Prelude\""), JSRaw ("")])
              ++ moduleBody
              ++ [JSRaw "\n// Package exports"]
              ++ moduleExports
@@ -443,7 +443,7 @@ typestr t = anyType
 
 anyType  = "Any"
 anyFunc  = "func (" ++ anyType ++ ") " ++ anyType
-funcType = "Function"
+funcType = "Fn"
 getSuper = "func () " ++ anyType
 
 exportPrefix = "E_"
