@@ -20,7 +20,8 @@ module Language.PureScript.CodeGen.JS (
     declToJs,
     moduleToJs,
     identNeedsEscaping,
-    unqual
+    unqual,
+    dotsTo
 ) where
 
 import Data.Maybe (catMaybes, fromMaybe)
@@ -459,4 +460,4 @@ anyFunc  = "func (" ++ anyType ++ ") " ++ anyType
 funcType = "Fn"
 getSuper = "func () " ++ anyType
 
-exportPrefix = "Exported_"
+exportPrefix = "I_"

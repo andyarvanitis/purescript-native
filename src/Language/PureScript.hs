@@ -51,7 +51,9 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.ByteString.UTF8 as BU
 
-import System.FilePath ((</>))
+import Debug.Trace
+
+import System.FilePath ((</>), joinPath)
 
 -- |
 -- Compile a collection of modules
@@ -160,9 +162,9 @@ make outputDir opts ms prefix = do
 
   toRebuild <- foldM (\s (Module moduleName' _ _) -> do
     let filePath = runModuleName moduleName'
-    let goFilePath = "src" </> runModuleName moduleName'
+    let goFilePath = joinPath ("src" : (changeMain outputDir . words . P.dotsTo ' ' $ runModuleName moduleName'))
 
-        jsFile = outputDir </> goFilePath </> (P.unqual $ show moduleName') ++ ".go"
+        jsFile = outputDir </> goFilePath </> (P.unqual $ runModuleName moduleName') ++ ".go"
         externsFile = outputDir </> filePath </> "externs.purs"
         inputFile = fromMaybe (error "Module has no filename in 'make'") $ M.lookup moduleName' filePathMap
 
@@ -190,8 +192,8 @@ make outputDir opts ms prefix = do
     go env' ms'
   go env ((True, m@(Module moduleName' _ exps)) : ms') = do
     let filePath = runModuleName moduleName'
-    let goFilePath = "src" </> runModuleName moduleName'
-        jsFile = outputDir </> goFilePath </> (P.unqual $ show moduleName') ++ ".go"
+    let goFilePath = joinPath ("src" : (changeMain outputDir . words . P.dotsTo ' ' $ runModuleName moduleName'))
+        jsFile = outputDir </> goFilePath </> (P.unqual $ runModuleName moduleName') ++ ".go"
         externsFile = outputDir </> filePath </> "externs.purs"
 
     lift . progress $ "Compiling " ++ runModuleName moduleName'
@@ -252,3 +254,7 @@ importPrelude = addDefaultImport (ModuleName [ProperName C.prelude])
 
 prelude :: String
 prelude = BU.toString $(embedFile "prelude/prelude.purs")
+
+changeMain :: FilePath -> [String] -> [String]
+changeMain out ("Main":ms) = (out:ms)
+changeMain _ ms = ms
