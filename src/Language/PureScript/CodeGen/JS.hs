@@ -312,10 +312,6 @@ extendObj obj sts = do
 --
 varToJs :: ModuleName -> Qualified Ident -> JS
 varToJs _ (Qualified Nothing ident) = var ident
-varToJs m qual@(Qualified (Just (ModuleName [ProperName "Prim"])) _) = qualifiedToJS m id qual
-varToJs m qual@(Qualified qmn (Ident ident))
-  | (Just m) == qmn = qualifiedToJS m id qual
-  | otherwise       = qualifiedToJS m id (Qualified qmn (Ident $ exportPrefix ++ ident))
 varToJs m qual = qualifiedToJS m id qual
 
 -- |
@@ -324,7 +320,7 @@ varToJs m qual = qualifiedToJS m id qual
 --
 qualifiedToJS :: ModuleName -> (a -> Ident) -> Qualified a -> JS
 qualifiedToJS _ f (Qualified (Just (ModuleName [ProperName mn])) a) | mn == C.prim = JSVar . runIdent $ f a
-qualifiedToJS m f (Qualified (Just m') a) | m /= m' = accessor (f a) (JSVar (moduleNameToJs m'))
+qualifiedToJS m f (Qualified (Just m') a) | m /= m' = JSVar $ moduleNameToJs m' ++ "." ++ exportPrefix ++ (identToJs $ f a)
 qualifiedToJS _ f (Qualified _ a) = JSVar $ identToJs (f a)
 
 -- |
