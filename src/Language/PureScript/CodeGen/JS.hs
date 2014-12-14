@@ -19,12 +19,13 @@ module Language.PureScript.CodeGen.JS (
     module AST,
     declToJs,
     moduleToJs,
-    identNeedsEscaping
+    identNeedsEscaping,
+    unqual
 ) where
 
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Function (on)
-import Data.List (nub, (\\), delete, sortBy, intercalate, elemIndex)
+import Data.List (nub, (\\), delete, sortBy, intercalate, elemIndices, isPrefixOf)
 import Data.Char (isUpper)
 
 import qualified Data.Map as M
@@ -54,6 +55,7 @@ import Debug.Trace
 --
 moduleToJs :: (Functor m, Applicative m, Monad m) => Options mode -> Module -> Environment -> SupplyT m [JS]
 moduleToJs opts (Module name decls (Just exps)) env = do
+  let jsImports = map (importToJs opts) . delete (ModuleName [ProperName C.prim]) . (\\ [name]) . nub $ concatMap imports decls
   jsDecls <- mapM (\decl -> declToJs opts name decl env) decls
   let optimized = concat $ map (map $ optimize opts) $ catMaybes jsDecls
   let isModuleEmpty = null exps
@@ -64,14 +66,18 @@ moduleToJs opts (Module name decls (Just exps)) env = do
            , JSRaw ("import \"reflect\"")
            , JSRaw ("import \"fmt\"")
            , JSRaw ("")
-           , JSRaw ("var _ reflect.Value // ignore unused package errors")
-           , JSRaw ("var _ fmt.Formatter //")
-           , JSRaw ("")
            ]
-             ++ (if moduleName == "Prelude" then [JSRaw ("type " ++ anyType ++ " interface{} // Type aliase for readability"),
-                                                  JSRaw ("type " ++ funcType ++ " " ++ anyFunc),
-                                                  JSRaw ("")]
-                                            else [JSRaw ("import . \"Prelude\""), JSRaw ("")])
+             ++ jsImports
+             ++ (if moduleName == "Prelude" then [JSRaw ("type " ++ anyType ++ " interface{} // Type aliase for readability")
+                                                , JSRaw ("type " ++ funcType ++ " " ++ anyFunc)
+                                                , JSRaw ("")]
+                                            else [JSRaw ("import . \"Prelude\"")
+                                                , JSRaw ("")
+                                                , JSRaw ("var _ Any           // ignore unused package errors")
+                                                , JSRaw ("var _ Prelude.Any   //")
+                                                , JSRaw ("var _ reflect.Value //")
+                                                , JSRaw ("var _ fmt.Formatter //")
+                                                , JSRaw ("")])
              ++ moduleBody
              ++ [JSRaw "\n// Package exports"]
              ++ moduleExports
@@ -81,17 +87,12 @@ moduleToJs opts (Module name decls (Just exps)) env = do
                                          else JSVariableIntroduction (exportPrefix ++ s) (Just $ JSVar s)
 
     moduleName = case name of (ModuleName [ProperName "Main"]) -> "main"
-                              _ -> moduleNameToJs name
+                              _ -> unqual $ moduleNameToJs' name
 
 moduleToJs _ _ _ = error "Exports should have been elaborated in name desugaring"
 
 importToJs :: Options mode -> ModuleName -> JS
-importToJs opts mn =
-  JSVariableIntroduction (moduleNameToJs mn) (Just moduleBody)
-  where
-  moduleBody = case optionsAdditional opts of
-    MakeOptions -> JSApp (JSVar "require") [JSStringLiteral (runModuleName mn)]
-    CompileOptions ns _ _ -> JSAccessor (moduleNameToJs mn) (JSVar ns)
+importToJs opts mn = JSRaw $ "import " ++ (dotsTo '_' (moduleNameToJs' mn)) ++ " \"" ++ (dotsTo '/' (moduleNameToJs' mn)) ++ "\""
 
 imports :: Declaration -> [ModuleName]
 imports (ImportDeclaration mn _ _) = [mn]
@@ -248,9 +249,10 @@ valueToJs opts m e v@App{} = do
     unApp (TypedValue _ val ty) args t = unApp val args (if t == Nothing then (Just $ typestr ty) else t)
     unApp other args t = (other, args, t)
 
-    castIfNeeded e@(JSVar _) _       = e
-    castIfNeeded e           Nothing = e
-    castIfNeeded e           _       = JSAccessor (parens funcType) e
+    castIfNeeded e@(JSVar _) _        = e
+    castIfNeeded e@(JSAccessor _ _) _ = e
+    castIfNeeded e           Nothing  = e
+    castIfNeeded e           _        = JSAccessor (parens funcType) e
 
 valueToJs opts m e (Let ds val) = do
   decls <- concat . catMaybes <$> mapM (flip (declToJs opts m) e) ds
@@ -308,6 +310,10 @@ extendObj obj sts = do
 --
 varToJs :: ModuleName -> Qualified Ident -> JS
 varToJs _ (Qualified Nothing ident) = var ident
+varToJs m qual@(Qualified (Just (ModuleName [ProperName "Prim"])) _) = qualifiedToJS m id qual
+varToJs m qual@(Qualified qmn (Ident ident))
+  | (Just m) == qmn = qualifiedToJS m id qual
+  | otherwise       = qualifiedToJS m id (Qualified qmn (Ident $ exportPrefix ++ ident))
 varToJs m qual = qualifiedToJS m id qual
 
 -- |
@@ -428,6 +434,13 @@ binderToJs m e varName done (NamedBinder ident binder) = do
 binderToJs m e varName done (PositionedBinder _ binder) =
   binderToJs m e varName done binder
 
+unqual :: String -> String
+unqual s = let indices = elemIndices '.' s in
+	         if null indices then s else drop (last indices + 1) s
+
+dotsTo :: Char -> String -> String
+dotsTo chr = map (\c -> if c == '.' then chr else c)
+
 typestr :: Type -> String
 typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"
 typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
@@ -446,4 +459,4 @@ anyFunc  = "func (" ++ anyType ++ ") " ++ anyType
 funcType = "Fn"
 getSuper = "func () " ++ anyType
 
-exportPrefix = "E_"
+exportPrefix = "Exported_"

@@ -146,6 +146,9 @@ nameIsJsReserved name =
 moduleNameToJs :: ModuleName -> String
 moduleNameToJs (ModuleName pns) = intercalate "_" (runProperName `map` pns)
 
+moduleNameToJs' :: ModuleName -> String
+moduleNameToJs' (ModuleName pns) = intercalate "." (runProperName `map` pns)
+
 -- |
 -- Finds the value stored for a data constructor in the current environment.
 -- This is a partial function, but if an invalid type has reached this far then

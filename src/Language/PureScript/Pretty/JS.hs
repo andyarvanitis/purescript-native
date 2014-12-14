@@ -15,11 +15,10 @@
 
 module Language.PureScript.Pretty.JS (
     prettyPrintJS
-  , unqual
 ) where
 
 import Language.PureScript.Pretty.Common
-import Language.PureScript.CodeGen.JS (identNeedsEscaping)
+import Language.PureScript.CodeGen.JS (identNeedsEscaping, unqual)
 import Language.PureScript.CodeGen.JS.AST
 
 import Data.List
@@ -350,9 +349,6 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                                                            ++ (takeWhile (\c -> isSpace c) (drop 2 ret))
                                                            ++ arg ++ " := " ++ arg ++ "_." ++ parens (fromMaybe "" pty)
                                                            ++ (drop 1 ret)
-
-unqual :: String -> String
-unqual s = drop (fromMaybe (-1) (elemIndex '.' s) + 1) s
 
 argWithTy "__unused" aty pty = ""
 argWithTy arg aty pty = arg ++ (case pty of Nothing -> " "
