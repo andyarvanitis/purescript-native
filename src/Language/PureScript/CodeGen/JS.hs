@@ -62,6 +62,7 @@ moduleToJs opts (Module name decls (Just exps)) env = do
   let isModuleEmpty = null exps
   let moduleBody = optimized
   let moduleExports = map (exportSymbol . identToJs . snd) $ M.toList . M.unions $ map exportToJs exps
+  let typeInstances = map (assignSymbol . identToJs . snd) $ M.toList . M.unions $ map assignIfInstance exps
   return $ [ JSRaw ("package " ++ moduleName)
            , JSRaw ("")
            , JSRaw ("import \"reflect\"")
@@ -81,12 +82,17 @@ moduleToJs opts (Module name decls (Just exps)) env = do
              ++ moduleBody
              ++ [JSRaw "\n// Package exports"]
              ++ moduleExports
+             ++ [ JSRaw ("")
+                , JSFunction' (Just "init") [] (JSBlock typeInstances, "")]
   where
     exportSymbol :: String -> JS
     exportSymbol s@(x:xs)
       | isUpper x = JSRaw ("// '" ++ s ++ "' automatically exported")
       | moduleName == "main" && s == "main" = JSRaw ""
       | otherwise = JSVariableIntroduction (exportPrefix ++ s) (Just $ JSVar s)
+
+    assignSymbol :: String -> JS
+    assignSymbol s = JSAssignment (JSVar $ exportPrefix ++ s) (JSVar s)
 
     moduleName = case name of (ModuleName [ProperName "Main"]) -> "main"
                               _ -> unqual $ moduleNameToJs' name
@@ -438,6 +444,10 @@ unqual s = let indices = elemIndices '.' s in
 
 dotsTo :: Char -> String -> String
 dotsTo chr = map (\c -> if c == '.' then chr else c)
+
+assignIfInstance :: DeclarationRef -> M.Map String Ident
+assignIfInstance (TypeInstanceRef name) = M.singleton (runIdent name) name
+assignIfInstance _ = M.empty
 
 typestr :: Type -> String
 typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"

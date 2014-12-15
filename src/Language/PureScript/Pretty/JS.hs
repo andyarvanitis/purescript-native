@@ -217,7 +217,7 @@ lam = mkPattern match
 lam' :: Pattern PrinterState JS ((Maybe String, [(String, String, Maybe String)], String), JS)
 lam' = mkPattern match
   where
-  match (JSFunction' Nothing args (ret,rty)) = Just ((Nothing, args, rty), ret)
+  match (JSFunction' name args (ret,rty)) = Just ((name, args, rty), ret)
   match _ = Nothing
 
 dat' :: Pattern PrinterState JS (String, JS)
@@ -309,12 +309,12 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                         ++ fromMaybe "" name
                         ++ "(" ++ intercalate ", " args ++ ") "
                         ++ ret ]
-                  , [ Wrap lam' $ \(name, [(arg,aty,pty)], rty) ret -> "func "
+                  , [ Wrap lam' $ \(name, args, rty) ret -> "func "
                         ++ fromMaybe "" name
-                        ++ (parens $ argWithTy arg aty pty)
+                        ++ parens (intercalate "," (map (applyTriple argWithTy) args))
                         ++ " "
                         ++ rty ++ " "
-                        ++ (body arg pty ret) ]
+                        ++ (body ret (map (\(arg,_,pty) -> (arg,pty)) args)) ]
                   , [ Wrap dat' $ \name fields -> "\n"
                         ++ "type "
                         ++ name
@@ -349,12 +349,15 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintJS1 th ++ " : " ++ prettyPrintJS1 el ]
                     ]
                   where
-                    body arg pty ret = case pty of Nothing -> ret
-                                                   _       -> (take 2 ret)
-                                                           ++ (takeWhile (\c -> isSpace c) (drop 2 ret))
-                                                           ++ arg ++ " := " ++ arg ++ "_." ++ parens (fromMaybe "" pty)
-                                                           ++ (drop 1 ret)
-
-argWithTy "__unused" aty pty = ""
+                    body ret [] = ret
+                    body ret [(arg, pty)] = case pty of Nothing -> ret
+                                                        _       -> (take 2 ret)
+                                                                ++ (takeWhile (\c -> isSpace c) (drop 2 ret))
+                                                                ++ arg ++ " := " ++ arg ++ "_." ++ parens (fromMaybe "" pty)
+                                                                ++ (drop 1 ret)
+argWithTy "__unused" _ _ = ""
 argWithTy arg aty pty = arg ++ (case pty of Nothing -> " "
                                             _       -> "_ ") ++ aty
+
+applyTriple :: (a -> b -> c -> d) -> (a,b,c) -> d
+applyTriple f (x,y,z) = f x y z
