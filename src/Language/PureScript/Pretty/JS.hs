@@ -41,6 +41,10 @@ literals = mkPattern' match
   match (JSStringLiteral s) = return $ string s
   match (JSBooleanLiteral True) = return "true"
   match (JSBooleanLiteral False) = return "false"
+  match (JSArrayLiteral []) = fmap concat $ sequence
+    [ return "[]Any{}"
+    , return ""
+    ]
   match (JSArrayLiteral xs) = fmap concat $ sequence
     [ return "[ "
     , fmap (intercalate ", ") $ forM xs prettyPrintJS'
@@ -70,7 +74,7 @@ literals = mkPattern' match
     ]
   match (JSVar ident) = return ident
   match (JSVariableIntroduction ident value) = fmap concat $ sequence $
-    if ident == "Main.main" then [return "func main() {",
+    if ident == "Main.Main" then [return "func main() {",
                                   return "\n",
                                   maybe (return "") (fmap ("  " ++) . prettyPrintJS') value,
                                   return "\n",
@@ -302,7 +306,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
   operators =
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "." ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
-                  , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
+                  , [ Wrap app $ \args val -> val ++ parens args ]
                   , [ Wrap init' $ \args val -> val ++ "{\n" ++ args ++ "}" ]
                   , [ unary JSNew "new " ]
                   , [ Wrap lam $ \(name, args) ret -> "function "
@@ -325,7 +329,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ binary    GreaterThan          ">" ]
                   , [ binary    GreaterThanOrEqualTo ">=" ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
-                  , [ AssocR instanceOf $ \v1 v2 -> "reflect.TypeOf(" ++ v1 ++ ") == reflect.TypeOf(" ++ v2 ++ "_ctor)" ]
+                  , [ AssocR instanceOf $ \v1 v2 -> "reflect.TypeOf" ++ parens v1 ++ " == reflect.TypeOf" ++ parens ('C' : v2) ]
 
                   , [ unary     Not                  "!" ]
                   , [ unary     BitwiseNot           "~" ]

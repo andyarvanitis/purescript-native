@@ -27,7 +27,7 @@ module Language.PureScript.CodeGen.JS (
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Function (on)
 import Data.List (nub, (\\), delete, sortBy, intercalate, elemIndices, isPrefixOf)
-import Data.Char (isUpper)
+import Data.Char (isLower, isUpper, toUpper)
 
 import qualified Data.Map as M
 
@@ -61,8 +61,8 @@ moduleToJs opts (Module name decls (Just exps)) env = do
   let optimized = concat $ map (map $ optimize opts) $ catMaybes jsDecls
   let isModuleEmpty = null exps
   let moduleBody = optimized
-  let moduleExports = map (exportSymbol . identToJs . snd) $ M.toList . M.unions $ map exportToJs exps
-  let typeInstances = map (assignSymbol . identToJs . snd) $ M.toList . M.unions $ map assignIfInstance exps
+  -- let moduleExports = map (exportSymbol . identToJs . snd) $ M.toList . M.unions $ map exportToJs exps
+  -- let typeInstances = map (assignSymbol . identToJs . snd) $ M.toList . M.unions $ map assignIfInstance exps
   return $ [ JSRaw ("package " ++ moduleName)
            , JSRaw ("")
            , JSRaw ("import \"reflect\"")
@@ -81,9 +81,9 @@ moduleToJs opts (Module name decls (Just exps)) env = do
                                                 , JSRaw ("")])
              ++ moduleBody
              ++ [JSRaw "\n// Package exports"]
-             ++ moduleExports
-             ++ [ JSRaw ("")
-                , JSFunction' (Just "init") [] (JSBlock typeInstances, "")]
+             -- ++ moduleExports
+             -- ++ [ JSRaw ("")
+             --    , JSFunction' (Just "init") [] (JSBlock typeInstances, "")]
   where
     exportSymbol :: String -> JS
     exportSymbol s@(x:xs)
@@ -118,13 +118,14 @@ imports other =
   collectB _ = []
 
 
-qname m e ident = if M.member (m,ident) (names e) then (show m ++ "." ++ identToJs ident) else identToJs ident
+qname m e ident = if M.member (m,ident) (names e) then runModuleName m ++ "." ++ (capitalize $ identToJs ident)
+                                                  else identToJs ident
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a declaration
 --
 declToJs :: (Functor m, Applicative m, Monad m) => Options mode -> ModuleName -> Declaration -> Environment -> SupplyT m (Maybe [JS])
-declToJs opts mp (ValueDeclaration ident nk bd (Right val)) e = do
+declToJs opts mp z@(ValueDeclaration ident nk bd (Right val)) e = do
   js <- valueToJs opts mp e val
   return $ Just [JSVariableIntroduction (qname mp e ident) (Just js)]
 
@@ -140,7 +141,7 @@ declToJs _ _ (DataDeclaration Newtype _ _ _) _ =
 declToJs _ mp (DataDeclaration Data _ _ ctors) e = do
   return $ Just $ flip concatMap ctors $ \(pn@(ProperName ctor), tys) ->
          [ makeConstructor ctor tys
-         , JSVar ("var " ++ ctor ++ "_ctor " ++ ctor)
+         , JSVar ("var " ++ ('C' : ctor) ++ (' ' : 'T' : ctor))
          ]
     where
     makeConstructor :: String -> [Type] -> JS
@@ -148,9 +149,9 @@ declToJs _ mp (DataDeclaration Data _ _ ctors) e = do
       let
         args = [ "value" ++ show index | index <- [0..(length types)-1] ]
         body = [(JSVar (arg ++ " " ++ "???")) | arg <- args ]
-      in JSData' ctorName (JSBlock body)
+      in JSData' ('T' : ctorName) (JSBlock body)
     go :: ProperName -> Int -> Int -> [JS] -> JS
-    go pn _ 0 values = JSInit (JSVar $ runProperName pn) (reverse values)
+    go pn _ 0 values = JSInit (JSVar $ runProperName pn) (map capVar (reverse values))
     go pn index n values =
       JSFunction Nothing ["value?" ++ show index]
         (JSBlock [JSReturn (go pn (index + 1) (n - 1) (JSVar ("value!" ++ show index) : values))])
@@ -159,11 +160,12 @@ declToJs opts mp (DataBindingGroupDeclaration ds) e = do
   return $ Just $ concat $ catMaybes jss
 declToJs _ _ (TypeClassDeclaration name _ supers members) _ =
   return $ Just $ [
-    JSData' (runProperName name) (JSBlock $ map assn args)]
+    JSData' ('T' : runProperName name) (JSBlock $ map assn args)]
   where
   assn :: (Ident, Maybe Type) -> JS
-  assn arg =  JSRaw $ identToJs (fst arg) ++ " " ++ if snd arg == Nothing then getSuper
-                                                                          else anyType
+  assn arg =  JSVar . capitalize $ identToJs (fst arg) ++ " " ++ if snd arg == Nothing
+                                                                   then getSuper
+                                                                   else anyType
   args :: [(Ident, Maybe Type)]
   args = sortBy (compare `on` (runIdent . fst)) $ memberNames ++ (zip superNames (repeat (Nothing)))
   memberNames = memberToName `map` members
@@ -196,7 +198,7 @@ exportToJs _                         = M.empty
 -- PureScript identifier.
 --
 var :: Ident -> JS
-var = JSVar . identToJs
+var ident@(Ident name) = JSVar . identToJs . Ident $ name
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for an accessor based on
@@ -218,10 +220,12 @@ valueToJs :: (Functor m, Applicative m, Monad m) => Options mode -> ModuleName -
 valueToJs _ _ _ (NumericLiteral n) = return $ JSNumericLiteral n
 valueToJs _ _ _ (StringLiteral s) = return $ JSStringLiteral s
 valueToJs _ _ _ (BooleanLiteral b) = return $ JSBooleanLiteral b
-valueToJs opts m e (ArrayLiteral xs) = JSArrayLiteral <$> mapM (valueToJs opts m e) xs
+valueToJs opts m e z@(ArrayLiteral xs) = do
+  vals <- mapM (valueToJs opts m e) xs
+  JSArrayLiteral <$> mapM (valueToJs opts m e) xs
 valueToJs opts m e (ObjectLiteral ps) = JSObjectLiteral <$> mapM (sndM (valueToJs opts m e)) ps
 valueToJs opts m e (TypeClassDictionaryConstructorApp name (TypedValue _ (ObjectLiteral ps) _)) =
-  JSInit (qualifiedToJS m (Ident . runProperName) name) <$> mapM (valueToJs opts m e . snd) (sortBy (compare `on` fst) ps)
+  JSInit (JSVar $ 'T' : unqualName name) <$> mapM (valueToJs opts m e . snd) (sortBy (compare `on` fst) ps)
 valueToJs _ _ _ TypeClassDictionaryConstructorApp{} =
   error "TypeClassDictionaryConstructorApp did not contain object literal"
 valueToJs opts m e (ObjectUpdate o ps) = do
@@ -229,32 +233,28 @@ valueToJs opts m e (ObjectUpdate o ps) = do
   sts <- mapM (sndM (valueToJs opts m e)) ps
   extendObj obj sts
 valueToJs _ m e (Constructor name) =
-  let propName = if isNullaryConstructor e name then "_ctor" else "create#"
-  in return $ JSVar $ unqualName name ++ propName
-  where
-    unqualName :: Qualified ProperName -> String
-    unqualName (Qualified (Just (ModuleName [ProperName _])) (ProperName uname)) = uname
-    unqualName n = show n
+  let propName = if isNullaryConstructor e name then 'C' else '#'
+  in return $ JSVar (propName : unqualName name)
 
 valueToJs opts m e (Case values binders) = do
   vals <- mapM (valueToJs opts m e) values
   bindersToJs opts m e binders vals
 valueToJs opts m e (IfThenElse cond th el) = JSConditional <$> valueToJs opts m e cond <*> valueToJs opts m e th <*> valueToJs opts m e el
-valueToJs opts m e (Accessor prop val) = (JSAccessor (identToJs . Ident $ prop)) <$> valueToJs opts m e val
+valueToJs opts m e (Accessor prop val) = (JSAccessor (capitalize . identToJs . Ident $ prop)) <$> valueToJs opts m e val
 
 valueToJs opts m e v@App{} = do
   let (f, args, fty) = unApp v [] Nothing
   args' <- mapM (valueToJs opts m e) args
   case f of
     Constructor name | isNewtypeConstructor e name && length args == 1 -> return (head args')
-    Constructor name | getConstructorArity e name == length args ->
-      return $ JSInit (qualifiedToJS m (Ident . runProperName) name) args'
+    Constructor name | getConstructorArity e name == length args -> error $ show args'
+      -- return $ JSInit (qualifiedToJS m (Ident . runProperName) name) (map capVar args')
     _ -> flip (foldl (\fn a -> JSApp (castIfNeeded fn fty) [a])) args' <$> valueToJs opts m e f
   where
     unApp :: Expr -> [Expr] -> Maybe String -> (Expr, [Expr], Maybe String)
     unApp (App val arg) args t = unApp val (arg : args) t
     unApp (PositionedValue _ val) args t = unApp val args t
-    unApp (TypedValue _ val ty) args t = unApp val args (if t == Nothing then (Just $ typestr ty) else t)
+    unApp (TypedValue _ val ty) args t = unApp val args (Just $ fromMaybe (typestr ty) t)
     unApp other args t = (other, args, t)
 
     castIfNeeded e@(JSVar _) _        = e
@@ -265,7 +265,7 @@ valueToJs opts m e v@App{} = do
 valueToJs opts m e (Let ds val) = do
   decls <- concat . catMaybes <$> mapM (flip (declToJs opts m) e) ds
   ret <- valueToJs opts m e val
-  return $ JSApp (JSFunction Nothing [] (JSBlock (decls ++ [JSReturn ret]))) []
+  return $ JSApp (JSFunction' Nothing [] (JSBlock (decls ++ [JSReturn ret]), anyType)) []
 valueToJs opts m e (Abs (Left arg) val) = do
   ret <- valueToJs opts m e val
   return $ JSFunction Nothing [identToJs arg] (JSBlock [JSReturn ret])
@@ -284,7 +284,7 @@ valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (ConstrainedType cls fty))
   ret <- valueToJs opts m e val
   return $ JSFunction' Nothing [(identToJs arg, anyType, Just $ constraint cls)] (JSBlock [JSReturn ret], anyType)
   where
-    constraint [((Qualified _ (ProperName name)),_)] = name
+    constraint [((Qualified _ (ProperName name)),_)] = ('T' : name)
     constraint c = error $ "constraint assumption error: " ++ show c
 
 valueToJs opts m e (TypedValue a v@(Abs (Left _) _) (ForAll _ t _)) = valueToJs opts m e (TypedValue a v t)
@@ -326,8 +326,8 @@ varToJs m qual = qualifiedToJS m id qual
 --
 qualifiedToJS :: ModuleName -> (a -> Ident) -> Qualified a -> JS
 qualifiedToJS _ f (Qualified (Just (ModuleName [ProperName mn])) a) | mn == C.prim = JSVar . runIdent $ f a
-qualifiedToJS m f (Qualified (Just m') a) | m /= m' = JSVar $ moduleNameToJs m' ++ "." ++ exportPrefix ++ (identToJs $ f a)
-qualifiedToJS _ f (Qualified _ a) = JSVar $ identToJs (f a)
+qualifiedToJS m f (Qualified (Just m') a) | m /= m' = JSVar $ moduleNameToJs m' ++ ('.' : capitalize (identToJs $ f a))
+qualifiedToJS _ f (Qualified _ a) = JSVar $ capitalize $ identToJs (f a)
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for pattern match binders
@@ -438,6 +438,10 @@ binderToJs m e varName done (NamedBinder ident binder) = do
 binderToJs m e varName done (PositionedBinder _ binder) =
   binderToJs m e varName done binder
 
+unqualName :: Qualified ProperName -> String
+unqualName (Qualified (Just (ModuleName [ProperName _])) (ProperName uname)) = uname
+unqualName n = show n
+
 unqual :: String -> String
 unqual s = let indices = elemIndices '.' s in
 	         if null indices then s else drop (last indices + 1) s
@@ -453,10 +457,9 @@ typestr :: Type -> String
 typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"
 typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
 typestr (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = "bool"
-typestr (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b) = funcType
-typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"]))
-                                                   (ProperName "Array")))
-                 (ty)) = "[]" ++ typestr ty
+typestr (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) REmpty) _) = error "Need to supprt func() T"
+typestr (TypeApp (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) _) _) = funcType
+typestr (TypeApp (TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) _) = ('[' : ']' : anyType)
 typestr (TypeApp (TypeConstructor _) ty) = typestr ty
 typestr (TypeApp _ (TypeVar _)) = anyType
 typestr (ForAll _ ty _) = typestr ty
@@ -468,3 +471,12 @@ funcType = anyFunc
 getSuper = "func () " ++ anyType
 
 exportPrefix = "I_"
+
+capitalize :: String -> String
+capitalize s@(x:xs)
+  | isLower x = (toUpper x : xs)
+  | otherwise = s
+
+capVar :: JS -> JS
+capVar (JSVar n) = JSVar $ capitalize n
+capVar v = v

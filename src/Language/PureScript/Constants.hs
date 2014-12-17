@@ -198,7 +198,7 @@ main = "main"
 -- Code Generation
 
 __superclass_ :: String
-__superclass_ = "__superclass_"
+__superclass_ = "Superclass_"
 
 __unused :: String
 __unused = "__unused"
