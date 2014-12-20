@@ -268,7 +268,7 @@ valueToJs opts m e (Let ds val) = do
   return $ JSApp (JSFunction' Nothing [] (JSBlock (decls ++ [JSReturn ret]), anyType)) []
 valueToJs opts m e (Abs (Left arg) val) = do
   ret <- valueToJs opts m e val
-  return $ JSFunction Nothing [identToJs arg] (JSBlock [JSReturn ret])
+  return $ error $ show $ JSFunction' Nothing [(identToJs arg, "", Nothing)] (JSBlock [JSReturn ret], "-Z-")
 valueToJs _ m _ (Var ident) = return $ varToJs m ident
 
 valueToJs opts m e (TypedValue _ (Abs (Left arg) val) (TypeApp (TypeApp _ aty) rty)) = do
@@ -310,7 +310,7 @@ extendObj obj sts = do
     assign = JSBlock [JSAssignment (JSIndexer jsKey jsNewObj) (JSIndexer jsKey obj)]
     stToAssign (s, js) = JSAssignment (JSAccessor s jsNewObj) js
     extend = map stToAssign sts
-  return $ JSApp (JSFunction Nothing [] block) []
+  return $ JSApp (JSFunction' Nothing [] (block, "-Y-")) []
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a reference to a
@@ -340,7 +340,7 @@ bindersToJs opts m e binders vals = do
   jss <- forM binders $ \(CaseAlternative bs result) -> do
     ret <- guardsToJs result
     go valNames ret bs
-  return $ JSApp (JSFunction Nothing [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSStringLiteral "Failed pattern match"])))
+  return $ JSApp (JSFunction' Nothing [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSStringLiteral "Failed pattern match"]), "-A-"))
                  []
   where
     go :: (Functor m, Applicative m, Monad m) => [String] -> [JS] -> [Binder] -> SupplyT m [JS]

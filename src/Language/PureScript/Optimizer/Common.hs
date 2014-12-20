@@ -38,7 +38,7 @@ isReassigned :: String -> JS -> Bool
 isReassigned var1 = everythingOnJS (||) check
   where
   check :: JS -> Bool
-  check (JSFunction _ args _) | var1 `elem` args = True
+  check (JSFunction' _ args _) | var1 `elem` (map fst' args) = True
   check (JSVariableIntroduction arg _) | var1 == arg = True
   check (JSAssignment (JSVar arg) _) | var1 == arg = True
   check (JSFor arg _ _ _) | var1 == arg = True

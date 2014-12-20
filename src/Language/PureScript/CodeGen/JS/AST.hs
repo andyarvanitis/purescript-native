@@ -19,6 +19,8 @@ module Language.PureScript.CodeGen.JS.AST where
 
 import Data.Data
 
+import Debug.Trace
+
 -- |
 -- Built-in unary operators
 --
@@ -347,3 +349,9 @@ everythingOnJS (<>) f = go
   go j@(JSLabel _ j1) = f j <> go j1
   go j@(JSInstanceOf j1 j2) = f j <> go j1 <> go j2
   go other = f other
+
+fst' :: (a, b, c) -> a
+fst' (a, _, _) = a
+
+fillargs :: [String] -> [(String, String, Maybe String)]
+fillargs args = zip3 args (repeat "") (repeat Nothing)

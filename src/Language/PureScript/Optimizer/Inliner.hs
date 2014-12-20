@@ -31,6 +31,8 @@ import Language.PureScript.Names
 
 import qualified Language.PureScript.Constants as C
 
+import Debug.Trace
+
 shouldInline :: JS -> Bool
 shouldInline (JSVar _) = True
 shouldInline (JSNumericLiteral _) = True
@@ -44,12 +46,12 @@ etaConvert :: JS -> JS
 etaConvert = everywhereOnJS convert
   where
   convert :: JS -> JS
-  convert (JSBlock [JSReturn (JSApp (JSFunction Nothing idents block@(JSBlock body)) args)])
+  convert (JSBlock [JSReturn (JSApp (JSFunction' Nothing idents (block@(JSBlock body), _)) args)])
     | all shouldInline args &&
-      not (any (`isRebound` block) (map JSVar idents)) &&
+      not (any (`isRebound` block) (map (JSVar . fst') idents)) &&
       not (any (`isRebound` block) args)
-      = JSBlock (map (replaceIdents (zip idents args)) body)
-  convert (JSFunction Nothing [] (JSBlock [JSReturn (JSApp fn [])])) = fn
+      = JSBlock (map (replaceIdents (zip (map fst' idents) args)) body)
+  convert (JSFunction' Nothing [] (JSBlock [JSReturn (JSApp fn [])], _)) = fn
   convert js = js
 
 unThunk :: JS -> JS
@@ -59,7 +61,7 @@ unThunk = everywhereOnJS convert
   convert (JSBlock []) = JSBlock []
   convert (JSBlock jss) =
     case last jss of
-      JSReturn (JSApp (JSFunction Nothing [] (JSBlock body)) []) -> JSBlock $ init jss ++ body
+      JSReturn (JSApp (JSFunction' Nothing [] (JSBlock body, _)) []) -> JSBlock $ init jss ++ body
       _ -> JSBlock jss
   convert js = js
 
@@ -67,7 +69,7 @@ evaluateIifes :: JS -> JS
 evaluateIifes = everywhereOnJS convert
   where
   convert :: JS -> JS
-  convert (JSApp (JSFunction Nothing [] (JSBlock [JSReturn ret])) []) = ret
+  convert (JSApp (JSFunction' Nothing [] (JSBlock [JSReturn ret], _)) []) = ret
   convert js = js
 
 inlineVariables :: JS -> JS
@@ -159,20 +161,20 @@ inlineCommonOperators = applyAll $
   mkFn 0 = everywhereOnJS convert
     where
     convert :: JS -> JS
-    convert (JSApp mkFnN [JSFunction Nothing [_] (JSBlock js)]) | isNFn C.mkFn 0 mkFnN =
-      JSFunction Nothing [] (JSBlock js)
+    convert (JSApp mkFnN [JSFunction' Nothing [_] (JSBlock js, rty)]) | isNFn C.mkFn 0 mkFnN =
+      JSFunction' Nothing [] (JSBlock js, rty)
     convert other = other
   mkFn n = everywhereOnJS convert
     where
     convert :: JS -> JS
     convert orig@(JSApp mkFnN [fn]) | isNFn C.mkFn n mkFnN =
       case collectArgs n [] fn of
-        Just (args, js) -> JSFunction Nothing args (JSBlock js)
+        Just (args, js) -> JSFunction' Nothing (fillargs args) (JSBlock js, "-X-")
         Nothing -> orig
     convert other = other
     collectArgs :: Int -> [String] -> JS -> Maybe ([String], [JS])
-    collectArgs 1 acc (JSFunction Nothing [oneArg] (JSBlock js)) | length acc == n - 1 = Just (reverse (oneArg : acc), js)
-    collectArgs m acc (JSFunction Nothing [oneArg] (JSBlock [JSReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
+    collectArgs 1 acc (JSFunction' Nothing [oneArg] (JSBlock js, _)) | length acc == n - 1 = Just (reverse (fst' oneArg : acc), js)
+    collectArgs m acc (JSFunction' Nothing [oneArg] (JSBlock [JSReturn ret], _)) = collectArgs (m - 1) (fst' oneArg : acc) ret
     collectArgs _ _   _ = Nothing
 
   isNFn :: String -> Int -> JS -> Bool

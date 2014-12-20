@@ -134,29 +134,30 @@ literals = mkPattern' match
     , prettyPrintJS' value
     ]
   match (JSWhile cond sts) = fmap concat $ sequence
-    [ return "while ("
-    , prettyPrintJS' cond
-    , return ") "
+    [ return "for "
+    , do c <- prettyPrintJS' cond
+         return (if c == "true" then "" else c)
+    , return " "
     , prettyPrintJS' sts
     ]
   match (JSFor ident start end sts) = fmap concat $ sequence
-    [ return $ "for (var " ++ ident ++ " = "
+    [ return $ "for " ++ ident ++ " := "
     , prettyPrintJS' start
     , return $ "; " ++ ident ++ " < "
     , prettyPrintJS' end
-    , return $ "; " ++ ident ++ "++) "
+    , return $ "; " ++ ident ++ "++ "
     , prettyPrintJS' sts
     ]
   match (JSForIn ident obj sts) = fmap concat $ sequence
-    [ return $ "for (var " ++ ident ++ " in "
+    [ return $ "for (" ++ ident ++ " in "
     , prettyPrintJS' obj
-    , return ") "
+    , return " "
     , prettyPrintJS' sts
     ]
   match (JSIfElse cond thens elses) = fmap concat $ sequence
-    [ return "if ("
+    [ return "if "
     , prettyPrintJS' cond
-    , return ") "
+    , return " "
     , prettyPrintJS' thens
     , maybe (return "") (fmap (" else " ++) . prettyPrintJS') elses
     ]
@@ -170,7 +171,7 @@ literals = mkPattern' match
     , return ")"
     ]
   match (JSBreak lbl) = return $ "break " ++ lbl
-  match (JSContinue lbl) = return $ "continue " ++ lbl
+  match (JSContinue lbl) = return $ "goto " ++ lbl
   match (JSLabel lbl js) = fmap concat $ sequence
     [ return $ lbl ++ ": "
     , prettyPrintJS' js
