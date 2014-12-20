@@ -355,3 +355,6 @@ fst' (a, _, _) = a
 
 fillargs :: [String] -> [(String, String, Maybe String)]
 fillargs args = zip3 args (repeat "") (repeat Nothing)
+
+mkret :: String -> JS -> (JS, String)
+mkret t js = (js, t)

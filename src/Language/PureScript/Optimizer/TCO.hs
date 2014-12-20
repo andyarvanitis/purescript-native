@@ -58,17 +58,17 @@ tco' = everywhereOnJS convert
 
   collectAllFunctionArgs :: [[(String, Maybe String)]] -> (JS -> JS) -> JS -> ([[(String, Maybe String)]], JS, JS -> JS)
 
-  collectAllFunctionArgs allArgs f (JSFunction' ident args (JSBlock (body@(JSReturn _):_), _)) =
-    collectAllFunctionArgs ((typedArgs args) : allArgs) (\b -> f (JSFunction' ident (map copyVar' args) (JSBlock [b], "Any"))) body
+  collectAllFunctionArgs allArgs f (JSFunction' ident args (JSBlock (body@(JSReturn _):_), rty)) =
+    collectAllFunctionArgs ((typedArgs args) : allArgs) (\b -> f (JSFunction' ident (map copyVar' args) (JSBlock [b], rty))) body
 
-  collectAllFunctionArgs allArgs f (JSFunction' ident args body@(JSBlock _, _)) =
-    ((typedArgs args) : allArgs, (fst body), f . JSFunction' ident (map copyVar' args) . typedBody)
+  collectAllFunctionArgs allArgs f (JSFunction' ident args body@(JSBlock _, rty)) =
+    ((typedArgs args) : allArgs, (fst body), f . JSFunction' ident (map copyVar' args) . mkret rty)
 
-  collectAllFunctionArgs allArgs f (JSReturn (JSFunction' ident args (JSBlock [body], _))) =
-    collectAllFunctionArgs ((typedArgs args) : allArgs) (\b -> f (JSReturn (JSFunction' ident (map copyVar' args) (JSBlock [b], "Any")))) body
+  collectAllFunctionArgs allArgs f (JSReturn (JSFunction' ident args (JSBlock [body], rty))) =
+    collectAllFunctionArgs ((typedArgs args) : allArgs) (\b -> f (JSReturn (JSFunction' ident (map copyVar' args) (JSBlock [b], rty)))) body
 
-  collectAllFunctionArgs allArgs f (JSReturn (JSFunction' ident args body@(JSBlock _, _))) =
-    ((typedArgs args) : allArgs, (fst body), f . JSReturn . JSFunction' ident (map copyVar' args) . typedBody)
+  collectAllFunctionArgs allArgs f (JSReturn (JSFunction' ident args body@(JSBlock _, rty))) =
+    ((typedArgs args) : allArgs, (fst body), f . JSReturn . JSFunction' ident (map copyVar' args) . mkret rty)
 
   collectAllFunctionArgs allArgs f body = (allArgs, body, f)
 
@@ -124,6 +124,4 @@ tco' = everywhereOnJS convert
   isFunction _ = False
 
 funcCast = parens "func (Any) Any" -- TODO: this needs to be moved to a common module!
-
 typedArgs = map (\(n, _, t) -> (n,t))
-typedBody js = (js, "Any")
