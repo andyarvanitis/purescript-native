@@ -23,8 +23,9 @@ module Language.PureScript.CodeGen.JS (
 ) where
 
 import Data.Function (on)
-import Data.List ((\\), delete, sortBy)
+import Data.List ((\\), delete, sortBy, isSuffixOf)
 import Data.Maybe (catMaybes, mapMaybe)
+import Data.Char (isLower)
 
 import Control.Applicative
 import Control.Arrow ((&&&))
@@ -40,6 +41,11 @@ import Language.PureScript.Supply
 import Language.PureScript.Traversals (sndM)
 import qualified Language.PureScript.Constants as C
 
+import Language.PureScript.Types
+import Language.PureScript.Pretty.Common
+import Language.PureScript.CodeGen.Go
+import Debug.Trace
+
 -- |
 -- Generate code in the simplified Javascript intermediate representation for all declarations in a
 -- module.
@@ -48,40 +54,48 @@ moduleToJs :: (Functor m, Applicative m, Monad m) => Options mode -> Module Ann 
 moduleToJs opts (Module name imps exps foreigns decls) = do
   let jsImports = map (importToJs opts) . delete (ModuleName [ProperName C.prim]) . (\\ [name]) $ imps
   let foreigns' = mapMaybe (\(_, js, _) -> js) foreigns
-  jsDecls <- mapM (bindToJs name) decls
+  jsDecls <- mapM (bindToJs name True) decls
   let optimized = concatMap (map $ optimize opts) $ catMaybes jsDecls
-  let isModuleEmpty = null exps
-  let moduleBody = JSStringLiteral "use strict" : jsImports ++ foreigns' ++ optimized
-  let exps' = JSObjectLiteral $ map (runIdent &&& JSVar . identToJs) exps
-  return $ case optionsAdditional opts of
-    MakeOptions -> moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
-    CompileOptions ns _ _ | not isModuleEmpty ->
-      [ JSVariableIntroduction ns
-                               (Just (JSBinary Or (JSVar ns) (JSObjectLiteral [])) )
-      , JSAssignment (JSAccessor (moduleNameToJs name) (JSVar ns))
-                     (JSApp (JSFunction Nothing [] (JSBlock (moduleBody ++ [JSReturn exps']))) [])
-      ]
-    _ -> []
-
+  return $ [ JSRaw ("package " ++ moduleName)
+           , JSRaw ("")
+           , JSRaw ("import \"reflect\"")
+           , JSRaw ("import \"fmt\"")
+           , JSRaw ("")
+           ]
+             ++ jsImports
+             ++ (if isPrelude name then
+                   (JSRaw ("type " ++ anyType ++ " interface{} // Type aliase for readability")
+                    : JSRaw ("")
+                    : appFnDef)
+                 else [JSRaw ("import . \"Prelude\"")
+                     , JSRaw ("")
+                     , JSRaw ("var _ Any           // ignore unused package errors")
+                     , JSRaw ("var _ Prelude.Any   //")
+                     , JSRaw ("var _ reflect.Value //")
+                     , JSRaw ("var _ fmt.Formatter //")
+                     , JSRaw ("")])
+             ++ optimized
+             ++ foreigns'
+  where
+    moduleName = case name of (ModuleName [ProperName "Main"]) -> "main"
+                              _ -> unqual $ moduleNameToJs' name
 -- |
 -- Generates Javascript code for a module import.
 --
 importToJs :: Options mode -> ModuleName -> JS
 importToJs opts mn =
-  JSVariableIntroduction (moduleNameToJs mn) (Just moduleBody)
-  where
-  moduleBody = case optionsAdditional opts of
-    MakeOptions -> JSApp (JSVar "require") [JSStringLiteral (runModuleName mn)]
-    CompileOptions ns _ _ -> JSAccessor (moduleNameToJs mn) (JSVar ns)
+  JSRaw $ "import " ++ (dotsTo '_' (moduleNameToJs' mn)) ++ " \"" ++ (dotsTo '/' (moduleNameToJs' mn)) ++ "\""
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a declaration
 --
-bindToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> Bind Ann -> SupplyT m (Maybe [JS])
-bindToJs mp (NonRec ident val) = do
+bindToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> Bool -> Bind Ann -> SupplyT m (Maybe [JS])
+bindToJs mp modlvl (NonRec ident val) = do
   js <- valueToJs mp val
-  return $ Just [JSVariableIntroduction (identToJs ident) (Just js)]
-bindToJs mp (Rec vals) = do
+  return $ Just [JSVariableIntroduction (if modlvl then qname else identToJs ident) (Just js)]
+  where
+    qname = runModuleName mp ++ "." ++ identToJs ident
+bindToJs mp _ (Rec vals) = do
   jss <- forM vals $ \(ident, val) -> do
     js <- valueToJs mp val
     return $ JSVariableIntroduction (identToJs ident) (Just js)
@@ -99,13 +113,11 @@ var = JSVar . identToJs
 -- a PureScript identifier. If the name is not valid in Javascript (symbol based, reserved name) an
 -- indexer is returned.
 --
-accessor :: Ident -> JS -> JS
-accessor (Ident prop) = accessorString prop
-accessor (Op op) = JSIndexer (JSStringLiteral op)
-
 accessorString :: String -> JS -> JS
-accessorString prop | identNeedsEscaping prop = JSIndexer (JSStringLiteral prop)
-                    | otherwise = JSAccessor prop
+accessorString prop = JSAccessor $ typeclassPrefix ++ (identToJs $ Ident prop)
+
+mapAccessorString :: String -> JS -> JS
+mapAccessorString prop = JSIndexer (JSStringLiteral prop) . withCast anyMap
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a value or expression.
@@ -114,38 +126,52 @@ valueToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> Expr Ann -> Su
 valueToJs m (Literal _ l) =
   literalToValueJS m l
 valueToJs m (Var (_, _, Just (IsConstructor _ 0)) name) =
-  return $ JSAccessor "value" $ qualifiedToJS m id name
+  return $ qualifiedToJS m id (withSuffix ctorSuffix name)
 valueToJs m (Var (_, _, Just (IsConstructor _ _)) name) =
-  return $ JSAccessor "create" $ qualifiedToJS m id name
+  return $ qualifiedToJS m id (withSuffix ctorSuffix name)
 valueToJs m (Accessor _ prop val) =
-  accessorString prop <$> valueToJs m val
+  case val of
+    Var (_, Just (TypeApp (TypeConstructor _) (RCons _ _ _)), _) _ -> mapAccessorString prop <$> valueToJs m val
+    _ -> accessorString prop <$> valueToJs m val
 valueToJs m (ObjectUpdate _ o ps) = do
   obj <- valueToJs m o
   sts <- mapM (sndM (valueToJs m)) ps
   extendObj obj sts
 valueToJs _ e@(Abs (_, _, Just IsTypeClassConstructor) _ val) =
   let args = unAbs e
-  in return $ JSFunction Nothing (map identToJs args) (JSBlock $ map assign args)
+  in return $ JSData' "" (JSBlock $ map decl args)
   where
   unAbs :: Expr Ann -> [Ident]
   unAbs (Abs _ arg val) = arg : unAbs val
   unAbs _ = []
-  assign :: Ident -> JS
-  assign name = JSAssignment (accessorString (runIdent name) (JSVar "this"))
-                             (var name)
-valueToJs m (Abs _ arg val) = do
+  decl :: Ident -> JS
+  decl name = JSVar $ typeclassPrefix ++ identToJs name ++ withSpace anyType
+valueToJs m e@(Abs (_, _, Just IsNewtype) arg val) = -- TODO: revisit this
+  let args = unAbs e
+  in return $ JSData' "" (JSBlock $ map decl args)
+  where
+  unAbs :: Expr Ann -> [Ident]
+  unAbs (Abs _ arg val) = arg : unAbs val
+  unAbs _ = []
+  decl :: Ident -> JS
+  decl name = JSVar . capitalize $ identToJs name ++ withSpace anyType
+valueToJs m (Abs (_, t, _) arg val) = do
   ret <- valueToJs m val
-  return $ JSFunction Nothing [identToJs arg] (JSBlock [JSReturn ret])
+  return $ JSFunction Nothing [identToJs arg ++ type' t] (JSBlock [JSReturn ret])
+    where
+      type' (Just (ForAll _ ty _)) = type' (Just ty)
+      type' (Just (ConstrainedType [((Qualified _ (ProperName name)),_)] _)) = withSpace name
+      type' _ = ""
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) args
   case f of
     Var (_, _, Just IsNewtype) _ -> return (head args')
     Var (_, _, Just (IsConstructor _ arity)) name | arity == length args ->
-      return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
+      return $ JSApp (JSVar $ withSuffix' ctorSuffix m name) args'
     Var (_, _, Just IsTypeClassConstructor) name ->
-      return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
-    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> valueToJs m f
+      return $ JSInit (JSVar $ unqualName name) args'
+    _ -> do fn <- valueToJs m f; return $ JSApp fn args'
   where
   unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
   unApp (App _ val arg) args = unApp val (arg : args)
@@ -156,7 +182,7 @@ valueToJs m (Case _ values binders) = do
   vals <- mapM (valueToJs m) values
   bindersToJs m binders vals
 valueToJs m (Let _ ds val) = do
-  decls <- concat . catMaybes <$> mapM (bindToJs m) ds
+  decls <- concat . catMaybes <$> mapM (bindToJs m False) ds
   ret <- valueToJs m val
   return $ JSApp (JSFunction Nothing [] (JSBlock (decls ++ [JSReturn ret]))) []
 valueToJs _ (Constructor (_, _, Just IsNewtype) _ (ProperName ctor) _) =
@@ -165,27 +191,27 @@ valueToJs _ (Constructor (_, _, Just IsNewtype) _ (ProperName ctor) _) =
                 JSFunction Nothing ["value"]
                   (JSBlock [JSReturn $ JSVar "value"]))])
 valueToJs _ (Constructor _ _ (ProperName ctor) 0) =
-  return $ iife ctor [ JSFunction (Just ctor) [] (JSBlock [])
-         , JSAssignment (JSAccessor "value" (JSVar ctor))
-              (JSUnary JSNew $ JSApp (JSVar ctor) []) ]
+  return $ JSBlock [ JSData' ctor (JSBlock [])
+         , JSFunction (Just $ ctor ++ ctorSuffix) [] (JSBlock [JSReturn (JSInit (JSVar ctor) [])])
+         ]
 valueToJs _ (Constructor _ _ (ProperName ctor) arity) =
-  return $ iife ctor [ makeConstructor ctor arity
-         , JSAssignment (JSAccessor "create" (JSVar ctor)) (go ctor 0 arity [])
+  return $ JSBlock [ makeConstructor ctor arity
+         , (go ctor 0 arity [])
          ]
     where
     makeConstructor :: String -> Int -> JS
     makeConstructor ctorName n =
       let args = [ "value" ++ show index | index <- [0..n-1] ]
-          body = [ JSAssignment (JSAccessor arg (JSVar "this")) (JSVar arg) | arg <- args ]
-      in JSFunction (Just ctorName) args (JSBlock body)
+          body = [ (JSVar $ arg ++ withSpace anyType) | arg <- args ]
+      in JSData' ctorName (JSBlock body)
     go :: String -> Int -> Int -> [JS] -> JS
-    go pn _ 0 values = JSUnary JSNew $ JSApp (JSVar pn) (reverse values)
+    go pn _ 0 values = JSInit (JSVar pn) (reverse values)
     go pn index n values =
-      JSFunction Nothing ["value" ++ show index]
+      JSFunction fname ["value" ++ show index]
         (JSBlock [JSReturn (go pn (index + 1) (n - 1) (JSVar ("value" ++ show index) : values))])
-
-iife :: String -> [JS] -> JS
-iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []
+      where
+        fname = case index of 0 -> Just $ pn ++ ctorSuffix
+                              _ -> Nothing
 
 literalToValueJS :: (Functor m, Applicative m, Monad m) => ModuleName -> Literal (Expr Ann) -> SupplyT m JS
 literalToValueJS _ (NumericLiteral n) = return $ JSNumericLiteral n
@@ -227,7 +253,10 @@ varToJs m qual = qualifiedToJS m id qual
 --
 qualifiedToJS :: ModuleName -> (a -> Ident) -> Qualified a -> JS
 qualifiedToJS _ f (Qualified (Just (ModuleName [ProperName mn])) a) | mn == C.prim = JSVar . runIdent $ f a
-qualifiedToJS m f (Qualified (Just m') a) | m /= m' = accessor (f a) (JSVar (moduleNameToJs m'))
+qualifiedToJS m f (Qualified (Just m') a)
+  | name@(x:xs) <- (identToJs $ f a), isLower x = JSVar . (if m /= m' && not (isPrelude m') then
+                                                             (moduleNameToJs m' ++) . ('.' :)
+                                                           else id) $ modulePrefix ++ name
 qualifiedToJS _ f (Qualified _ a) = JSVar $ identToJs (f a)
 
 -- |
@@ -241,7 +270,7 @@ bindersToJs m binders vals = do
   jss <- forM binders $ \(CaseAlternative bs result) -> do
     ret <- guardsToJs result
     go valNames ret bs
-  return $ JSApp (JSFunction Nothing [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSUnary JSNew $ JSApp (JSVar "Error") [JSStringLiteral "Failed pattern match"]])))
+  return $ JSApp (JSFunction Nothing [] (JSBlock (assignments ++ concat jss ++ [JSThrow (JSStringLiteral "Failed pattern match")])))
                  []
   where
     go :: (Functor m, Applicative m, Monad m) => [String] -> [JS] -> [Binder Ann] -> SupplyT m [JS]
@@ -270,7 +299,7 @@ binderToJs _ varName done (VarBinder _ ident) =
   return (JSVariableIntroduction (identToJs ident) (Just (JSVar varName)) : done)
 binderToJs m varName done (ConstructorBinder (_, _, Just IsNewtype) _ _ [b]) =
   binderToJs m varName done b
-binderToJs m varName done (ConstructorBinder (_, _, Just (IsConstructor ctorType _)) _ ctor bs) = do
+binderToJs m varName done (ConstructorBinder (_, _, Just (IsConstructor ctorType _)) d ctor bs) = do
   js <- go 0 done bs
   return $ case ctorType of
     ProductType -> js
@@ -285,18 +314,22 @@ binderToJs m varName done (ConstructorBinder (_, _, Just (IsConstructor ctorType
     argVar <- freshName
     done'' <- go (index + 1) done' bs'
     js <- binderToJs m argVar done'' binder
-    return (JSVariableIntroduction argVar (Just (JSAccessor ("value" ++ show index) (JSVar varName))) : js)
+    return (JSVariableIntroduction argVar (Just (JSAccessor (parens (dtype) ++ "." ++ "value" ++ show index) (JSVar varName))) : js)
+  (Qualified dmod (ProperName dname)) = d
+  dtype = case dmod of
+            Nothing -> dname
+            Just dmod' -> if dmod' == m then dname else runModuleName dmod' ++ ('.' : dname)
 binderToJs m varName done binder@(ConstructorBinder _ _ ctor _) | isCons ctor = do
   let (headBinders, tailBinder) = uncons [] binder
       numberOfHeadBinders = fromIntegral $ length headBinders
   js1 <- foldM (\done' (headBinder, index) -> do
     headVar <- freshName
     jss <- binderToJs m headVar done' headBinder
-    return (JSVariableIntroduction headVar (Just (JSIndexer (JSNumericLiteral (Left index)) (JSVar varName))) : jss)) done (zip headBinders [0..])
+    return (JSVariableIntroduction headVar (Just (JSIndexer (JSNumericLiteral (Left index)) (withCast anyList (JSVar varName)))) : jss)) done (zip headBinders [0..])
   tailVar <- freshName
   js2 <- binderToJs m tailVar js1 tailBinder
-  return [JSIfElse (JSBinary GreaterThanOrEqualTo (JSAccessor "length" (JSVar varName)) (JSNumericLiteral (Left numberOfHeadBinders))) (JSBlock
-    ( JSVariableIntroduction tailVar (Just (JSApp (JSAccessor "slice" (JSVar varName)) [JSNumericLiteral (Left numberOfHeadBinders)])) :
+  return [JSIfElse (JSBinary GreaterThanOrEqualTo (listLen (JSVar varName)) (JSNumericLiteral (Left numberOfHeadBinders))) (JSBlock
+    ( JSVariableIntroduction tailVar (Just (JSIndexer (JSVar (show numberOfHeadBinders ++ ":")) (withCast anyList (JSVar varName)))) :
       js2
     )) Nothing]
   where
@@ -329,7 +362,7 @@ literalToBinderJS m varName done (ObjectLiteral bs) = go done bs
     return (JSVariableIntroduction propVar (Just (accessorString prop (JSVar varName))) : js)
 literalToBinderJS m varName done (ArrayLiteral bs) = do
   js <- go done 0 bs
-  return [JSIfElse (JSBinary EqualTo (JSAccessor "length" (JSVar varName)) (JSNumericLiteral (Left (fromIntegral $ length bs)))) (JSBlock js) Nothing]
+  return [JSIfElse (JSBinary EqualTo (listLen (JSVar varName)) (JSNumericLiteral (Left (fromIntegral $ length bs)))) (JSBlock js) Nothing]
   where
   go :: (Functor m, Applicative m, Monad m) => [JS] -> Integer -> [Binder Ann] -> SupplyT m [JS]
   go done' _ [] = return done'
@@ -337,8 +370,24 @@ literalToBinderJS m varName done (ArrayLiteral bs) = do
     elVar <- freshName
     done'' <- go done' (index + 1) bs'
     js <- binderToJs m elVar done'' binder
-    return (JSVariableIntroduction elVar (Just (JSIndexer (JSNumericLiteral (Left index)) (JSVar varName))) : js)
+    return (JSVariableIntroduction elVar (Just (JSIndexer (JSNumericLiteral (Left index)) (withCast anyList (JSVar varName)))) : js)
 
 isCons :: Qualified ProperName -> Bool
 isCons (Qualified (Just mn) ctor) = mn == ModuleName [ProperName C.prim] && ctor == ProperName "Array"
 isCons name = error $ "Unexpected argument in isCons: " ++ show name
+
+unqualName :: Qualified Ident -> String
+unqualName (Qualified _ (Ident name)) = name
+unqualName n = show n
+
+withSuffix :: String -> Qualified Ident -> Qualified Ident
+withSuffix suffix (Qualified n (Ident name)) = Qualified n (Ident $ name ++ suffix)
+
+withSuffix' :: String -> ModuleName -> Qualified Ident -> String
+withSuffix' suffix m full@(Qualified n (Ident name))
+  | n == Just m = name ++ suffix
+  | otherwise = show full ++ suffix
+
+isPrelude :: ModuleName -> Bool
+isPrelude (ModuleName [ProperName "Prelude"]) = True
+isPrelude _ = False

@@ -27,12 +27,16 @@ import Language.PureScript.Names
 --
 --  * Reserved javascript identifiers are prefixed with '$$'.
 --
---  * Symbols are prefixed with '$' followed by a symbol name or their ordinal value.
+--  * Symbols are given a "__" suffix following their name or ordinal value.
 --
 identToJs :: Ident -> String
-identToJs (Ident name) | nameIsJsReserved name = "$$" ++ name
+identToJs (Ident name) | nameIsJsReserved name = name ++ "_"
+identToJs (Ident name) | (x:_) <- name, not (isLetter x) = lowercaseStart $ concatMap identCharToString name
 identToJs (Ident name) = concatMap identCharToString name
-identToJs (Op op) = concatMap identCharToString op
+identToJs (Op op) = lowercaseStart $ concatMap identCharToString op
+
+lowercaseStart :: String -> String
+lowercaseStart (x:xs) = (toLower x : xs)
 
 -- |
 -- Test if a string is a valid JS identifier without escaping.
@@ -40,35 +44,35 @@ identToJs (Op op) = concatMap identCharToString op
 identNeedsEscaping :: String -> Bool
 identNeedsEscaping s = s /= identToJs (Ident s)
 
--- |
+-- |"_
 -- Attempts to find a human-readable name for a symbol, if none has been specified returns the
 -- ordinal value.
 --
 identCharToString :: Char -> String
 identCharToString c | isAlphaNum c = [c]
 identCharToString '_' = "_"
-identCharToString '.' = "$dot"
-identCharToString '$' = "$dollar"
-identCharToString '~' = "$tilde"
-identCharToString '=' = "$eq"
-identCharToString '<' = "$less"
-identCharToString '>' = "$greater"
-identCharToString '!' = "$bang"
-identCharToString '#' = "$hash"
-identCharToString '%' = "$percent"
-identCharToString '^' = "$up"
-identCharToString '&' = "$amp"
-identCharToString '|' = "$bar"
-identCharToString '*' = "$times"
-identCharToString '/' = "$div"
-identCharToString '+' = "$plus"
-identCharToString '-' = "$minus"
-identCharToString ':' = "$colon"
-identCharToString '\\' = "$bslash"
-identCharToString '?' = "$qmark"
-identCharToString '@' = "$at"
-identCharToString '\'' = "$prime"
-identCharToString c = '$' : show (ord c)
+identCharToString '.' = "Dot"
+identCharToString '$' = "Dollar"
+identCharToString '~' = "Tilde"
+identCharToString '=' = "Eq"
+identCharToString '<' = "Less"
+identCharToString '>' = "Greater"
+identCharToString '!' = "Bang"
+identCharToString '#' = "Hash"
+identCharToString '%' = "Percent"
+identCharToString '^' = "Up"
+identCharToString '&' = "Amp"
+identCharToString '|' = "Bar"
+identCharToString '*' = "Times"
+identCharToString '/' = "Div"
+identCharToString '+' = "Plus"
+identCharToString '-' = "Minus"
+identCharToString ':' = "Colon"
+identCharToString '\\' = "Backslash"
+identCharToString '?' = "Qmark"
+identCharToString '@' = "At"
+identCharToString '\'' = "Prime"
+identCharToString c = show (ord c) ++ "__"
 
 -- |
 -- Checks whether an identifier name is reserved in Javascript.
@@ -139,3 +143,6 @@ nameIsJsReserved name =
 
 moduleNameToJs :: ModuleName -> String
 moduleNameToJs (ModuleName pns) = intercalate "_" (runProperName `map` pns)
+
+moduleNameToJs' :: ModuleName -> String
+moduleNameToJs' (ModuleName pns) = intercalate "." (runProperName `map` pns)

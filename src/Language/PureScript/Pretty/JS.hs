@@ -27,10 +27,12 @@ import Control.PatternArrows
 import qualified Control.Arrow as A
 
 import Language.PureScript.CodeGen.JS.AST
-import Language.PureScript.CodeGen.JS.Common
 import Language.PureScript.Pretty.Common
 
 import Numeric
+
+import Language.PureScript.CodeGen.Go
+import Debug.Trace
 
 literals :: Pattern PrinterState JS String
 literals = mkPattern' match
@@ -40,26 +42,30 @@ literals = mkPattern' match
   match (JSStringLiteral s) = return $ string s
   match (JSBooleanLiteral True) = return "true"
   match (JSBooleanLiteral False) = return "false"
+  match (JSArrayLiteral []) = fmap concat $ sequence
+    [ return $ anyList ++ "{}"
+    , return ""
+    ]
   match (JSArrayLiteral xs) = fmap concat $ sequence
     [ return "[ "
     , fmap (intercalate ", ") $ forM xs prettyPrintJS'
     , return " ]"
     ]
-  match (JSObjectLiteral []) = return "{}"
+  match (JSObjectLiteral []) = return "nil"
   match (JSObjectLiteral ps) = fmap concat $ sequence
-    [ return "{\n"
+    [ return anyMap
+    , return "{\n"
     , withIndent $ do
         jss <- forM ps $ \(key, value) -> fmap ((objectPropertyToString key ++ ": ") ++) . prettyPrintJS' $ value
         indentString <- currentIndent
-        return $ intercalate ", \n" $ map (indentString ++) jss
+        return $ concatMap (\s -> s ++ ",\n") $ map (indentString ++) jss
     , return "\n"
     , currentIndent
     , return "}"
     ]
     where
     objectPropertyToString :: String -> String
-    objectPropertyToString s | identNeedsEscaping s = show s
-                             | otherwise = s
+    objectPropertyToString = show
   match (JSBlock sts) = fmap concat $ sequence
     [ return "{\n"
     , withIndent $ prettyStatements sts
@@ -68,40 +74,114 @@ literals = mkPattern' match
     , return "}"
     ]
   match (JSVar ident) = return ident
-  match (JSVariableIntroduction ident value) = fmap concat $ sequence
-    [ return "var "
-    , return ident
-    , maybe (return "") (fmap (" = " ++) . prettyPrintJS') value
-    ]
+  match (JSVariableIntroduction ident value) =
+    let atModLevel = '.' `elem` ident in
+    fmap concat $ sequence $
+    if ident == "Main.main" then [return $ funcDecl ++ "main() {",
+                                  return "\n",
+                                  maybe (return "") (fmap ("  " ++) . prettyPrintJS') value,
+                                  return "\n",
+                                  return $ "}"]
+    else case value of
+      (Just (JSFunction Nothing [arg] (JSBlock ret))) ->
+          if atModLevel then let arg' = argOnly arg
+                                 typ' = typeOnly arg in
+                             [return funcDecl,
+                              return (modulePrefix ++ unqual ident),
+                              return . parens $ arg' ++ withSpace anyType,
+                              return " ",
+                              return anyType, -- TODO: look for JSReturn and set accordingly?
+                              return " ",
+                              prettyPrintJS' . JSBlock $
+                              if typ' == anyType
+                                then ret
+                                else [JSBlock (JSVariableIntroduction arg' (Just $ withCast typ' (JSVar arg')) : ret)]
+                              ]
+                        else [return "var ",
+                              return ident,
+                              return $ withSpace funcDecl,
+                              return (parens anyType),
+                              return " ",
+                              return anyType, -- TODO: look for JSReturn and set accordingly?
+                              return "\n",
+                              currentIndent,
+                              withIndent $ return ident,
+                              maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+
+      (Just (JSData' prefix fields)) ->
+           [prettyPrintJS' (JSData' (prefix ++ unqual ident) fields)]
+
+      (Just (JSInit a b)) ->
+           [return "var ",
+            return (modulePrefix ++ unqual ident),
+            return " ",
+            prettyPrintJS' a,
+            return "\n",
+            return $ funcDecl ++ "init() { ",
+            return "\n",
+            withIndent $ do
+              indentString <- currentIndent
+              return (indentString ++ modulePrefix ++ unqual ident),
+            return " = ",
+            prettyPrintJS' a,
+            return "{\n",
+            withIndent $ withIndent $ do
+              jss <- forM b prettyPrintJS'
+              indentString <- currentIndent
+              return $ concatMap (\s -> s ++ ",\n") $ map (indentString ++) jss,
+            withIndent $ do
+              indentString <- currentIndent
+              return indentString,
+            return "}",
+            return "\n",
+            return "}",
+            return "\n"]
+
+      (Just (JSObjectLiteral [])) ->
+           [return "var ",
+            return $ if atModLevel then modulePrefix else "",
+            return $ unqual ident,
+            return " ",
+            return "struct{}"]
+
+      (Just (JSBlock b)) ->
+           [return $ prettyPrintJS b]
+
+      _ -> [return "var ",
+            return $ if atModLevel then modulePrefix else "",
+            return $ unqual ident,
+            maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
+
   match (JSAssignment target value) = fmap concat $ sequence
     [ prettyPrintJS' target
     , return " = "
     , prettyPrintJS' value
     ]
   match (JSWhile cond sts) = fmap concat $ sequence
-    [ return "while ("
-    , prettyPrintJS' cond
-    , return ") "
+    [ return "for "
+    , do c <- prettyPrintJS' cond
+         return (if c == "true" then "" else c)
+    , return " "
     , prettyPrintJS' sts
     ]
   match (JSFor ident start end sts) = fmap concat $ sequence
-    [ return $ "for (var " ++ ident ++ " = "
+    [ return $ "for " ++ ident ++ " := "
     , prettyPrintJS' start
     , return $ "; " ++ ident ++ " < "
     , prettyPrintJS' end
-    , return $ "; " ++ ident ++ "++) "
+    , return $ "; " ++ ident ++ "++ "
     , prettyPrintJS' sts
     ]
   match (JSForIn ident obj sts) = fmap concat $ sequence
-    [ return $ "for (var " ++ ident ++ " in "
+    [ return $ "for (" ++ ident ++ " in "
     , prettyPrintJS' obj
-    , return ") "
+    , return " "
     , prettyPrintJS' sts
     ]
   match (JSIfElse cond thens elses) = fmap concat $ sequence
-    [ return "if ("
-    , prettyPrintJS' cond
-    , return ") "
+    [ return "if "
+    , prettyPrintJS' $ condition cond
+    , return " "
     , prettyPrintJS' thens
     , maybe (return "") (fmap (" else " ++) . prettyPrintJS') elses
     ]
@@ -110,11 +190,12 @@ literals = mkPattern' match
     , prettyPrintJS' value
     ]
   match (JSThrow value) = fmap concat $ sequence
-    [ return "throw "
+    [ return "panic("
     , prettyPrintJS' value
+    , return ")"
     ]
   match (JSBreak lbl) = return $ "break " ++ lbl
-  match (JSContinue lbl) = return $ "continue " ++ lbl
+  match (JSContinue lbl) = return $ "goto " ++ lbl
   match (JSLabel lbl js) = fmap concat $ sequence
     [ return $ lbl ++ ": "
     , prettyPrintJS' js
@@ -162,12 +243,44 @@ lam = mkPattern match
   match (JSFunction name args ret) = Just ((name, args), ret)
   match _ = Nothing
 
+dat' :: Pattern PrinterState JS (String, JS)
+dat' = mkPattern match
+  where
+  match (JSData' name fields) = Just (name, fields)
+  match _ = Nothing
+
 app :: Pattern PrinterState JS (String, JS)
 app = mkPattern' match
   where
   match (JSApp val args) = do
+    jss <- mapM prettyPrintJS' (val:args)
+    return (intercalate ", " jss, val)
+  match _ = mzero
+
+app' :: Pattern PrinterState JS (String, JS)
+app' = mkPattern' match
+  where
+  match (JSApp' val args) = do
     jss <- mapM prettyPrintJS' args
     return (intercalate ", " jss, val)
+  match (JSApp val@(JSFunction _ _ _) args) = do
+    jss <- mapM prettyPrintJS' args
+    return $ (intercalate ", " jss, val)
+  match _ = mzero
+
+init' :: Pattern PrinterState JS (String, JS)
+init' = mkPattern' match
+  where
+  match (JSInit val args) =
+    case args of
+      [] -> return ([], val)
+      _ -> do
+           fields <- withIndent $ do
+                  jss <- forM args prettyPrintJS'
+                  indentString <- currentIndent
+                  return $ concatMap (\s -> s ++ ",\n") $ map (indentString ++) jss
+           indentString <- currentIndent
+           return ('\n' : fields ++ indentString, val)
   match _ = mzero
 
 typeOf :: Pattern PrinterState JS ((), JS)
@@ -204,7 +317,7 @@ prettyStatements :: [JS] -> StateT PrinterState Maybe String
 prettyStatements sts = do
   jss <- forM sts prettyPrintJS'
   indentString <- currentIndent
-  return $ intercalate "\n" $ map ((++ ";") . (indentString ++)) jss
+  return $ intercalate "\n" $ map (indentString ++) jss
 
 -- |
 -- Generate a pretty-printed string representing a Javascript expression
@@ -230,18 +343,29 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
   operators =
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "." ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
-                  , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
+                  , [ Wrap app $ \args _ -> appFn ++ parens args ]
+                  , [ Wrap app' $ \args val -> val ++ "(" ++ args ++ ")" ]
+                  , [ Wrap init' $ \args val -> val ++ "{" ++ args ++ "}" ]
                   , [ unary JSNew "new " ]
-                  , [ Wrap lam $ \(name, args) ret -> "function "
+                  , [ Wrap lam $ \(name, args) ret -> funcDecl
                         ++ fromMaybe "" name
-                        ++ "(" ++ intercalate ", " args ++ ") "
+                        ++ parens (intercalate "," (map addTypeIfNeeded args))
+                        ++ " "
+                        ++ anyType
+                        ++ " "
                         ++ ret ]
+                  , [ Wrap dat' $ \name fields -> "\n"
+                        ++ "type "
+                        ++ name
+                        ++ " struct "
+                        ++ fields ]
                   , [ binary    LessThan             "<" ]
                   , [ binary    LessThanOrEqualTo    "<=" ]
                   , [ binary    GreaterThan          ">" ]
                   , [ binary    GreaterThanOrEqualTo ">=" ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
-                  , [ AssocR instanceOf $ \v1 v2 -> v1 ++ " instanceof " ++ v2 ]
+                  , [ AssocR instanceOf $ \v1 v2 -> typeOfExpr v1 ++ " == " ++ typeOfType v2 ]
+
                   , [ unary     Not                  "!" ]
                   , [ unary     BitwiseNot           "~" ]
                   , [ unary     Negate               "-" ]
@@ -254,7 +378,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ binary    ShiftLeft            "<<" ]
                   , [ binary    ShiftRight           ">>" ]
                   , [ binary    ZeroFillShiftRight   ">>>" ]
-                  , [ binary    EqualTo              "===" ]
+                  , [ binary    EqualTo              "==" ]
                   , [ binary    NotEqualTo           "!==" ]
                   , [ binary    BitwiseAnd           "&" ]
                   , [ binary    BitwiseXor           "^" ]

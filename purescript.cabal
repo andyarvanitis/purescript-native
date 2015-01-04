@@ -56,6 +56,7 @@ library
                      Language.PureScript.CodeGen.JS.Optimizer.MagicDo
                      Language.PureScript.CodeGen.JS.Optimizer.TCO
                      Language.PureScript.CodeGen.JS.Optimizer.Unused
+                     Language.PureScript.CodeGen.Go
                      Language.PureScript.Constants
                      Language.PureScript.CoreFn
                      Language.PureScript.CoreFn.Ann

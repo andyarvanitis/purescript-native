@@ -30,7 +30,7 @@ import Control.Applicative
 import Control.Arrow ((&&&))
 import Control.Monad.Error
 
-import System.FilePath ((</>))
+import System.FilePath ((</>), joinPath)
 
 import Language.PureScript.AST as P
 import Language.PureScript.CodeGen as P
@@ -50,6 +50,8 @@ import Language.PureScript.TypeChecker as P
 import Language.PureScript.Types as P
 import qualified Language.PureScript.CoreFn as CoreFn
 import qualified Language.PureScript.Constants as C
+
+import Language.PureScript.CodeGen.Go as Go
 
 -- |
 -- Compile a collection of modules
@@ -159,8 +161,9 @@ make outputDir opts ms prefix = do
 
   toRebuild <- foldM (\s (Module moduleName' _ _) -> do
     let filePath = runModuleName moduleName'
+    let goFilePath = joinPath ("src" : (changeMain outputDir . words . Go.dotsTo ' ' $ runModuleName moduleName'))
 
-        jsFile = outputDir </> filePath </> "index.js"
+        jsFile = outputDir </> goFilePath </> (Go.unqual $ runModuleName moduleName') ++ ".go"
         externsFile = outputDir </> filePath </> "externs.purs"
         inputFile = fromMaybe (error "Module has no filename in 'make'") $ M.lookup moduleName' filePathMap
 
@@ -188,7 +191,8 @@ make outputDir opts ms prefix = do
     go env' ms'
   go env ((True, m@(Module moduleName' _ exps)) : ms') = do
     let filePath = runModuleName moduleName'
-        jsFile = outputDir </> filePath </> "index.js"
+    let goFilePath = joinPath ("src" : (changeMain outputDir . words . Go.dotsTo ' ' $ runModuleName moduleName'))
+        jsFile = outputDir </> goFilePath </> (Go.unqual $ runModuleName moduleName') ++ ".go"
         externsFile = outputDir </> filePath </> "externs.purs"
 
     lift . progress $ "Compiling " ++ runModuleName moduleName'
@@ -250,3 +254,7 @@ importPrelude = addDefaultImport (ModuleName [ProperName C.prelude])
 
 prelude :: String
 prelude = BU.toString $(embedFile "prelude/prelude.purs")
+
+changeMain :: FilePath -> [String] -> [String]
+changeMain out ("Main":ms) = (out:ms)
+changeMain _ ms = ms
