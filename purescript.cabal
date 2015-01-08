@@ -116,7 +116,7 @@ library
     other-modules: Paths_purescript
     ghc-options: -Wall -fno-warn-warnings-deprecations -O2
 
-executable psc
+executable pgc
     build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
                    mtl -any, optparse-applicative >= 0.10.0, parsec -any, purescript -any,
                    transformers -any, utf8-string -any
@@ -126,7 +126,7 @@ executable psc
     other-modules:
     ghc-options: -Wall -fno-warn-warnings-deprecations -O2 -fno-warn-unused-do-bind
 
-executable psc-make
+executable pgc-make
     build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
                    mtl -any, optparse-applicative >= 0.10.0, parsec -any, purescript -any,
                    transformers -any, utf8-string -any
