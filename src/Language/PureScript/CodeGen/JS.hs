@@ -188,7 +188,7 @@ valueToJs _ (Constructor (_, _, Just IsNewtype) _ (ProperName ctor) _) =
                   (JSBlock [JSReturn $ JSVar "value"]))])
 valueToJs _ (Constructor _ _ (ProperName ctor) 0) =
   return $ JSBlock [ JSData' ctor (JSBlock [])
-         , JSFunction (Just $ ctor ++ ctorSuffix) [] (JSBlock [JSReturn (JSInit (JSVar ctor) [])])
+         , JSFunction (Just $ ctor ++ ctorSuffix) ["_"] (JSBlock [JSReturn (JSInit (JSVar ctor) [])])
          ]
 valueToJs _ (Constructor _ _ (ProperName ctor) arity) =
   return $ JSBlock [ makeConstructor ctor arity

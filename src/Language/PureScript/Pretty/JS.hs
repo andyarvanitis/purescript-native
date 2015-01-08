@@ -51,7 +51,7 @@ literals = mkPattern' match
     , fmap (intercalate ", ") $ forM xs prettyPrintJS'
     , return " ]"
     ]
-  match (JSObjectLiteral []) = return "nil"
+  match (JSObjectLiteral []) = return nil
   match (JSObjectLiteral ps) = fmap concat $ sequence
     [ return anyMap
     , return "{\n"
@@ -78,7 +78,7 @@ literals = mkPattern' match
     let atModLevel = '.' `elem` ident in
     fmap concat $ sequence $
     if ident == "Main.main" then [
-                                  return $ funcDecl ++ "_main_() " ++ anyType ++ " {",
+                                  return $ funcDecl ++ "_main_" ++ parens anyType ++ withSpace anyType ++ " {",
                                   return "\n",
                                   maybe (return "") (fmap ("  return " ++) . prettyPrintJS') value,
                                   return "\n",
@@ -86,7 +86,7 @@ literals = mkPattern' match
                                   return "\n",
                                   return $ funcDecl ++ "main() {",
                                   return "\n",
-                                  return $ "  " ++ appFn ++ parens "_main_()",
+                                  return $ "  " ++ appFn ++ parens ("_main_" ++ parens nil),
                                   return "\n",
                                   return $ "}"
                                   ]

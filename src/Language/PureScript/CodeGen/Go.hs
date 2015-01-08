@@ -21,9 +21,6 @@ funcDecl = "func "
 anyFunc :: String
 anyFunc  = funcDecl ++ parens (anyType) ++ withSpace anyType
 
-noArgFunc :: String
-noArgFunc  = funcDecl ++ parens [] ++ withSpace anyType
-
 appFn :: String
 appFn = "ApplyFn"
 
@@ -32,6 +29,9 @@ anyList = "[]" ++ anyType
 
 anyMap :: String
 anyMap = "map [string] " ++ anyType
+
+nil :: String
+nil = "nil"
 
 getSuper :: String
 getSuper = funcDecl ++ parens "" ++ withSpace anyType
@@ -45,7 +45,7 @@ appFnDef = map JSRaw [
               funcDecl ++ appFn ++ parens ("f " ++ anyType ++ ", args ..." ++ anyType) ++ " " ++ anyType ++ " {"
             , "  count := len(args)"
             , "  if count == 0 {"
-            , "    f = f." ++ parens (noArgFunc) ++ "()"
+            , "    f = f." ++ parens (anyFunc) ++ parens nil
             , "  } else {"
             , "    for i := 0; i < count; i++ {"
             , "      f = f." ++ parens (anyFunc) ++ "(args[i])"
@@ -66,7 +66,7 @@ typeOfExpr :: String -> String
 typeOfExpr s = "reflect.TypeOf" ++ parens s
 
 typeOfType :: String -> String
-typeOfType s = typeOfExpr (parens ('*': s) ++ parens "nil") ++ ".Elem()"
+typeOfType s = typeOfExpr (parens ('*': s) ++ parens nil) ++ ".Elem()"
 
 addTypeIfNeeded :: String -> String
 addTypeIfNeeded [] = []

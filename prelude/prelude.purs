@@ -524,7 +524,7 @@ module Data.Function where
 
   foreign import _mkFn0
     "func _mkFn0(fn interface{}) interface{} {\
-    \  return func() interface{} {\
+    \  return func(interface{}) interface{} {\
     \    return fn(nil);\
     \  };\
     \}" :: forall a. (Unit -> a) -> Fn0 a
@@ -796,11 +796,11 @@ module Control.Monad.Eff where
 
   foreign import _bindE """
     func _bindE(a_ interface{}) interface{} {
-      a := a_.(func () interface{})
+      a := a_.(func (interface{}) interface{})
       return func(f_ interface{}) interface{} {
         f := f_.(func (interface{}) interface{})
-        return func() interface{} {
-          return f(a()).(func () interface{})()
+        return func(interface{}) interface{} {
+          return f(a(nil)).(func (interface{}) interface{})(nil)
         }
       }
     }""" :: forall e a b. Eff e a -> (a -> Eff e b) -> Eff e b
@@ -811,8 +811,8 @@ module Control.Monad.Eff where
 
   foreign import _runPure """
   func _runPure(f_ interface{}) interface{} {
-    f := f_.(func () interface{})
-    return f()
+    f := f_.(func (interface{}) interface{})
+    return f(nil)
   }""" :: forall a. Pure a -> a
 
   runPure = _runPure
@@ -868,7 +868,7 @@ module Debug.Trace where
 
   foreign import _trace """
     func _trace(s interface{}) interface{} {
-      return func() interface{} {
+      return func(interface{}) interface{} {
         fmt.Println(s)
         return nil
       }
