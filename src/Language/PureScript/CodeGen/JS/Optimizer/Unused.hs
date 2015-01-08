@@ -36,7 +36,7 @@ removeCodeAfterReturnStatements = everywhereOnJS (removeFromBlock go)
 removeUnusedArg :: JS -> JS
 removeUnusedArg = everywhereOnJS convert
   where
-  convert (JSFunction name [arg] body) | arg == C.__unused = JSFunction name [] body
+  -- convert (JSFunction name [arg] body) | arg == C.__unused = JSFunction name [] body
   convert js = js
 
 removeUndefinedApp :: JS -> JS

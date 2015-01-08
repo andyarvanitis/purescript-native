@@ -77,11 +77,19 @@ literals = mkPattern' match
   match (JSVariableIntroduction ident value) =
     let atModLevel = '.' `elem` ident in
     fmap concat $ sequence $
-    if ident == "Main.main" then [return $ funcDecl ++ "main() {",
+    if ident == "Main.main" then [
+                                  return $ funcDecl ++ "_main_() " ++ anyType ++ " {",
                                   return "\n",
-                                  maybe (return "") (fmap ("  " ++) . prettyPrintJS') value,
+                                  maybe (return "") (fmap ("  return " ++) . prettyPrintJS') value,
                                   return "\n",
-                                  return $ "}"]
+                                  return $ "}",
+                                  return "\n",
+                                  return $ funcDecl ++ "main() {",
+                                  return "\n",
+                                  return $ "  " ++ appFn ++ parens "_main_()",
+                                  return "\n",
+                                  return $ "}"
+                                  ]
     else case value of
       (Just (JSFunction Nothing [arg] (JSBlock ret))) ->
           if atModLevel then let arg' = argOnly arg

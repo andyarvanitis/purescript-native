@@ -868,8 +868,8 @@ module Debug.Trace where
 
   foreign import _trace """
     func _trace(s interface{}) interface{} {
-      fmt.Println(s)
       return func() interface{} {
+        fmt.Println(s)
         return nil
       }
     }""" :: forall r. String -> Eff (trace :: Trace | r) Unit
