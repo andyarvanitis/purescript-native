@@ -63,16 +63,12 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
            , JSRaw ("")
            ]
              ++ jsImports
-             ++ (if isPrelude name then
-                   (JSRaw ("type " ++ anyType ++ " interface{} // Type aliase for readability")
-                    : JSRaw ("")
-                    : appFnDef)
+             ++ (if isPrelude name then appFnDef
                  else [JSRaw ("import . \"Prelude\"")
                      , JSRaw ("")
-                     , JSRaw ("var _ Any           // ignore unused package errors")
-                     , JSRaw ("var _ Prelude.Any   //")
-                     , JSRaw ("var _ reflect.Value //")
+                     , JSRaw ("var _ reflect.Value // ignore unused package errors")
                      , JSRaw ("var _ fmt.Formatter //")
+                     , JSRaw ("var _ = Prelude." ++ appFn)
                      , JSRaw ("")])
              ++ optimized
              ++ foreigns'

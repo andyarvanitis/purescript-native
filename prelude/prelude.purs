@@ -75,9 +75,9 @@ module Prelude
   (:) = cons
 
   foreign import _cons
-    "func _cons(e Any) Any {\
-    \  return func(l Any) Any {\
-    \    return append(l.([]Any), e);\
+    "func _cons(e interface{}) interface{} {\
+    \  return func(l interface{}) interface{} {\
+    \    return append(l.([]interface{}), e);\
     \  };\
     \}" :: forall a. a -> [a] -> [a]
 
@@ -87,7 +87,7 @@ module Prelude
     show :: a -> String
 
   foreign import _showStringImpl """
-    func _showStringImpl(s Any) Any {
+    func _showStringImpl(s interface{}) interface{} {
       return fmt.Sprintf("\"%s\"", s);
     }""" :: String -> String
 
@@ -101,7 +101,7 @@ module Prelude
     show true = "true"
     show false = "false"
 
-  foreign import _showNumberImpl "func _showNumberImpl(n Any) Any {\
+  foreign import _showNumberImpl "func _showNumberImpl(n interface{}) interface{} {\
                                 \  return fmt.Sprint(n);\
                                 \}" :: Number -> String
 
@@ -109,10 +109,10 @@ module Prelude
     show = _showNumberImpl
 
   foreign import _showArrayImpl """
-  func _showArrayImpl(f_ Any) Any {
-    f := f_.(func (Any) Any)
-    return func(xs_ Any) Any {
-      xs := xs_.([]Any)
+  func _showArrayImpl(f_ interface{}) interface{} {
+    f := f_.(func (interface{}) interface{})
+    return func(xs_ interface{}) interface{} {
+      xs := xs_.([]interface{})
       last := len(xs) - 1
       var ss string
       for i, x := range xs {
@@ -201,37 +201,37 @@ module Prelude
     (%) :: a -> a -> a
     negate :: a -> a
 
-  foreign import _numAdd "func _numAdd(n1 Any) Any {\
-                        \  return func(n2 Any) Any {\
+  foreign import _numAdd "func _numAdd(n1 interface{}) interface{} {\
+                        \  return func(n2 interface{}) interface{} {\
                         \    return n1.(int) + n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import _numSub "func _numSub(n1 Any) Any {\
-                        \  return func(n2 Any) Any {\
+  foreign import _numSub "func _numSub(n1 interface{}) interface{} {\
+                        \  return func(n2 interface{}) interface{} {\
                         \    return n1.(int) - n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import _numMul "func _numMul(n1 Any) Any {\
-                        \  return func(n2 Any) Any {\
+  foreign import _numMul "func _numMul(n1 interface{}) interface{} {\
+                        \  return func(n2 interface{}) interface{} {\
                         \    return n1.(int) * n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import _numDiv "func _numDiv(n1 Any) Any {\
-                        \  return func(n2 Any) Any {\
+  foreign import _numDiv "func _numDiv(n1 interface{}) interface{} {\
+                        \  return func(n2 interface{}) interface{} {\
                         \    return n1.(int) / n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import _numMod "func _numMod(n1 Any) Any {\
-                        \  return func(n2 Any) Any {\
+  foreign import _numMod "func _numMod(n1 interface{}) interface{} {\
+                        \  return func(n2 interface{}) interface{} {\
                         \    return n1.(int) % n2.(int);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import _numNegate "func _numNegate(n Any) Any {\
+  foreign import _numNegate "func _numNegate(n interface{}) interface{} {\
                            \  return -(n.(int));\
                            \}" :: Number -> Number
 
@@ -256,8 +256,8 @@ module Prelude
     (/=) :: a -> a -> Boolean
 
   foreign import _refEq
-    "func _refEq(r1 Any) Any {\
-    \  return func(r2 Any) Any {\
+    "func _refEq(r1 interface{}) interface{} {\
+    \  return func(r2 interface{}) interface{} {\
     \    return r1 == r2;\
     \  };\
     \}" :: forall a. a -> a -> Boolean
@@ -265,8 +265,8 @@ module Prelude
   refEq = _refEq
 
   foreign import _refIneq
-    "func _refIneq(r1 Any) Any {\
-    \  return func(r2 Any) Any {\
+    "func _refIneq(r1 interface{}) interface{} {\
+    \  return func(r2 interface{}) interface{} {\
     \    return r1 != r2;\
     \  };\
     \}" :: forall a. a -> a -> Boolean
@@ -290,7 +290,7 @@ module Prelude
     (/=) = refIneq
 
   foreign import _eqArrayImpl"""
-    func _eqArrayImpl(f Any) Any {
+    func _eqArrayImpl(f interface{}) interface{} {
       panic("eqArrayImpl not implemented")
     }""" :: forall a. (a -> a -> Boolean) -> [a] -> [a] -> Boolean
 
@@ -344,11 +344,11 @@ module Prelude
     _ -> true
 
   foreign import _unsafeCompareImpl """
-    func _unsafeCompareImpl(lt Any)Any {
-      return func(eq Any) Any {
-        return func(gt Any) Any {
-          return func(x Any) Any {
-            return func(y Any) Any {
+    func _unsafeCompareImpl(lt interface{})interface{} {
+      return func(eq interface{}) interface{} {
+        return func(gt interface{}) interface{} {
+          return func(x interface{}) interface{} {
+            return func(y interface{}) interface{} {
               if x.(int) < y.(int) {
                 return lt
               } else if x.(int) > y.(int) {
@@ -401,43 +401,43 @@ module Prelude
     zshr :: b -> Number -> b
     complement :: b -> b
 
-  foreign import _numShl "func _numShl(n1 Any) Any {\
-                        \  return func(n2 Any) Any {\
+  foreign import _numShl "func _numShl(n1 interface{}) interface{} {\
+                        \  return func(n2 interface{}) interface{} {\
                         \    return n1.(uint) << n2.(uint);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import _numShr "func _numShr(n1 Any) Any {\
-                        \  return func(n2 Any) Any {\
+  foreign import _numShr "func _numShr(n1 interface{}) interface{} {\
+                        \  return func(n2 interface{}) interface{} {\
                         \    return n1.(uint) >> n2.(uint);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import _numZshr "func _numZshr(n1 Any) Any {\
-                          \  return func(n2 Any) Any {\
+  foreign import _numZshr "func _numZshr(n1 interface{}) interface{} {\
+                          \  return func(n2 interface{}) interface{} {\
                           \    panic(\"n1 >>> n2\");\
                           \  };\
                           \}" :: Number -> Number -> Number
 
-  foreign import _numAnd "func _numAnd(n1 Any) Any {\
-                        \  return func(n2 Any) Any {\
+  foreign import _numAnd "func _numAnd(n1 interface{}) interface{} {\
+                        \  return func(n2 interface{}) interface{} {\
                         \    return n1.(uint) & n2.(uint);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import _numOr "func _numOr(n1 Any) Any {\
-                       \  return func(n2 Any) Any {\
+  foreign import _numOr "func _numOr(n1 interface{}) interface{} {\
+                       \  return func(n2 interface{}) interface{} {\
                        \    return n1.(uint) | n2.(uint);\
                        \  };\
                        \}" :: Number -> Number -> Number
 
-  foreign import _numXor "func _numXor(n1 Any) Any {\
-                        \  return func(n2 Any) Any {\
+  foreign import _numXor "func _numXor(n1 interface{}) interface{} {\
+                        \  return func(n2 interface{}) interface{} {\
                         \    return n1.(uint) ^ n2.(uint);\
                         \  };\
                         \}" :: Number -> Number -> Number
 
-  foreign import _numComplement "func _numComplement(n Any) Any {\
+  foreign import _numComplement "func _numComplement(n interface{}) interface{} {\
                                \  return ^(n.(uint));\
                                \}" :: Number -> Number
 
@@ -458,19 +458,19 @@ module Prelude
     (||) :: b -> b -> b
     not :: b -> b
 
-  foreign import _boolAnd "func _boolAnd(b1 Any) Any {\
-                         \  return func(b2 Any) Any {\
+  foreign import _boolAnd "func _boolAnd(b1 interface{}) interface{} {\
+                         \  return func(b2 interface{}) interface{} {\
                          \    return b1.(bool) && b2.(bool);\
                          \  };\
                          \}"  :: Boolean -> Boolean -> Boolean
 
-  foreign import _boolOr "func _boolOr(b1 Any) Any {\
-                        \  return func(b2 Any) Any {\
+  foreign import _boolOr "func _boolOr(b1 interface{}) interface{} {\
+                        \  return func(b2 interface{}) interface{} {\
                         \    return b1.(bool) || b2.(bool);\
                         \  };\
                         \}" :: Boolean -> Boolean -> Boolean
 
-  foreign import _boolNot "func _boolNot(b Any) Any {\
+  foreign import _boolNot "func _boolNot(b interface{}) interface{} {\
                          \  return !(b.(bool));\
                          \}" :: Boolean -> Boolean
 
@@ -485,8 +485,8 @@ module Prelude
     (<>) :: a -> a -> a
 
   foreign import _concatString
-    "func _concatString(s1 Any) Any {\
-    \  return func(s2 Any) Any {\
+    "func _concatString(s1 interface{}) interface{} {\
+    \  return func(s2 interface{}) interface{} {\
     \    return s1.(string) + s2.(string);\
     \  };\
     \}" :: String -> String -> String
@@ -523,108 +523,108 @@ module Data.Function where
   foreign import data Fn10 :: * -> * -> * -> * -> * -> * -> * -> * -> * -> * -> * -> *
 
   foreign import _mkFn0
-    "func _mkFn0(fn Any) Any {\
-    \  return func() Any {\
+    "func _mkFn0(fn interface{}) interface{} {\
+    \  return func() interface{} {\
     \    return fn(nil);\
     \  };\
     \}" :: forall a. (Unit -> a) -> Fn0 a
 
   foreign import _mkFn1
-    "func _mkFn1(fn Any) Any {\
-    \  return func(a Any) Any {\
+    "func _mkFn1(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
     \    return fn(a);\
     \  };\
     \}" :: forall a b. (a -> b) -> Fn1 a b
 
   foreign import _mkFn2
-    "func _mkFn2(fn Any) Any {\
-    \  return func(a, b Any) Any {\
+    "func _mkFn2(fn interface{}) interface{} {\
+    \  return func(a, b interface{}) interface{} {\
     \    return fn(a)(b);\
     \  };\
     \}" :: forall a b c. (a -> b -> c) -> Fn2 a b c
 
   foreign import _mkFn3
-    "func _mkFn3(fn Any) Any {\
-    \  return func(a, b, c Any) Any {\
+    "func _mkFn3(fn interface{}) interface{} {\
+    \  return func(a, b, c interface{}) interface{} {\
     \    return fn(a)(b)(c);\
     \  };\
     \}" :: forall a b c d. (a -> b -> c -> d) -> Fn3 a b c d
 
   foreign import _mkFn4
-    "func _mkFn4(fn Any) Any {\
-    \  return func(a, b, c, d Any) Any {\
+    "func _mkFn4(fn interface{}) interface{} {\
+    \  return func(a, b, c, d interface{}) interface{} {\
     \    return fn(a)(b)(c)(d);\
     \  };\
     \}" :: forall a b c d e. (a -> b -> c -> d -> e) -> Fn4 a b c d e
 
   foreign import _mkFn5
-    "func _mkFn5(fn Any) Any {\
-    \  return func(a, b, c, d, e Any) Any {\
+    "func _mkFn5(fn interface{}) interface{} {\
+    \  return func(a, b, c, d, e interface{}) interface{} {\
     \    return fn(a)(b)(c)(d)(e);\
     \  };\
     \}" :: forall a b c d e f. (a -> b -> c -> d -> e -> f) -> Fn5 a b c d e f
 
   foreign import _mkFn6
-    "func _mkFn6(fn Any) Any {\
-    \  return func(a, b, c, d, e, f Any) Any {\
+    "func _mkFn6(fn interface{}) interface{} {\
+    \  return func(a, b, c, d, e, f interface{}) interface{} {\
     \    return fn(a)(b)(c)(d)(e)(f);\
     \  };\
     \}" :: forall a b c d e f g. (a -> b -> c -> d -> e -> f -> g) -> Fn6 a b c d e f g
 
   foreign import _mkFn7
-    "func _mkFn7(fn Any) Any {\
-    \  return func(a, b, c, d, e, f, g Any) Any {\
+    "func _mkFn7(fn interface{}) interface{} {\
+    \  return func(a, b, c, d, e, f, g interface{}) interface{} {\
     \    return fn(a)(b)(c)(d)(e)(f)(g);\
     \  };\
     \}" :: forall a b c d e f g h. (a -> b -> c -> d -> e -> f -> g -> h) -> Fn7 a b c d e f g h
 
   foreign import _mkFn8
-    "func _mkFn8(fn Any) Any {\
-    \  return func(a, b, c, d, e, f, g, h Any) Any {\
+    "func _mkFn8(fn interface{}) interface{} {\
+    \  return func(a, b, c, d, e, f, g, h interface{}) interface{} {\
     \    return fn(a)(b)(c)(d)(e)(f)(g)(h);\
     \  };\
     \}" :: forall a b c d e f g h i. (a -> b -> c -> d -> e -> f -> g -> h -> i) -> Fn8 a b c d e f g h i
 
   foreign import _mkFn9
-    "func _mkFn9(fn Any) Any {\
-    \  return func(a, b, c, d, e, f, g, h, i Any) Any {\
+    "func _mkFn9(fn interface{}) interface{} {\
+    \  return func(a, b, c, d, e, f, g, h, i interface{}) interface{} {\
     \    return fn(a)(b)(c)(d)(e)(f)(g)(h)(i);\
     \  };\
     \}" :: forall a b c d e f g h i j. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j) -> Fn9 a b c d e f g h i j
 
   foreign import _mkFn10
-    "func _mkFn10(fn Any) Any {\
-    \  return func(a, b, c, d, e, f, g, h, i, j Any) Any {\
+    "func _mkFn10(fn interface{}) interface{} {\
+    \  return func(a, b, c, d, e, f, g, h, i, j interface{}) interface{} {\
     \    return fn(a)(b)(c)(d)(e)(f)(g)(h)(i)(j);\
     \  };\
     \}" :: forall a b c d e f g h i j k. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> k) -> Fn10 a b c d e f g h i j k
 
   foreign import _runFn0
-    "func _runFn0(fn Any) Any {\
+    "func _runFn0(fn interface{}) interface{} {\
     \  return fn();\
     \}" :: forall a. Fn0 a -> a
 
   foreign import _runFn1
-    "func _runFn1(fn Any) Any {\
-    \  return func(a Any) Any {\
+    "func _runFn1(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
     \    return fn(a);\
     \  };\
     \}" :: forall a b. Fn1 a b -> a -> b
 
   foreign import _runFn2
-    "func _runFn2(fn Any) Any {\
-    \  return func(a Any) Any {\
-    \    return func(b Any) Any {\
+    "func _runFn2(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
+    \    return func(b interface{}) interface{} {\
     \      return fn(a, b);\
     \    };\
     \  };\
     \}" :: forall a b c. Fn2 a b c -> a -> b -> c
 
   foreign import _runFn3
-    "func _runFn3(fn Any) Any {\
-    \  return func(a Any) Any {\
-    \    return func(b Any) Any {\
-    \      return func(c Any) Any {\
+    "func _runFn3(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
+    \    return func(b interface{}) interface{} {\
+    \      return func(c interface{}) interface{} {\
     \        return fn(a, b, c);\
     \      };\
     \    };\
@@ -632,11 +632,11 @@ module Data.Function where
     \}" :: forall a b c d. Fn3 a b c d -> a -> b -> c -> d
 
   foreign import _runFn4
-    "func _runFn4(fn Any) Any {\
-    \  return func(a Any) Any {\
-    \    return func(b Any) Any {\
-    \      return func(c Any) Any {\
-    \        return func(d Any) Any {\
+    "func _runFn4(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
+    \    return func(b interface{}) interface{} {\
+    \      return func(c interface{}) interface{} {\
+    \        return func(d interface{}) interface{} {\
     \          return fn(a, b, c, d);\
     \        };\
     \      };\
@@ -645,12 +645,12 @@ module Data.Function where
     \}" :: forall a b c d e. Fn4 a b c d e -> a -> b -> c -> d -> e
 
   foreign import _runFn5
-    "func _runFn5(fn Any) Any {\
-    \  return func(a Any) Any {\
-    \    return func(b Any) Any {\
-    \      return func(c Any) Any {\
-    \        return func(d Any) Any {\
-    \          return func(e Any) Any {\
+    "func _runFn5(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
+    \    return func(b interface{}) interface{} {\
+    \      return func(c interface{}) interface{} {\
+    \        return func(d interface{}) interface{} {\
+    \          return func(e interface{}) interface{} {\
     \            return fn(a, b, c, d, e);\
     \          };\
     \        };\
@@ -660,13 +660,13 @@ module Data.Function where
     \}" :: forall a b c d e f. Fn5 a b c d e f -> a -> b -> c -> d -> e -> f
 
   foreign import _runFn6
-    "func _runFn6(fn Any) Any {\
-    \  return func(a Any) Any {\
-    \    return func(b Any) Any {\
-    \      return func(c Any) Any {\
-    \        return func(d Any) Any {\
-    \          return func(e Any) Any {\
-    \            return func(f Any) Any {\
+    "func _runFn6(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
+    \    return func(b interface{}) interface{} {\
+    \      return func(c interface{}) interface{} {\
+    \        return func(d interface{}) interface{} {\
+    \          return func(e interface{}) interface{} {\
+    \            return func(f interface{}) interface{} {\
     \              return fn(a, b, c, d, e, f);\
     \            };\
     \          };\
@@ -677,14 +677,14 @@ module Data.Function where
     \}" :: forall a b c d e f g. Fn6 a b c d e f g -> a -> b -> c -> d -> e -> f -> g
 
   foreign import _runFn7
-    "func _runFn7(fn Any) Any {\
-    \  return func(a Any) Any {\
-    \    return func(b Any) Any {\
-    \      return func(c Any) Any {\
-    \        return func(d Any) Any {\
-    \          return func(e Any) Any {\
-    \            return func(f Any) Any {\
-    \              return func(g Any) Any {\
+    "func _runFn7(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
+    \    return func(b interface{}) interface{} {\
+    \      return func(c interface{}) interface{} {\
+    \        return func(d interface{}) interface{} {\
+    \          return func(e interface{}) interface{} {\
+    \            return func(f interface{}) interface{} {\
+    \              return func(g interface{}) interface{} {\
     \                return fn(a, b, c, d, e, f, g);\
     \              };\
     \            };\
@@ -696,15 +696,15 @@ module Data.Function where
     \}" :: forall a b c d e f g h. Fn7 a b c d e f g h -> a -> b -> c -> d -> e -> f -> g -> h
 
   foreign import _runFn8
-    "func _runFn8(fn Any) Any {\
-    \  return func(a Any) Any {\
-    \    return func(b Any) Any {\
-    \      return func(c Any) Any {\
-    \        return func(d Any) Any {\
-    \          return func(e Any) Any {\
-    \            return func(f Any) Any {\
-    \              return func(g Any) Any {\
-    \                return func(h Any) Any {\
+    "func _runFn8(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
+    \    return func(b interface{}) interface{} {\
+    \      return func(c interface{}) interface{} {\
+    \        return func(d interface{}) interface{} {\
+    \          return func(e interface{}) interface{} {\
+    \            return func(f interface{}) interface{} {\
+    \              return func(g interface{}) interface{} {\
+    \                return func(h interface{}) interface{} {\
     \                  return fn(a, b, c, d, e, f, g, h);\
     \                };\
     \              };\
@@ -717,16 +717,16 @@ module Data.Function where
     \}" :: forall a b c d e f g h i. Fn8 a b c d e f g h i -> a -> b -> c -> d -> e -> f -> g -> h -> i
 
   foreign import _runFn9
-    "func _runFn9(fn Any) Any {\
-    \  return func(a Any) Any {\
-    \    return func(b Any) Any {\
-    \      return func(c Any) Any {\
-    \        return func(d Any) Any {\
-    \          return func(e Any) Any {\
-    \            return func(f Any) Any {\
-    \              return func(g Any) Any {\
-    \                return func(h Any) Any {\
-    \                  return func(i Any) Any {\
+    "func _runFn9(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
+    \    return func(b interface{}) interface{} {\
+    \      return func(c interface{}) interface{} {\
+    \        return func(d interface{}) interface{} {\
+    \          return func(e interface{}) interface{} {\
+    \            return func(f interface{}) interface{} {\
+    \              return func(g interface{}) interface{} {\
+    \                return func(h interface{}) interface{} {\
+    \                  return func(i interface{}) interface{} {\
     \                    return fn(a, b, c, d, e, f, g, h, i);\
     \                  };\
     \                };\
@@ -740,17 +740,17 @@ module Data.Function where
     \}" :: forall a b c d e f g h i j. Fn9 a b c d e f g h i j -> a -> b -> c -> d -> e -> f -> g -> h -> i -> j
 
   foreign import _runFn10
-    "func _runFn10(fn Any) Any {\
-    \  return func(a Any) Any {\
-    \    return func(b Any) Any {\
-    \      return func(c Any) Any {\
-    \        return func(d Any) Any {\
-    \          return func(e Any) Any {\
-    \            return func(f Any) Any {\
-    \              return func(g Any) Any {\
-    \                return func(h Any) Any {\
-    \                  return func(i Any) Any {\
-    \                    return func(j Any) Any {\
+    "func _runFn10(fn interface{}) interface{} {\
+    \  return func(a interface{}) interface{} {\
+    \    return func(b interface{}) interface{} {\
+    \      return func(c interface{}) interface{} {\
+    \        return func(d interface{}) interface{} {\
+    \          return func(e interface{}) interface{} {\
+    \            return func(f interface{}) interface{} {\
+    \              return func(g interface{}) interface{} {\
+    \                return func(h interface{}) interface{} {\
+    \                  return func(i interface{}) interface{} {\
+    \                    return func(j interface{}) interface{} {\
     \                      return fn(a, b, c, d, e, f, g, h, i, j);\
     \                    };\
     \                  };\
@@ -781,7 +781,7 @@ module Data.Eq where
 module Prelude.Unsafe where
 
   foreign import _unsafeIndex """
-    func _unsafeIndex(xs Any) Any {
+    func _unsafeIndex(xs interface{}) interface{} {
       panic("unsafeIndex not implemented")
     }""" :: forall a. [a] -> Number -> a
 
@@ -789,18 +789,18 @@ module Control.Monad.Eff where
 
   foreign import data Eff :: # ! -> * -> *
 
-  foreign import _returnE "func _returnE(a Any) Any {\
+  foreign import _returnE "func _returnE(a interface{}) interface{} {\
                          \    return a;\
                          \}" :: forall e a. a -> Eff e a
   returnE = _returnE
 
   foreign import _bindE """
-    func _bindE(a_ Any) Any {
-      a := a_.(func () Any)
-      return func(f_ Any) Any {
-        f := f_.(func (Any) Any)
-        return func() Any {
-          return f(a()).(func () Any)()
+    func _bindE(a_ interface{}) interface{} {
+      a := a_.(func () interface{})
+      return func(f_ interface{}) interface{} {
+        f := f_.(func (interface{}) interface{})
+        return func() interface{} {
+          return f(a()).(func () interface{})()
         }
       }
     }""" :: forall e a b. Eff e a -> (a -> Eff e b) -> Eff e b
@@ -810,8 +810,8 @@ module Control.Monad.Eff where
   type Pure a = forall e. Eff e a
 
   foreign import _runPure """
-  func _runPure(f_ Any) Any {
-    f := f_.(func () Any)
+  func _runPure(f_ interface{}) interface{} {
+    f := f_.(func () interface{})
     return f()
   }""" :: forall a. Pure a -> a
 
@@ -832,22 +832,22 @@ module Control.Monad.Eff where
   instance monadEff :: Monad (Eff e)
 
   foreign import _untilE """
-    func _untilE(f Any) Any {
+    func _untilE(f interface{}) interface{} {
       panic("untilE not implemented")
     }""" :: forall e. Eff e Boolean -> Eff e Unit
 
   foreign import _whileE """
-    func _whileE(f Any) Any {
+    func _whileE(f interface{}) interface{} {
       panic("whileE not implemented")
     }""" :: forall e a. Eff e Boolean -> Eff e a -> Eff e Unit
 
   foreign import _forE """
-    func _forE(lo Any) Any {
+    func _forE(lo interface{}) interface{} {
       panic("forE not implemented")
     }""" :: forall e. Number -> Number -> (Number -> Eff e Unit) -> Eff e Unit
 
   foreign import _foreachE """
-    func _foreachE(as Any) Any {
+    func _foreachE(as interface{}) interface{} {
       panic("foreachE not implemented")
     }""" :: forall e a. [a] -> (a -> Eff e Unit) -> Eff e Unit
 
@@ -856,7 +856,7 @@ module Control.Monad.Eff.Unsafe where
   import Control.Monad.Eff
 
   foreign import _unsafeInterleaveEff
-    "func _unsafeInterleaveEff(f Any) Any {\
+    "func _unsafeInterleaveEff(f interface{}) interface{} {\
     \  return f;\
     \}" :: forall eff1 eff2 a. Eff eff1 a -> Eff eff2 a
 
@@ -867,9 +867,9 @@ module Debug.Trace where
   foreign import data Trace :: !
 
   foreign import _trace """
-    func _trace(s Any) Any {
+    func _trace(s interface{}) interface{} {
       fmt.Println(s)
-      return func() Any {
+      return func() interface{} {
         return nil
       }
     }""" :: forall r. String -> Eff (trace :: Trace | r) Unit
@@ -889,35 +889,35 @@ module Control.Monad.ST where
 
   foreign import data STRef :: * -> * -> *
 
-  foreign import _newSTRef "func _newSTRef(val Any) Any {\
-                          \  return func( Any) Any {\
+  foreign import _newSTRef "func _newSTRef(val interface{}) interface{} {\
+                          \  return func( interface{}) interface{} {\
                           \    return { value: val };\
                           \  };\
                           \}" :: forall a h r. a -> Eff (st :: ST h | r) (STRef h a)
 
-  foreign import _readSTRef "func _readSTRef(ref Any) Any {\
-                           \  return func( Any) Any {\
+  foreign import _readSTRef "func _readSTRef(ref interface{}) interface{} {\
+                           \  return func( interface{}) interface{} {\
                            \    return ref.value;\
                            \  };\
                            \}" :: forall a h r. STRef h a -> Eff (st :: ST h | r) a
 
-  foreign import _modifySTRef "func _modifySTRef(ref Any) Any {\
-                             \  return func(f Any) Any {\
-                             \    return func( Any) Any {\
+  foreign import _modifySTRef "func _modifySTRef(ref interface{}) interface{} {\
+                             \  return func(f interface{}) interface{} {\
+                             \    return func( interface{}) interface{} {\
                              \      return ref.value = f(ref.value);\
                              \    };\
                              \  };\
                              \}" :: forall a h r. STRef h a -> (a -> a) -> Eff (st :: ST h | r) a
 
-  foreign import _writeSTRef "func _writeSTRef(ref Any) Any {\
-                            \  return func(a Any) Any {\
-                            \    return func( Any) Any {\
+  foreign import _writeSTRef "func _writeSTRef(ref interface{}) interface{} {\
+                            \  return func(a interface{}) interface{} {\
+                            \    return func( interface{}) interface{} {\
                             \      return ref.value = a;\
                             \    };\
                             \  };\
                             \}" :: forall a h r. STRef h a -> a -> Eff (st :: ST h | r) a
 
-  foreign import _runST "func _runST(f Any) Any {\
+  foreign import _runST "func _runST(f interface{}) interface{} {\
                        \  return f;\
                        \}" :: forall a r. (forall h. Eff (st :: ST h | r) a) -> Eff r a
   runST = _runST

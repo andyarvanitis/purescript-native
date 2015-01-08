@@ -13,7 +13,7 @@ dotsTo :: Char -> String -> String
 dotsTo chr = map (\c -> if c == '.' then chr else c)
 
 anyType :: String
-anyType  = "Any"
+anyType  = "interface{}"
 
 funcDecl :: String
 funcDecl = "func "
