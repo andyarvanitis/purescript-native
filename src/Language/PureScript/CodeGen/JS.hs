@@ -55,7 +55,7 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   let jsImports = map (importToJs opts) . delete (ModuleName [ProperName C.prim]) . (\\ [name]) $ imps
   let foreigns' = mapMaybe (\(_, js, _) -> js) foreigns
   jsDecls <- mapM (bindToJs name True) decls
-  let optimized = concatMap (map $ optimize opts) $ catMaybes jsDecls
+  let optimized = concatMap (map $ optimize opts) jsDecls
   return $ [ JSRaw ("package " ++ moduleName)
            , JSRaw ("")
            , JSRaw ("import \"reflect\"")
@@ -85,9 +85,9 @@ importToJs opts mn =
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a declaration
 --
-bindToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> Bind Ann -> SupplyT m [JS]
-bindToJs mp (NonRec ident val) = return <$> nonRecToJS mp ident val
-bindToJs mp (Rec vals) = forM vals (uncurry (nonRecToJS mp))
+bindToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> Bool -> Bind Ann -> SupplyT m [JS]
+bindToJs mp ml (NonRec ident val) = return <$> nonRecToJS mp ml ident val
+bindToJs mp ml (Rec vals) = forM vals (uncurry (nonRecToJS mp ml))
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a single non-recursive 
@@ -95,13 +95,16 @@ bindToJs mp (Rec vals) = forM vals (uncurry (nonRecToJS mp))
 --
 -- The main purpose of this function is to handle code generation for comments.
 --
-nonRecToJS :: (Functor m, Applicative m, Monad m) => ModuleName -> Ident -> Expr Ann -> SupplyT m JS
-nonRecToJS m i e@(extractAnn -> (_, com, _, _)) | not (null com) =
-  JSComment com <$> nonRecToJS m i (modifyAnn removeComments e)
-nonRecToJS mp ident val = do
+nonRecToJS :: (Functor m, Applicative m, Monad m) => ModuleName -> Bool -> Ident -> Expr Ann -> SupplyT m JS
+nonRecToJS m ml i e@(extractAnn -> (_, com, _, _)) | not (null com) =
+  JSComment com <$> nonRecToJS m ml i (modifyAnn removeComments e)
+nonRecToJS mp ml ident val = do
   js <- valueToJs mp val
-  return $ JSVariableIntroduction (identToJs ident) (Just js)
-  
+  return $ JSVariableIntroduction qname (Just js)
+  where
+    qname = case ml of
+              True -> runModuleName mp ++ "." ++ identToJs ident
+              False -> identToJs ident
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a variable based on a
@@ -127,13 +130,13 @@ mapAccessorString prop = JSIndexer (JSStringLiteral prop) . withCast anyMap
 valueToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> Expr Ann -> SupplyT m JS
 valueToJs m (Literal _ l) =
   literalToValueJS m l
-valueToJs m (Var (_, _, Just (IsConstructor _ 0)) name) =
+valueToJs m (Var (_, _, _, Just (IsConstructor _ 0)) name) =
   return $ qualifiedToJS m id (withSuffix ctorSuffix name)
-valueToJs m (Var (_, _, Just (IsConstructor _ _)) name) =
+valueToJs m (Var (_, _, _, Just (IsConstructor _ _)) name) =
   return $ qualifiedToJS m id (withSuffix ctorSuffix name)
 valueToJs m (Accessor _ prop val) =
   case val of
-    Var (_, Just (TypeApp (TypeConstructor _) (RCons _ _ _)), _) _ -> mapAccessorString prop <$> valueToJs m val
+    Var (_, _, Just (TypeApp (TypeConstructor _) (RCons _ _ _)), _) _ -> mapAccessorString prop <$> valueToJs m val
     _ -> accessorString prop <$> valueToJs m val
 valueToJs m (ObjectUpdate _ o ps) = do
   obj <- valueToJs m o
@@ -148,7 +151,7 @@ valueToJs _ e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   unAbs _ = []
   decl :: Ident -> JS
   decl name = JSVar $ typeclassPrefix ++ identToJs name ++ withSpace anyType
-valueToJs m e@(Abs (_, _, Just IsNewtype) arg val) = -- TODO: revisit this
+valueToJs m e@(Abs (_, _, _, Just IsNewtype) arg val) = -- TODO: revisit this
   let args = unAbs e
   in return $ JSData' "" (JSBlock $ map decl args)
   where
@@ -157,7 +160,7 @@ valueToJs m e@(Abs (_, _, Just IsNewtype) arg val) = -- TODO: revisit this
   unAbs _ = []
   decl :: Ident -> JS
   decl name = JSVar . capitalize $ identToJs name ++ withSpace anyType
-valueToJs m (Abs (_, t, _) arg val) = do
+valueToJs m (Abs (_, _, t, _) arg val) = do
   ret <- valueToJs m val
   return $ JSFunction Nothing [identToJs arg ++ type' t] (JSBlock [JSReturn ret])
     where
@@ -168,10 +171,10 @@ valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) args
   case f of
-    Var (_, _, Just IsNewtype) _ -> return (head args')
-    Var (_, _, Just (IsConstructor _ arity)) name | arity == length args ->
+    Var (_, _, _, Just IsNewtype) _ -> return (head args')
+    Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
       return $ JSApp (JSVar $ withSuffix' ctorSuffix m name) args'
-    Var (_, _, Just IsTypeClassConstructor) name ->
+    Var (_, _, _, Just IsTypeClassConstructor) name ->
       return $ JSInit (JSVar $ unqualName name) args'
     _ -> do fn <- valueToJs m f; return $ JSApp fn args'
   where
@@ -184,7 +187,7 @@ valueToJs m (Case _ values binders) = do
   vals <- mapM (valueToJs m) values
   bindersToJs m binders vals
 valueToJs m (Let _ ds val) = do
-  decls <- concat <$> mapM (bindToJs m) ds
+  decls <- concat <$> mapM (bindToJs m False) ds
   ret <- valueToJs m val
   return $ JSApp (JSFunction Nothing [] (JSBlock (decls ++ [JSReturn ret]))) []
 valueToJs _ (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) =
@@ -301,7 +304,7 @@ binderToJs _ varName done (VarBinder _ ident) =
   return (JSVariableIntroduction (identToJs ident) (Just (JSVar varName)) : done)
 binderToJs m varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
   binderToJs m varName done b
-binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType _)) _ ctor bs) = do
+binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType _)) d ctor bs) = do
   js <- go 0 done bs
   return $ case ctorType of
     ProductType -> js
