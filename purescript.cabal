@@ -1,5 +1,5 @@
 name: purescript
-version: 0.6.2
+version: 0.6.3
 cabal-version: >=1.8
 build-type: Simple
 license: MIT
@@ -67,6 +67,7 @@ library
                      Language.PureScript.CoreFn.Meta
                      Language.PureScript.CoreFn.Module
                      Language.PureScript.CoreFn.Traversals
+                     Language.PureScript.Comments
                      Language.PureScript.DeadCodeElimination
                      Language.PureScript.Environment
                      Language.PureScript.Errors
