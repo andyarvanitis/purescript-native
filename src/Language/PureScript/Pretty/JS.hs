@@ -67,9 +67,14 @@ literals = mkPattern' match
     where
     objectPropertyToString :: String -> String
     objectPropertyToString = show
-  match (JSBlock sts) = fmap concat $ sequence
+  match (JSBlock sts) = fmap concat $ sequence $
     [ return "{\n"
-    , withIndent $ prettyStatements sts
+    ] ++ (let fndecls = filter fnDecl sts in
+          case fndecls of
+            [] -> [return ""]
+            _  -> [withIndent . prettyStatements $
+                   map (\(JSVariableIntroduction v _) -> JSVar $ "var " ++ v ++ withSpace anyFunc) fndecls, return "\n"]) ++
+    [ withIndent $ prettyStatements sts
     , return "\n"
     , currentIndent
     , return "}"
@@ -106,15 +111,7 @@ literals = mkPattern' match
                                 then ret
                                 else [JSBlock (JSVariableIntroduction arg' (Just $ withCast typ' (JSVar arg')) : ret)]
                               ]
-                        else [return "var ",
-                              return ident,
-                              return $ withSpace funcDecl,
-                              return (parens anyType),
-                              return " ",
-                              return anyType, -- TODO: look for JSReturn and set accordingly?
-                              return "\n",
-                              currentIndent,
-                              withIndent $ return ident,
+                        else [return ident,
                               maybe (return "") (fmap (" = " ++) . prettyPrintJS') value]
 
       (Just (JSData' prefix fields)) ->
@@ -422,3 +419,8 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ binary    Or                   "||" ]
                   , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintJS1 th ++ " : " ++ prettyPrintJS1 el ]
                     ]
+
+fnDecl :: JS -> Bool
+fnDecl j = case j of
+             (JSVariableIntroduction _ (Just (JSFunction _ _ _))) -> True
+             _ -> False

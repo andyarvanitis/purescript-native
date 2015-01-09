@@ -105,6 +105,7 @@ nameIsJsReserved name =
               , "float"
               , "for"
               , "function"
+              , "go"
               , "goto"
               , "if"
               , "implements"
