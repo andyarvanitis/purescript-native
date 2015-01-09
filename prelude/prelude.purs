@@ -525,89 +525,89 @@ module Data.Function where
   foreign import _mkFn0
     "func _mkFn0(fn interface{}) interface{} {\
     \  return func(interface{}) interface{} {\
-    \    return fn(nil);\
+    \    return ApplyFn(fn);\
     \  };\
     \}" :: forall a. (Unit -> a) -> Fn0 a
 
   foreign import _mkFn1
     "func _mkFn1(fn interface{}) interface{} {\
     \  return func(a interface{}) interface{} {\
-    \    return fn(a);\
+    \    return ApplyFn(fn, a);\
     \  };\
     \}" :: forall a b. (a -> b) -> Fn1 a b
 
   foreign import _mkFn2
     "func _mkFn2(fn interface{}) interface{} {\
     \  return func(a, b interface{}) interface{} {\
-    \    return fn(a)(b);\
+    \    return ApplyFn(fn, a, b);\
     \  };\
     \}" :: forall a b c. (a -> b -> c) -> Fn2 a b c
 
   foreign import _mkFn3
     "func _mkFn3(fn interface{}) interface{} {\
     \  return func(a, b, c interface{}) interface{} {\
-    \    return fn(a)(b)(c);\
+    \    return ApplyFn(fn, a, b, c);\
     \  };\
     \}" :: forall a b c d. (a -> b -> c -> d) -> Fn3 a b c d
 
   foreign import _mkFn4
     "func _mkFn4(fn interface{}) interface{} {\
     \  return func(a, b, c, d interface{}) interface{} {\
-    \    return fn(a)(b)(c)(d);\
+    \    return ApplyFn(fn, a, b, c, d);\
     \  };\
     \}" :: forall a b c d e. (a -> b -> c -> d -> e) -> Fn4 a b c d e
 
   foreign import _mkFn5
     "func _mkFn5(fn interface{}) interface{} {\
     \  return func(a, b, c, d, e interface{}) interface{} {\
-    \    return fn(a)(b)(c)(d)(e);\
+    \    return ApplyFn(fn, a, b, c, d, e);\
     \  };\
     \}" :: forall a b c d e f. (a -> b -> c -> d -> e -> f) -> Fn5 a b c d e f
 
   foreign import _mkFn6
     "func _mkFn6(fn interface{}) interface{} {\
     \  return func(a, b, c, d, e, f interface{}) interface{} {\
-    \    return fn(a)(b)(c)(d)(e)(f);\
+    \    return ApplyFn(fn, a, b, c, d, e, f);\
     \  };\
     \}" :: forall a b c d e f g. (a -> b -> c -> d -> e -> f -> g) -> Fn6 a b c d e f g
 
   foreign import _mkFn7
     "func _mkFn7(fn interface{}) interface{} {\
     \  return func(a, b, c, d, e, f, g interface{}) interface{} {\
-    \    return fn(a)(b)(c)(d)(e)(f)(g);\
+    \    return ApplyFn(fn, a, b, c, d, e, f, g);\
     \  };\
     \}" :: forall a b c d e f g h. (a -> b -> c -> d -> e -> f -> g -> h) -> Fn7 a b c d e f g h
 
   foreign import _mkFn8
     "func _mkFn8(fn interface{}) interface{} {\
     \  return func(a, b, c, d, e, f, g, h interface{}) interface{} {\
-    \    return fn(a)(b)(c)(d)(e)(f)(g)(h);\
+    \    return ApplyFn(fn, a, b, c, d, e, f, g, h);\
     \  };\
     \}" :: forall a b c d e f g h i. (a -> b -> c -> d -> e -> f -> g -> h -> i) -> Fn8 a b c d e f g h i
 
   foreign import _mkFn9
     "func _mkFn9(fn interface{}) interface{} {\
     \  return func(a, b, c, d, e, f, g, h, i interface{}) interface{} {\
-    \    return fn(a)(b)(c)(d)(e)(f)(g)(h)(i);\
+    \    return ApplyFn(fn, a, b, c, d, e, f, g, h, i);\
     \  };\
     \}" :: forall a b c d e f g h i j. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j) -> Fn9 a b c d e f g h i j
 
   foreign import _mkFn10
     "func _mkFn10(fn interface{}) interface{} {\
     \  return func(a, b, c, d, e, f, g, h, i, j interface{}) interface{} {\
-    \    return fn(a)(b)(c)(d)(e)(f)(g)(h)(i)(j);\
+    \    return ApplyFn(fn, a, b, c, d, e, f, g, h, i, j);\
     \  };\
     \}" :: forall a b c d e f g h i j k. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> k) -> Fn10 a b c d e f g h i j k
 
   foreign import _runFn0
     "func _runFn0(fn interface{}) interface{} {\
-    \  return fn();\
+    \  return ApplyFn(fn);\
     \}" :: forall a. Fn0 a -> a
 
   foreign import _runFn1
     "func _runFn1(fn interface{}) interface{} {\
     \  return func(a interface{}) interface{} {\
-    \    return fn(a);\
+    \    return ApplyFn(fn, a);\
     \  };\
     \}" :: forall a b. Fn1 a b -> a -> b
 
@@ -615,7 +615,7 @@ module Data.Function where
     "func _runFn2(fn interface{}) interface{} {\
     \  return func(a interface{}) interface{} {\
     \    return func(b interface{}) interface{} {\
-    \      return fn(a, b);\
+    \      return ApplyFn(fn, a, b);\
     \    };\
     \  };\
     \}" :: forall a b c. Fn2 a b c -> a -> b -> c
@@ -625,7 +625,7 @@ module Data.Function where
     \  return func(a interface{}) interface{} {\
     \    return func(b interface{}) interface{} {\
     \      return func(c interface{}) interface{} {\
-    \        return fn(a, b, c);\
+    \        return ApplyFn(fn, a, b, c);\
     \      };\
     \    };\
     \  };\
@@ -637,7 +637,7 @@ module Data.Function where
     \    return func(b interface{}) interface{} {\
     \      return func(c interface{}) interface{} {\
     \        return func(d interface{}) interface{} {\
-    \          return fn(a, b, c, d);\
+    \          return ApplyFn(fn, a, b, c, d);\
     \        };\
     \      };\
     \    };\
@@ -651,7 +651,7 @@ module Data.Function where
     \      return func(c interface{}) interface{} {\
     \        return func(d interface{}) interface{} {\
     \          return func(e interface{}) interface{} {\
-    \            return fn(a, b, c, d, e);\
+    \            return ApplyFn(fn, a, b, c, d, e);\
     \          };\
     \        };\
     \      };\
@@ -667,7 +667,7 @@ module Data.Function where
     \        return func(d interface{}) interface{} {\
     \          return func(e interface{}) interface{} {\
     \            return func(f interface{}) interface{} {\
-    \              return fn(a, b, c, d, e, f);\
+    \              return ApplyFn(fn, a, b, c, d, e, f);\
     \            };\
     \          };\
     \        };\
@@ -685,7 +685,7 @@ module Data.Function where
     \          return func(e interface{}) interface{} {\
     \            return func(f interface{}) interface{} {\
     \              return func(g interface{}) interface{} {\
-    \                return fn(a, b, c, d, e, f, g);\
+    \                return ApplyFn(fn, a, b, c, d, e, f, g);\
     \              };\
     \            };\
     \          };\
@@ -705,7 +705,7 @@ module Data.Function where
     \            return func(f interface{}) interface{} {\
     \              return func(g interface{}) interface{} {\
     \                return func(h interface{}) interface{} {\
-    \                  return fn(a, b, c, d, e, f, g, h);\
+    \                  return ApplyFn(fn, a, b, c, d, e, f, g, h);\
     \                };\
     \              };\
     \            };\
@@ -727,7 +727,7 @@ module Data.Function where
     \              return func(g interface{}) interface{} {\
     \                return func(h interface{}) interface{} {\
     \                  return func(i interface{}) interface{} {\
-    \                    return fn(a, b, c, d, e, f, g, h, i);\
+    \                    return ApplyFn(fn, a, b, c, d, e, f, g, h, i);\
     \                  };\
     \                };\
     \              };\
@@ -751,7 +751,7 @@ module Data.Function where
     \                return func(h interface{}) interface{} {\
     \                  return func(i interface{}) interface{} {\
     \                    return func(j interface{}) interface{} {\
-    \                      return fn(a, b, c, d, e, f, g, h, i, j);\
+    \                      return ApplyFn(fn, a, b, c, d, e, f, g, h, i, j);\
     \                    };\
     \                  };\
     \                };\
@@ -860,6 +860,8 @@ module Control.Monad.Eff.Unsafe where
     \  return f;\
     \}" :: forall eff1 eff2 a. Eff eff1 a -> Eff eff2 a
 
+  _ignoreUnused = runPure
+
 module Debug.Trace where
 
   import Control.Monad.Eff
@@ -889,37 +891,48 @@ module Control.Monad.ST where
 
   foreign import data STRef :: * -> * -> *
 
-  foreign import _newSTRef "func _newSTRef(val interface{}) interface{} {\
-                          \  return func( interface{}) interface{} {\
-                          \    return { value: val };\
-                          \  };\
-                          \}" :: forall a h r. a -> Eff (st :: ST h | r) (STRef h a)
+  foreign import _newSTRef """
+  func _newSTRef(val interface{}) interface{} {
+    return func(interface{}) interface{} {
+      return &val
+    }
+  }""" :: forall a h r. a -> Eff (st :: ST h | r) (STRef h a)
 
-  foreign import _readSTRef "func _readSTRef(ref interface{}) interface{} {\
-                           \  return func( interface{}) interface{} {\
-                           \    return ref.value;\
-                           \  };\
-                           \}" :: forall a h r. STRef h a -> Eff (st :: ST h | r) a
+  foreign import _readSTRef """
+  func _readSTRef(ref interface{}) interface{} {
+    return func(interface{}) interface{} {
+      var ref = ref.(*interface{})
+      return *ref
+    }
+  }""" :: forall a h r. STRef h a -> Eff (st :: ST h | r) a
 
-  foreign import _modifySTRef "func _modifySTRef(ref interface{}) interface{} {\
-                             \  return func(f interface{}) interface{} {\
-                             \    return func( interface{}) interface{} {\
-                             \      return ref.value = f(ref.value);\
-                             \    };\
-                             \  };\
-                             \}" :: forall a h r. STRef h a -> (a -> a) -> Eff (st :: ST h | r) a
+  foreign import _modifySTRef """
+  func _modifySTRef(ref interface{}) interface{} {
+    return func(f interface{}) interface{} {
+      return func(interface{}) interface{} {
+        var ref = ref.(*interface{})
+        *ref = f.(func (interface{}) interface{})(*ref)
+        return *ref
+      }
+    }
+  }""" :: forall a h r. STRef h a -> (a -> a) -> Eff (st :: ST h | r) a
 
-  foreign import _writeSTRef "func _writeSTRef(ref interface{}) interface{} {\
-                            \  return func(a interface{}) interface{} {\
-                            \    return func( interface{}) interface{} {\
-                            \      return ref.value = a;\
-                            \    };\
-                            \  };\
-                            \}" :: forall a h r. STRef h a -> a -> Eff (st :: ST h | r) a
+  foreign import _writeSTRef """
+  func _writeSTRef(ref interface{}) interface{} {
+    return func(a interface{}) interface{} {
+      return func(interface{}) interface{} {
+        var ref = ref.(*interface{})
+        *ref = a
+        return *ref
+      }
+    }
+  }""" :: forall a h r. STRef h a -> a -> Eff (st :: ST h | r) a
 
-  foreign import _runST "func _runST(f interface{}) interface{} {\
-                       \  return f;\
-                       \}" :: forall a r. (forall h. Eff (st :: ST h | r) a) -> Eff r a
+  foreign import _runST """
+  func _runST(f interface{}) interface{} {
+    return f
+  }""" :: forall a r. (forall h. Eff (st :: ST h | r) a) -> Eff r a
+
   runST = _runST
 
   pureST :: forall a. (forall h r. Eff (st :: ST h | r) a) -> a

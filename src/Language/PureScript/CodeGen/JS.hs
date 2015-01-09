@@ -69,6 +69,7 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
                      , JSRaw ("var _ reflect.Value // ignore unused package errors")
                      , JSRaw ("var _ fmt.Formatter //")
                      , JSRaw ("var _ = Prelude." ++ appFn)
+                     , JSRaw ("var _ = " ++ appFn)
                      , JSRaw ("")])
              ++ optimized
              ++ foreigns'
