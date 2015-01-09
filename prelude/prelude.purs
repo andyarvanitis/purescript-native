@@ -898,6 +898,8 @@ module Control.Monad.ST where
     }
   }""" :: forall a h r. a -> Eff (st :: ST h | r) (STRef h a)
 
+  newSTRef = _newSTRef
+
   foreign import _readSTRef """
   func _readSTRef(ref interface{}) interface{} {
     return func(interface{}) interface{} {
@@ -905,6 +907,8 @@ module Control.Monad.ST where
       return *ref
     }
   }""" :: forall a h r. STRef h a -> Eff (st :: ST h | r) a
+
+  readSTRef = _readSTRef
 
   foreign import _modifySTRef """
   func _modifySTRef(ref interface{}) interface{} {
@@ -917,6 +921,8 @@ module Control.Monad.ST where
     }
   }""" :: forall a h r. STRef h a -> (a -> a) -> Eff (st :: ST h | r) a
 
+  modifySTRef = _modifySTRef
+
   foreign import _writeSTRef """
   func _writeSTRef(ref interface{}) interface{} {
     return func(a interface{}) interface{} {
@@ -927,6 +933,8 @@ module Control.Monad.ST where
       }
     }
   }""" :: forall a h r. STRef h a -> a -> Eff (st :: ST h | r) a
+
+  writeSTRef = _writeSTRef
 
   foreign import _runST """
   func _runST(f interface{}) interface{} {
