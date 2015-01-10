@@ -56,24 +56,25 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   let foreigns' = mapMaybe (\(_, js, _) -> js) foreigns
   jsDecls <- mapM (bindToJs name True) decls
   let optimized = concatMap (map $ optimize opts) jsDecls
-  return $ [ JSRaw ("package " ++ moduleName)
-           , JSRaw ("")
-           , JSRaw ("import \"reflect\"")
-           , JSRaw ("import \"fmt\"")
-           , JSRaw ("")
+  return $ [ JSRaw $ "package " ++ moduleName
+           , JSRaw ""
+           , JSRaw "import \"reflect\""
+           , JSRaw "import \"fmt\""
+           , JSRaw ""
            ]
              ++ jsImports
              ++ (if isPrelude name then
                    appFnDef ++
-                   [JSRaw ("var " ++ appFn ++ " = ApplyFunction")
+                   [JSRaw $ "var " ++ appFn ++ " = ApplyFunction"
                   , JSRaw ""]
                  else
-                   [JSRaw ("")
-                  , JSRaw ("var _ reflect.Value // ignore unused package errors")
-                  , JSRaw ("var _ fmt.Formatter")
-                  , JSRaw ("var _ = Prelude.ApplyFunction")
-                  , JSRaw ("var " ++ appFn ++ " = Prelude.ApplyFunction")
-                  , JSRaw ("")])
+                   [JSRaw ""
+                  , JSRaw "var _ reflect.Value // ignore unused package errors"
+                  , JSRaw "var _ fmt.Formatter"
+                  , JSRaw "var _ = Prelude.ApplyFunction"
+                  , JSRaw ""
+                  , JSRaw $ "var " ++ appFn ++ " = Prelude.ApplyFunction"
+                  , JSRaw ""])
              ++ optimized
              ++ foreigns'
   where
