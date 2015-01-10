@@ -67,10 +67,10 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
                  else [JSRaw ("import . \"Prelude\"")
                      , JSRaw ("")
                      , JSRaw ("var _ reflect.Value // ignore unused package errors")
-                     , JSRaw ("var _ fmt.Formatter //")
-                     , JSRaw ("var _ = Prelude." ++ appFn)
-                     , JSRaw ("var _ = " ++ appFn)
+                     , JSRaw ("var _ fmt.Formatter")
+                     , JSRaw ("var _ = Prelude.ApplyFunction")
                      , JSRaw ("")])
+             ++ [JSRaw ("var " ++ appFn ++ " = ApplyFunction"), JSRaw ""]
              ++ optimized
              ++ foreigns'
   where

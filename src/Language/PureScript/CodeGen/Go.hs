@@ -22,7 +22,7 @@ anyFunc :: String
 anyFunc  = funcDecl ++ parens (anyType) ++ withSpace anyType
 
 appFn :: String
-appFn = "ApplyFn"
+appFn = "apply"
 
 anyList :: String
 anyList = "[]" ++ anyType
@@ -42,7 +42,7 @@ capitalize s = s
 
 appFnDef :: [JS]
 appFnDef = map JSRaw [
-              funcDecl ++ appFn ++ parens ("f " ++ anyType ++ ", args ..." ++ anyType) ++ " " ++ anyType ++ " {"
+              funcDecl ++ "ApplyFunction" ++ parens ("f " ++ anyType ++ ", args ..." ++ anyType) ++ " " ++ anyType ++ " {"
             , "  count := len(args)"
             , "  if count == 0 {"
             , "    f = f." ++ parens (anyFunc) ++ parens nil
