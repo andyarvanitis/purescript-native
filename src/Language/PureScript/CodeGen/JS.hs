@@ -63,14 +63,17 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
            , JSRaw ("")
            ]
              ++ jsImports
-             ++ (if isPrelude name then appFnDef
-                 else [JSRaw ("import . \"Prelude\"")
-                     , JSRaw ("")
-                     , JSRaw ("var _ reflect.Value // ignore unused package errors")
-                     , JSRaw ("var _ fmt.Formatter")
-                     , JSRaw ("var _ = Prelude.ApplyFunction")
-                     , JSRaw ("")])
-             ++ [JSRaw ("var " ++ appFn ++ " = ApplyFunction"), JSRaw ""]
+             ++ (if isPrelude name then
+                   appFnDef ++
+                   [JSRaw ("var " ++ appFn ++ " = ApplyFunction")
+                  , JSRaw ""]
+                 else
+                   [JSRaw ("")
+                  , JSRaw ("var _ reflect.Value // ignore unused package errors")
+                  , JSRaw ("var _ fmt.Formatter")
+                  , JSRaw ("var _ = Prelude.ApplyFunction")
+                  , JSRaw ("var " ++ appFn ++ " = Prelude.ApplyFunction")
+                  , JSRaw ("")])
              ++ optimized
              ++ foreigns'
   where
@@ -166,7 +169,7 @@ valueToJs m (Abs (_, _, t, _) arg val) = do
   return $ JSFunction Nothing [identToJs arg ++ type' t] (JSBlock [JSReturn ret])
     where
       type' (Just (ForAll _ ty _)) = type' (Just ty)
-      type' (Just (ConstrainedType [((Qualified _ (ProperName name)),_)] _)) = withSpace name
+      type' (Just (ConstrainedType [(name@(Qualified _ _),_)] _)) = withSpace (qualNameStr' m name)
       type' _ = ""
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
@@ -176,7 +179,7 @@ valueToJs m e@App{} = do
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
       return $ JSApp (JSVar $ withSuffix' ctorSuffix m name) args'
     Var (_, _, _, Just IsTypeClassConstructor) name ->
-      return $ JSInit (JSVar $ unqualName name) args'
+      return $ JSInit (JSVar $ qualNameStr m name) args'
     _ -> do fn <- valueToJs m f; return $ JSApp fn args'
   where
   unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
@@ -260,9 +263,9 @@ varToJs m qual = qualifiedToJS m id qual
 qualifiedToJS :: ModuleName -> (a -> Ident) -> Qualified a -> JS
 qualifiedToJS _ f (Qualified (Just (ModuleName [ProperName mn])) a) | mn == C.prim = JSVar . runIdent $ f a
 qualifiedToJS m f (Qualified (Just m') a)
-  | name@(x:xs) <- (identToJs $ f a), isLower x = JSVar . (if m /= m' && not (isPrelude m') then
-                                                             (moduleNameToJs m' ++) . ('.' :)
-                                                           else id) $ modulePrefix ++ name
+  | name@(x:xs) <- (identToJs $ f a) = JSVar $ (if m /= m' then moduleNameToJs m' ++ "." else "")
+                                            ++ (if isLower x then modulePrefix else "")
+                                            ++ name
 qualifiedToJS _ f (Qualified _ a) = JSVar $ identToJs (f a)
 
 -- |
@@ -385,6 +388,14 @@ isCons name = error $ "Unexpected argument in isCons: " ++ show name
 unqualName :: Qualified Ident -> String
 unqualName (Qualified _ (Ident name)) = name
 unqualName n = show n
+
+qualNameStr ::ModuleName -> Qualified Ident -> String
+qualNameStr m (Qualified mn (Ident name)) | mn == Just m = name
+qualNameStr m n = show n
+
+qualNameStr' ::ModuleName -> Qualified ProperName -> String
+qualNameStr' m (Qualified mn (ProperName name)) | mn == Just m = name
+qualNameStr' m n = show n
 
 withSuffix :: String -> Qualified Ident -> Qualified Ident
 withSuffix suffix (Qualified n (Ident name)) = Qualified n (Ident $ name ++ suffix)
