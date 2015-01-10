@@ -48,9 +48,9 @@ literals = mkPattern' match
     , return ""
     ]
   match (JSArrayLiteral xs) = fmap concat $ sequence
-    [ return "[ "
+    [ return $ anyList ++ "{ "
     , fmap (intercalate ", ") $ forM xs prettyPrintJS'
-    , return " ]"
+    , return " }"
     ]
   match (JSObjectLiteral []) = return nil
   match (JSObjectLiteral ps) = fmap concat $ sequence
