@@ -23,7 +23,9 @@ module Language.PureScript.CodeGen.JS (
 ) where
 
 import Data.List ((\\), delete)
+import Data.List (elemIndices, intercalate, nub, sort)
 import Data.Maybe (mapMaybe)
+import Data.Char (isAlphaNum)
 
 import Control.Applicative
 import Control.Arrow ((&&&))
@@ -38,6 +40,9 @@ import Language.PureScript.Options
 import Language.PureScript.Supply
 import Language.PureScript.Traversals (sndM)
 import qualified Language.PureScript.Constants as C
+import qualified Language.PureScript.Types as T
+
+import Debug.Trace
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for all declarations in a
@@ -50,15 +55,20 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   jsDecls <- mapM (bindToJs name) decls
   let optimized = concatMap (map $ optimize opts) jsDecls
   let isModuleEmpty = null exps
-  let moduleBody = JSStringLiteral "use strict" : jsImports ++ foreigns' ++ optimized
+  -- let moduleBody = JSStringLiteral "use strict" : jsImports ++ foreigns' ++ optimized
+  let moduleBody = optimized
   let exps' = JSObjectLiteral $ map (runIdent &&& JSVar . identToJs) exps
   return $ case optionsAdditional opts of
     MakeOptions -> moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
     CompileOptions ns _ _ | not isModuleEmpty ->
-      [ JSVariableIntroduction ns
-                               (Just (JSBinary Or (JSVar ns) (JSObjectLiteral [])) )
-      , JSAssignment (JSAccessor (moduleNameToJs name) (JSVar ns))
-                     (JSApp (JSFunction Nothing [] (JSBlock (moduleBody ++ [JSReturn exps']))) [])
+      -- [ JSVariableIntroduction ns
+      --                          (Just (JSBinary Or (JSVar ns) (JSObjectLiteral [])) )
+      -- , JSAssignment (JSAccessor (moduleNameToJs name) (JSVar ns))
+      --                (JSApp (JSFunction Nothing [] (JSBlock (moduleBody ++ [JSReturn exps']))) [])
+      -- ]
+      [ JSRaw "#include <functional>\n"
+      , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(const T&)>"
+      , JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleBody)
       ]
     _ -> []
 
@@ -91,8 +101,11 @@ nonRecToJS m i e@(extractAnn -> (_, com, _, _)) | not (null com) =
   JSComment com <$> nonRecToJS m i (modifyAnn removeComments e)
 nonRecToJS mp ident val = do
   js <- valueToJs mp val
-  return $ JSVariableIntroduction (identToJs ident) (Just js)
-  
+  return $ JSVariableIntroduction (identToJs ident) (expr js)
+  where
+    expr js = case js of
+                JSFunction orig args sts -> Just (JSFunction (fnName orig (identToJs ident)) args sts)
+                _ -> Just js
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a variable based on a
@@ -132,7 +145,7 @@ valueToJs m (ObjectUpdate _ o ps) = do
   extendObj obj sts
 valueToJs _ e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   let args = unAbs e
-  in return $ JSFunction Nothing (map identToJs args) (JSBlock $ map assign args)
+  in return $ noOp
   where
   unAbs :: Expr Ann -> [Ident]
   unAbs (Abs _ arg val) = arg : unAbs val
@@ -140,9 +153,17 @@ valueToJs _ e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   assign :: Ident -> JS
   assign name = JSAssignment (accessorString (runIdent name) (JSVar "this"))
                              (var name)
-valueToJs m (Abs _ arg val) = do
+
+valueToJs m (Abs (_, _, (Just (T.ForAll _ (T.ConstrainedType _ _) _)), _) _ _) = return noOp
+
+valueToJs m (Abs ann arg val) = do
   ret <- valueToJs m val
-  return $ JSFunction Nothing [identToJs arg] (JSBlock [JSReturn ret])
+  return $ JSFunction (Just annotatedName) [fnArgStr ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
+  where
+    ty = case ann of (_, _, t, _) -> t
+                     _ -> Nothing
+    annotatedName = templTypes ty ++ fnRetStr ty
+
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) args
@@ -150,13 +171,25 @@ valueToJs m e@App{} = do
     Var (_, _, _, Just IsNewtype) _ -> return (head args')
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
       return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
-    Var (_, _, _, Just IsTypeClassConstructor) name ->
-      return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
+    Var (_, _, ty, Just IsTypeClassConstructor) name ->
+      return $ JSBlock' [] (map toVarDecl (zip (names ty) args'))
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> valueToJs m f
   where
   unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
   unApp (App _ val arg) args = unApp val (arg : args)
   unApp other args = (other, args)
+
+  names ty = map fst (fst . T.rowToList $ rowType ty)
+
+  rowType :: Maybe T.Type -> T.Type
+  rowType (Just (T.TypeApp (T.TypeConstructor _) row)) = row
+  rowType _ = error "Not a row type"
+
+  toVarDecl :: (String, JS) -> JS
+  toVarDecl (nm, js) =
+    JSVariableIntroduction nm (Just $ case js of
+                                        JSFunction orig args sts -> JSFunction (fnName orig nm) args sts
+                                        _ -> js)
 valueToJs m (Var _ ident) =
   return $ varToJs m ident
 valueToJs m (Case _ values binders) = do
@@ -349,3 +382,41 @@ literalToBinderJS m varName done (ArrayLiteral bs) = do
 isCons :: Qualified ProperName -> Bool
 isCons (Qualified (Just mn) ctor) = mn == ModuleName [ProperName C.prim] && ctor == ProperName "Array"
 isCons name = error $ "Unexpected argument in isCons: " ++ show name
+
+noOp :: JS
+noOp = JSRaw []
+
+typestr :: T.Type -> String
+typestr (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"
+typestr (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
+typestr (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = "bool"
+typestr (T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) T.REmpty) _) = error "Need to supprt func() T"
+typestr (T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b) = "fn<" ++ typestr a ++ "," ++ typestr b ++ ">"
+typestr (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) a) = ("std::vector<" ++ typestr a ++ ">")
+typestr (T.TypeApp (T.TypeConstructor _) ty) = typestr ty
+typestr (T.TypeApp _ (T.TypeVar _)) = "TBD"
+typestr (T.ForAll _ ty _) = typestr ty
+typestr (T.Skolem nm _ _) = '\'' : nm
+typestr t = "T"
+
+fnArgStr :: Maybe T.Type -> String
+fnArgStr (Just ((T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b))) = cleanType $ typestr a
+fnArgStr _ = []
+
+fnRetStr :: Maybe T.Type -> String
+fnRetStr (Just ((T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b))) = cleanType $ typestr b
+fnRetStr _ = []
+
+fnName :: Maybe String -> String -> Maybe String
+fnName Nothing name = Just name
+fnName (Just t) name = Just (t ++ ' ' : name)
+
+cleanType :: String -> String
+cleanType s = filter (\c -> c /= '\'') s
+
+templTypes :: Maybe T.Type -> String
+templTypes (Just t) =
+  let s = typestr t
+      ss = (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '\'' $ s) in
+      if null ss then "" else intercalate ", " (map ("class " ++) . nub . sort $ ss) ++ "|"
+templTypes _ = ""

@@ -68,9 +68,37 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
+  match (JSBlock' name sts) = fmap concat $ sequence $
+    [ return $ name ++ " {\n"
+    , withIndent $ prettyStatements sts
+    , return "\n"
+    , currentIndent
+    , return "}"
+    ]
   match (JSVar ident) = return ident
+  match (JSVariableIntroduction _ (Just (JSBlock' [] sts))) = do
+     jss <- forM (filter isNoOp sts) prettyPrintJS'
+     indentString <- currentIndent
+     return $ intercalate (";\n" ++ indentString) jss
+  match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence
+    [ return $ if null (dropWhile (/= '|') name)
+                 then ""
+                 else "template<" ++ (takeWhile (/= '|') name) ++ ">"
+    , return "\n"
+    , do indentString <- currentIndent
+         return $ indentString ++ "auto "
+    , return $ last (words name)
+    , return "("
+    , return $ intercalate ", " args
+    , return ")"
+    , return $ if length (words name) > 1
+                 then " -> " ++ (concat . init . words $ drop ((fromMaybe (-1) $ elemIndex '|' name) + 1) name)
+                 else ""
+    , return " "
+    , prettyPrintJS' sts
+    ]
   match (JSVariableIntroduction ident value) = fmap concat $ sequence
-    [ return "var "
+    [ return "auto "
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintJS') value
     ]
@@ -229,7 +257,7 @@ binary op str = AssocL match (\v1 v2 -> v1 ++ " " ++ str ++ " " ++ v2)
 
 prettyStatements :: [JS] -> StateT PrinterState Maybe String
 prettyStatements sts = do
-  jss <- forM sts prettyPrintJS'
+  jss <- forM (filter isNoOp sts) prettyPrintJS'
   indentString <- currentIndent
   return $ intercalate "\n" $ map ((++ ";") . (indentString ++)) jss
 
@@ -259,9 +287,9 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
                   , [ unary JSNew "new " ]
-                  , [ Wrap lam $ \(name, args) ret -> "function "
-                        ++ fromMaybe "" name
-                        ++ "(" ++ intercalate ", " args ++ ") "
+                  , [ Wrap lam $ \(name, args) ret -> "[=]"
+                        -- ++ fromMaybe "" name
+                        ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args) ++ ") "
                         ++ ret ]
                   , [ binary    LessThan             "<" ]
                   , [ binary    LessThanOrEqualTo    "<=" ]
@@ -290,3 +318,8 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ binary    Or                   "||" ]
                   , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintJS1 th ++ " : " ++ prettyPrintJS1 el ]
                     ]
+
+isNoOp :: JS -> Bool
+isNoOp (JSRaw []) = True
+isNoOp (JSVariableIntroduction _ (Just (JSRaw []))) = False
+isNoOp _ = True

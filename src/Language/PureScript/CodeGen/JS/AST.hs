@@ -188,6 +188,10 @@ data JS
   --
   | JSBlock [JS]
   -- |
+  -- A (named) block of expressions in braces
+  --
+  | JSBlock' String [JS]
+  -- |
   -- A variable introduction and optional initialization
   --
   | JSVariableIntroduction String (Maybe JS)
@@ -266,6 +270,7 @@ everywhereOnJS f = go
   go (JSApp j js) = f (JSApp (go j) (map go js))
   go (JSConditional j1 j2 j3) = f (JSConditional (go j1) (go j2) (go j3))
   go (JSBlock js) = f (JSBlock (map go js))
+  go (JSBlock' nm js) = f (JSBlock' nm (map go js))
   go (JSVariableIntroduction name j) = f (JSVariableIntroduction name (fmap go j))
   go (JSAssignment j1 j2) = f (JSAssignment (go j1) (go j2))
   go (JSWhile j1 j2) = f (JSWhile (go j1) (go j2))
@@ -294,6 +299,7 @@ everywhereOnJSTopDown f = go . f
   go (JSApp j js) = JSApp (go (f j)) (map (go . f) js)
   go (JSConditional j1 j2 j3) = JSConditional (go (f j1)) (go (f j2)) (go (f j3))
   go (JSBlock js) = JSBlock (map (go . f) js)
+  go (JSBlock' nm js) = JSBlock' nm (map (go . f) js)
   go (JSVariableIntroduction name j) = JSVariableIntroduction name (fmap (go . f) j)
   go (JSAssignment j1 j2) = JSAssignment (go (f j1)) (go (f j2))
   go (JSWhile j1 j2) = JSWhile (go (f j1)) (go (f j2))
@@ -321,6 +327,8 @@ everythingOnJS (<>) f = go
   go j@(JSApp j1 js) = foldl (<>) (f j <> go j1) (map go js)
   go j@(JSConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(JSBlock js) = foldl (<>) (f j) (map go js)
+  go j@(JSBlock' _ js) = foldl (<>) (f j) (map go js)
+  go j@(JSBlock' _ js) = go (JSBlock js)
   go j@(JSVariableIntroduction _ (Just j1)) = f j <> go j1
   go j@(JSAssignment j1 j2) = f j <> go j1 <> go j2
   go j@(JSWhile j1 j2) = f j <> go j1 <> go j2
