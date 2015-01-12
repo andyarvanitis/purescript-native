@@ -154,9 +154,10 @@ valueToJs _ e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   assign :: Ident -> JS
   assign name = JSAssignment (accessorString (runIdent name) (JSVar "this"))
                              (var name)
-
 valueToJs m (Abs (_, _, (Just (T.ForAll _ (T.ConstrainedType _ _) _)), _) _ _) = return noOp
-
+valueToJs m (Abs (_, _, (Just (T.ConstrainedType _ _)), _) _ val)
+    | (Abs (_, _, t, _) _ val') <- val, Nothing <- t = valueToJs m val'
+    | otherwise = valueToJs m val
 valueToJs m (Abs ann arg val) = do
   ret <- valueToJs m val
   return $ JSFunction (Just annotatedName) [fnArgStr ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
@@ -164,7 +165,6 @@ valueToJs m (Abs ann arg val) = do
     ty = case ann of (_, _, t, _) -> t
                      _ -> Nothing
     annotatedName = templTypes ty ++ fnRetStr ty
-
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) args
