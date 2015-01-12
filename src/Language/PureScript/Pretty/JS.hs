@@ -77,7 +77,7 @@ literals = mkPattern' match
     ]
   match (JSVar ident) = return ident
   match (JSVariableIntroduction _ (Just (JSBlock' [] sts))) = do
-     jss <- forM (filter isNoOp sts) prettyPrintJS'
+     jss <- forM (filter noNoOp sts) prettyPrintJS'
      indentString <- currentIndent
      return $ intercalate (";\n" ++ indentString) jss
   match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence
@@ -257,7 +257,7 @@ binary op str = AssocL match (\v1 v2 -> v1 ++ " " ++ str ++ " " ++ v2)
 
 prettyStatements :: [JS] -> StateT PrinterState Maybe String
 prettyStatements sts = do
-  jss <- forM (filter isNoOp sts) prettyPrintJS'
+  jss <- forM (filter noNoOp sts) prettyPrintJS'
   indentString <- currentIndent
   return $ intercalate "\n" $ map ((++ ";") . (indentString ++)) jss
 
@@ -319,7 +319,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintJS1 th ++ " : " ++ prettyPrintJS1 el ]
                     ]
 
-isNoOp :: JS -> Bool
-isNoOp (JSRaw []) = True
-isNoOp (JSVariableIntroduction _ (Just (JSRaw []))) = False
-isNoOp _ = True
+noNoOp :: JS -> Bool
+noNoOp (JSRaw []) = False
+noNoOp (JSVariableIntroduction _ (Just (JSRaw []))) = False
+noNoOp _ = True

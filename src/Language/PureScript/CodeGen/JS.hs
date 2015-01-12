@@ -23,8 +23,9 @@ module Language.PureScript.CodeGen.JS (
 ) where
 
 import Data.List ((\\), delete)
-import Data.List (elemIndices, intercalate, nub, sort)
+import Data.List (elemIndices, intercalate, isPrefixOf, nub, sort)
 import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Char (isAlphaNum)
 
 import Control.Applicative
@@ -179,16 +180,12 @@ valueToJs m e@App{} = do
   unApp (App _ val arg) args = unApp val (arg : args)
   unApp other args = (other, args)
 
-  names ty = map fst (fst . T.rowToList $ rowType ty)
-
-  rowType :: Maybe T.Type -> T.Type
-  rowType (Just (T.TypeApp (T.TypeConstructor _) row)) = row
-  rowType _ = error "Not a row type"
-
+  names ty = map fst (fst . T.rowToList $ fromMaybe T.REmpty ty)
   toVarDecl :: (String, JS) -> JS
+  toVarDecl (nm, js) | JSFunction _ _ _ <- js, C.__superclass_ `isPrefixOf` nm = noOp
   toVarDecl (nm, js) =
     JSVariableIntroduction nm (Just $ case js of
-                                        JSFunction orig args sts -> JSFunction (fnName orig nm) args sts
+                                        JSFunction orig ags sts -> JSFunction (fnName orig nm) ags sts
                                         _ -> js)
 valueToJs m (Var _ ident) =
   return $ varToJs m ident

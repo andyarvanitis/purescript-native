@@ -166,10 +166,16 @@ exprToCoreFn env ss com _ (A.TypedValue _ v ty) =
   exprToCoreFn env ss com (Just ty) v
 exprToCoreFn env ss com ty (A.Let ds v) =
   Let (ss, com, ty, Nothing) (concatMap (declToCoreFn env ss []) ds) (exprToCoreFn env ss [] Nothing v)
-exprToCoreFn env ss com _  (A.TypeClassDictionaryConstructorApp name (A.TypedValue _ (A.ObjectLiteral vs) ty)) =
+exprToCoreFn env ss com _  (A.TypeClassDictionaryConstructorApp name (A.TypedValue _ (A.ObjectLiteral vs) _)) =
   let args = map (exprToCoreFn env ss [] Nothing . snd) $ sortBy (compare `on` fst) vs
-      ctor = Var (ss, [], Just ty, Just IsTypeClassConstructor) (fmap properToIdent name)
+      ctor = Var (ss, [], rowType, Just IsTypeClassConstructor) (fmap properToIdent name)
   in foldl (App (ss, com, Nothing, Nothing)) ctor args
+  where
+    rowType = Just (mkRow . map fst $ sortBy (compare `on` fst) vs)
+    mkRow :: [String] -> Type
+    mkRow [] = REmpty
+    mkRow (n:ns) = RCons n REmpty (mkRow ns)
+
 exprToCoreFn env _ com ty (A.PositionedValue ss com1 v) =
   exprToCoreFn env (Just ss) (com ++ com1) ty v
 exprToCoreFn _ _ _ _ e =
