@@ -184,9 +184,10 @@ valueToJs m e@App{} = do
   toVarDecl :: (String, JS) -> JS
   toVarDecl (nm, js) | JSFunction _ _ _ <- js, C.__superclass_ `isPrefixOf` nm = noOp
   toVarDecl (nm, js) =
-    JSVariableIntroduction nm (Just $ case js of
-                                        JSFunction orig ags sts -> JSFunction (fnName orig nm) ags sts
-                                        _ -> js)
+    JSVariableIntroduction (identToJs $ Ident nm)
+                           (Just $ case js of
+                                     JSFunction orig ags sts -> JSFunction (fnName orig nm) ags sts
+                                     _ -> js)
   cntConstr :: Expr Ann -> Int
   cntConstr (Var (_, _, Just ty, _) _) = cntConstr' ty
   cntConstr _ = 0
@@ -415,8 +416,8 @@ fnRetStr (Just ((T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (Modul
 fnRetStr _ = []
 
 fnName :: Maybe String -> String -> Maybe String
-fnName Nothing name = Just name
-fnName (Just t) name = Just (t ++ ' ' : name)
+fnName Nothing name = Just (identToJs $ Ident name)
+fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
 
 cleanType :: String -> String
 cleanType s = filter (\c -> c /= '\'') s
