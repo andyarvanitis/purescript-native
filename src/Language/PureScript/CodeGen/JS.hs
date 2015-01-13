@@ -62,11 +62,6 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   return $ case optionsAdditional opts of
     MakeOptions -> moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
     CompileOptions ns _ _ | not isModuleEmpty ->
-      -- [ JSVariableIntroduction ns
-      --                          (Just (JSBinary Or (JSVar ns) (JSObjectLiteral [])) )
-      -- , JSAssignment (JSAccessor (moduleNameToJs name) (JSVar ns))
-      --                (JSApp (JSFunction Nothing [] (JSBlock (moduleBody ++ [JSReturn exps']))) [])
-      -- ]
       [ JSRaw "#include <functional>\n"
       , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(const T&)>"
       , JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleBody)
