@@ -178,17 +178,20 @@ valueToJs m (Abs ann arg val) = do
     annotatedName = templTypes ty ++ fnRetStr ty
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
-  args' <- mapM (valueToJs m) args
+  args' <- mapM (valueToJs m) (filter (not . typeinst) args)
+  tci <- mapM (valueToJs m) (filter typeinst args)
   case f of
     Var (_, _, _, Just IsNewtype) _ -> return (head args')
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
       return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name ->
       return $ JSBlock' [] (map toVarDecl (zip (names ty) args'))
-    _ -> flip (foldl (\fn a -> JSApp fn [a])) (drop (cntConstr f) args') <$> valueToJs m f
+    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> do fn <- valueToJs m f
+                                                           return $ instfn tci fn
   where
   unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
-  unApp (App _ val arg) args = unApp val (arg : args)
+  unApp (App (_, _, Nothing, _) val arg@(Var _ (Qualified Nothing _))) args = unApp val args
+  unApp (App (_, _, _, _) val arg) args = unApp val (arg : args)
   unApp other args = (other, args)
 
   names ty = map fst (fst . T.rowToList $ fromMaybe T.REmpty ty)
@@ -203,15 +206,13 @@ valueToJs m e@App{} = do
     | (Just name) <- orig, '|' `elem` name = fnName orig nm
     | otherwise = fnName (Just $ "|" ++ fromMaybe "" orig) nm
 
-  cntConstr :: Expr Ann -> Int
-  cntConstr (Var (_, _, Just ty, _) _) = cntConstr' ty
-  cntConstr _ = 0
+  typeinst :: Expr Ann -> Bool
+  typeinst (Var (_, _, Nothing, Nothing) (Qualified (Just _) _)) = True
+  typeinst _ = False
 
-  cntConstr' :: T.Type -> Int
-  cntConstr' ty
-    | (T.ForAll _ ty' _) <- ty = cntConstr' ty'
-    | (T.ConstrainedType ts _) <- ty = length ts
-  cntConstr' _ = 0
+  instfn :: [JS] -> JS -> JS
+  instfn [JSVar inst] (JSVar name) = JSVar (inst ++ "::" ++ name)
+  instfn _ js = js
 
 valueToJs m (Var _ ident) =
   return $ varToJs m ident
