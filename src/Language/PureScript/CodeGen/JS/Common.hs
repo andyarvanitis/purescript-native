@@ -30,7 +30,7 @@ import Language.PureScript.Names
 --  * Symbols are prefixed with '$' followed by a symbol name or their ordinal value.
 --
 identToJs :: Ident -> String
-identToJs (Ident name) | nameIsJsReserved name = "$$" ++ name
+identToJs (Ident name) | nameIsJsReserved name = "__" ++ name
 identToJs (Ident name) = concatMap identCharToString name
 identToJs (Op op) = concatMap identCharToString op
 
@@ -47,28 +47,28 @@ identNeedsEscaping s = s /= identToJs (Ident s)
 identCharToString :: Char -> String
 identCharToString c | isAlphaNum c = [c]
 identCharToString '_' = "_"
-identCharToString '.' = "$dot"
-identCharToString '$' = "$dollar"
-identCharToString '~' = "$tilde"
-identCharToString '=' = "$eq"
-identCharToString '<' = "$less"
-identCharToString '>' = "$greater"
-identCharToString '!' = "$bang"
-identCharToString '#' = "$hash"
-identCharToString '%' = "$percent"
-identCharToString '^' = "$up"
-identCharToString '&' = "$amp"
-identCharToString '|' = "$bar"
-identCharToString '*' = "$times"
-identCharToString '/' = "$div"
-identCharToString '+' = "$plus"
-identCharToString '-' = "$minus"
-identCharToString ':' = "$colon"
-identCharToString '\\' = "$bslash"
-identCharToString '?' = "$qmark"
-identCharToString '@' = "$at"
-identCharToString '\'' = "$prime"
-identCharToString c = '$' : show (ord c)
+identCharToString '.' = "_dot"
+identCharToString '$' = "_dollar"
+identCharToString '~' = "_tilde"
+identCharToString '=' = "_eq"
+identCharToString '<' = "_less"
+identCharToString '>' = "_greater"
+identCharToString '!' = "_bang"
+identCharToString '#' = "_hash"
+identCharToString '%' = "_percent"
+identCharToString '^' = "_up"
+identCharToString '&' = "_amp"
+identCharToString '|' = "_bar"
+identCharToString '*' = "_times"
+identCharToString '/' = "_div"
+identCharToString '+' = "_plus"
+identCharToString '-' = "_minus"
+identCharToString ':' = "_colon"
+identCharToString '\\' = "_bslash"
+identCharToString '?' = "_qmark"
+identCharToString '@' = "_at"
+identCharToString '\'' = "_prime"
+identCharToString c = '_' : show (ord c)
 
 -- |
 -- Checks whether an identifier name is reserved in Javascript.

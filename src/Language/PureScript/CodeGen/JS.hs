@@ -63,7 +63,7 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
     MakeOptions -> moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
     CompileOptions ns _ _ | not isModuleEmpty ->
       [ JSRaw "#include <functional>\n"
-      , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(const T&)>"
+      , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(T)>"
       , JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleBody)
       ]
     _ -> []
@@ -431,7 +431,7 @@ fnRetStr (Just ((T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (Modul
 fnRetStr _ = []
 
 fnName :: Maybe String -> String -> Maybe String
-fnName Nothing name = Just (identToJs $ Ident name)
+fnName Nothing name = Just name
 fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
 
 cleanType :: String -> String
