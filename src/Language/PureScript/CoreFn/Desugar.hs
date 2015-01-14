@@ -36,6 +36,8 @@ import Language.PureScript.Types
 import Language.PureScript.Comments
 import qualified Language.PureScript.AST as A
 
+import Debug.Trace
+
 -- |
 -- Desugars a module from AST to CoreFn representation.
 --
@@ -120,11 +122,21 @@ mkTypeClassConstructor :: Maybe SourceSpan -> [Comment] -> [Constraint] -> [A.De
 mkTypeClassConstructor ss com [] [] = Literal (ss, com, Nothing, Just IsTypeClassConstructor) (ObjectLiteral [])
 mkTypeClassConstructor ss com supers members =
   let args@(a:as) = sort $ map typeClassMemberName members ++ superClassDictionaryNames supers
+      as' = sortBy (compare `on` fst) $ map (\m -> (typeClassMemberName m, typeClassMemberType m)) members
+                                     ++ map (\m -> (m, Nothing)) (superClassDictionaryNames supers)
       props = [ (arg, Var nullAnn $ Qualified Nothing (Ident arg)) | arg <- args ]
       dict = Literal nullAnn (ObjectLiteral props)
   in Abs (ss, com, Nothing, Just IsTypeClassConstructor)
          (Ident a)
-         (foldr (Abs nullAnn . Ident) dict as)
+         (foldr mkAbs dict as')
+  where
+    typeClassMemberType :: A.Declaration -> Maybe Type
+    typeClassMemberType (A.TypeDeclaration _ ty) = Just ty
+    typeClassMemberType (A.PositionedDeclaration _ _ d) = typeClassMemberType d
+    typeClassMemberType d = error $ "Invalid declaration in type class definition: " ++ show d
+
+    mkAbs :: (String, Maybe Type) -> Expr Ann -> Expr Ann
+    mkAbs (name, ty) = Abs (Nothing, [], ty, Nothing) (Ident name)
 
 -- |
 -- Desugars expressions from AST to CoreFn representation.

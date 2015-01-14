@@ -23,7 +23,7 @@ module Language.PureScript.CodeGen.JS (
 ) where
 
 import Data.List ((\\), delete)
-import Data.List (elemIndices, intercalate, isPrefixOf, nub, sort)
+import Data.List (elemIndices, intercalate, intersperse, isPrefixOf, nub, sort)
 import Data.Maybe (mapMaybe)
 import Data.Maybe (fromMaybe)
 import Data.Char (isAlphaNum)
@@ -139,9 +139,9 @@ valueToJs m (ObjectUpdate _ o ps) = do
   obj <- valueToJs m o
   sts <- mapM (sndM (valueToJs m)) ps
   extendObj obj sts
-valueToJs _ e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
-  let args = unAbs e
-  in return $ noOp
+valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ val) = do
+  let fs = fnInfo val []
+  return $ JSBlock' [] (map mkFn fs)
   where
   unAbs :: Expr Ann -> [Ident]
   unAbs (Abs _ arg val) = arg : unAbs val
@@ -149,6 +149,17 @@ valueToJs _ e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   assign :: Ident -> JS
   assign name = JSAssignment (accessorString (runIdent name) (JSVar "this"))
                              (var name)
+
+  fnInfo :: Expr Ann -> [(Ident, Maybe T.Type)] -> [(Ident, Maybe T.Type)]
+  fnInfo (Abs (_, _, ty, _) name val) fs = fnInfo val ((name, ty) : fs)
+  fnInfo _ fs = fs
+
+  mkFn :: (Ident, Maybe T.Type) -> JS
+  mkFn (_, Nothing) = noOp
+  mkFn (ident, ty) = JSVariableIntroduction (identToJs ident)
+                                            (Just $ JSFunction (annotatedName) [fnArgStr ty] noOp)
+    where annotatedName = Just $ templTypes ty ++ fnRetStr ty ++ ' ' : identToJs ident
+
 valueToJs m (Abs (_, _, (Just (T.ForAll _ (T.ConstrainedType _ _) _)), _) _ _) = return noOp
 valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
     | (Abs (_, _, t, _) _ val') <- val, Nothing <- t = valueToJs m (dropAbs (length ts - 2) val') -- TODO: confirm '-2'
@@ -186,8 +197,12 @@ valueToJs m e@App{} = do
   toVarDecl (nm, js) =
     JSVariableIntroduction (identToJs $ Ident nm)
                            (Just $ case js of
-                                     JSFunction orig ags sts -> JSFunction (fnName orig nm) ags sts
+                                     JSFunction orig ags sts -> JSFunction (asTemplate orig nm) ags sts
                                      _ -> js)
+  asTemplate orig nm
+    | (Just name) <- orig, '|' `elem` name = fnName orig nm
+    | otherwise = fnName (Just $ "|" ++ fromMaybe "" orig) nm
+
   cntConstr :: Expr Ann -> Int
   cntConstr (Var (_, _, Just ty, _) _) = cntConstr' ty
   cntConstr _ = 0
@@ -402,9 +417,9 @@ typestr (T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [P
 typestr (T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b) = "fn<" ++ typestr a ++ "," ++ typestr b ++ ">"
 typestr (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) a) = ("std::vector<" ++ typestr a ++ ">")
 typestr (T.TypeApp (T.TypeConstructor _) ty) = typestr ty
-typestr (T.TypeApp _ (T.TypeVar _)) = "TBD"
 typestr (T.ForAll _ ty _) = typestr ty
 typestr (T.Skolem nm _ _) = '\'' : nm
+typestr (T.TypeVar nm) = '\'' : nm
 typestr t = "T"
 
 fnArgStr :: Maybe T.Type -> String
