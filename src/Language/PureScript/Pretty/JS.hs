@@ -80,6 +80,10 @@ literals = mkPattern' match
      jss <- forM (filter noNoOp sts) prettyPrintJS'
      indentString <- currentIndent
      return $ intercalate (";\n" ++ indentString) jss
+  match (JSVariableIntroduction vname (Just (JSBlock' name sts))) = fmap concat $ sequence
+    [ return $ name ++ ' ' : vname
+    , prettyPrintJS' (JSBlock' [] sts)
+    ]
   match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence
     [ return $ if null (dropWhile (/= '|') name)
                  then ""

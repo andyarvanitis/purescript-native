@@ -139,27 +139,26 @@ valueToJs m (ObjectUpdate _ o ps) = do
   obj <- valueToJs m o
   sts <- mapM (sndM (valueToJs m)) ps
   extendObj obj sts
-valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ val) = do
-  let fs = fnInfo val []
-  return $ JSBlock' [] (map mkFn fs)
-  where
-  unAbs :: Expr Ann -> [Ident]
-  unAbs (Abs _ arg val) = arg : unAbs val
-  unAbs _ = []
-  assign :: Ident -> JS
-  assign name = JSAssignment (accessorString (runIdent name) (JSVar "this"))
-                             (var name)
-
-  fnInfo :: Expr Ann -> [(Ident, Maybe T.Type)] -> [(Ident, Maybe T.Type)]
-  fnInfo (Abs (_, _, ty, _) name val) fs = fnInfo val ((name, ty) : fs)
-  fnInfo _ fs = fs
-
-  mkFn :: (Ident, Maybe T.Type) -> JS
-  mkFn (_, Nothing) = noOp
-  mkFn (ident, ty) = JSVariableIntroduction (identToJs ident)
-                                            (Just $ JSFunction (annotatedName) [fnArgStr ty] noOp)
-    where annotatedName = Just $ templTypes ty ++ fnRetStr ty ++ ' ' : identToJs ident
-
+valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ val) = return noOp
+  -- let fs = fnInfo val []
+  -- return $ JSBlock' [] (map mkFn fs)
+  -- where
+  -- unAbs :: Expr Ann -> [Ident]
+  -- unAbs (Abs _ arg val) = arg : unAbs val
+  -- unAbs _ = []
+  -- assign :: Ident -> JS
+  -- assign name = JSAssignment (accessorString (runIdent name) (JSVar "this"))
+  --                            (var name)
+  --
+  -- fnInfo :: Expr Ann -> [(Ident, Maybe T.Type)] -> [(Ident, Maybe T.Type)]
+  -- fnInfo (Abs (_, _, ty, _) name val) fs = fnInfo val ((name, ty) : fs)
+  -- fnInfo _ fs = fs
+  --
+  -- mkFn :: (Ident, Maybe T.Type) -> JS
+  -- mkFn (_, Nothing) = noOp
+  -- mkFn (ident, ty) = JSVariableIntroduction (identToJs ident)
+  --                                           (Just $ JSFunction (annotatedName) [fnArgStr ty] noOp)
+  --   where annotatedName = Just $ templTypes ty ++ fnRetStr ty ++ ' ' : identToJs ident
 valueToJs m (Abs (_, _, (Just (T.ForAll _ (T.ConstrainedType _ _) _)), _) _ _) = return noOp
 valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
     | (Abs (_, _, t, _) _ val') <- val, Nothing <- t = valueToJs m (dropAbs (length ts - 2) val') -- TODO: confirm '-2'
@@ -185,7 +184,7 @@ valueToJs m e@App{} = do
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
       return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name ->
-      return $ JSBlock' [] (map toVarDecl (zip (names ty) args'))
+      return $ JSBlock' "namespace" (map toVarDecl (zip (names ty) args'))
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> do fn <- valueToJs m f
                                                            return $ instfn tci fn
   where
@@ -200,12 +199,8 @@ valueToJs m e@App{} = do
   toVarDecl (nm, js) =
     JSVariableIntroduction (identToJs $ Ident nm)
                            (Just $ case js of
-                                     JSFunction orig ags sts -> JSFunction (asTemplate orig nm) ags sts
+                                     JSFunction orig ags sts -> JSFunction (fnName orig nm) ags sts
                                      _ -> js)
-  asTemplate orig nm
-    | (Just name) <- orig, '|' `elem` name = fnName orig nm
-    | otherwise = fnName (Just $ "|" ++ fromMaybe "" orig) nm
-
   typeinst :: Expr Ann -> Bool
   typeinst (Var (_, _, Nothing, Nothing) (Qualified (Just _) _)) = True
   typeinst _ = False
