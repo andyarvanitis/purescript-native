@@ -57,15 +57,18 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   let optimized = concatMap (map $ optimize opts) jsDecls
   let isModuleEmpty = null exps
   -- let moduleBody = JSStringLiteral "use strict" : jsImports ++ foreigns' ++ optimized
+  let moduleHeader = (map stripImpls optimized) ++ [JSRaw "// end of header"]
   let moduleBody = optimized
   let exps' = JSObjectLiteral $ map (runIdent &&& JSVar . identToJs) exps
   return $ case optionsAdditional opts of
-    MakeOptions -> moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
+    MakeOptions -> moduleBody -- ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
     CompileOptions ns _ _ | not isModuleEmpty ->
       [ JSRaw "#include <functional>\n"
       , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(T)>"
-      , JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleBody)
+      , JSRaw "\n"
       ]
+      ++ [JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleHeader)]
+      ++ [JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleBody)]
     _ -> []
 
 -- |
@@ -439,3 +442,10 @@ templTypes (Just t) =
       ss = (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '\'' $ s) in
       if null ss then "" else intercalate ", " (map ("class " ++) . nub . sort $ ss) ++ "|"
 templTypes _ = ""
+
+stripImpls :: JS -> JS
+stripImpls (JSBlock' name bs) = JSBlock' name (map stripImpls bs)
+stripImpls (JSComment c e) = JSComment c (stripImpls e)
+stripImpls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripImpls expr)
+stripImpls (JSFunction fn args _) = JSFunction fn args noOp
+stripImpls _ = noOp
