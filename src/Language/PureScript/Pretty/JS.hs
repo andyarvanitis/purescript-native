@@ -80,19 +80,20 @@ literals = mkPattern' match
     [ prettyPrintJS' (JSNamespace name sts)
     ]
   match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence
-    [ return $ if null (dropWhile (/= '|') name)
-                 then ""
-                 else "template<" ++ (takeWhile (/= '|') name) ++ ">"
-    , return "\n"
-    , do indentString <- currentIndent
-         return $ indentString ++ "auto "
+    [ if null (dropWhile (/= '|') name) then
+        return []
+      else do
+        indentString <- currentIndent
+        return $ "template<" ++ (takeWhile (/= '|') name) ++ ">\n" ++ indentString
+    , return "auto "
     , return $ last (words name)
     , return "("
     , return $ intercalate ", " args
     , return ")"
-    , return $ if length (words name) > 1
-                 then " -> " ++ (concat . init . words $ drop ((fromMaybe (-1) $ elemIndex '|' name) + 1) name)
-                 else ""
+    , return $ if length (words name) > 1 then
+                 " -> " ++ (concat . init . words $ drop ((fromMaybe (-1) $ elemIndex '|' name) + 1) name)
+               else
+                 []
     , return " "
     , prettyPrintJS' sts
     ]
