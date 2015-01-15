@@ -57,7 +57,7 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   let optimized = concatMap (map $ optimize opts) jsDecls
   let isModuleEmpty = null exps
   -- let moduleBody = JSStringLiteral "use strict" : jsImports ++ foreigns' ++ optimized
-  let moduleHeader = (map stripImpls optimized) ++ [JSRaw "// end of header"]
+  let moduleHeader = (map stripImpls optimized)
   let moduleBody = optimized
   let exps' = JSObjectLiteral $ map (runIdent &&& JSVar . identToJs) exps
   return $ case optionsAdditional opts of
@@ -67,7 +67,8 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
       , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(T)>"
       , JSRaw "\n"
       ]
-      ++ [JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleHeader)]
+      ++ [JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleHeader)
+        , JSRaw "// end of header"]
       ++ [JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleBody)]
     _ -> []
 
@@ -181,7 +182,7 @@ valueToJs m (Abs ann arg val) = do
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
-  tci <- mapM (valueToJs m) (filter typeinst args)
+  let tci = instanceJs $ filter typeinst args
   case f of
     Var (_, _, _, Just IsNewtype) _ -> return (head args')
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
@@ -208,8 +209,17 @@ valueToJs m e@App{} = do
   typeinst (Var (_, _, Nothing, Nothing) (Qualified (Just _) _)) = True
   typeinst _ = False
 
+  instanceJs :: [Expr Ann] -> [JS]
+  instanceJs [Var (_, _, Nothing, Nothing) (Qualified (Just _) ident)] = [JSVar $ identToJs ident]
+  instanceJs _ = []
+
   instfn :: [JS] -> JS -> JS
-  instfn [JSVar inst] (JSVar name) = JSVar (inst ++ "::" ++ name)
+  instfn [JSVar inst] (JSVar name)
+    | ':' `elem` name = JSVar . intercalate "::" $ init parts ++ (inst : tail parts)
+    | otherwise = JSVar (inst ++ "::" ++ name)
+    where
+      parts = words $ map (\c -> case c of ':' -> ' '
+                                           _ -> c) name
   instfn _ js = js
 
 valueToJs m (Var _ ident) =
@@ -289,7 +299,7 @@ varToJs m qual = qualifiedToJS m id qual
 --
 qualifiedToJS :: ModuleName -> (a -> Ident) -> Qualified a -> JS
 qualifiedToJS _ f (Qualified (Just (ModuleName [ProperName mn])) a) | mn == C.prim = JSVar . runIdent $ f a
-qualifiedToJS m f (Qualified (Just m') a) | m /= m' = accessor (f a) (JSVar (moduleNameToJs m'))
+qualifiedToJS m f (Qualified (Just m') a) | m /= m' = (JSVar (moduleNameToJs m' ++ "::" ++ identToJs (f a)))
 qualifiedToJS _ f (Qualified _ a) = JSVar $ identToJs (f a)
 
 -- |
