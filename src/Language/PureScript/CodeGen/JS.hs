@@ -67,9 +67,9 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
       , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(T)>"
       , JSRaw "\n"
       ]
-      ++ [JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleHeader)
+      ++ [JSNamespace (moduleNameToJs name) (moduleHeader)
         , JSRaw "// end of header"]
-      ++ [JSBlock' ("\nnamespace " ++ moduleNameToJs name) (moduleBody)]
+      ++ [JSNamespace (moduleNameToJs name) (moduleBody)]
     _ -> []
 
 -- |
@@ -188,7 +188,7 @@ valueToJs m e@App{} = do
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
       return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name ->
-      return $ JSBlock' "namespace" (map toVarDecl (zip (names ty) args'))
+      return $ JSNamespace [] (map toVarDecl (zip (names ty) args'))
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> do fn <- valueToJs m f
                                                            return $ instfn tci fn
   where
@@ -454,7 +454,7 @@ templTypes (Just t) =
 templTypes _ = ""
 
 stripImpls :: JS -> JS
-stripImpls (JSBlock' name bs) = JSBlock' name (map stripImpls bs)
+stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
 stripImpls (JSComment c e) = JSComment c (stripImpls e)
 stripImpls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripImpls expr)
 stripImpls (JSFunction fn args _) = JSFunction fn args noOp

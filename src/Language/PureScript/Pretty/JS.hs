@@ -68,21 +68,16 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
-  match (JSBlock' name sts) = fmap concat $ sequence $
-    [ return $ name ++ " {\n"
+  match (JSNamespace name sts) = fmap concat $ sequence $
+    [ return $ "namespace " ++ name ++ " {\n"
     , withIndent $ prettyStatements sts
     , return "\n"
     , currentIndent
     , return "}"
     ]
   match (JSVar ident) = return ident
-  match (JSVariableIntroduction _ (Just (JSBlock' [] sts))) = do
-     jss <- forM (filter noNoOp sts) prettyPrintJS'
-     indentString <- currentIndent
-     return $ intercalate (";\n" ++ indentString) jss
-  match (JSVariableIntroduction vname (Just (JSBlock' name sts))) = fmap concat $ sequence
-    [ return $ name ++ ' ' : vname
-    , prettyPrintJS' (JSBlock' [] sts)
+  match (JSVariableIntroduction name (Just (JSNamespace _ sts))) = fmap concat $ sequence
+    [ prettyPrintJS' (JSNamespace name sts)
     ]
   match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence
     [ return $ if null (dropWhile (/= '|') name)
