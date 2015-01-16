@@ -105,12 +105,12 @@ literals = mkPattern' match
     , return "\n"
     , withIndent $ do
         indentString <- currentIndent
-        return $ intercalate "\n" $ map ((++ ";") . (indentString ++)) fields
-    , return "\n"
+        return $ concatMap ((++ ";\n") . (indentString ++)) fields
     , withIndent $ do
         indentString <- currentIndent
-        let vals =  map (last . words) fields
-        return $ indentString ++ ctor ++ parens (intercalate ", " fields) ++ " : "
+        let vals = map (last . words) fields
+        return $ indentString ++ ctor ++ parens (intercalate ", " fields)
+              ++ (if null fields then [] else " : ")
               ++ intercalate ", " (map (\v -> v ++ parens v) vals)
               ++ " {}"
     , return "\n"

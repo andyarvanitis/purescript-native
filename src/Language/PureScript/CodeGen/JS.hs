@@ -272,8 +272,9 @@ valueToJs _ (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
     types (Just T.REmpty) = []
 
     mkfn :: Maybe String -> [String] -> JS
+    mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar ctor) []]
     mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
-    mkfn _ [] = JSApp (JSVar ctor) (map JSVar (map (last . words) (fields ty)))
+    mkfn Nothing [] = JSApp (JSVar ctor) (map JSVar (map (last . words) (fields ty)))
 
     fname = Just $ fty (types ty) ++ " create";
 
