@@ -192,6 +192,10 @@ data JS
   --
   | JSNamespace String [JS]
   -- |
+  -- A class representing "data"
+  --
+  | JSData String String [String] JS
+  -- |
   -- A variable introduction and optional initialization
   --
   | JSVariableIntroduction String (Maybe JS)
@@ -271,6 +275,7 @@ everywhereOnJS f = go
   go (JSConditional j1 j2 j3) = f (JSConditional (go j1) (go j2) (go j3))
   go (JSBlock js) = f (JSBlock (map go js))
   go (JSNamespace nm js) = f (JSNamespace nm (map go js))
+  go (JSData name ty fields j) = f (JSData name ty fields (go j))
   go (JSVariableIntroduction name j) = f (JSVariableIntroduction name (fmap go j))
   go (JSAssignment j1 j2) = f (JSAssignment (go j1) (go j2))
   go (JSWhile j1 j2) = f (JSWhile (go j1) (go j2))
@@ -300,6 +305,7 @@ everywhereOnJSTopDown f = go . f
   go (JSConditional j1 j2 j3) = JSConditional (go (f j1)) (go (f j2)) (go (f j3))
   go (JSBlock js) = JSBlock (map (go . f) js)
   go (JSNamespace nm js) = JSNamespace nm (map (go . f) js)
+  go (JSData name ty fields j) = JSData name ty fields (go (f j))
   go (JSVariableIntroduction name j) = JSVariableIntroduction name (fmap (go . f) j)
   go (JSAssignment j1 j2) = JSAssignment (go (f j1)) (go (f j2))
   go (JSWhile j1 j2) = JSWhile (go (f j1)) (go (f j2))
@@ -328,6 +334,7 @@ everythingOnJS (<>) f = go
   go j@(JSConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(JSBlock js) = foldl (<>) (f j) (map go js)
   go j@(JSNamespace _ js) = foldl (<>) (f j) (map go js)
+  go j@(JSData _ _ _ j1) = f j <> go j1
   go j@(JSVariableIntroduction _ (Just j1)) = f j <> go j1
   go j@(JSAssignment j1 j2) = f j <> go j1 <> go j2
   go j@(JSWhile j1 j2) = f j <> go j1 <> go j2

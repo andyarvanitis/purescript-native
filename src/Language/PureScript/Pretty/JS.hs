@@ -97,6 +97,33 @@ literals = mkPattern' match
     , return " "
     , prettyPrintJS' sts
     ]
+  match (JSVariableIntroduction name (Just (JSData ctor typename fields fn))) = fmap concat $ sequence
+    [ return "struct "
+    , return ctor
+    , return " : public "
+    , return $ typename ++ " {"
+    , return "\n"
+    , withIndent $ do
+        indentString <- currentIndent
+        return $ intercalate "\n" $ map ((++ ";") . (indentString ++)) fields
+    , return "\n"
+    , withIndent $ do
+        indentString <- currentIndent
+        let vals =  map (last . words) fields
+        return $ indentString ++ ctor ++ parens (intercalate ", " fields) ++ " : "
+              ++ intercalate ", " (map (\v -> v ++ parens v) vals)
+              ++ " {}"
+    , return "\n"
+    , currentIndent
+    , currentIndent
+    , withIndent $ do
+        f <- prettyPrintJS' fn
+        return $ "static " ++ f
+    , return "\n"
+    , do
+        indentString <- currentIndent
+        return $ indentString ++ "}"
+    ]
   match (JSVariableIntroduction ident value) = fmap concat $ sequence
     [ return "auto "
     , return ident

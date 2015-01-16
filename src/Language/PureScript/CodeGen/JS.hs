@@ -56,9 +56,8 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   jsDecls <- mapM (bindToJs name) decls
   let optimized = concatMap (map $ optimize opts) jsDecls
   let isModuleEmpty = null exps
-  -- let moduleBody = JSStringLiteral "use strict" : jsImports ++ foreigns' ++ optimized
-  let moduleHeader = (map stripImpls optimized)
-  let moduleBody = optimized
+  let moduleHeader = dataTypes decls ++ map stripImpls optimized
+  let moduleBody = map stripDecls optimized
   let exps' = JSObjectLiteral $ map (runIdent &&& JSVar . identToJs) exps
   return $ case optionsAdditional opts of
     MakeOptions -> moduleBody -- ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
@@ -236,28 +235,53 @@ valueToJs _ (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) =
               JSObjectLiteral [("create",
                 JSFunction Nothing ["value"]
                   (JSBlock [JSReturn $ JSVar "value"]))])
-valueToJs _ (Constructor _ _ (ProperName ctor) 0) =
-  return $ iife ctor [ JSFunction (Just ctor) [] (JSBlock [])
-         , JSAssignment (JSAccessor "value" (JSVar ctor))
-              (JSUnary JSNew $ JSApp (JSVar ctor) []) ]
-valueToJs _ (Constructor _ _ (ProperName ctor) arity) =
-  return $ iife ctor [ makeConstructor ctor arity
-         , JSAssignment (JSAccessor "create" (JSVar ctor)) (go ctor 0 arity [])
-         ]
-    where
-    makeConstructor :: String -> Int -> JS
-    makeConstructor ctorName n =
-      let args = [ "value" ++ show index | index <- [0..n-1] ]
-          body = [ JSAssignment (JSAccessor arg (JSVar "this")) (JSVar arg) | arg <- args ]
-      in JSFunction (Just ctorName) args (JSBlock body)
-    go :: String -> Int -> Int -> [JS] -> JS
-    go pn _ 0 values = JSUnary JSNew $ JSApp (JSVar pn) (reverse values)
-    go pn index n values =
-      JSFunction Nothing ["value" ++ show index]
-        (JSBlock [JSReturn (go pn (index + 1) (n - 1) (JSVar ("value" ++ show index) : values))])
+-- valueToJs _ (Constructor _ _ (ProperName ctor) 0) =
+--   return $ iife ctor [ JSFunction (Just ctor) [] (JSBlock [])
+--          , JSAssignment (JSAccessor "value" (JSVar ctor))
+--               (JSUnary JSNew $ JSApp (JSVar ctor) []) ]
+-- valueToJs _ (Constructor _ _ (ProperName ctor) arity) =
+--   return $ iife ctor [ makeConstructor ctor arity
+--          , JSAssignment (JSAccessor "create" (JSVar ctor)) (go ctor 0 arity [])
+--          ]
+--     where
+--     makeConstructor :: String -> Int -> JS
+--     makeConstructor ctorName n =
+--       let args = [ "value" ++ show index | index <- [0..n-1] ]
+--           body = [ JSAssignment (JSAccessor arg (JSVar "this")) (JSVar arg) | arg <- args ]
+--       in JSFunction (Just ctorName) args (JSBlock body)
+--     go :: String -> Int -> Int -> [JS] -> JS
+--     go pn _ 0 values = JSUnary JSNew $ JSApp (JSVar pn) (reverse values)
+--     go pn index n values =
+--       JSFunction Nothing ["value" ++ show index]
+--         (JSBlock [JSReturn (go pn (index + 1) (n - 1) (JSVar ("value" ++ show index) : values))])
+--
+-- iife :: String -> [JS] -> JS
+-- iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []
 
-iife :: String -> [JS] -> JS
-iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []
+valueToJs _ (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
+    return $ JSData ctor typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (fields ty))
+  where
+    typename = runProperName typ
+
+    fields :: Maybe T.Type -> [String]
+    fields ty = map (\(t,n) -> t ++ ' ' : ("value" ++ show n)) $ zip (types ty) [0..]
+
+    types :: Maybe T.Type -> [String]
+    types Nothing = []
+    types (Just (T.RCons _ ty row)) = (typestr ty) : types (Just row)
+    types (Just T.REmpty) = []
+
+    mkfn :: Maybe String -> [String] -> JS
+    mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
+    mkfn _ [] = JSApp (JSVar ctor) (map JSVar (map (last . words) (fields ty)))
+
+    fname = Just $ fty (types ty) ++ " create";
+
+    fty :: [String] -> String
+    fty [] = ctor
+    fty [t] = ctor
+    fty (_:t:ts) = "fn<" ++ t ++ "," ++ fty ts ++ ">"
+
 
 literalToValueJS :: (Functor m, Applicative m, Monad m) => ModuleName -> Literal (Expr Ann) -> SupplyT m JS
 literalToValueJS _ (NumericLiteral n) = return $ JSNumericLiteral n
@@ -429,6 +453,7 @@ typestr (T.TypeApp (T.TypeConstructor _) ty) = typestr ty
 typestr (T.ForAll _ ty _) = typestr ty
 typestr (T.Skolem nm _ _) = '\'' : nm
 typestr (T.TypeVar nm) = '\'' : nm
+typestr (T.TypeConstructor typ) = let brk = map (\c -> if c=='.' then ' ' else c) in intercalate "::" . words . brk $ show typ
 typestr t = "T"
 
 fnArgStr :: Maybe T.Type -> String
@@ -458,4 +483,17 @@ stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
 stripImpls (JSComment c e) = JSComment c (stripImpls e)
 stripImpls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripImpls expr)
 stripImpls (JSFunction fn args _) = JSFunction fn args noOp
+stripImpls dat@(JSData _ _ _ _) = dat
 stripImpls _ = noOp
+
+stripDecls :: JS -> JS
+stripDecls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripDecls expr)
+stripDecls dat@(JSData _ _ _ _) = noOp
+stripDecls js = js
+
+dataTypes :: [Bind Ann] -> [JS]
+dataTypes = map (JSVar . (\s -> "struct " ++ s ++ " {}")) . nub . filter (not . null) . map dataType
+
+dataType :: Bind Ann -> String
+dataType (NonRec _ (Constructor (_, _, _, _) name _ _)) = runProperName name
+dataType _ = []
