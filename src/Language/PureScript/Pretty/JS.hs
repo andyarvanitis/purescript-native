@@ -19,6 +19,7 @@ module Language.PureScript.Pretty.JS (
 
 import Data.List
 import Data.Maybe (fromMaybe)
+import Data.Char (isAlphaNum)
 
 import Control.Applicative
 import Control.Arrow ((<+>))
@@ -97,8 +98,11 @@ literals = mkPattern' match
     , return " "
     , prettyPrintJS' sts
     ]
-  match (JSVariableIntroduction name (Just (JSData ctor typename fields fn))) = fmap concat $ sequence
-    [ return "struct "
+  match (JSVariableIntroduction name (Just (JSData ctor typename fs fn))) =
+    let fields = cleanType <$> fs in fmap concat $ sequence
+    [ do indentString <- currentIndent
+         return $ templDecl indentString $ intercalate ", " fs
+    , return "struct "
     , return ctor
     , return " : public "
     , return $ typename ++ " {"
@@ -108,7 +112,7 @@ literals = mkPattern' match
         return $ concatMap ((++ ";\n") . (indentString ++)) fields
     , withIndent $ do
         indentString <- currentIndent
-        let vals = map (last . words) fields
+        let vals = last . words <$> fields
         return $ indentString ++ ctor ++ parens (intercalate ", " fields)
               ++ (if null fields then [] else " : ")
               ++ intercalate ", " (map (\v -> v ++ parens v) vals)
@@ -359,3 +363,14 @@ noNoOp :: JS -> Bool
 noNoOp (JSRaw []) = False
 noNoOp (JSVariableIntroduction _ (Just (JSRaw []))) = False
 noNoOp _ = True
+
+templDecl :: String -> String -> String
+templDecl _ [] = []
+templDecl sp ts =
+  if null ss then []
+             else "template<" ++ intercalate ", " (map ("class " ++) . nub . sort $ ss) ++ ">\n" ++ sp
+  where
+    ss = (takeWhile isAlphaNum . flip drop ts) <$> (map (+1) . elemIndices '\'' $ ts)
+
+cleanType :: String -> String
+cleanType s = filter (\c -> c /= '\'') s

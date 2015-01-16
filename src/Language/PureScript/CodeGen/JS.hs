@@ -259,7 +259,7 @@ valueToJs _ (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) =
 -- iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []
 
 valueToJs _ (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
-    return $ JSData ctor typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (fields ty))
+    return $ JSData ctor typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (cleanType <$> fields ty))
   where
     typename = runProperName typ
 
@@ -274,7 +274,7 @@ valueToJs _ (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
     mkfn :: Maybe String -> [String] -> JS
     mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar ctor) []]
     mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
-    mkfn Nothing [] = JSApp (JSVar ctor) (map JSVar (map (last . words) (fields ty)))
+    mkfn Nothing [] = JSApp (JSVar ctor) (JSVar <$> last . words <$> fields ty)
 
     fname = Just $ fty (types ty) ++ " create";
 
