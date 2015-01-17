@@ -183,7 +183,7 @@ valueToJs m (Abs ann arg val) = do
   where
     ty = case ann of (_, _, t, _) -> t
                      _ -> Nothing
-    annotatedName = templTypes ty ++ fnRetStr m ty
+    annotatedName = templTypes m ty ++ fnRetStr m ty
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
@@ -228,6 +228,12 @@ valueToJs m e@App{} = do
                                            _ -> c) name
   instfn _ js = js
 
+valueToJs m (Var (_, _, Just ty, _) ident) =
+  return $ varJs m ident
+  where
+    varJs :: ModuleName -> Qualified Ident -> JS
+    varJs _ (Qualified Nothing ident) = JSVar $ identToJs ident ++ '@' : typestr m ty
+    varJs m qual = JSVar $ (qualifiedToStr m id qual) ++ '@' : typestr m ty
 valueToJs m (Var _ ident) =
   return $ varToJs m ident
 valueToJs m (Case _ values binders) = do
@@ -275,7 +281,7 @@ valueToJs m (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
 
     types :: Maybe T.Type -> [String]
     types Nothing = []
-    types (Just (T.RCons _ ty row)) = (typestr ty) : types (Just row)
+    types (Just (T.RCons _ ty row)) = (typestr m ty) : types (Just row)
     types (Just T.REmpty) = []
 
     mkfn :: Maybe String -> [String] -> JS
@@ -341,7 +347,7 @@ qualifiedToJS _ f (Qualified _ a) = JSVar $ identToJs (f a)
 bindersToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> [CaseAlternative Ann] -> [JS] -> SupplyT m JS
 bindersToJs m binders vals = do
   valNames <- replicateM (length vals) freshName
-  let assignments = zipWith JSVariableIntroduction valNames (map Just vals)
+  let assignments = zipWith JSVariableIntroduction (copyTyInfo <$> zip valNames vals) (map Just vals)
   jss <- forM binders $ \(CaseAlternative bs result) -> do
     ret <- guardsToJs result
     go valNames ret bs
@@ -361,6 +367,10 @@ bindersToJs m binders vals = do
       done  <- valueToJs m val
       return $ JSIfElse cond' (JSBlock [JSReturn done]) Nothing
     guardsToJs (Right v) = return . JSReturn <$> valueToJs m v
+
+    copyTyInfo :: (String, JS) -> String
+    copyTyInfo (s, JSVar v) = s ++ dropWhile (/='@') v
+    copyTyInfo (s, _) = s
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a pattern match
@@ -451,19 +461,31 @@ isCons name = error $ "Unexpected argument in isCons: " ++ show name
 noOp :: JS
 noOp = JSRaw []
 
-typestr :: T.Type -> String
-typestr (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"
-typestr (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
-typestr (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = "bool"
-typestr (T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) T.REmpty) _) = error "Need to supprt func() T"
-typestr (T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b) = "fn<" ++ typestr a ++ "," ++ typestr b ++ ">"
-typestr (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) a) = ("std::vector<" ++ typestr a ++ ">")
-typestr (T.TypeApp (T.TypeConstructor _) ty) = typestr ty
-typestr (T.ForAll _ ty _) = typestr ty
-typestr (T.Skolem nm _ _) = '\'' : nm
-typestr (T.TypeVar nm) = '\'' : nm
-typestr (T.TypeConstructor typ) = let brk = map (\c -> if c=='.' then ' ' else c) in managedTy . intercalate "::" . words . brk $ show typ
-typestr t = "T"
+typestr :: ModuleName -> T.Type -> String
+typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"
+typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
+typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = "bool"
+typestr _ (T.TypeApp
+            (T.TypeApp
+              (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+               T.REmpty) _)
+                 = error "Need to supprt func() T"
+typestr m (T.TypeApp
+            (T.TypeApp
+              (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+               a) b)
+                 = "fn<" ++ typestr m a ++ "," ++ typestr m b ++ ">"
+typestr m (T.TypeApp
+            (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
+             a)
+               = ("std::vector<" ++ typestr m a ++ ">")
+typestr m (T.TypeApp a@(T.TypeConstructor _) b@(T.TypeConstructor _)) = typestr m a ++ '@' : typestr m b
+typestr m (T.ForAll _ ty _) = typestr m ty
+typestr _ (T.Skolem nm _ _) = '\'' : nm
+typestr _ (T.TypeVar nm) = '\'' : nm
+typestr m (T.TypeConstructor typ) = let brk = map (\c -> if c=='.' then ' ' else c) in
+                                    managedTy . intercalate "::" . words . brk $ qualifiedToStr m (Ident . runProperName) typ
+typestr _ t = "T"
 
 fnArgStr :: ModuleName -> Maybe T.Type -> String
 fnArgStr m (Just ((T.TypeApp
@@ -471,11 +493,11 @@ fnArgStr m (Just ((T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                       (T.TypeConstructor a)) _)))
                          = managedTy $ qualifiedToStr m (Ident . runProperName) a
-fnArgStr _ (Just ((T.TypeApp
+fnArgStr m (Just ((T.TypeApp
                     (T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                        a) _)))
-                         = cleanType $ typestr a
+                         = cleanType $ typestr m a
 fnArgStr _ _ = []
 
 fnRetStr :: ModuleName -> Maybe T.Type -> String
@@ -484,11 +506,11 @@ fnRetStr m (Just ((T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                        _) (T.TypeConstructor b))))
                          = managedTy $ qualifiedToStr m (Ident . runProperName) b
-fnRetStr _ (Just ((T.TypeApp
+fnRetStr m (Just ((T.TypeApp
                     (T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                        _) b)))
-                         = cleanType $ typestr b
+                         = cleanType $ typestr m b
 fnRetStr _ _ = []
 
 fnName :: Maybe String -> String -> Maybe String
@@ -496,14 +518,14 @@ fnName Nothing name = Just name
 fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
 
 cleanType :: String -> String
-cleanType s = filter (\c -> c /= '\'') s
+cleanType = filter (/= '\'') . takeWhile (/='@')
 
-templTypes :: Maybe T.Type -> String
-templTypes (Just t) =
-  let s = typestr t
+templTypes :: ModuleName -> Maybe T.Type -> String
+templTypes m (Just t) =
+  let s = typestr m t
       ss = (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '\'' $ s) in
       if null ss then "" else intercalate ", " (map ("class " ++) . nub . sort $ ss) ++ "|"
-templTypes _ = ""
+templTypes _ _ = ""
 
 stripImpls :: JS -> JS
 stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
