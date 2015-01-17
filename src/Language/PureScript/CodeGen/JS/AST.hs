@@ -168,10 +168,6 @@ data JS
   --
   | JSAccessor String JS
   -- |
-  -- An ptr-to-object property accessor expression
-  --
-  | JSPtrAccessor String JS
-  -- |
   -- A function introduction (optional name, arguments, body)
   --
   | JSFunction (Maybe String) [String] JS
@@ -278,7 +274,6 @@ everywhereOnJS f = go
   go (JSIndexer j1 j2) = f (JSIndexer (go j1) (go j2))
   go (JSObjectLiteral js) = f (JSObjectLiteral (map (fmap go) js))
   go (JSAccessor prop j) = f (JSAccessor prop (go j))
-  go (JSPtrAccessor prop j) = f (JSPtrAccessor prop (go j))
   go (JSFunction name args j) = f (JSFunction name args (go j))
   go (JSApp j js) = f (JSApp (go j) (map go js))
   go (JSConditional j1 j2 j3) = f (JSConditional (go j1) (go j2) (go j3))
@@ -310,7 +305,6 @@ everywhereOnJSTopDown f = go . f
   go (JSIndexer j1 j2) = JSIndexer (go (f j1)) (go (f j2))
   go (JSObjectLiteral js) = JSObjectLiteral (map (fmap (go . f)) js)
   go (JSAccessor prop j) = JSAccessor prop (go (f j))
-  go (JSPtrAccessor prop j) = JSPtrAccessor prop (go (f j))
   go (JSFunction name args j) = JSFunction name args (go (f j))
   go (JSApp j js) = JSApp (go (f j)) (map (go . f) js)
   go (JSConditional j1 j2 j3) = JSConditional (go (f j1)) (go (f j2)) (go (f j3))
@@ -341,7 +335,6 @@ everythingOnJS (<>) f = go
   go j@(JSIndexer j1 j2) = f j <> go j1 <> go j2
   go j@(JSObjectLiteral js) = foldl (<>) (f j) (map (go . snd) js)
   go j@(JSAccessor _ j1) = f j <> go j1
-  go j@(JSPtrAccessor _ j1) = f j <> go j1
   go j@(JSFunction _ _ j1) = f j <> go j1
   go j@(JSApp j1 js) = foldl (<>) (f j <> go j1) (map go js)
   go j@(JSConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3

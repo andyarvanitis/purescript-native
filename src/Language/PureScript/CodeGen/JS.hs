@@ -65,6 +65,10 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
       [ JSRaw "#include <functional>\n"
       , JSRaw "#include <memory>\n"
       , JSRaw "#include <iostream>\n"
+      , JSRaw "#define data std::shared_ptr\n"
+      , JSRaw "#define make_data std::make_shared\n"
+      , JSRaw "#define cast *std::dynamic_pointer_cast\n"
+      , JSRaw "#define instance_of std::dynamic_pointer_cast\n"
       , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(T)>"
       , JSRaw "\n"
       ]
@@ -385,7 +389,7 @@ binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorT
     argVar <- freshName
     done'' <- go (index + 1) done' bs'
     js <- binderToJs m argVar done'' binder
-    return (JSVariableIntroduction argVar (Just (JSPtrAccessor ("value" ++ show index) (JSCast ctorName (JSVar varName)))) : js)
+    return (JSVariableIntroduction argVar (Just (JSAccessor ("value" ++ show index) (JSCast ctorName (JSVar varName)))) : js)
   ctorName = qualifiedToJS m (Ident . runProperName) ctor
 binderToJs m varName done binder@(ConstructorBinder _ _ ctor _) | isCons ctor = do
   let (headBinders, tailBinder) = uncons [] binder
@@ -527,7 +531,7 @@ qualifiedToStr m f (Qualified (Just m') a) | m /= m' = moduleNameToJs m' ++ "::"
 qualifiedToStr _ f (Qualified _ a) = identToJs (f a)
 
 managedTy :: String -> String
-managedTy t = "std::shared_ptr<" ++ t ++ ">"
+managedTy t = "data<" ++ t ++ ">"
 
 mkManaged :: String -> String
-mkManaged t = "std::make_shared<" ++ t ++ ">"
+mkManaged t = "make_data<" ++ t ++ ">"
