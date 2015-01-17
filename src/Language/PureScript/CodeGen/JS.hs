@@ -232,8 +232,8 @@ valueToJs m (Var (_, _, Just ty, _) ident) =
   return $ varJs m ident
   where
     varJs :: ModuleName -> Qualified Ident -> JS
-    varJs _ (Qualified Nothing ident) = JSVar $ identToJs ident ++ '@' : typestr m ty
-    varJs m qual = JSVar $ (qualifiedToStr m id qual) ++ '@' : typestr m ty
+    varJs _ (Qualified Nothing ident) = JSVar $ identToJs ident ++ addType (typestr m ty)
+    varJs m qual = JSVar $ (qualifiedToStr m id qual) ++ addType (typestr m ty)
 valueToJs m (Var _ ident) =
   return $ varToJs m ident
 valueToJs m (Case _ values binders) = do
@@ -346,8 +346,9 @@ qualifiedToJS _ f (Qualified _ a) = JSVar $ identToJs (f a)
 --
 bindersToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> [CaseAlternative Ann] -> [JS] -> SupplyT m JS
 bindersToJs m binders vals = do
-  valNames <- replicateM (length vals) freshName
-  let assignments = zipWith JSVariableIntroduction (copyTyInfo <$> zip valNames vals) (map Just vals)
+  untypedValNames <- replicateM (length vals) freshName
+  let valNames = copyTyInfo <$> zip untypedValNames vals
+  let assignments = zipWith JSVariableIntroduction valNames (map Just vals)
   jss <- forM binders $ \(CaseAlternative bs result) -> do
     ret <- guardsToJs result
     go valNames ret bs
@@ -369,7 +370,7 @@ bindersToJs m binders vals = do
     guardsToJs (Right v) = return . JSReturn <$> valueToJs m v
 
     copyTyInfo :: (String, JS) -> String
-    copyTyInfo (s, JSVar v) = s ++ dropWhile (/='@') v
+    copyTyInfo (s, JSVar v) = s ++ getType v
     copyTyInfo (s, _) = s
 
 -- |
@@ -389,7 +390,7 @@ binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorT
   return $ case ctorType of
     ProductType -> js
     SumType ->
-      [JSIfElse (JSInstanceOf (JSVar varName) (qualifiedToJS m (Ident . runProperName) ctor))
+      [JSIfElse (JSInstanceOf (JSVar varName) (JSVar ctorName))
                 (JSBlock js)
                 Nothing]
   where
@@ -399,8 +400,11 @@ binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorT
     argVar <- freshName
     done'' <- go (index + 1) done' bs'
     js <- binderToJs m argVar done'' binder
-    return (JSVariableIntroduction argVar (Just (JSAccessor ("value" ++ show index) (JSCast ctorName (JSVar varName)))) : js)
-  ctorName = qualifiedToJS m (Ident . runProperName) ctor
+    return (JSVariableIntroduction argVar (Just (JSAccessor ("value" ++ show index) (JSCast (JSVar ctorName) (JSVar varName)))) : js)
+  ctorName = qualifiedToStr m (Ident . runProperName) ctor
+          ++ case getSpecialization varName of
+               [] -> []
+               _ -> "<" ++ getSpecialization varName ++ ">"
 binderToJs m varName done binder@(ConstructorBinder _ _ ctor _) | isCons ctor = do
   let (headBinders, tailBinder) = uncons [] binder
       numberOfHeadBinders = fromIntegral $ length headBinders
@@ -479,7 +483,7 @@ typestr m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
              a)
                = ("std::vector<" ++ typestr m a ++ ">")
-typestr m (T.TypeApp a@(T.TypeConstructor _) b@(T.TypeConstructor _)) = typestr m a ++ '@' : typestr m b
+typestr m (T.TypeApp a@(T.TypeConstructor _) b@(T.TypeConstructor _)) = typestr m a ++ addType (typestr m b)
 typestr m (T.ForAll _ ty _) = typestr m ty
 typestr _ (T.Skolem nm _ _) = '\'' : nm
 typestr _ (T.TypeVar nm) = '\'' : nm
@@ -518,7 +522,7 @@ fnName Nothing name = Just name
 fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
 
 cleanType :: String -> String
-cleanType = filter (/= '\'') . takeWhile (/='@')
+cleanType = filter (/= '\'') . rmType
 
 templTypes :: ModuleName -> Maybe T.Type -> String
 templTypes m (Just t) =
@@ -557,3 +561,15 @@ managedTy t = "data<" ++ t ++ ">"
 
 mkManaged :: String -> String
 mkManaged t = "make_data<" ++ t ++ ">"
+
+addType :: String -> String
+addType t = '@' : t
+
+getType :: String -> String
+getType = dropWhile (/='@')
+
+getSpecialization :: String -> String
+getSpecialization = drop 1 . getType . drop 1 . getType
+
+rmType :: String -> String
+rmType = takeWhile (/='@')

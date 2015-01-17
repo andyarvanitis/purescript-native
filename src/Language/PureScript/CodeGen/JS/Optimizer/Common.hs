@@ -25,7 +25,7 @@ applyAll = foldl1 (.)
 replaceIdent :: String -> JS -> JS -> JS
 replaceIdent var1 js = everywhereOnJS replace
   where
-  replace (JSVar var2) | var1 == var2 = js
+  replace (JSVar var2) | (takeWhile (/='@') var1) == (takeWhile (/='@') var2) = js
   replace other = other
 
 replaceIdents :: [(String, JS)] -> JS -> JS
