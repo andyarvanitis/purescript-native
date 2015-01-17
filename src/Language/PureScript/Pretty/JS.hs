@@ -236,6 +236,18 @@ accessor = mkPattern match
   match (JSAccessor prop val) = Just (prop, val)
   match _ = Nothing
 
+accessor' :: Pattern PrinterState JS (String, JS)
+accessor' = mkPattern match
+  where
+  match (JSPtrAccessor prop val) = Just (prop, val)
+  match _ = Nothing
+
+cast :: Pattern PrinterState JS (String, JS)
+cast = mkPattern' match
+  where
+  match (JSCast typ val) = (,) <$> prettyPrintJS' typ <*> pure val
+  match _ = mzero
+
 indexer :: Pattern PrinterState JS (String, JS)
 indexer = mkPattern' match
   where
@@ -324,19 +336,20 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
   operators :: OperatorTable PrinterState JS String
   operators =
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "." ++ prop ]
+                  , [ Wrap accessor' $ \prop val -> val ++ "->" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
                   , [ unary JSNew "new " ]
-                  , [ Wrap lam $ \(name, args) ret -> "[=]"
-                        -- ++ fromMaybe "" name
+                  , [ Wrap lam $ \(_, args) ret -> "[=]"
                         ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args) ++ ") "
                         ++ ret ]
+                  , [ Wrap cast $ \typ val -> "std::dynamic_pointer_cast<" ++ typ ++ ">" ++ parens val ]
                   , [ binary    LessThan             "<" ]
                   , [ binary    LessThanOrEqualTo    "<=" ]
                   , [ binary    GreaterThan          ">" ]
                   , [ binary    GreaterThanOrEqualTo ">=" ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
-                  , [ AssocR instanceOf $ \v1 v2 -> v1 ++ " instanceof " ++ v2 ]
+                  , [ AssocR instanceOf $ \v1 v2 -> "std::dynamic_pointer_cast<" ++ v2 ++ ">" ++ parens v1 ]
                   , [ unary     Not                  "!" ]
                   , [ unary     BitwiseNot           "~" ]
                   , [ negateOperator ]

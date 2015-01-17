@@ -63,6 +63,8 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
     MakeOptions -> moduleBody -- ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
     CompileOptions ns _ _ | not isModuleEmpty ->
       [ JSRaw "#include <functional>\n"
+      , JSRaw "#include <memory>\n"
+      , JSRaw "#include <iostream>\n"
       , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(T)>"
       , JSRaw "\n"
       ]
@@ -173,11 +175,11 @@ valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
 
 valueToJs m (Abs ann arg val) = do
   ret <- valueToJs m val
-  return $ JSFunction (Just annotatedName) [fnArgStr ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
+  return $ JSFunction (Just annotatedName) [fnArgStr m ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
   where
     ty = case ann of (_, _, t, _) -> t
                      _ -> Nothing
-    annotatedName = templTypes ty ++ fnRetStr ty
+    annotatedName = templTypes ty ++ fnRetStr m ty
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
@@ -185,7 +187,8 @@ valueToJs m e@App{} = do
   case f of
     Var (_, _, _, Just IsNewtype) _ -> return (head args')
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
-      return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
+      -- return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
+      return $ JSApp (JSVar . mkManaged $ qualifiedToStr m id name) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name ->
       return $ JSNamespace [] (map toVarDecl (zip (names ty) args'))
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> do fn <- valueToJs m f
@@ -258,7 +261,7 @@ valueToJs _ (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) =
 -- iife :: String -> [JS] -> JS
 -- iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []
 
-valueToJs _ (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
+valueToJs m (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
     return $ JSData ctor typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (cleanType <$> fields ty))
   where
     typename = runProperName typ
@@ -272,15 +275,15 @@ valueToJs _ (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
     types (Just T.REmpty) = []
 
     mkfn :: Maybe String -> [String] -> JS
-    mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar ctor) []]
+    mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar $ mkManaged ctor) []]
     mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
-    mkfn Nothing [] = JSApp (JSVar ctor) (JSVar <$> last . words <$> fields ty)
+    mkfn Nothing [] = JSApp (JSVar $ mkManaged ctor) (JSVar <$> last . words <$> fields ty)
 
     fname = Just $ fty (types ty) ++ " create";
 
     fty :: [String] -> String
-    fty [] = ctor
-    fty [t] = ctor
+    fty [] = managedTy ctor
+    fty [_] = managedTy ctor
     fty (_:t:ts) = "fn<" ++ t ++ "," ++ fty ts ++ ">"
 
 
@@ -382,7 +385,8 @@ binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorT
     argVar <- freshName
     done'' <- go (index + 1) done' bs'
     js <- binderToJs m argVar done'' binder
-    return (JSVariableIntroduction argVar (Just (JSAccessor ("value" ++ show index) (JSVar varName))) : js)
+    return (JSVariableIntroduction argVar (Just (JSPtrAccessor ("value" ++ show index) (JSCast ctorName (JSVar varName)))) : js)
+  ctorName = qualifiedToJS m (Ident . runProperName) ctor
 binderToJs m varName done binder@(ConstructorBinder _ _ ctor _) | isCons ctor = do
   let (headBinders, tailBinder) = uncons [] binder
       numberOfHeadBinders = fromIntegral $ length headBinders
@@ -454,16 +458,34 @@ typestr (T.TypeApp (T.TypeConstructor _) ty) = typestr ty
 typestr (T.ForAll _ ty _) = typestr ty
 typestr (T.Skolem nm _ _) = '\'' : nm
 typestr (T.TypeVar nm) = '\'' : nm
-typestr (T.TypeConstructor typ) = let brk = map (\c -> if c=='.' then ' ' else c) in intercalate "::" . words . brk $ show typ
+typestr (T.TypeConstructor typ) = let brk = map (\c -> if c=='.' then ' ' else c) in managedTy . intercalate "::" . words . brk $ show typ
 typestr t = "T"
 
-fnArgStr :: Maybe T.Type -> String
-fnArgStr (Just ((T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b))) = cleanType $ typestr a
-fnArgStr _ = []
+fnArgStr :: ModuleName -> Maybe T.Type -> String
+fnArgStr m (Just ((T.TypeApp
+                    (T.TypeApp
+                      (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                      (T.TypeConstructor a)) _)))
+                         = managedTy $ qualifiedToStr m (Ident . runProperName) a
+fnArgStr _ (Just ((T.TypeApp
+                    (T.TypeApp
+                      (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                       a) _)))
+                         = cleanType $ typestr a
+fnArgStr _ _ = []
 
-fnRetStr :: Maybe T.Type -> String
-fnRetStr (Just ((T.TypeApp (T.TypeApp (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) a) b))) = cleanType $ typestr b
-fnRetStr _ = []
+fnRetStr :: ModuleName -> Maybe T.Type -> String
+fnRetStr m (Just ((T.TypeApp
+                    (T.TypeApp
+                      (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                       _) (T.TypeConstructor b))))
+                         = managedTy $ qualifiedToStr m (Ident . runProperName) b
+fnRetStr _ (Just ((T.TypeApp
+                    (T.TypeApp
+                      (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                       _) b)))
+                         = cleanType $ typestr b
+fnRetStr _ _ = []
 
 fnName :: Maybe String -> String -> Maybe String
 fnName Nothing name = Just name
@@ -493,8 +515,19 @@ stripDecls dat@(JSData _ _ _ _) = noOp
 stripDecls js = js
 
 dataTypes :: [Bind Ann] -> [JS]
-dataTypes = map (JSVar . (\s -> "struct " ++ s ++ " {}")) . nub . filter (not . null) . map dataType
+dataTypes = map (JSVar . (\s -> "struct " ++ s ++ " { virtual ~" ++ s ++ "(){} }")) . nub . filter (not . null) . map dataType
 
 dataType :: Bind Ann -> String
 dataType (NonRec _ (Constructor (_, _, _, _) name _ _)) = runProperName name
 dataType _ = []
+
+qualifiedToStr :: ModuleName -> (a -> Ident) -> Qualified a -> String
+qualifiedToStr _ f (Qualified (Just (ModuleName [ProperName mn])) a) | mn == C.prim = runIdent $ f a
+qualifiedToStr m f (Qualified (Just m') a) | m /= m' = moduleNameToJs m' ++ "::" ++ identToJs (f a)
+qualifiedToStr _ f (Qualified _ a) = identToJs (f a)
+
+managedTy :: String -> String
+managedTy t = "std::shared_ptr<" ++ t ++ ">"
+
+mkManaged :: String -> String
+mkManaged t = "std::make_shared<" ++ t ++ ">"
