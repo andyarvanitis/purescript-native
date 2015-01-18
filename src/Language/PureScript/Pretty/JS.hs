@@ -99,13 +99,13 @@ literals = mkPattern' match
     , prettyPrintJS' sts
     ]
   match (JSVariableIntroduction name (Just (JSData ctor typename fs fn))) =
-    let fields = cleanType <$> fs in fmap concat $ sequence
+    let fields = filter (/='\'') <$> fs in fmap concat $ sequence
     [ do indentString <- currentIndent
-         return $ templDecl indentString $ intercalate ", " fs
+         return $ templateDecl indentString typename
     , return "struct "
     , return ctor
     , return " : public "
-    , return $ typename ++ " {"
+    , return $ dataType typename ++ " {"
     , return "\n"
     , withIndent $ do
         indentString <- currentIndent
@@ -370,13 +370,15 @@ noNoOp (JSRaw []) = False
 noNoOp (JSVariableIntroduction _ (Just (JSRaw []))) = False
 noNoOp _ = True
 
-templDecl :: String -> String -> String
-templDecl _ [] = []
-templDecl sp ts =
-  if null ss then []
-             else "template<" ++ intercalate ", " (map ("class " ++) . nub . sort $ ss) ++ ">\n" ++ sp
-  where
-    ss = (takeWhile isAlphaNum . flip drop ts) <$> (map (+1) . elemIndices '\'' $ ts)
+templateDecl :: String -> String -> String
+templateDecl sp s
+  | t@('[':_:_:_) <- drop 1 $ dropWhile (/='@') s =
+      "template" ++ '<' : intercalate ", " (("typename " ++) <$> read t) ++ ">\n" ++ sp
+  | otherwise = []
 
-cleanType :: String -> String
-cleanType s = filter (\c -> c /= '\'') s
+dataType :: String -> String
+dataType s = takeWhile (/='@') s ++ case ty of
+                                      [] -> []
+                                      "[]" -> []
+                                      _  -> '<' : intercalate "," (read ty) ++ ">"
+  where ty = drop 1 $ dropWhile (/='@') s

@@ -191,8 +191,7 @@ valueToJs m e@App{} = do
   case f of
     Var (_, _, _, Just IsNewtype) _ -> return (head args')
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
-      -- return $ JSUnary JSNew $ JSApp (qualifiedToJS m id name) args'
-      return $ JSApp (JSVar . mkManaged $ qualifiedToStr m id name) args'
+      return $ JSApp (JSVar . mkManaged $ qualifiedToStr m id name ++ ttype) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name ->
       return $ JSNamespace [] (map toVarDecl (zip (names ty) args'))
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> do fn <- valueToJs m f
@@ -200,7 +199,7 @@ valueToJs m e@App{} = do
   where
   unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
   unApp (App (_, _, Nothing, _) val arg@(Var _ (Qualified Nothing _))) args = unApp val args
-  unApp (App (_, _, _, _) val arg) args = unApp val (arg : args)
+  unApp (App (_, _, Just dty, _) val arg) args = unApp val (arg : args)
   unApp other args = (other, args)
 
   names ty = map fst (fst . T.rowToList $ fromMaybe T.REmpty ty)
@@ -227,6 +226,10 @@ valueToJs m e@App{} = do
       parts = words $ map (\c -> case c of ':' -> ' '
                                            _ -> c) name
   instfn _ js = js
+
+  ttype
+    | (App (_, _, Just dty, _) _ _) <- e, tstr@('[':_:_:_) <- typestr m dty = '<' : (drop 1 $ getType tstr) ++ ">"
+    | otherwise = []
 
 valueToJs m (Var (_, _, Just ty, _) ident) =
   return $ varJs m ident
@@ -483,7 +486,9 @@ typestr m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
              a)
                = ("std::vector<" ++ typestr m a ++ ">")
-typestr m (T.TypeApp a@(T.TypeConstructor _) b@(T.TypeConstructor _)) = typestr m a ++ addType (typestr m b)
+-- typestr m (T.TypeApp a@(T.TypeConstructor _) b@(T.TypeConstructor _)) = typestr m a ++ addType (typestr m b)
+typestr m (T.TypeApp a@(T.TypeConstructor _) b) = typestr m a ++ addType (typestr m b)
+typestr m (T.TypeApp a b) = typestr m a ++ addType (typestr m b)
 typestr m (T.ForAll _ ty _) = typestr m ty
 typestr _ (T.Skolem nm _ _) = '\'' : nm
 typestr _ (T.TypeVar nm) = '\'' : nm
@@ -545,7 +550,14 @@ stripDecls dat@(JSData _ _ _ _) = noOp
 stripDecls js = js
 
 dataTypes :: [Bind Ann] -> [JS]
-dataTypes = map (JSVar . (\s -> "struct " ++ s ++ " { virtual ~" ++ s ++ "(){} }")) . nub . filter (not . null) . map dataType
+dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType
+  where
+    mkClass :: String -> String
+    mkClass s = templateDecl ++ "struct " ++ rmType s ++ " { virtual ~" ++ rmType s ++ "(){} }"
+      where
+        templateDecl
+          | t@('[':_:_:_) <- drop 1 $ getType s = "template" ++ '<' : intercalate ", " (("typename " ++) <$> read t) ++ "> "
+          | otherwise = []
 
 dataType :: Bind Ann -> String
 dataType (NonRec _ (Constructor (_, _, _, _) name _ _)) = runProperName name

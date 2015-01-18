@@ -99,13 +99,16 @@ declToCoreFn _ ss com (A.DataDeclaration Newtype _ _ [(ctor, _)]) =
     Abs (ss, com, Nothing, Just IsNewtype) (Ident "x") (Var nullAnn $ Qualified Nothing (Ident "x"))]
 declToCoreFn _ _ _ d@(A.DataDeclaration Newtype _ _ _) =
   error $ "Found newtype with multiple constructors: " ++ show d
-declToCoreFn _ ss com (A.DataDeclaration Data tyName _ ctors) =
+declToCoreFn _ ss com (A.DataDeclaration Data tyName parms ctors) =
   flip map ctors $ \(ctor, tys) ->
-    NonRec (properToIdent ctor) $ Constructor (ss, com, Just $ rowType tys, Nothing) tyName ctor (length tys)
+    NonRec (properToIdent ctor) $ Constructor (ss, com, Just $ rowType tys, Nothing) annotTyName ctor (length tys)
   where
     rowType :: [Type] -> Type
     rowType [] = REmpty
     rowType (t:ts) = RCons [] t (rowType ts)
+    annotTyName = ProperName $ (runProperName tyName) ++ ('@' : asTemplate)
+    asTemplate = show $ map fst parms
+
 declToCoreFn env ss _   (A.DataBindingGroupDeclaration ds) = concatMap (declToCoreFn env ss []) ds
 declToCoreFn env ss com (A.ValueDeclaration name _ _ (Right e)) =
   [NonRec name (exprToCoreFn env ss com Nothing e)]
