@@ -191,7 +191,7 @@ valueToJs m e@App{} = do
   case f of
     Var (_, _, _, Just IsNewtype) _ -> return (head args')
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
-      return $ JSApp (JSVar . mkManaged $ qualifiedToStr m id name ++ ttype) args'
+      return $ foldl (\fn a -> JSApp fn [a]) (JSVar $ qualifiedToStr m id name ++ ttype ++ "::create") args'
     Var (_, _, ty, Just IsTypeClassConstructor) name ->
       return $ JSNamespace [] (map toVarDecl (zip (names ty) args'))
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> do fn <- valueToJs m f
@@ -228,7 +228,7 @@ valueToJs m e@App{} = do
   instfn _ js = js
 
   ttype
-    | (App (_, _, Just dty, _) _ _) <- e, tstr@('[':_:_:_) <- typestr m dty = '<' : (drop 1 $ getType tstr) ++ ">"
+    | (App (_, _, Just dty, _) _ _) <- e, tstr@(_:_) <- typestr m dty = '<' : (getSpecialization tstr) ++ ">"
     | otherwise = []
 
 valueToJs m (Var (_, _, Just ty, _) ident) =
@@ -275,12 +275,12 @@ valueToJs _ (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) =
 -- iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []
 
 valueToJs m (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
-    return $ JSData ctor typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (cleanType <$> fields ty))
+    return $ JSData ctor typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (rmType <$> fields ty))
   where
     typename = runProperName typ
 
     fields :: Maybe T.Type -> [String]
-    fields ty = map (\(t,n) -> t ++ ' ' : ("value" ++ show n)) $ zip (types ty) [0..]
+    fields ty = map (\(t,n) -> t ++ ' ' : ("value" ++ show n)) $ zip (types ty) ([0..] :: [Int])
 
     types :: Maybe T.Type -> [String]
     types Nothing = []
@@ -288,9 +288,9 @@ valueToJs m (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
     types (Just T.REmpty) = []
 
     mkfn :: Maybe String -> [String] -> JS
-    mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar $ mkManaged ctor) []]
+    mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar $ mkData ctor) []]
     mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
-    mkfn Nothing [] = JSApp (JSVar $ mkManaged ctor) (JSVar <$> last . words <$> fields ty)
+    mkfn Nothing [] = JSApp (JSVar $ mkData ctor) (JSVar <$> last . words <$> fields ty)
 
     fname = Just $ fty (types ty) ++ " create";
 
@@ -486,12 +486,11 @@ typestr m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
              a)
                = ("std::vector<" ++ typestr m a ++ ">")
--- typestr m (T.TypeApp a@(T.TypeConstructor _) b@(T.TypeConstructor _)) = typestr m a ++ addType (typestr m b)
 typestr m (T.TypeApp a@(T.TypeConstructor _) b) = typestr m a ++ addType (typestr m b)
 typestr m (T.TypeApp a b) = typestr m a ++ addType (typestr m b)
 typestr m (T.ForAll _ ty _) = typestr m ty
-typestr _ (T.Skolem nm _ _) = '\'' : nm
-typestr _ (T.TypeVar nm) = '\'' : nm
+typestr _ (T.Skolem nm _ _) = '#' : nm
+typestr _ (T.TypeVar nm) = '#' : nm
 typestr m (T.TypeConstructor typ) = let brk = map (\c -> if c=='.' then ' ' else c) in
                                     managedTy . intercalate "::" . words . brk $ qualifiedToStr m (Ident . runProperName) typ
 typestr _ t = "T"
@@ -506,7 +505,7 @@ fnArgStr m (Just ((T.TypeApp
                     (T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                        a) _)))
-                         = cleanType $ typestr m a
+                         = typestr m a
 fnArgStr _ _ = []
 
 fnRetStr :: ModuleName -> Maybe T.Type -> String
@@ -519,21 +518,18 @@ fnRetStr m (Just ((T.TypeApp
                     (T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                        _) b)))
-                         = cleanType $ typestr m b
+                         = typestr m b
 fnRetStr _ _ = []
 
 fnName :: Maybe String -> String -> Maybe String
 fnName Nothing name = Just name
 fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
 
-cleanType :: String -> String
-cleanType = filter (/= '\'') . rmType
-
 templTypes :: ModuleName -> Maybe T.Type -> String
 templTypes m (Just t) =
   let s = typestr m t
-      ss = (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '\'' $ s) in
-      if null ss then "" else intercalate ", " (map ("class " ++) . nub . sort $ ss) ++ "|"
+      ss = (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s) in
+      if null ss then "" else intercalate ", " (map ("typename " ++) . nub . sort $ ss) ++ "|"
 templTypes _ _ = ""
 
 stripImpls :: JS -> JS
@@ -571,8 +567,8 @@ qualifiedToStr _ f (Qualified _ a) = identToJs (f a)
 managedTy :: String -> String
 managedTy t = "data<" ++ t ++ ">"
 
-mkManaged :: String -> String
-mkManaged t = "make_data<" ++ t ++ ">"
+mkData :: String -> String
+mkData t = "make_data<" ++ t ++ ">"
 
 addType :: String -> String
 addType t = '@' : t
@@ -581,7 +577,15 @@ getType :: String -> String
 getType = dropWhile (/='@')
 
 getSpecialization :: String -> String
-getSpecialization = drop 1 . getType . drop 1 . getType
+getSpecialization s = case spec of
+                        [] -> []
+                        ('@':ss) -> more ss
+                        _ -> spec
+  where
+    spec = drop 1 . dropWhile (/='>') $ filter (/= '#') s
+    more ms
+      | '@' `elem` ms = takeWhile (/='@') ms ++ ',' : more (drop 1 $ dropWhile (/='@') ms)
+      | otherwise = ms
 
 rmType :: String -> String
 rmType = takeWhile (/='@')

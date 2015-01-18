@@ -99,7 +99,7 @@ literals = mkPattern' match
     , prettyPrintJS' sts
     ]
   match (JSVariableIntroduction name (Just (JSData ctor typename fs fn))) =
-    let fields = filter (/='\'') <$> fs in fmap concat $ sequence
+    let fields = filter (/='#') <$> fs in fmap concat $ sequence
     [ do indentString <- currentIndent
          return $ templateDecl indentString typename
     , return "struct "
