@@ -30,14 +30,14 @@ import Debug.Trace
 
 headerPreamble :: [JS]
 headerPreamble =
-  [ JSRaw "#include <functional>\n"
-  , JSRaw "#include <memory>\n"
-  , JSRaw "#include <iostream>\n"
-  , JSRaw "#define data std::shared_ptr\n"
-  , JSRaw "#define make_data std::make_shared\n"
-  , JSRaw "#define cast *std::dynamic_pointer_cast\n"
-  , JSRaw "#define instance_of std::dynamic_pointer_cast\n"
-  , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(T)>"
+  [ JSRaw "#include <functional>"
+  , JSRaw "#include <memory>"
+  , JSRaw "#include <iostream>"
+  , JSRaw "#define data std::shared_ptr"
+  , JSRaw "#define make_data std::make_shared"
+  , JSRaw "#define cast *std::dynamic_pointer_cast"
+  , JSRaw "#define instance_of std::dynamic_pointer_cast"
+  , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(T)>;"
   , JSRaw "\n"
   ]
 
@@ -122,11 +122,12 @@ stripImpls :: JS -> JS
 stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
 stripImpls (JSComment c e) = JSComment c (stripImpls e)
 stripImpls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripImpls expr)
-stripImpls (JSFunction fn args _) = JSFunction fn args noOp
+stripImpls (JSFunction fn args _) = JSFunction fn args (JSRaw ";")
 stripImpls dat@(JSData _ _ _ _) = dat
 stripImpls _ = noOp
 -----------------------------------------------------------------------------------------------------------------------
 stripDecls :: JS -> JS
+stripDecls (JSComment c e) = JSComment c (stripDecls e)
 stripDecls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripDecls expr)
 stripDecls dat@(JSData _ _ _ _) = noOp
 stripDecls js = js
@@ -135,7 +136,7 @@ dataTypes :: [Bind Ann] -> [JS]
 dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType
   where
     mkClass :: String -> String
-    mkClass s = templateDecl ++ "struct " ++ rmType s ++ " { virtual ~" ++ rmType s ++ "(){} }"
+    mkClass s = templateDecl ++ "struct " ++ rmType s ++ " { virtual ~" ++ rmType s ++ "(){} };"
       where
         templateDecl
           | t@('[':_:_:_) <- drop 1 $ getType s = "template " ++ '<' : intercalate ", " (("typename " ++) <$> read t) ++ "> "

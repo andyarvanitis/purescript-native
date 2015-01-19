@@ -126,17 +126,19 @@ literals = mkPattern' match
     , return "\n"
     , do
         indentString <- currentIndent
-        return $ indentString ++ "}"
+        return $ indentString ++ "};"
     ]
   match (JSVariableIntroduction ident value) = fmap concat $ sequence
     [ return "auto "
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintJS') value
+    , return ";"
     ]
   match (JSAssignment target value) = fmap concat $ sequence
     [ prettyPrintJS' target
     , return " = "
     , prettyPrintJS' value
+    , return ";"
     ]
   match (JSWhile cond sts) = fmap concat $ sequence
     [ return "while ("
@@ -168,13 +170,14 @@ literals = mkPattern' match
   match (JSReturn value) = fmap concat $ sequence
     [ return "return "
     , prettyPrintJS' value
+    , return ";"
     ]
   match (JSThrow value) = fmap concat $ sequence
     [ return "throw "
     , prettyPrintJS' value
     ]
-  match (JSBreak lbl) = return $ "break " ++ lbl
-  match (JSContinue lbl) = return $ "continue " ++ lbl
+  match (JSBreak lbl) = return $ "goto " ++ lbl ++ ";"
+  match (JSContinue lbl) = return $ "goto " ++ lbl ++ ";"
   match (JSLabel lbl js) = fmap concat $ sequence
     [ return $ lbl ++ ": "
     , prettyPrintJS' js
@@ -305,7 +308,7 @@ prettyStatements :: [JS] -> StateT PrinterState Maybe String
 prettyStatements sts = do
   jss <- forM (filter noNoOp sts) prettyPrintJS'
   indentString <- currentIndent
-  return $ intercalate "\n" $ map ((++ ";") . (indentString ++)) jss
+  return $ intercalate "\n" $ map (indentString ++) jss
 
 -- |
 -- Generate a pretty-printed string representing a Javascript expression
@@ -368,7 +371,8 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
 
 noNoOp :: JS -> Bool
 noNoOp (JSRaw []) = False
-noNoOp (JSVariableIntroduction _ (Just (JSRaw []))) = False
+noNoOp (JSComment _ js) = noNoOp js
+noNoOp (JSVariableIntroduction _ (Just js)) = noNoOp js
 noNoOp _ = True
 
 templateDecl :: String -> String -> String
