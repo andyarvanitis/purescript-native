@@ -138,7 +138,7 @@ dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType
     mkClass s = templateDecl ++ "struct " ++ rmType s ++ " { virtual ~" ++ rmType s ++ "(){} }"
       where
         templateDecl
-          | t@('[':_:_:_) <- drop 1 $ getType s = "template" ++ '<' : intercalate ", " (("typename " ++) <$> read t) ++ "> "
+          | t@('[':_:_:_) <- drop 1 $ getType s = "template " ++ '<' : intercalate ", " (("typename " ++) <$> read t) ++ "> "
           | otherwise = []
 -----------------------------------------------------------------------------------------------------------------------
 dataType :: Bind Ann -> String

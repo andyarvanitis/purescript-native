@@ -85,7 +85,7 @@ literals = mkPattern' match
         return []
       else do
         indentString <- currentIndent
-        return $ "template<" ++ (takeWhile (/= '|') name) ++ ">\n" ++ indentString
+        return $ "template <" ++ (takeWhile (/= '|') name) ++ ">\n" ++ indentString
     , return "auto "
     , return $ last (words name)
     , return "("
@@ -374,7 +374,7 @@ noNoOp _ = True
 templateDecl :: String -> String -> String
 templateDecl sp s
   | t@('[':_:_:_) <- drop 1 $ dropWhile (/='@') s =
-      "template" ++ '<' : intercalate ", " (("typename " ++) <$> read t) ++ ">\n" ++ sp
+      "template " ++ '<' : intercalate ", " (("typename " ++) <$> read t) ++ ">\n" ++ sp
   | otherwise = []
 
 dataType :: String -> String
