@@ -178,8 +178,7 @@ valueToJs m e@App{} = do
                                                            return $ instfn tci fn
   where
   unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
-  unApp (App (_, _, Nothing, _) val arg@(Var _ (Qualified Nothing _))) args = unApp val args
-  unApp (App (_, _, Just dty, _) val arg) args = unApp val (arg : args)
+  unApp (App _ val arg) args = unApp val (arg : args)
   unApp other args = (other, args)
 
   names ty = map fst (fst . T.rowToList $ fromMaybe T.REmpty ty)
