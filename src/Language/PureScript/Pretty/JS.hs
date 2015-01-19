@@ -76,7 +76,7 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
-  match (JSVar ident) = return (takeWhile (/='@') ident)
+  match (JSVar ident) = return . filter (/='#') $ takeWhile (/='@') ident
   match (JSVariableIntroduction name (Just (JSNamespace _ sts))) = fmap concat $ sequence
     [ prettyPrintJS' (JSNamespace name sts)
     ]
@@ -89,10 +89,10 @@ literals = mkPattern' match
     , return "auto "
     , return $ last (words name)
     , return "("
-    , return $ intercalate ", " args
+    , return $ intercalate ", " $ filter (/='#') <$> args
     , return ")"
     , return $ if length (words name) > 1 then
-                 " -> " ++ (concat . init . words $ drop ((fromMaybe (-1) $ elemIndex '|' name) + 1) name)
+                 " -> " ++ (filter (/='#') . concat . init . words $ drop ((fromMaybe (-1) $ elemIndex '|' name) + 1) name)
                else
                  []
     , return " "
@@ -333,7 +333,8 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
                   , [ unary JSNew "new " ]
-                  , [ Wrap lam $ \(_, args) ret -> "[=]"
+                  , [ Wrap lam $ \(_, args) ret -> filter (/='#') $
+                           "[=]"
                         ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args) ++ ") "
                         ++ ret ]
                   , [ AssocR cast $ \typ val -> "cast<" ++ typ ++ ">" ++ parens val ]

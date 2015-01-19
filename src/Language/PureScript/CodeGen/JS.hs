@@ -208,7 +208,10 @@ valueToJs m e@App{} = do
   instfn _ js = js
 
   ttype
-    | (App (_, _, Just dty, _) _ _) <- e, tstr@(_:_) <- typestr m dty = '<' : (getSpecialization tstr) ++ ">"
+    | (App (_, _, Just dty, _) _ _) <- e = case dataCon m dty of
+                                                    [] -> []
+                                                    [_] -> []
+                                                    (_:ts) -> '<' : intercalate "," ts ++ ">"
     | otherwise = []
 
 valueToJs m (Var (_, _, Just ty, _) ident) =
@@ -252,8 +255,8 @@ valueToJs m (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
     fname = Just $ fty (types ty) ++ " create";
 
     fty :: [String] -> String
-    fty [] = managedTy ctor
-    fty [_] = managedTy ctor
+    fty [] = asDataTy ctor
+    fty [_] = asDataTy ctor
     fty (_:t:ts) = "fn<" ++ t ++ "," ++ fty ts ++ ">"
 
 iife :: String -> [JS] -> JS
