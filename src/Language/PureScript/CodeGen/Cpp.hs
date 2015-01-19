@@ -74,11 +74,7 @@ typestr m a@(T.TypeApp _ _)
 typestr m (T.ForAll _ ty _) = typestr m ty
 typestr _ (T.Skolem nm _ _) = '#' : nm
 typestr _ (T.TypeVar nm) = '#' : nm
-typestr m (T.TypeConstructor typ) = intercalate "::" . words $ brk tname
-  where
-    tname = qualifiedToStr m (Ident . runProperName) typ
-    brk = map (\c -> if c=='.' then ' ' else c)
-
+typestr m a@(T.TypeConstructor _) = asDataTy $ qualDataTypeName m a
 typestr _ t = "T"
 -----------------------------------------------------------------------------------------------------------------------
 fnArgStr :: ModuleName -> Maybe T.Type -> String
@@ -99,8 +95,17 @@ fnRetStr _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 dataCon :: ModuleName -> T.Type -> [String]
 dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)
+dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _)) = [typestr m a]
+dataCon m a@(T.TypeConstructor _) = [qualDataTypeName m a]
 dataCon m a = [typestr m a]
 dataCon _ _ = []
+-----------------------------------------------------------------------------------------------------------------------
+qualDataTypeName :: ModuleName -> T.Type -> String
+qualDataTypeName m (T.TypeConstructor typ) = intercalate "::" . words $ brk tname
+  where
+    tname = qualifiedToStr m (Ident . runProperName) typ
+    brk = map (\c -> if c=='.' then ' ' else c)
+qualDataTypeName _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 fnName :: Maybe String -> String -> Maybe String
 fnName Nothing name = Just name
