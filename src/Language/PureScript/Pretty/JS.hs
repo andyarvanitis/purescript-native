@@ -177,6 +177,7 @@ literals = mkPattern' match
   match (JSThrow value) = fmap concat $ sequence
     [ return "throw "
     , prettyPrintJS' value
+    , return ";"
     ]
   match (JSBreak lbl) = return $ "goto " ++ lbl ++ ";"
   match (JSContinue lbl) = return $ "goto " ++ lbl ++ ";"
