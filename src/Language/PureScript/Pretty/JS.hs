@@ -33,6 +33,7 @@ import Language.PureScript.Pretty.Common
 import Language.PureScript.Comments
 
 import Numeric
+import Debug.Trace
 
 literals :: Pattern PrinterState JS String
 literals = mkPattern' match
@@ -336,9 +337,11 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
                   , [ unary JSNew "new " ]
-                  , [ Wrap lam $ \(_, args) ret -> filter (/='#') $
+                  , [ Wrap lam $ \(name, args) ret -> filter (/='#') $
                            "[=]"
-                        ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args) ++ ") "
+                        ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args) ++ ")"
+                        ++ maybe "" (" -> " ++) name
+                        ++ " "
                         ++ ret ]
                   , [ AssocR cast $ \typ val -> "cast<" ++ typ ++ ">" ++ parens val ]
                   , [ binary    LessThan             "<" ]

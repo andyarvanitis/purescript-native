@@ -146,6 +146,13 @@ dataType :: Bind Ann -> String
 dataType (NonRec _ (Constructor (_, _, _, _) name _ _)) = runProperName name
 dataType _ = []
 -----------------------------------------------------------------------------------------------------------------------
+getAppSpecType :: ModuleName -> Expr Ann -> Int -> String
+getAppSpecType m e l
+    | (App (_, _, Just dty, _) _ _) <- e,
+      (_:ts) <- dataCon m dty,
+      ty@(_:_) <- drop l ts                 = '<' : intercalate "," ty ++ ">"
+    | otherwise = []
+-----------------------------------------------------------------------------------------------------------------------
 qualifiedToStr :: ModuleName -> (a -> Ident) -> Qualified a -> String
 qualifiedToStr _ f (Qualified (Just (ModuleName [ProperName mn])) a) | mn == C.prim = runIdent $ f a
 qualifiedToStr m f (Qualified (Just m') a) | m /= m' = moduleNameToJs m' ++ "::" ++ identToJs (f a)
@@ -157,6 +164,9 @@ asDataTy t = "data<" ++ t ++ ">"
 mkData :: String -> String
 mkData t = "make_data<" ++ t ++ ">"
 -----------------------------------------------------------------------------------------------------------------------
+mkDataFn :: String -> String
+mkDataFn t = t ++ "::create"
+-----------------------------------------------------------------------------------------------------------------------
 addType :: String -> String
 addType t = '@' : t
 -----------------------------------------------------------------------------------------------------------------------
@@ -165,7 +175,7 @@ getType = dropWhile (/='@')
 -----------------------------------------------------------------------------------------------------------------------
 getSpecialization :: String -> String
 getSpecialization s = case spec of
-                        ('<':ss) -> take (length ss - 2) ss
+                        ('<':ss) -> '<' : take (length ss - 2) ss ++ ">"
                         _ -> []
   where
     spec = dropWhile (/='<') . drop 1 $ dropWhile (/='<') s

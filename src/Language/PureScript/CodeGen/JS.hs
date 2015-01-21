@@ -25,7 +25,7 @@ module Language.PureScript.CodeGen.JS (
 import Data.List ((\\), delete)
 import Data.List (intercalate, isPrefixOf)
 import Data.Maybe (mapMaybe)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 
 import Control.Applicative
 import Control.Arrow ((&&&))
@@ -131,8 +131,8 @@ valueToJs m (Literal _ l) =
   literalToValueJS m l
 valueToJs m (Var (_, _, _, Just (IsConstructor _ 0)) name) =
   return $ JSAccessor "value" $ qualifiedToJS m id name
-valueToJs m (Var (_, _, _, Just (IsConstructor _ _)) name) =
-  return $ JSAccessor "create" $ qualifiedToJS m id name
+valueToJs m (Var (_, _, ty, Just (IsConstructor _ _)) name) =
+  return $ JSVar . mkDataFn $ qualifiedToStr m id name ++ (getSpecialization $ fnRetStr m ty)
 valueToJs m (Accessor _ prop val) =
   accessorString prop <$> valueToJs m val
 valueToJs m (ObjectUpdate _ o ps) = do
@@ -157,12 +157,10 @@ valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
       dropAbs :: Int -> Expr Ann -> Expr Ann
       dropAbs n (Abs _ _ ann) | n > 0 = dropAbs (n-1) ann
       dropAbs _ a = a
-valueToJs m (Abs ann arg val) = do
+valueToJs m (Abs (_, _, ty, _) arg val) = do
   ret <- valueToJs m val
   return $ JSFunction (Just annotatedName) [fnArgStr m ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
   where
-    ty = case ann of (_, _, t, _) -> t
-                     _ -> Nothing
     annotatedName = templTypes m ty ++ fnRetStr m ty
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
@@ -171,7 +169,10 @@ valueToJs m e@App{} = do
   case f of
     Var (_, _, _, Just IsNewtype) _ -> return (head args')
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
-      return $ foldl (\fn a -> JSApp fn [a]) (JSVar $ qualifiedToStr m id name ++ ttype ++ "::create") args'
+      return $ JSApp (JSVar . mkData $ qualifiedToStr m id name ++ getAppSpecType m e 0) args'
+    Var (_, _, _, Just (IsConstructor _ arity)) name | not (null args) ->
+      return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr m id name
+                                                              ++ getAppSpecType m e (arity - length args + 1)) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name ->
       return $ JSNamespace [] (map toVarDecl (zip (names ty) args'))
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> do fn <- valueToJs m f
@@ -205,13 +206,6 @@ valueToJs m e@App{} = do
       parts = words $ map (\c -> case c of ':' -> ' '
                                            _ -> c) name
   instfn _ js = js
-
-  ttype
-    | (App (_, _, Just dty, _) _ _) <- e = case dataCon m dty of
-                                                    [] -> []
-                                                    [_] -> []
-                                                    (_:ts) -> '<' : intercalate "," ts ++ ">"
-    | otherwise = []
 
 valueToJs m (Var (_, _, Just ty, _) ident) =
   return $ varJs m ident
@@ -313,10 +307,13 @@ bindersToJs m binders vals = do
   untypedValNames <- replicateM (length vals) freshName
   let valNames = copyTyInfo <$> zip untypedValNames vals
   let assignments = zipWith JSVariableIntroduction valNames (map Just vals)
-  jss <- forM binders $ \(CaseAlternative bs result) -> do
+  fn' <- forM binders $ \(CaseAlternative bs result) -> do
     ret <- guardsToJs result
-    go valNames ret bs
-  return $ JSApp (JSFunction Nothing [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSUnary JSNew $ JSApp (JSVar "Error") [JSStringLiteral "Failed pattern match"]])))
+    ret' <- go valNames ret bs
+    return (ret', retType result)
+  let jss = fst <$> fn'
+  let name = listToMaybe . filter (not . null) $ map snd fn'
+  return $ JSApp (JSFunction name [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSUnary JSNew $ JSApp (JSVar "Error") [JSStringLiteral "Failed pattern match"]])))
                  []
   where
     go :: (Functor m, Applicative m, Monad m) => [String] -> [JS] -> [Binder Ann] -> SupplyT m [JS]
@@ -336,6 +333,11 @@ bindersToJs m binders vals = do
     copyTyInfo :: (String, JS) -> String
     copyTyInfo (s, JSVar v) = s ++ getType v
     copyTyInfo (s, _) = s
+
+    retType :: Either [(Guard Ann, Expr Ann)] (Expr Ann) -> String
+    retType (Right (App (_, _, Just ty, _) _ _)) = typestr m ty
+    retType (Left vs@(_:_)) = retType (Right . snd $ last vs)
+    retType _ = []
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a pattern match
@@ -365,10 +367,7 @@ binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorT
     done'' <- go (index + 1) done' bs'
     js <- binderToJs m argVar done'' binder
     return (JSVariableIntroduction argVar (Just (JSAccessor ("value" ++ show index) (JSCast (JSVar ctorName) (JSVar varName)))) : js)
-  ctorName = qualifiedToStr m (Ident . runProperName) ctor
-          ++ case getSpecialization varName of
-               [] -> []
-               _ -> "<" ++ getSpecialization varName ++ ">"
+  ctorName = qualifiedToStr m (Ident . runProperName) ctor ++ getSpecialization varName
 binderToJs m varName done binder@(ConstructorBinder _ _ ctor _) | isCons ctor = do
   let (headBinders, tailBinder) = uncons [] binder
       numberOfHeadBinders = fromIntegral $ length headBinders

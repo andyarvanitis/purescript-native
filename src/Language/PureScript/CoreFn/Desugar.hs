@@ -181,6 +181,8 @@ exprToCoreFn env ss com ty (A.Constructor name) =
   Var (ss, com, ty, Just $ getConstructorMeta env name) $ fmap properToIdent name
 exprToCoreFn env ss com ty (A.Case vs alts) =
   Case (ss, com, ty, Nothing) (map (exprToCoreFn env ss [] Nothing) vs) (map (altToCoreFn env ss) alts)
+exprToCoreFn env ss com ty@(Just _) (A.TypedValue _ v@(A.Constructor name) _) =
+  exprToCoreFn env ss com ty v
 exprToCoreFn env ss com _ (A.TypedValue _ v ty) =
   exprToCoreFn env ss com (Just ty) v
 exprToCoreFn env ss com ty (A.Let ds v) =
