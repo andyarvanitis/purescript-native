@@ -30,14 +30,18 @@ import Debug.Trace
 
 headerPreamble :: [JS]
 headerPreamble =
-  [ JSRaw "#include <functional>"
+  [ JSRaw "// Standard includes"
+  , JSRaw "#include <functional>"
   , JSRaw "#include <memory>"
+  , JSRaw "#include <vector>"
   , JSRaw "#include <iostream>"
-  , JSRaw "#define data std::shared_ptr"
+  , JSRaw "// Types and aliases"
+  , JSRaw "template <typename T> using data = std::shared_ptr<T>;"
   , JSRaw "#define make_data std::make_shared"
   , JSRaw "#define cast *std::dynamic_pointer_cast"
-  , JSRaw "#define instance_of std::dynamic_pointer_cast"
+  , JSRaw "#define instanceof std::dynamic_pointer_cast"
   , JSRaw "\ntemplate <typename T, typename U>\nusing fn = std::function<U(T)>;"
+  , JSRaw "template <typename T> using list = std::vector<T>;"
   , JSRaw "\n"
   ]
 
@@ -64,7 +68,7 @@ typestr m (T.TypeApp
 typestr m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
              a)
-               = ("std::vector<" ++ typestr m a ++ ">")
+               = ("list<" ++ typestr m a ++ ">")
 
 typestr m a@(T.TypeApp _ _)
   | [t] <- dataCon m a = asDataTy t

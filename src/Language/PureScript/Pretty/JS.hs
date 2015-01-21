@@ -350,7 +350,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ binary    GreaterThan          ">" ]
                   , [ binary    GreaterThanOrEqualTo ">=" ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
-                  , [ AssocR instanceOf $ \v1 v2 -> "instance_of<" ++ v2 ++ ">" ++ parens v1 ]
+                  , [ AssocR instanceOf $ \v1 v2 -> "instanceof<" ++ v2 ++ ">" ++ parens v1 ]
                   , [ unary     Not                  "!" ]
                   , [ unary     BitwiseNot           "~" ]
                   , [ negateOperator ]
