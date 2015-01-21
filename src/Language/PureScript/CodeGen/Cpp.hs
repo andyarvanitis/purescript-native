@@ -121,6 +121,7 @@ templTypes _ _ = ""
 stripImpls :: JS -> JS
 stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
 stripImpls (JSComment c e) = JSComment c (stripImpls e)
+stripImpls imp@(JSVariableIntroduction var (Just (JSFunction (Just name) _ _))) | '|' `elem` name = imp
 stripImpls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripImpls expr)
 stripImpls (JSFunction fn args _) = JSFunction fn args noOp
 stripImpls dat@(JSData _ _ _ _) = dat
@@ -128,6 +129,7 @@ stripImpls _ = noOp
 -----------------------------------------------------------------------------------------------------------------------
 stripDecls :: JS -> JS
 stripDecls (JSComment c e) = JSComment c (stripDecls e)
+stripDecls imp@(JSVariableIntroduction var (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
 stripDecls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripDecls expr)
 stripDecls dat@(JSData _ _ _ _) = noOp
 stripDecls js = js
