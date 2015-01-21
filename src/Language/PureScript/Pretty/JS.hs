@@ -92,10 +92,7 @@ literals = mkPattern' match
     , return "("
     , return $ intercalate ", " $ filter (/='#') <$> args
     , return ")"
-    , return $ if length (words name) > 1 then
-                 " -> " ++ (filter (/='#') . concat . init . words $ drop ((fromMaybe (-1) $ elemIndex '|' name) + 1) name)
-               else
-                 []
+    , return $ stripFnAnnot name
     , return " "
     , prettyPrintJS' sts
     ]
@@ -340,7 +337,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ Wrap lam $ \(name, args) ret -> filter (/='#') $
                            "[=]"
                         ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args) ++ ")"
-                        ++ maybe "" (" -> " ++) name
+                        ++ maybe "" stripFnAnnot name
                         ++ " "
                         ++ ret ]
                   , [ AssocR cast $ \typ val -> "cast<" ++ typ ++ ">" ++ parens val ]
@@ -390,3 +387,10 @@ dataType s = takeWhile (/='@') s ++ case ty of
                                       "[]" -> []
                                       _  -> '<' : intercalate "," (read ty) ++ ">"
   where ty = drop 1 $ dropWhile (/='@') s
+
+stripFnAnnot :: String -> String
+stripFnAnnot fn
+  | length (words fn) > 1, name@(_:_) <- stripped = " -> " ++ name
+  | otherwise = []
+  where
+    stripped = filter (/='#') . concat . init . words $ drop ((fromMaybe (-1) $ elemIndex '|' fn) + 1) fn

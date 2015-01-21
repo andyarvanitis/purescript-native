@@ -335,7 +335,7 @@ bindersToJs m binders vals = do
     copyTyInfo (s, _) = s
 
     retType :: Either [(Guard Ann, Expr Ann)] (Expr Ann) -> String
-    retType (Right (App (_, _, Just ty, _) _ _)) = typestr m ty
+    retType (Right (App (_, _, Just ty, _) _ _)) = typestr m ty ++ " f"
     retType (Left vs@(_:_)) = retType (Right . snd $ last vs)
     retType _ = []
 
