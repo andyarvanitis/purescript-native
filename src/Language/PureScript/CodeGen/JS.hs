@@ -191,7 +191,7 @@ valueToJs m e@App{} = do
                                      JSFunction orig ags sts -> JSFunction (fnName orig nm) ags sts
                                      _ -> js)
   typeinst :: Expr Ann -> Bool
-  typeinst (Var (_, _, Nothing, Nothing) (Qualified (Just _) _)) = True
+  typeinst (Var (_, _, Nothing, Nothing) _) = True -- TODO: make sure this doesn't remove the wrong (untyped) args
   typeinst _ = False
 
   instanceJs :: [Expr Ann] -> [JS]
