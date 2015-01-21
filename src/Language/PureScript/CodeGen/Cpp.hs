@@ -122,7 +122,7 @@ stripImpls :: JS -> JS
 stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
 stripImpls (JSComment c e) = JSComment c (stripImpls e)
 stripImpls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripImpls expr)
-stripImpls (JSFunction fn args _) = JSFunction fn args (JSRaw ";")
+stripImpls (JSFunction fn args _) = JSFunction fn args noOp
 stripImpls dat@(JSData _ _ _ _) = dat
 stripImpls _ = noOp
 -----------------------------------------------------------------------------------------------------------------------

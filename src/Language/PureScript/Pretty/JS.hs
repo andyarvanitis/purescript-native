@@ -86,15 +86,19 @@ literals = mkPattern' match
         return []
       else do
         indentString <- currentIndent
-        return $ "template <" ++ (takeWhile (/= '|') name) ++ ">\n" ++ indentString
+        return $ "template <" ++ (takeWhile (/= '|') name) ++ ">"
+              ++ if noNoOp sts then '\n':indentString else " "
     , return "auto "
     , return $ last (words name)
     , return "("
     , return $ intercalate ", " $ filter (/='#') <$> args
     , return ")"
     , return $ stripFnAnnot name
-    , return " "
-    , prettyPrintJS' sts
+    , if noNoOp sts then do
+        s <- prettyPrintJS' sts
+        return $ s ++ " "
+      else
+        return ";"
     ]
   match (JSVariableIntroduction name (Just (JSData ctor typename fs fn))) =
     let fields = filter (/='#') <$> fs in fmap concat $ sequence
