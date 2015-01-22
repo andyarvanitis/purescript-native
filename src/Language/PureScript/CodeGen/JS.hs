@@ -149,7 +149,6 @@ valueToJs _ e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   assign :: Ident -> JS
   assign name = JSAssignment (accessorString (runIdent name) (JSVar "this"))
                              (var name)
-valueToJs m (Abs (_, _, (Just (T.ForAll _ (T.ConstrainedType _ _) _)), _) _ _) = return noOp
 valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
     | (Abs (_, _, t, _) _ val') <- val, Nothing <- t = valueToJs m (dropAbs (length ts - 2) val') -- TODO: confirm '-2'
     | otherwise = valueToJs m val
@@ -157,6 +156,12 @@ valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
       dropAbs :: Int -> Expr Ann -> Expr Ann
       dropAbs n (Abs _ _ ann) | n > 0 = dropAbs (n-1) ann
       dropAbs _ a = a
+valueToJs m (Abs (_, _, Just ty, _) arg val) | isConstrained ty = return noOp
+  where
+    isConstrained :: T.Type -> Bool
+    isConstrained (T.ForAll _ (T.ConstrainedType _ _) _) = True
+    isConstrained (T.ForAll _ t _) = isConstrained t
+    isConstrained _ = False
 valueToJs m (Abs (_, _, ty, _) arg val) = do
   ret <- valueToJs m val
   return $ JSFunction (Just annotatedName) [fnArgStr m ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
