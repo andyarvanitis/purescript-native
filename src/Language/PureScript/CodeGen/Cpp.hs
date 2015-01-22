@@ -150,6 +150,7 @@ stripImpls dat@(JSData _ _ _ _) = dat
 stripImpls _ = noOp
 -----------------------------------------------------------------------------------------------------------------------
 stripDecls :: JS -> JS
+stripDecls (JSNamespace name bs) = JSNamespace name (map stripDecls bs)
 stripDecls (JSComment c e) = JSComment c (stripDecls e)
 stripDecls imp@(JSVariableIntroduction var (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
 stripDecls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripDecls expr)
