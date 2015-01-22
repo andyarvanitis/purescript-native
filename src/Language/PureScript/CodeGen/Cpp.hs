@@ -15,7 +15,7 @@
 module Language.PureScript.CodeGen.Cpp where
 
 import Data.List (elemIndices, intercalate, nub, sort)
-import Data.Char (isAlphaNum)
+import Data.Char (isAlphaNum, toUpper)
 
 import Control.Applicative
 
@@ -94,8 +94,8 @@ typestr m a@(T.TypeApp _ _)
   | otherwise = "T"
 
 typestr m (T.ForAll _ ty _) = typestr m ty
-typestr _ (T.Skolem nm _ _) = '#' : nm
-typestr _ (T.TypeVar nm) = '#' : nm
+typestr _ (T.Skolem (n:ns) _ _) = '#' : toUpper n : ns
+typestr _ (T.TypeVar (n:ns)) = '#' : toUpper n : ns
 typestr m a@(T.TypeConstructor _) = asDataTy $ qualDataTypeName m a
 typestr _ t = "T"
 -----------------------------------------------------------------------------------------------------------------------

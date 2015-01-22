@@ -30,7 +30,7 @@ import Language.PureScript.Names
 --  * Symbols are prefixed with '$' followed by a symbol name or their ordinal value.
 --
 identToJs :: Ident -> String
-identToJs (Ident name) | nameIsJsReserved name = "__" ++ name
+identToJs (Ident name) | nameIsJsReserved name = '_' : name
 identToJs (Ident name) = concatMap identCharToString name
 identToJs (Op op) = concatMap identCharToString op
 
