@@ -23,7 +23,8 @@ module Language.PureScript.CodeGen.JS (
 ) where
 
 import Data.List ((\\), delete)
-import Data.List (intercalate, isPrefixOf)
+import Data.List (intercalate, isPrefixOf, nubBy, sortBy)
+import Data.Function (on)
 import Data.Maybe (mapMaybe)
 import Data.Maybe (fromMaybe, listToMaybe)
 
@@ -168,7 +169,7 @@ valueToJs m (Abs (_, _, ty, _) arg val) = do
   where
     annotatedName = templTypes m ty ++ fnRetStr m ty
 valueToJs m e@App{} = do
-  let (f, args) = unApp e []
+  let (f, args, appTy) = unApp e [] Nothing
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
   let tci = instanceJs $ filter typeinst args
   case f of
@@ -181,11 +182,12 @@ valueToJs m e@App{} = do
     Var (_, _, ty, Just IsTypeClassConstructor) name ->
       return $ JSNamespace [] (map toVarDecl (zip (names ty) args'))
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> do fn <- valueToJs m f
-                                                           return $ instfn tci fn
+                                                           return $ instfn tci fn appTy
   where
-  unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
-  unApp (App _ val arg) args = unApp val (arg : args)
-  unApp other args = (other, args)
+  unApp :: Expr Ann -> [Expr Ann] -> Maybe T.Type -> (Expr Ann, [Expr Ann], Maybe T.Type)
+  unApp (App (_, _, Just ty', _) val arg) args _ = unApp val (arg : args) (Just ty')
+  unApp (App _ val arg) args ty = unApp val (arg : args) ty
+  unApp other args ty = (other, args, ty)
 
   names ty = map fst (fst . T.rowToList $ fromMaybe T.REmpty ty)
   toVarDecl :: (String, JS) -> JS
@@ -203,14 +205,28 @@ valueToJs m e@App{} = do
   instanceJs [Var (_, _, Nothing, Nothing) (Qualified (Just _) ident)] = [JSVar $ identToJs ident]
   instanceJs _ = []
 
-  instfn :: [JS] -> JS -> JS
-  instfn [JSVar inst] (JSVar name)
+  instfn :: [JS] -> JS -> Maybe T.Type -> JS
+  instfn [JSVar inst] (JSVar name) ty
     | ':' `elem` name = JSVar . intercalate "::" $ init parts ++ (inst : tail parts)
-    | otherwise = JSVar (inst ++ "::" ++ name)
+    | otherwise = JSVar (inst ++ "::" ++ name')
     where
       parts = words $ map (\c -> case c of ':' -> ' '
-                                           _ -> c) name
-  instfn _ js = js
+                                           _ -> c) name'
+      name' = specializedName name ty
+  instfn _ js _ = js
+
+  specializedName :: String -> Maybe T.Type -> String
+  specializedName name Nothing = name
+  specializedName name (Just ty)
+    | utys@(_:_) <- unresolvableTypes =
+        rmType name ++ '<' : (intercalate "," $ snd <$> filter (flip elem utys . fst) types) ++ ">"
+    | otherwise = name
+    where
+      unresolvableTypes = (templParms . getRet $ ftypeStr) \\ (templParms . getArg $ ftypeStr)
+      types = nubBy ((==) `on` fst) . sortBy (compare `on` fst) $
+              zip (extractTypes . getRet $ ftypeStr) (extractTypes $ typestr m ty)
+      ftypeStr | ('@':'f':'n':'<':ss) <- getType name = init ss
+               | otherwise = []
 
 valueToJs m (Var (_, _, Just ty, _) ident) =
   return $ varJs m ident

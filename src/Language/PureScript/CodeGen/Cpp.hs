@@ -136,10 +136,8 @@ fnName Nothing name = Just name
 fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
 -----------------------------------------------------------------------------------------------------------------------
 templTypes :: ModuleName -> Maybe T.Type -> String
-templTypes m (Just t) =
-  let s = typestr m t
-      ss = (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s) in
-      if null ss then "" else intercalate ", " (map ("typename " ++) . nub . sort $ ss) ++ "|"
+templTypes m (Just t)
+  | s <- typestr m t, '#' `elem` s = intercalate ", " (("typename "++) <$> templParms s) ++ "|"
 templTypes _ _ = ""
 -----------------------------------------------------------------------------------------------------------------------
 stripImpls :: JS -> JS
@@ -209,3 +207,42 @@ getSpecialization s = case spec of
 -----------------------------------------------------------------------------------------------------------------------
 rmType :: String -> String
 rmType = takeWhile (/='@')
+-----------------------------------------------------------------------------------------------------------------------
+fromAngles :: String -> Int -> String
+fromAngles [] _ = []
+fromAngles _ 0 = []
+fromAngles (x@'<':xs) n = x : fromAngles xs (n+1)
+fromAngles (x@'>':xs) n = x : fromAngles xs (n-1)
+fromAngles (x:xs)     n = x : fromAngles xs n
+-----------------------------------------------------------------------------------------------------------------------
+afterAngles :: String -> Int -> String
+afterAngles [] _ = []
+afterAngles xs 0 = xs
+afterAngles ('<':xs) n = afterAngles xs (n+1)
+afterAngles ('>':xs) n = afterAngles xs (n-1)
+afterAngles (_:xs)   n = afterAngles xs n
+-----------------------------------------------------------------------------------------------------------------------
+getArg :: String -> String
+getArg ('f':'n':'<':xs) = "fn<" ++ fromAngles xs 1
+getArg xs = takeWhile (/=',') xs
+-----------------------------------------------------------------------------------------------------------------------
+getRet :: String -> String
+getRet ('f':'n':'<':xs) = drop 1 $ afterAngles xs 1
+getRet xs = drop 1 $ dropWhile (/=',') xs
+-----------------------------------------------------------------------------------------------------------------------
+templParms :: String -> [String]
+templParams [] = []
+templParms s = nub . sort $ templParms' s
+
+templParms' :: String -> [String]
+templParams' [] = []
+templParms' s = (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
+
+extractTypes :: String -> [String]
+extractTypes = words . extractTypes'
+
+extractTypes' :: String -> String
+extractTypes' [] = []
+extractTypes' ('f':'n':'<':xs) = ' ' : extractTypes' xs
+extractTypes' (x:xs) | not (isAlphaNum x) = ' ' : extractTypes' xs
+extractTypes' (x:xs) = x : extractTypes' xs
