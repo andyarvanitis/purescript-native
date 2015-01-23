@@ -89,6 +89,12 @@ literals = mkPattern' match
         return $ "template <" ++ (takeWhile (/= '|') name) ++ ">"
               ++ if noNoOp sts then '\n':indentString else " "
     , return "auto "
+    , return $ case sts of
+                 (JSBlock [JSReturn (JSApp _ [JSVar arg])]) ->
+                   if length args == 1 && (last . words $ head args) == arg then
+                     "inline "
+                   else []
+                 _ -> []
     , return $ last (words name)
     , return "("
     , return $ intercalate ", " $ filter (/='#') <$> args
