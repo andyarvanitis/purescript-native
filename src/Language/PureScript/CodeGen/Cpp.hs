@@ -88,16 +88,18 @@ typestr m (T.TypeApp
              a)
                = ("list<" ++ typestr m a ++ ">")
 
-typestr m a@(T.TypeApp _ _)
+typestr m a@(T.TypeApp (T.TypeConstructor _) _)
   | [t] <- dataCon m a = asDataTy t
   | (t:ts) <- dataCon m a = asDataTy $ t ++ '<' : intercalate "," ts ++ ">"
   | otherwise = "T"
 
+typestr m (T.TypeApp (T.TypeApp _ a) b) = "fn<" ++ typestr m a ++ "," ++ typestr m b ++ ">"
 typestr m (T.ForAll _ ty _) = typestr m ty
 typestr _ (T.Skolem (n:ns) _ _) = '#' : toUpper n : ns
 typestr _ (T.TypeVar (n:ns)) = '#' : toUpper n : ns
 typestr m a@(T.TypeConstructor _) = asDataTy $ qualDataTypeName m a
-typestr _ t = "T"
+typestr m (T.ConstrainedType _ ty) = typestr m ty
+typestr _ _ = "T"
 -----------------------------------------------------------------------------------------------------------------------
 fnArgStr :: ModuleName -> Maybe T.Type -> String
 fnArgStr m (Just ((T.TypeApp
