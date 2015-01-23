@@ -107,6 +107,7 @@ fnArgStr m (Just ((T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                        a) _)))
                          = typestr m a
+fnArgStr m (Just (T.ForAll _ ty _)) = fnArgStr m (Just ty)
 fnArgStr _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 fnRetStr :: ModuleName -> Maybe T.Type -> String
@@ -115,6 +116,7 @@ fnRetStr m (Just ((T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                        _) b)))
                          = typestr m b
+fnRetStr m (Just (T.ForAll _ ty _)) = fnRetStr m (Just ty)
 fnRetStr _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 dataCon :: ModuleName -> T.Type -> [String]

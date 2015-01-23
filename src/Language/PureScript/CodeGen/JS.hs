@@ -23,7 +23,7 @@ module Language.PureScript.CodeGen.JS (
 ) where
 
 import Data.List ((\\), delete)
-import Data.List (intercalate, isPrefixOf, nubBy, sortBy)
+import Data.List (intercalate, isInfixOf, isPrefixOf, nubBy, sortBy)
 import Data.Function (on)
 import Data.Maybe (mapMaybe)
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -66,6 +66,7 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
       headerPreamble
       ++ [JSNamespace (moduleNameToJs name) (moduleHeader)
         , JSRaw "// end of header"]
+      ++ foreigns'
       ++ [JSNamespace (moduleNameToJs name) (moduleBody)]
     _ -> []
 
@@ -100,9 +101,13 @@ nonRecToJS mp ident val = do
   js <- valueToJs mp val
   return $ JSVariableIntroduction (identToJs ident) (expr js)
   where
-    expr js = case js of
-                JSFunction orig args sts -> Just (JSFunction (fnName orig (identToJs ident)) args sts)
-                _ -> Just js
+    expr (JSFunction orig args sts) = Just (JSFunction (fnName orig (identToJs ident)) args sts)
+    expr (JSVar name)
+      | (Var (_, _, ty@(Just _), _) fn) <- val,
+        "@fn<" `isInfixOf` name -- TODO: need better check here
+        = Just (JSFunction (Just $ templTypes mp ty ++ fnRetStr mp ty ++ ' ' : identToJs ident)
+            [fnArgStr mp ty ++ " arg"] (JSBlock [JSReturn $ JSApp (qualifiedToJS mp id fn) [JSVar "arg"]]))
+    expr js = Just js
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a variable based on a
