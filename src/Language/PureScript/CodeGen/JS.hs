@@ -100,6 +100,9 @@ nonRecToJS mp ident val = do
   js <- valueToJs mp val
   return $ JSVariableIntroduction (identToJs ident) (expr js)
   where
+    expr (JSFunction orig args sts)
+      | (Abs (_, _, _, Just IsNewtype) _ _) <- val
+      = Just (JSFunction (fnName orig (identToJs . Ident $ (runIdent ident) ++ "_create")) args sts)
     expr (JSFunction orig args sts) = Just (JSFunction (fnName orig (identToJs ident)) args sts)
     expr (JSVar name)
       | (Var (_, _, ty@(Just _), _) fn) <- val,
@@ -167,6 +170,15 @@ valueToJs m (Abs (_, _, Just ty, _) arg val) | isConstrained ty = return noOp
     isConstrained (T.ForAll _ (T.ConstrainedType _ _) _) = True
     isConstrained (T.ForAll _ t _) = isConstrained t
     isConstrained _ = False
+
+valueToJs m (Abs (_, _, ty, Just IsNewtype) arg val) = do
+  ret <- valueToJs m val
+  return $ JSFunction (Just annotatedName)
+             [typeStr ++ ' ' : identToJs arg] (JSBlock [JSReturn $ makeCtor ret])
+  where
+    typeStr = maybe [] (typestr m) ty
+    annotatedName = templTypes m ty ++ asDataTy typeStr
+    makeCtor ret = JSApp (JSVar $ mkData typeStr) [ret]
 valueToJs m (Abs (_, _, ty, _) arg val) = do
   ret <- valueToJs m val
   return $ JSFunction (Just annotatedName) [fnArgStr m ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
@@ -177,7 +189,7 @@ valueToJs m e@App{} = do
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
   let tci = instanceJs $ filter typeinst args
   case f of
-    Var (_, _, _, Just IsNewtype) _ -> return (head args')
+    Var (_, _, _, Just IsNewtype) _ -> return $ JSApp (JSVar . mkData $ maybe [] (qualDataTypeName m) appTy) (take 1 args')
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
       return $ JSApp (JSVar . mkData $ qualifiedToStr m id name ++ getAppSpecType m e 0) args'
     Var (_, _, _, Just (IsConstructor _ arity)) name | not (null args) ->
@@ -232,6 +244,12 @@ valueToJs m e@App{} = do
       ftypeStr | ('@':'f':'n':'<':ss) <- getType name = init ss
                | otherwise = []
 
+valueToJs m (Var (_, _, Just ty, Just IsNewtype) ident) =
+  return $ varJs m ident
+  where
+    varJs :: ModuleName -> Qualified Ident -> JS
+    varJs _ (Qualified Nothing ident) = JSVar $ identToJs ident ++ "_create" ++ addType (typestr m ty)
+    varJs m qual = JSVar $ (qualifiedToStr m id qual) ++ "_create" ++ addType (typestr m ty)
 valueToJs m (Var (_, _, Just ty, _) ident) =
   return $ varJs m ident
   where

@@ -87,7 +87,7 @@ literals = mkPattern' match
       else do
         indentString <- currentIndent
         return $ "template <" ++ (takeWhile (/= '|') name) ++ ">"
-              ++ if noNoOp sts then '\n':indentString else " "
+              ++ if notNoOp sts then '\n':indentString else " "
     , return "auto "
     , return $ case sts of
                  (JSBlock [JSReturn (JSApp _ [JSVar arg])]) ->
@@ -100,9 +100,9 @@ literals = mkPattern' match
     , return $ intercalate ", " $ filter (/='#') <$> args
     , return ")"
     , return $ stripFnAnnot name
-    , if noNoOp sts then do
+    , if notNoOp sts then do
         s <- prettyPrintJS' sts
-        return $ s ++ " "
+        return $ ' ' : s ++ " "
       else
         return ";"
     ]
@@ -315,7 +315,7 @@ binary op str = AssocL match (\v1 v2 -> v1 ++ " " ++ str ++ " " ++ v2)
 
 prettyStatements :: [JS] -> StateT PrinterState Maybe String
 prettyStatements sts = do
-  jss <- forM (filter noNoOp sts) prettyPrintJS'
+  jss <- forM (filter notNoOp sts) prettyPrintJS'
   indentString <- currentIndent
   return $ intercalate "\n" $ map (indentString ++) jss
 
@@ -380,11 +380,11 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintJS1 th ++ " : " ++ prettyPrintJS1 el ]
                     ]
 
-noNoOp :: JS -> Bool
-noNoOp (JSRaw []) = False
-noNoOp (JSComment _ js) = noNoOp js
-noNoOp (JSVariableIntroduction _ (Just js)) = noNoOp js
-noNoOp _ = True
+notNoOp :: JS -> Bool
+notNoOp (JSRaw []) = False
+notNoOp (JSComment _ js) = notNoOp js
+notNoOp (JSVariableIntroduction _ (Just js)) = notNoOp js
+notNoOp _ = True
 
 templateDecl :: String -> String -> String
 templateDecl sp s

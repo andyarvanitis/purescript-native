@@ -99,9 +99,9 @@ exportToCoreFn _ = []
 -- Desugars member declarations from AST to CoreFn representation.
 --
 declToCoreFn :: Environment -> Maybe SourceSpan -> [Comment] -> A.Declaration -> [Bind Ann]
-declToCoreFn _ ss com (A.DataDeclaration Newtype _ _ [(ctor, _)]) =
+declToCoreFn _ ss com (A.DataDeclaration Newtype _ _ [(ctor, tys)]) =
   [NonRec (properToIdent ctor) $
-    Abs (ss, com, Nothing, Just IsNewtype) (Ident "x") (Var nullAnn $ Qualified Nothing (Ident "x"))]
+    Abs (ss, com, Just $ head tys, Just IsNewtype) (Ident "x") (Var nullAnn $ Qualified Nothing (Ident "x"))]
 declToCoreFn _ _ _ d@(A.DataDeclaration Newtype _ _ _) =
   error $ "Found newtype with multiple constructors: " ++ show d
 declToCoreFn _ ss com (A.DataDeclaration Data tyName parms ctors) =
