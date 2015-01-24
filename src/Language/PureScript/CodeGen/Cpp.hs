@@ -37,18 +37,41 @@ headerPreamble =
   , JSRaw "#include <vector>"
   , JSRaw "#include <iostream>"
   , JSRaw " "
+  , JSRaw "// Type support"
+  , JSRaw " "
+  , JSRaw "template <typename T, typename Enable = void>"
+  , JSRaw "struct ADT;"
+  , JSRaw " "
+  , JSRaw "template <typename T>"
+  , JSRaw "struct ADT <T, typename std::enable_if<std::is_arithmetic<T>::value>::type> {"
+  , JSRaw "  using type = T;"
+  , JSRaw "  template <typename... ArgTypes>"
+  , JSRaw "  constexpr static auto make(ArgTypes... args) -> type {"
+  , JSRaw "    return T(args...);"
+  , JSRaw "  }"
+  , JSRaw "};"
+  , JSRaw " "
+  , JSRaw "template <typename T>"
+  , JSRaw "struct ADT <T, typename std::enable_if<!std::is_arithmetic<T>::value>::type> {"
+  , JSRaw "  using type = std::shared_ptr<T>;"
+  , JSRaw "  template <typename... ArgTypes>"
+  , JSRaw "  constexpr static auto make(ArgTypes... args) -> type {"
+  , JSRaw "    return std::make_shared<T>(args...);"
+  , JSRaw "  }"
+  , JSRaw "};"
+  , JSRaw " "
   , JSRaw "// Type aliases"
   , JSRaw "//"
   , JSRaw "template <typename T, typename U> using fn = std::function<U(T)>;"
-  , JSRaw "template <typename T> using data = std::shared_ptr<T>;"
+  , JSRaw "template <typename T> using data = typename ADT<T>::type;"
   , JSRaw "template <typename T> using list = std::vector<T>;"
   , JSRaw "using string = std::string;"
   , JSRaw " "
   , JSRaw "// Function aliases"
   , JSRaw " "
   , JSRaw "template <typename T, typename... ArgTypes>"
-  , JSRaw "constexpr auto make_data(ArgTypes... args) -> std::shared_ptr<T> {"
-  , JSRaw "  return std::make_shared<T>(args...);"
+  , JSRaw "constexpr auto make_data(ArgTypes... args) -> typename ADT<T>::type {"
+  , JSRaw "  return ADT<T>::make(args...);"
   , JSRaw "}"
   , JSRaw " "
   , JSRaw "template <typename T, typename U>"
@@ -67,7 +90,7 @@ noOp :: JS
 noOp = JSRaw []
 -----------------------------------------------------------------------------------------------------------------------
 typestr :: ModuleName -> T.Type -> String
-typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "int"
+typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "long"
 typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
 typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = "bool"
 
@@ -191,8 +214,11 @@ asDataTy t = "data<" ++ t ++ ">"
 mkData :: String -> String
 mkData t = "make_data<" ++ t ++ ">"
 -----------------------------------------------------------------------------------------------------------------------
+dataCtorName :: String
+dataCtorName = "ctor"
+-----------------------------------------------------------------------------------------------------------------------
 mkDataFn :: String -> String
-mkDataFn t = t ++ "::create"
+mkDataFn t = t ++ ':':':':dataCtorName
 -----------------------------------------------------------------------------------------------------------------------
 addType :: String -> String
 addType t = '@' : t

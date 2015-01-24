@@ -102,7 +102,7 @@ nonRecToJS mp ident val = do
   where
     expr (JSFunction orig args sts)
       | (Abs (_, _, _, Just IsNewtype) _ _) <- val
-      = Just (JSFunction (fnName orig (identToJs . Ident $ (runIdent ident) ++ "_create")) args sts)
+      = Just (JSFunction (fnName orig (identToJs . Ident $ (runIdent ident) ++ '_' : dataCtorName)) args sts)
     expr (JSFunction orig args sts) = Just (JSFunction (fnName orig (identToJs ident)) args sts)
     expr (JSVar name)
       | (Var (_, _, ty@(Just _), _) fn) <- val,
@@ -248,8 +248,8 @@ valueToJs m (Var (_, _, Just ty, Just IsNewtype) ident) =
   return $ varJs m ident
   where
     varJs :: ModuleName -> Qualified Ident -> JS
-    varJs _ (Qualified Nothing ident) = JSVar $ identToJs ident ++ "_create" ++ addType (typestr m ty)
-    varJs m qual = JSVar $ (qualifiedToStr m id qual) ++ "_create" ++ addType (typestr m ty)
+    varJs _ (Qualified Nothing ident) = JSVar $ identToJs ident ++ '_' : dataCtorName ++ addType (typestr m ty)
+    varJs m qual = JSVar $ (qualifiedToStr m id qual) ++ '_' : dataCtorName ++ addType (typestr m ty)
 valueToJs m (Var (_, _, Just ty, _) ident) =
   return $ varJs m ident
   where
@@ -288,7 +288,7 @@ valueToJs m (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
     mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
     mkfn Nothing [] = JSApp (JSVar $ mkData ctor) (JSVar <$> last . words <$> fields ty)
 
-    fname = Just $ fty (types ty) ++ " create";
+    fname = Just $ fty (types ty) ++ ' ': dataCtorName;
 
     fty :: [String] -> String
     fty [] = asDataTy ctor
