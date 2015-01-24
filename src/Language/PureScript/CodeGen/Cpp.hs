@@ -43,7 +43,7 @@ headerPreamble =
   , JSRaw "struct ADT;"
   , JSRaw " "
   , JSRaw "template <typename T>"
-  , JSRaw "struct ADT <T, typename std::enable_if<std::is_arithmetic<T>::value>::type> {"
+  , JSRaw "struct ADT <T, typename std::enable_if<std::is_fundamental<T>::value>::type> {"
   , JSRaw "  using type = T;"
   , JSRaw "  template <typename... ArgTypes>"
   , JSRaw "  constexpr static auto make(ArgTypes... args) -> type {"
@@ -52,7 +52,7 @@ headerPreamble =
   , JSRaw "};"
   , JSRaw " "
   , JSRaw "template <typename T>"
-  , JSRaw "struct ADT <T, typename std::enable_if<!std::is_arithmetic<T>::value>::type> {"
+  , JSRaw "struct ADT <T, typename std::enable_if<!std::is_fundamental<T>::value>::type> {"
   , JSRaw "  using type = std::shared_ptr<T>;"
   , JSRaw "  template <typename... ArgTypes>"
   , JSRaw "  constexpr static auto make(ArgTypes... args) -> type {"
@@ -111,6 +111,16 @@ typestr m (T.TypeApp
              a)
                = ("list<" ++ typestr m a ++ ">")
 
+typestr m (T.TypeApp
+            (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
+             T.REmpty)
+               = ("std::nullptr_t")
+
+typestr m (T.TypeApp
+            (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
+             a)
+               = ("struct{" ++ typestr m a ++ "}")
+
 typestr m a@(T.TypeApp (T.TypeConstructor _) _)
   | [t] <- dataCon m a = asDataTy t
   | (t:ts) <- dataCon m a = asDataTy $ t ++ '<' : intercalate "," ts ++ ">"
@@ -119,9 +129,10 @@ typestr m a@(T.TypeApp (T.TypeConstructor _) _)
 typestr m (T.TypeApp (T.TypeApp _ a) b) = "fn<" ++ typestr m a ++ "," ++ typestr m b ++ ">"
 typestr m (T.ForAll _ ty _) = typestr m ty
 typestr _ (T.Skolem (n:ns) _ _) = '#' : toUpper n : ns
-typestr _ (T.TypeVar (n:ns)) = '#' : toUpper n : ns
+typestr _ (T.TypeVar name) = name
 typestr m a@(T.TypeConstructor _) = asDataTy $ qualDataTypeName m a
 typestr m (T.ConstrainedType _ ty) = typestr m ty
+typestr _ T.REmpty = []
 typestr _ _ = "??"
 -----------------------------------------------------------------------------------------------------------------------
 fnArgStr :: ModuleName -> Maybe T.Type -> String
@@ -162,7 +173,7 @@ fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
 -----------------------------------------------------------------------------------------------------------------------
 templTypes :: ModuleName -> Maybe T.Type -> String
 templTypes m (Just t)
-  | s <- typestr m t, '#' `elem` s = intercalate ", " (("typename "++) <$> templParms s) ++ "|"
+  | s <- typestr m t, ('#' `elem` s) = intercalate ", " (("typename "++) <$> templParms s) ++ "|"
 templTypes _ _ = ""
 -----------------------------------------------------------------------------------------------------------------------
 stripImpls :: JS -> JS

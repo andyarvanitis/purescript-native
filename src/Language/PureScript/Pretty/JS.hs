@@ -48,7 +48,7 @@ literals = mkPattern' match
     , fmap (intercalate ", ") $ forM xs prettyPrintJS'
     , return " ]"
     ]
-  match (JSObjectLiteral []) = return "{}"
+  match (JSObjectLiteral []) = return "nullptr"
   match (JSObjectLiteral ps) = fmap concat $ sequence
     [ return "{\n"
     , withIndent $ do
