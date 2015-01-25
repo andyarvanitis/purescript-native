@@ -27,9 +27,8 @@ import Options.Applicative
 
 import qualified Language.PureScript as P
 import qualified Paths_purescript as Paths
-import qualified System.IO.UTF8 as U
 import System.Exit (exitSuccess, exitFailure)
-import System.IO (stderr)
+import System.IO (hPutStr, stderr)
 
 
 data PSCDocsOptions = PSCDocsOptions
@@ -43,14 +42,14 @@ docgen (PSCDocsOptions showHierarchy input) = do
   e <- P.parseModulesFromFiles (fromMaybe "") <$> mapM (fmap (first Just) . parseFile) (nub input)
   case e of
     Left err -> do
-      U.hPutStr stderr $ show err
+      hPutStr stderr $ show err
       exitFailure
     Right ms -> do
-      U.putStrLn . runDocs $ (renderModules showHierarchy) (map snd ms)
+      putStrLn . runDocs $ (renderModules showHierarchy) (map snd ms)
       exitSuccess
 
 parseFile :: FilePath -> IO (FilePath, String)
-parseFile input = (,) input <$> U.readFile input
+parseFile input = (,) input <$> readFile input
 
 type Docs = Writer [String] ()
 
@@ -137,7 +136,7 @@ renderDeclaration n _ (P.ExternDataDeclaration name kind) =
 renderDeclaration n _ (P.TypeSynonymDeclaration name args ty) = do
   let
     typeApp  = foldl P.TypeApp (P.TypeConstructor (P.Qualified Nothing name)) (map toTypeVar args)
-    typeName = prettyPrintType' typeApp    
+    typeName = prettyPrintType' typeApp
   atIndent n $ "type " ++ typeName ++ " = " ++ prettyPrintType' ty
 renderDeclaration n exps (P.TypeClassDeclaration name args implies ds) = do
   let impliesText = case implies of
@@ -162,7 +161,7 @@ renderComments :: Int -> [P.Comment] -> Docs
 renderComments n cs = mapM_ (atIndent n) ls
   where
   ls = concatMap toLines cs
-  
+
   toLines (P.LineComment s) = [s]
   toLines (P.BlockComment s) = lines s
 
@@ -218,7 +217,7 @@ inputFile = strArgument $
   <> help "The input .purs file(s)"
 
 includeHeirarcy :: Parser Bool
-includeHeirarcy = switch $ 
+includeHeirarcy = switch $
      long "hierarchy-images"
   <> help "Include markdown for type class hierarchy images in the output."
 
@@ -233,6 +232,6 @@ main = execParser opts >>= docgen
   infoModList = fullDesc <> headerInfo <> footerInfo
   headerInfo  = header   "psc-docs - Generate Markdown documentation from PureScript extern files"
   footerInfo  = footer $ "psc-docs " ++ showVersion Paths.version
-  
+
   version :: Parser (a -> a)
   version = abortOption (InfoMsg (showVersion Paths.version)) $ long "version" <> help "Show the version number" <> hidden

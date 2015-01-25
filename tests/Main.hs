@@ -28,15 +28,14 @@ import System.Process
 import System.FilePath (pathSeparator)
 import System.Directory (getCurrentDirectory, getTemporaryDirectory, getDirectoryContents, findExecutable)
 import Text.Parsec (ParseError)
-import qualified System.IO.UTF8 as U
 
 readInput :: [FilePath] -> IO [(FilePath, String)]
 readInput inputFiles = forM inputFiles $ \inputFile -> do
-  text <- U.readFile inputFile
+  text <- readFile inputFile
   return (inputFile, text)
 
 loadPrelude :: Either String (String, String, P.Environment)
-loadPrelude = 
+loadPrelude =
   case P.parseModulesFromFiles id [("", P.prelude)] of
     Left parseError -> Left (show parseError)
     Right ms -> P.compile (P.defaultCompileOptions { P.optionsAdditional = P.CompileOptions "Tests" [] [] }) (map snd ms) []
@@ -86,7 +85,7 @@ findNodeProcess = runMaybeT . msum $ map (MaybeT . findExecutable) names
 
 main :: IO ()
 main = do
-  putStrLn "Compiling Prelude" 
+  putStrLn "Compiling Prelude"
   case loadPrelude of
     Left err -> putStrLn err >> exitFailure
     Right (preludeJs, exts, _) -> do

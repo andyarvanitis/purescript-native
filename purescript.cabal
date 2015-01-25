@@ -1,5 +1,5 @@
 name: purescript
-version: 0.6.3
+version: 0.6.4
 cabal-version: >=1.8
 build-type: Simple
 license: MIT
@@ -32,7 +32,7 @@ library
                    mtl >= 2.1.0 && < 2.3.0,
                    parsec -any,
                    transformers >= 0.3 && < 0.5,
-                   utf8-string -any,
+                   utf8-string >= 1 && < 2,
                    pattern-arrows >= 0.0.2 && < 0.1,
                    monad-unify >= 0.2.2 && < 0.3,
                    file-embed >= 0.0.7 && < 0.0.8,
@@ -120,7 +120,7 @@ library
 executable psc
     build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
                    mtl -any, optparse-applicative >= 0.10.0, parsec -any, purescript -any,
-                   transformers -any, utf8-string -any
+                   transformers -any
     main-is: Main.hs
     buildable: True
     hs-source-dirs: psc
@@ -130,7 +130,7 @@ executable psc
 executable psc-make
     build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
                    mtl -any, optparse-applicative >= 0.10.0, parsec -any, purescript -any,
-                   transformers -any, utf8-string -any
+                   transformers -any
     main-is: Main.hs
     buildable: True
     hs-source-dirs: psc-make
@@ -141,7 +141,7 @@ executable psci
     build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
                    mtl -any, optparse-applicative >= 0.10.0, parsec -any,
                    haskeline >= 0.7.0.0, purescript -any, transformers -any,
-                   utf8-string -any, process -any
+                   process -any
 
     main-is: Main.hs
     buildable: True
@@ -151,7 +151,7 @@ executable psci
     ghc-options: -Wall -fno-warn-warnings-deprecations -O2
 
 executable psc-docs
-    build-depends: base >=4 && <5, purescript -any, utf8-string -any,
+    build-depends: base >=4 && <5, purescript -any,
                    optparse-applicative >= 0.10.0, process -any, mtl -any
     main-is: Main.hs
     buildable: True
@@ -160,7 +160,7 @@ executable psc-docs
     ghc-options: -Wall -fno-warn-warnings-deprecations -O2
 
 executable hierarchy
-    build-depends: base >=4 && <5, purescript -any, utf8-string -any, optparse-applicative >= 0.10.0,
+    build-depends: base >=4 && <5, purescript -any, optparse-applicative >= 0.10.0,
                    process -any, mtl -any, parsec -any, filepath -any, directory -any
     main-is: Main.hs
     buildable: True
@@ -171,7 +171,7 @@ executable hierarchy
 test-suite tests
     build-depends: base >=4 && <5, containers -any, directory -any,
                    filepath -any, mtl -any, parsec -any, purescript -any,
-                   transformers -any, utf8-string -any, process -any
+                   transformers -any, process -any
     type: exitcode-stdio-1.0
     main-is: Main.hs
     buildable: True
