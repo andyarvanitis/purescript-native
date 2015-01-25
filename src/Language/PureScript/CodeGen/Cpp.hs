@@ -123,19 +123,20 @@ typestr m (T.TypeApp
              a)
                = ("struct{" ++ typestr m a ++ "}")
 
-typestr m a@(T.TypeApp _ (T.TypeConstructor _))
-  | [t] <- dataCon m a = asDataTy t
-  | (t:ts) <- dataCon m a = asDataTy $ t ++ '<' : intercalate "," ts ++ ">"
-  | otherwise = "?"
+typestr m app@(T.TypeApp a b)
+  | (T.TypeConstructor _) <- a, [t] <- dataCon m app = asDataTy t
+  | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = asDataTy $ t ++ '<' : intercalate "," ts ++ ">"
+  | (T.TypeConstructor _) <- b, [t] <- dataCon m app = asDataTy t
+  | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = asDataTy $ t ++ '<' : intercalate "," ts ++ ">"
 
-typestr m (T.TypeApp (T.TypeApp _ a) b) = "fn<" ++ typestr m a ++ "," ++ typestr m b ++ ">"
+typestr m (T.TypeApp a b) = "fn<" ++ typestr m a ++ "," ++ typestr m b ++ ">"
 typestr m (T.ForAll _ ty _) = typestr m ty
 typestr _ (T.Skolem (n:ns) _ _) = '#' : toUpper n : ns
 typestr _ (T.TypeVar name) = name
 typestr m a@(T.TypeConstructor _) = asDataTy $ qualDataTypeName m a
 typestr m (T.ConstrainedType _ ty) = typestr m ty
 typestr _ T.REmpty = []
-typestr _ _ = "??"
+typestr m b = error "Unknown type: " ++ show b
 -----------------------------------------------------------------------------------------------------------------------
 fnArgStr :: ModuleName -> Maybe T.Type -> String
 fnArgStr m (Just ((T.TypeApp
