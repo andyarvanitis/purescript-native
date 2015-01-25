@@ -192,7 +192,7 @@ data JS
   --
   | JSNamespace String [JS]
   -- |
-  -- A class representing "data"
+  -- A class representing "data", including ADTs
   --
   | JSData String String [String] JS
   -- |

@@ -13,7 +13,7 @@
 --
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE GADTs, ViewPatterns #-}
+{-# LANGUAGE GADTs, ViewPatterns, PatternGuards #-}
 
 module Language.PureScript.CodeGen.JS (
     module AST,
@@ -100,9 +100,6 @@ nonRecToJS mp ident val = do
   js <- valueToJs mp val
   return $ JSVariableIntroduction (identToJs ident) (expr js)
   where
-    expr (JSFunction orig args sts)
-      | (Abs (_, _, _, Just IsNewtype) _ _) <- val
-      = Just (JSFunction (fnName orig (identToJs . Ident $ (runIdent ident) ++ '_' : dataCtorName)) args sts)
     expr (JSFunction orig args sts) = Just (JSFunction (fnName orig (identToJs ident)) args sts)
     expr (JSVar name)
       | (Var (_, _, ty@(Just _), _) fn) <- val,
@@ -140,7 +137,7 @@ valueToJs m (Literal _ l) =
 valueToJs m (Var (_, _, _, Just (IsConstructor _ 0)) name) =
   return $ JSAccessor "value" $ qualifiedToJS m id name
 valueToJs m (Var (_, _, ty, Just (IsConstructor _ _)) name) =
-  return $ JSVar . mkDataFn $ qualifiedToStr m id name ++ (getSpecialization $ fnRetStr m ty)
+  return $ JSVar . mkDataFn $ qualifiedToStr m mkUnique' name ++ (getSpecialization $ fnRetStr m ty)
 valueToJs m (Accessor _ prop val) =
   accessorString prop <$> valueToJs m val
 valueToJs m (ObjectUpdate _ o ps) = do
@@ -170,15 +167,6 @@ valueToJs m (Abs (_, _, Just ty, _) arg val) | isConstrained ty = return noOp
     isConstrained (T.ForAll _ (T.ConstrainedType _ _) _) = True
     isConstrained (T.ForAll _ t _) = isConstrained t
     isConstrained _ = False
-
-valueToJs m (Abs (_, _, ty, Just IsNewtype) arg val) = do
-  ret <- valueToJs m val
-  return $ JSFunction (Just annotatedName)
-             [typeStr ++ ' ' : identToJs arg] (JSBlock [JSReturn $ makeCtor ret])
-  where
-    typeStr = maybe [] (typestr m) ty
-    annotatedName = templTypes m ty ++ asDataTy typeStr
-    makeCtor ret = JSApp (JSVar $ mkData typeStr) [ret]
 valueToJs m (Abs (_, _, ty, _) arg val) = do
   ret <- valueToJs m val
   return $ JSFunction (Just annotatedName) [fnArgStr m ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
@@ -189,11 +177,12 @@ valueToJs m e@App{} = do
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
   let tci = instanceJs $ filter typeinst args
   case f of
-    Var (_, _, _, Just IsNewtype) _ -> return $ JSApp (JSVar . mkData $ maybe [] (qualDataTypeName m) appTy) (take 1 args')
+    Var (_, _, _, Just IsNewtype) name ->
+      return $ JSApp (JSVar . mkData $ qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0) (take 1 args')
     Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
-      return $ JSApp (JSVar . mkData $ qualifiedToStr m id name ++ getAppSpecType m e 0) args'
+      return $ JSApp (JSVar . mkData $ qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0) args'
     Var (_, _, _, Just (IsConstructor _ arity)) name | not (null args) ->
-      return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr m id name
+      return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr m mkUnique' name
                                                               ++ getAppSpecType m e (arity - length args + 1)) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name ->
       return $ JSNamespace [] (map toVarDecl (zip (names ty) args'))
@@ -244,12 +233,8 @@ valueToJs m e@App{} = do
       ftypeStr | ('@':'f':'n':'<':ss) <- getType name = init ss
                | otherwise = []
 
-valueToJs m (Var (_, _, Just ty, Just IsNewtype) ident) =
-  return $ varJs m ident
-  where
-    varJs :: ModuleName -> Qualified Ident -> JS
-    varJs _ (Qualified Nothing ident) = JSVar $ identToJs ident ++ '_' : dataCtorName ++ addType (typestr m ty)
-    varJs m qual = JSVar $ (qualifiedToStr m id qual) ++ '_' : dataCtorName ++ addType (typestr m ty)
+valueToJs m (Var (_, _, ty, Just IsNewtype) ident) =
+  return $ JSVar . mkDataFn $ qualifiedToStr m (mkUnique' . mkUnique') ident ++ (getSpecialization $ fnRetStr m ty)
 valueToJs m (Var (_, _, Just ty, _) ident) =
   return $ varJs m ident
   where
@@ -265,16 +250,11 @@ valueToJs m (Let _ ds val) = do
   decls <- concat <$> mapM (bindToJs m) ds
   ret <- valueToJs m val
   return $ JSApp (JSFunction Nothing [] (JSBlock (decls ++ [JSReturn ret]))) []
-valueToJs _ (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) =
-  return $ JSVariableIntroduction ctor (Just $
-              JSObjectLiteral [("create",
-                JSFunction Nothing ["value"]
-                  (JSBlock [JSReturn $ JSVar "value"]))])
-valueToJs m (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
-    return $ JSData ctor typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (fields ty))
+valueToJs m (Constructor (_, _, Just ty, Just IsNewtype) (ProperName typename) (ProperName ctor) _) =
+  return $ JSData (mkUnique ctor) typename [typestr m ty] noOp
+valueToJs m (Constructor (_, _, ty, _) (ProperName typename) (ProperName ctor) arity) =
+    return $ JSData (mkUnique ctor) typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (fields ty))
   where
-    typename = runProperName typ
-
     fields :: Maybe T.Type -> [String]
     fields ty = map (\(t,n) -> t ++ ' ' : ("value" ++ show n)) $ zip (types ty) ([0..] :: [Int])
 
@@ -284,15 +264,15 @@ valueToJs m (Constructor (_, _, ty, _) typ (ProperName ctor) arity) =
     types (Just T.REmpty) = []
 
     mkfn :: Maybe String -> [String] -> JS
-    mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar $ mkData ctor) []]
+    mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar $ mkData (mkUnique ctor)) []]
     mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
-    mkfn Nothing [] = JSApp (JSVar $ mkData ctor) (JSVar <$> last . words <$> fields ty)
+    mkfn Nothing [] = JSApp (JSVar $ mkData (mkUnique ctor)) (JSVar <$> last . words <$> fields ty)
 
     fname = Just $ fty (types ty) ++ ' ': dataCtorName;
 
     fty :: [String] -> String
-    fty [] = asDataTy ctor
-    fty [_] = asDataTy ctor
+    fty [] = asDataTy $ mkUnique ctor
+    fty [_] = asDataTy $ mkUnique ctor
     fty (_:t:ts) = "fn<" ++ t ++ "," ++ fty ts ++ ">"
 
 iife :: String -> [JS] -> JS
@@ -410,7 +390,7 @@ binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorT
     done'' <- go (index + 1) done' bs'
     js <- binderToJs m argVar done'' binder
     return (JSVariableIntroduction argVar (Just (JSAccessor ("value" ++ show index) (JSCast (JSVar ctorName) (JSVar varName)))) : js)
-  ctorName = qualifiedToStr m (Ident . runProperName) ctor ++ getSpecialization varName
+  ctorName = qualifiedToStr m (Ident . mkUnique . runProperName) ctor ++ getSpecialization varName
 binderToJs m varName done binder@(ConstructorBinder _ _ ctor _) | isCons ctor = do
   let (headBinders, tailBinder) = uncons [] binder
       numberOfHeadBinders = fromIntegral $ length headBinders

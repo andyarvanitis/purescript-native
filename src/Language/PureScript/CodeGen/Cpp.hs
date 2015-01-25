@@ -12,6 +12,8 @@
 -- This module generates code in the simplified Javascript intermediate representation from Purescript code
 --
 -----------------------------------------------------------------------------
+{-# LANGUAGE PatternGuards #-}
+
 module Language.PureScript.CodeGen.Cpp where
 
 import Data.List (elemIndices, intercalate, nub, sort)
@@ -111,7 +113,7 @@ typestr m (T.TypeApp
              a)
                = ("list<" ++ typestr m a ++ ">")
 
-typestr m (T.TypeApp
+typestr _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
              T.REmpty)
                = ("std::nullptr_t")
@@ -121,7 +123,7 @@ typestr m (T.TypeApp
              a)
                = ("struct{" ++ typestr m a ++ "}")
 
-typestr m a@(T.TypeApp (T.TypeConstructor _) _)
+typestr m a@(T.TypeApp _ (T.TypeConstructor _))
   | [t] <- dataCon m a = asDataTy t
   | (t:ts) <- dataCon m a = asDataTy $ t ++ '<' : intercalate "," ts ++ ">"
   | otherwise = "?"
@@ -158,7 +160,6 @@ dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)
 dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _)) = [typestr m a]
 dataCon m a@(T.TypeConstructor _) = [qualDataTypeName m a]
 dataCon m a = [typestr m a]
-dataCon _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 qualDataTypeName :: ModuleName -> T.Type -> String
 qualDataTypeName m (T.TypeConstructor typ) = intercalate "::" . words $ brk tname
@@ -179,7 +180,7 @@ templTypes _ _ = ""
 stripImpls :: JS -> JS
 stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
 stripImpls (JSComment c e) = JSComment c (stripImpls e)
-stripImpls imp@(JSVariableIntroduction var (Just (JSFunction (Just name) _ _))) | '|' `elem` name = imp
+stripImpls imp@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = imp
 stripImpls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripImpls expr)
 stripImpls (JSFunction fn args _) = JSFunction fn args noOp
 stripImpls dat@(JSData _ _ _ _) = dat
@@ -188,9 +189,9 @@ stripImpls _ = noOp
 stripDecls :: JS -> JS
 stripDecls (JSNamespace name bs) = JSNamespace name (map stripDecls bs)
 stripDecls (JSComment c e) = JSComment c (stripDecls e)
-stripDecls imp@(JSVariableIntroduction var (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
+stripDecls (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
 stripDecls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripDecls expr)
-stripDecls dat@(JSData _ _ _ _) = noOp
+stripDecls (JSData _ _ _ _) = noOp
 stripDecls js = js
 -----------------------------------------------------------------------------------------------------------------------
 dataTypes :: [Bind Ann] -> [JS]
@@ -204,6 +205,7 @@ dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType
           | otherwise = []
 -----------------------------------------------------------------------------------------------------------------------
 dataType :: Bind Ann -> String
+dataType (NonRec _ (Constructor (_, _, _, Just IsNewtype) name _ _)) = []
 dataType (NonRec _ (Constructor (_, _, _, _) name _ _)) = runProperName name
 dataType _ = []
 -----------------------------------------------------------------------------------------------------------------------
@@ -230,6 +232,12 @@ dataCtorName = "ctor"
 -----------------------------------------------------------------------------------------------------------------------
 mkDataFn :: String -> String
 mkDataFn t = t ++ ':':':':dataCtorName
+-----------------------------------------------------------------------------------------------------------------------
+mkUnique :: String -> String
+mkUnique s = '_' : s ++ "_"
+
+mkUnique' :: Ident -> Ident
+mkUnique' (Ident s) = Ident $ mkUnique s
 -----------------------------------------------------------------------------------------------------------------------
 addType :: String -> String
 addType t = '@' : t
@@ -270,12 +278,7 @@ getRet ('f':'n':'<':xs) = drop 1 $ afterAngles xs 1
 getRet xs = drop 1 $ dropWhile (/=',') xs
 -----------------------------------------------------------------------------------------------------------------------
 templParms :: String -> [String]
-templParams [] = []
-templParms s = nub . sort $ templParms' s
-
-templParms' :: String -> [String]
-templParams' [] = []
-templParms' s = (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
+templParms s = nub . sort $ (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
 
 extractTypes :: String -> [String]
 extractTypes = words . extractTypes'

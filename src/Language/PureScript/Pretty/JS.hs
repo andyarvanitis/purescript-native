@@ -70,13 +70,17 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
-  match (JSNamespace name sts) = fmap concat $ sequence $
-    [ return $ "namespace " ++ name ++ " {\n"
-    , withIndent $ prettyStatements sts
-    , return "\n"
-    , currentIndent
-    , return "}"
-    ]
+  match (JSNamespace name sts) =
+    if any notNoOp sts then
+      fmap concat $ sequence $
+        [ return $ "namespace " ++ name ++ " {\n"
+        , withIndent $ prettyStatements sts
+        , return "\n"
+        , currentIndent
+        , return "}"
+        ]
+    else
+      return []
   match (JSVar ident) = return . filter (/='#') $ takeWhile (/='@') ident
   match (JSVariableIntroduction name (Just (JSNamespace _ sts))) = fmap concat $ sequence
     [ prettyPrintJS' (JSNamespace name sts)
@@ -88,13 +92,13 @@ literals = mkPattern' match
         indentString <- currentIndent
         return $ "template <" ++ (takeWhile (/= '|') name) ++ ">"
               ++ if notNoOp sts then '\n':indentString else " "
-    , return "auto "
     , return $ case sts of
                  (JSBlock [JSReturn (JSApp _ [JSVar arg])]) ->
                    if length args == 1 && (last . words $ head args) == arg then
                      "inline "
                    else []
                  _ -> []
+    , return "auto "
     , return $ last (words name)
     , return "("
     , return $ intercalate ", " $ filter (/='#') <$> args
@@ -105,6 +109,34 @@ literals = mkPattern' match
         return $ ' ' : s ++ " "
       else
         return ";"
+    ]
+  -- TODO: some of this should be moved out of here -- maybe apply optim to data too?
+  --
+  match (JSVariableIntroduction name (Just (JSData ctor typename [typestr] (JSRaw [])))) = fmap concat $ sequence
+    [ do indentString <- currentIndent
+         return $ "// Using newtype optimizations\n" ++ indentString
+    , do indentString <- currentIndent
+         return $ templateDecl indentString typename
+    , do indentString <- currentIndent
+         return $ "using " ++ takeWhile (/='@') typename ++ " = " ++ typestr ++ ";\n" ++ indentString
+    , do indentString <- currentIndent
+         return $ templateDecl indentString typename
+    , do indentString <- currentIndent
+         return $ "using " ++ ctor ++ " = " ++ typestr ++ ";\n" ++ indentString
+    , do indentString <- currentIndent
+         return $ templateDecl indentString typename
+    , return $ "struct _" ++ ctor ++ "_ {"
+    , return "\n"
+    , withIndent $ do
+         indentString <- currentIndent
+         f <- prettyPrintJS' $ JSVariableIntroduction [] $ Just $
+                JSFunction (Just $ typestr ++ " ctor") [typestr ++ ' ' : "value"] $
+                  JSBlock [JSReturn (JSApp (JSVar typestr) [JSVar "value"])]
+         return $ indentString ++ "static " ++ f
+    , currentIndent
+    , return "\n"
+    , do indentString <- currentIndent
+         return $ indentString ++ "};"
     ]
   match (JSVariableIntroduction name (Just (JSData ctor typename fs fn))) =
     let fields = filter (/='#') <$> fs in fmap concat $ sequence
