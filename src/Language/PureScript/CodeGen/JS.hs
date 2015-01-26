@@ -23,7 +23,7 @@ module Language.PureScript.CodeGen.JS (
 ) where
 
 import Data.List ((\\), delete)
-import Data.List (intercalate, isInfixOf, isPrefixOf, nubBy, sortBy)
+import Data.List (intercalate, isPrefixOf, nubBy, sortBy)
 import Data.Function (on)
 import Data.Maybe (mapMaybe)
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -98,16 +98,21 @@ nonRecToJS m i e@(extractAnn -> (_, com, _, _)) | not (null com) =
   JSComment com <$> nonRecToJS m i (modifyAnn removeComments e)
 nonRecToJS mp ident val = do
   js <- valueToJs mp val
-  return $ JSVariableIntroduction (identToJs ident) (expr js)
+  return $ JSVariableIntroduction (identToJs ident) (Just $ expr ident js)
   where
-    expr (JSFunction orig args sts) = Just (JSFunction (fnName orig (identToJs ident)) args sts)
-    expr (JSVar name)
-      | (Var (_, _, ty@(Just _), _) fn) <- val,
-        "@fn<" `isInfixOf` name -- TODO: need better check here
-        = Just (JSFunction (Just $ templTypes mp ty ++ fnRetStr mp ty ++ ' ' : identToJs ident)
-            [fnArgStr mp ty ++ " arg"] (JSBlock [JSReturn $ JSApp (qualifiedToJS mp id fn) [JSVar "arg"]]))
-    expr js = Just js
+    expr :: Ident -> JS -> JS
+    expr var (JSFunction orig args sts) = JSFunction (fnName orig (identToJs var)) args sts
+    expr var js@(JSVar _) = expr' var js
+    expr var (JSNamespace [] jss) = JSNamespace [] (expr' var <$> jss)
+    expr var js = js
 
+    expr' :: Ident -> JS -> JS
+    expr' var (JSVar name)
+      | ('@':'f':'n':'<':ss) <- getType name, typ <- init ss
+        = JSFunction (Just (templTypes name ++ ' ' : getRet typ ++ ' ' : identToJs var))
+            [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp (JSVar name) [JSVar "arg"]])
+    expr' _ (JSVariableIntroduction var (Just js)) = JSVariableIntroduction var (Just $ expr' (Ident var) js)
+    expr' _ js = js
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a variable based on a
@@ -172,7 +177,7 @@ valueToJs m (Abs (_, _, ty, _) arg val) = do
   ret <- valueToJs m val
   return $ JSFunction (Just annotatedName) [fnArgStr m ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
   where
-    annotatedName = templTypes m ty ++ fnRetStr m ty
+    annotatedName = templTypes' m ty ++ fnRetStr m ty
 valueToJs m e@App{} = do
   let (f, args, appTy) = unApp e [] Nothing
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)

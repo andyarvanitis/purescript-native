@@ -37,6 +37,7 @@ headerPreamble =
   , JSRaw "#include <functional>"
   , JSRaw "#include <memory>"
   , JSRaw "#include <vector>"
+  , JSRaw "#include <string>"
   , JSRaw "#include <iostream>"
   , JSRaw " "
   , JSRaw "// Type support"
@@ -173,10 +174,15 @@ fnName :: Maybe String -> String -> Maybe String
 fnName Nothing name = Just name
 fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
 -----------------------------------------------------------------------------------------------------------------------
-templTypes :: ModuleName -> Maybe T.Type -> String
-templTypes m (Just t)
-  | s <- typestr m t, ('#' `elem` s) = intercalate ", " (("typename "++) <$> templParms s) ++ "|"
-templTypes _ _ = ""
+templTypes :: String -> String
+templTypes s
+  | ('#' `elem` s) = intercalate ", " (("typename "++) <$> templParms s) ++ "|"
+templTypes _ = []
+-----------------------------------------------------------------------------------------------------------------------
+templTypes' :: ModuleName -> Maybe T.Type -> String
+templTypes' m (Just t)
+  | s <- typestr m t = templTypes s
+templTypes' _ _ = ""
 -----------------------------------------------------------------------------------------------------------------------
 stripImpls :: JS -> JS
 stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
@@ -206,7 +212,7 @@ dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType
           | otherwise = []
 -----------------------------------------------------------------------------------------------------------------------
 dataType :: Bind Ann -> String
-dataType (NonRec _ (Constructor (_, _, _, Just IsNewtype) name _ _)) = []
+dataType (NonRec _ (Constructor (_, _, _, Just IsNewtype) _ _ _)) = []
 dataType (NonRec _ (Constructor (_, _, _, _) name _ _)) = runProperName name
 dataType _ = []
 -----------------------------------------------------------------------------------------------------------------------
@@ -239,6 +245,7 @@ mkUnique s = '_' : s ++ "_"
 
 mkUnique' :: Ident -> Ident
 mkUnique' (Ident s) = Ident $ mkUnique s
+mkUnique' ident = ident
 -----------------------------------------------------------------------------------------------------------------------
 addType :: String -> String
 addType t = '@' : t
