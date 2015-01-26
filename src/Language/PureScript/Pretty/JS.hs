@@ -92,18 +92,15 @@ literals = mkPattern' match
         indentString <- currentIndent
         return $ "template <" ++ (takeWhile (/= '|') name) ++ ">"
               ++ if notNoOp sts then '\n':indentString else " "
-    , return $ case sts of
-                 (JSBlock [JSReturn (JSApp _ [JSVar arg])]) ->
-                   if length args == 1 && (last . words $ head args) == arg then
-                     "inline "
-                   else []
-                 _ -> []
-    , return "auto "
-    , return $ last (words name)
+    , return $ let ws = words name in
+               if "inline" `elem` ws then
+                 "inline auto " ++ last (filter (/="inline") ws)
+               else
+                 "auto " ++ last ws
     , return "("
     , return $ intercalate ", " $ filter (/='#') <$> args
     , return ")"
-    , return $ stripFnAnnot name
+    , return $ returnType name
     , if notNoOp sts then do
         s <- prettyPrintJS' sts
         return $ ' ' : s ++ " "
@@ -380,7 +377,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ Wrap lam $ \(name, args) ret -> filter (/='#') $
                            "[=]"
                         ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args) ++ ")"
-                        ++ maybe "" stripFnAnnot name
+                        ++ maybe "" returnType name
                         ++ " "
                         ++ ret ]
                   , [ AssocR cast $ \typ val -> "cast<" ++ typ ++ ">" ++ parens val ]
@@ -431,9 +428,10 @@ dataType s = takeWhile (/='@') s ++ case ty of
                                       _  -> '<' : intercalate "," (read ty) ++ ">"
   where ty = drop 1 $ dropWhile (/='@') s
 
-stripFnAnnot :: String -> String
-stripFnAnnot fn
+returnType :: String -> String
+returnType fn
   | length (words fn) > 1, name@(_:_) <- stripped = " -> " ++ name
   | otherwise = []
   where
-    stripped = filter (/='#') . concat . init . words $ drop ((fromMaybe (-1) $ elemIndex '|' fn) + 1) fn
+    stripped = filter (/='#') . concat . init . filter (/="inline") . words $
+                 drop ((fromMaybe (-1) $ elemIndex '|' fn) + 1) fn

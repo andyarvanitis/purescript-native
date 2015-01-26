@@ -187,6 +187,8 @@ templTypes' _ _ = ""
 stripImpls :: JS -> JS
 stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
 stripImpls (JSComment c e) = JSComment c (stripImpls e)
+stripImpls (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
+  | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
 stripImpls imp@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = imp
 stripImpls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripImpls expr)
 stripImpls (JSFunction fn args _) = JSFunction fn args noOp
@@ -196,6 +198,8 @@ stripImpls _ = noOp
 stripDecls :: JS -> JS
 stripDecls (JSNamespace name bs) = JSNamespace name (map stripDecls bs)
 stripDecls (JSComment c e) = JSComment c (stripDecls e)
+stripDecls imp@(JSVariableIntroduction var (Just (JSFunction (Just name) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
+  | ((last $ words arg) == arg') = noOp
 stripDecls (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
 stripDecls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripDecls expr)
 stripDecls (JSData _ _ _ _) = noOp

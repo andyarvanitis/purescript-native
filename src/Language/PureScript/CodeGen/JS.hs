@@ -64,9 +64,13 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
     MakeOptions -> moduleBody -- ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
     CompileOptions ns _ _ | not isModuleEmpty ->
       headerPreamble
-      ++ [JSNamespace (moduleNameToJs name) (moduleHeader ++ foreigns')
+      ++ (if (not.null) foreigns' then
+            [JSNamespace (moduleNameToJs name ++ " /* foreign imports */") (foreigns')
+            , JSRaw "// end of foreign imports"]
+          else [])
+      ++ [JSNamespace (moduleNameToJs name ++ " /* module header */") (moduleHeader)
         , JSRaw "// end of header"]
-      ++ [JSNamespace (moduleNameToJs name) (moduleBody)]
+      ++ [JSNamespace (moduleNameToJs name ++ " /* module source */") (moduleBody)]
     _ -> []
 
 -- |
