@@ -181,6 +181,8 @@ exprToCoreFn _ _ _ _ (A.Abs _ _) =
   error "Abs with Binder argument was not desugared before exprToCoreFn"
 exprToCoreFn env ss com ty (A.App v1 v2) =
   App (ss, com, ty, Nothing) (exprToCoreFn env ss [] Nothing v1) (exprToCoreFn env ss [] Nothing v2)
+exprToCoreFn env ss com Nothing (A.Var ident@(Qualified (Just mn) name))
+  | Just (ty, _, _) <- M.lookup (mn, name) (names env) = Var (ss, com, Just ty, Nothing) ident
 exprToCoreFn _ ss com ty (A.Var ident) =
   Var (ss, com, ty, Nothing) ident
 exprToCoreFn env ss com ty (A.IfThenElse v1 v2 v3) =

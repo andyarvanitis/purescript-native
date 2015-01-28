@@ -124,6 +124,9 @@ typestr m (T.TypeApp
              a)
                = ("struct{" ++ typestr m a ++ "}")
 
+typestr m (T.TypeApp T.TypeVar{} b) = typestr m b
+typestr m (T.TypeApp T.Skolem{}  b) = typestr m b
+
 typestr m app@(T.TypeApp a b)
   | (T.TypeConstructor _) <- a, [t] <- dataCon m app = asDataTy t
   | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = asDataTy $ t ++ '<' : intercalate "," ts ++ ">"
@@ -133,7 +136,7 @@ typestr m app@(T.TypeApp a b)
 typestr m (T.TypeApp a b) = "fn<" ++ typestr m a ++ "," ++ typestr m b ++ ">"
 typestr m (T.ForAll _ ty _) = typestr m ty
 typestr _ (T.Skolem (n:ns) _ _) = '#' : toUpper n : ns
-typestr _ (T.TypeVar name) = name
+typestr _ (T.TypeVar (n:ns)) = '#' : toUpper n : ns
 typestr m a@(T.TypeConstructor _) = asDataTy $ qualDataTypeName m a
 typestr m (T.ConstrainedType _ ty) = typestr m ty
 typestr _ T.REmpty = []
