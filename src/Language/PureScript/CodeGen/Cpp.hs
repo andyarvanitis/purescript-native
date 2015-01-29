@@ -92,55 +92,76 @@ headerPreamble =
 noOp :: JS
 noOp = JSRaw []
 -----------------------------------------------------------------------------------------------------------------------
-typestr :: ModuleName -> T.Type -> String
-typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = "long"
-typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = "string"
-typestr _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = "bool"
+data Type = Native String
+          | Function Type Type
+          | Data Type
+          | Specialized Type [Type]
+          | List Type
+          | Template String
+          | Empty
+          deriving (Eq)
 
-typestr _ (T.TypeApp
+-----------------------------------------------------------------------------------------------------------------------
+instance Show Type where
+  show (Native name) = name
+  show (Function a b) = "fn<" ++ show a ++ "," ++ show b ++ ">"
+  show (Data t) = "data<" ++ show t ++ ">"
+  show (Specialized t []) = show t
+  show (Specialized t ts) = show t ++ '<' : (intercalate "," $ map show ts) ++ ">"
+  show (List t) = "list<" ++ show t ++ ">"
+  show (Template (c:cs)) = '#' : toUpper c : cs
+  show (Empty) = []
+
+-----------------------------------------------------------------------------------------------------------------------
+mktype :: ModuleName -> T.Type -> Type
+
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Native "long"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Native "string"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Native "bool"
+
+mktype _ (T.TypeApp
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-               T.REmpty) _)
-                 = error "Need to supprt func() T"
+               T.REmpty) _) = error "Need to supprt func() T"
 
-typestr m (T.TypeApp
+mktype m (T.TypeApp
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-               a) b)
-                 = "fn<" ++ typestr m a ++ "," ++ typestr m b ++ ">"
+               a) b) = Function (mktype m a) (mktype m b)
 
-typestr m (T.TypeApp
+mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
-             a)
-               = ("list<" ++ typestr m a ++ ">")
+             a) = List (mktype m a)
 
-typestr _ (T.TypeApp
+mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-             T.REmpty)
-               = ("std::nullptr_t")
+             T.REmpty) = Native "std::nullptr_t"
 
-typestr m (T.TypeApp
+mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-             a)
-               = ("struct{" ++ typestr m a ++ "}")
+             a) = Native ("struct{" ++ typestr m a ++ "}")
 
-typestr m (T.TypeApp T.TypeVar{} b) = typestr m b
-typestr m (T.TypeApp T.Skolem{}  b) = typestr m b
+mktype m (T.TypeApp T.TypeVar{} b) = mktype m b
+mktype m (T.TypeApp T.Skolem{}  b) = mktype m b
 
-typestr m app@(T.TypeApp a b)
-  | (T.TypeConstructor _) <- a, [t] <- dataCon m app = asDataTy t
-  | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = asDataTy $ t ++ '<' : intercalate "," ts ++ ">"
-  | (T.TypeConstructor _) <- b, [t] <- dataCon m app = asDataTy t
-  | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = asDataTy $ t ++ '<' : intercalate "," ts ++ ">"
+mktype m app@(T.TypeApp a b)
+  | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Data t
+  | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Data (Specialized t ts)
+  | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Data t
+  | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Data (Specialized t ts)
 
-typestr m (T.TypeApp a b) = "fn<" ++ typestr m a ++ "," ++ typestr m b ++ ">"
-typestr m (T.ForAll _ ty _) = typestr m ty
-typestr _ (T.Skolem (n:ns) _ _) = '#' : toUpper n : ns
-typestr _ (T.TypeVar (n:ns)) = '#' : toUpper n : ns
-typestr m a@(T.TypeConstructor _) = asDataTy $ qualDataTypeName m a
-typestr m (T.ConstrainedType _ ty) = typestr m ty
-typestr _ T.REmpty = []
-typestr m b = error "Unknown type: " ++ show b
+mktype m (T.TypeApp a b) = Function (mktype m a) (mktype m b)
+mktype m (T.ForAll _ ty _) = mktype m ty
+mktype _ (T.Skolem name _ _) = Template name
+mktype _ (T.TypeVar name) = Template name
+mktype m a@(T.TypeConstructor _) = Data (Native $ qualDataTypeName m a)
+mktype m (T.ConstrainedType _ ty) = mktype m ty
+mktype _ T.REmpty = Empty
+mktype m b = error $ "Unknown type: " ++ show b
+
+typestr :: ModuleName -> T.Type -> String
+typestr m t = show $ mktype m t
+
 -----------------------------------------------------------------------------------------------------------------------
 fnArgStr :: ModuleName -> Maybe T.Type -> String
 fnArgStr m (Just ((T.TypeApp
@@ -160,11 +181,11 @@ fnRetStr m (Just ((T.TypeApp
 fnRetStr m (Just (T.ForAll _ ty _)) = fnRetStr m (Just ty)
 fnRetStr _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
-dataCon :: ModuleName -> T.Type -> [String]
+dataCon :: ModuleName -> T.Type -> [Type]
 dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)
-dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _)) = [typestr m a]
-dataCon m a@(T.TypeConstructor _) = [qualDataTypeName m a]
-dataCon m a = [typestr m a]
+dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _)) = [mktype m a]
+dataCon m a@(T.TypeConstructor _) = [Native $ qualDataTypeName m a]
+dataCon m a = [mktype m a]
 -----------------------------------------------------------------------------------------------------------------------
 qualDataTypeName :: ModuleName -> T.Type -> String
 qualDataTypeName m (T.TypeConstructor typ) = intercalate "::" . words $ brk tname
@@ -226,8 +247,8 @@ dataType _ = []
 getAppSpecType :: ModuleName -> Expr Ann -> Int -> String
 getAppSpecType m e l
     | (App (_, _, Just dty, _) _ _) <- e,
-      (_:ts) <- dataCon m dty,
-      ty@(_:_) <- drop l ts                 = '<' : intercalate "," ty ++ ">"
+      (_:ts) <- show $ dataCon m dty,
+      ty@(_:_) <- drop l (show ts) = '<' : intercalate "," (map show ty) ++ ">"
     | otherwise = []
 -----------------------------------------------------------------------------------------------------------------------
 qualifiedToStr :: ModuleName -> (a -> Ident) -> Qualified a -> String
@@ -303,3 +324,15 @@ extractTypes' [] = []
 extractTypes' ('f':'n':'<':xs) = ' ' : extractTypes' xs
 extractTypes' (x:xs) | not (isAlphaNum x) = ' ' : extractTypes' xs
 extractTypes' (x:xs) = x : extractTypes' xs
+
+-----------------------------------------------------------------------------------------------------------------------
+fillTemplates :: Type -> Type -> Type
+fillTemplates (Native t) (Native t') | t == t' = (Native t')
+fillTemplates (Function a b) (Function a' b') = Function (fillTemplates a a') (fillTemplates b b')
+fillTemplates (Data t) (Data t') = Data (fillTemplates t t')
+fillTemplates (Specialized t []) (Specialized t' []) = Specialized (fillTemplates t t') []
+fillTemplates (Specialized t ts) (Specialized t' ts') = Specialized (fillTemplates t t') (zipWith fillTemplates ts ts')
+fillTemplates (List t) (List t') = List (fillTemplates t t')
+fillTemplates (Template a) a' = a'
+fillTemplates Empty Empty = Empty
+fillTemplates _ _ = error "Mismatched type structure!"
