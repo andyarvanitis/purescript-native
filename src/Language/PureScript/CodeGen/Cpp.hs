@@ -218,28 +218,38 @@ templTypes' m (Just t)
   | s <- typestr m t = templTypes s
 templTypes' _ _ = ""
 -----------------------------------------------------------------------------------------------------------------------
-stripImpls :: JS -> JS
-stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
-stripImpls (JSSequence bs) = JSSequence (map stripImpls bs)
-stripImpls (JSComment c e) = JSComment c (stripImpls e)
-stripImpls (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
+declarations :: JS -> JS
+declarations (JSNamespace name bs) = JSNamespace name (map declarations bs)
+declarations (JSSequence bs) = JSSequence (map declarations bs)
+declarations (JSComment c e) = JSComment c (declarations e)
+declarations (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
   | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
-stripImpls imp@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = imp
-stripImpls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripImpls expr)
-stripImpls (JSFunction fn args _) = JSFunction fn args noOp
-stripImpls dat@(JSData _ _ _ _) = dat
-stripImpls _ = noOp
+declarations imp@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ (JSRaw [])))) = imp
+declarations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
+declarations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ declarations expr)
+declarations (JSFunction fn args _) = JSFunction fn args noOp
+declarations dat@(JSData _ _ _ _) = dat
+declarations _ = noOp
 -----------------------------------------------------------------------------------------------------------------------
-stripDecls :: JS -> JS
-stripDecls (JSNamespace name bs) = JSNamespace name (map stripDecls bs)
-stripDecls (JSSequence bs) = JSSequence (map stripDecls bs)
-stripDecls (JSComment c e) = JSComment c (stripDecls e)
-stripDecls (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
+implementations :: JS -> JS
+implementations (JSNamespace name bs) = JSNamespace name (map implementations bs)
+implementations (JSSequence bs) = JSSequence (map implementations bs)
+implementations (JSComment c e) = JSComment c (implementations e)
+implementations (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
   | ((last $ words arg) == arg') = noOp
-stripDecls (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
-stripDecls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripDecls expr)
-stripDecls (JSData _ _ _ _) = noOp
-stripDecls js = js
+implementations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
+implementations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ implementations expr)
+implementations (JSData _ _ _ _) = noOp
+implementations js = js
+-----------------------------------------------------------------------------------------------------------------------
+templates :: JS -> JS
+templates (JSNamespace name bs) = JSNamespace name (map templates bs)
+templates (JSSequence bs) = JSSequence (map templates bs)
+templates (JSComment c e) = JSComment c (templates e)
+templates (JSVariableIntroduction _ (Just (JSFunction (Just name) _ (JSRaw [])))) = noOp
+templates imp@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = imp
+templates (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ templates expr)
+templates _ = noOp
 -----------------------------------------------------------------------------------------------------------------------
 dataTypes :: [Bind Ann] -> [JS]
 dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType
