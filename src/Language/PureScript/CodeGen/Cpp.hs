@@ -220,6 +220,7 @@ templTypes' _ _ = ""
 -----------------------------------------------------------------------------------------------------------------------
 stripImpls :: JS -> JS
 stripImpls (JSNamespace name bs) = JSNamespace name (map stripImpls bs)
+stripImpls (JSSequence bs) = JSSequence (map stripImpls bs)
 stripImpls (JSComment c e) = JSComment c (stripImpls e)
 stripImpls (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
   | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
@@ -231,6 +232,7 @@ stripImpls _ = noOp
 -----------------------------------------------------------------------------------------------------------------------
 stripDecls :: JS -> JS
 stripDecls (JSNamespace name bs) = JSNamespace name (map stripDecls bs)
+stripDecls (JSSequence bs) = JSSequence (map stripDecls bs)
 stripDecls (JSComment c e) = JSComment c (stripDecls e)
 stripDecls (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
   | ((last $ words arg) == arg') = noOp
@@ -380,7 +382,3 @@ declFnTy :: ModuleName -> Expr Ann -> Maybe Type
 declFnTy m (Var (_, _, Just ty, _) _) = mktype m ty -- drop 3 . init $ typestr m ty -- strip outer "fn<>"
 declFnTy m (App _ val _) = declFnTy m val
 declFnTy _ _ = Nothing -- error $ "Can't find type: " ++ show m ++ ' ' : show t
-
------------------------------------------------------------------------------------------------------------------------
-asComment :: String -> String
-asComment s = "/*" ++ s ++ "*/"

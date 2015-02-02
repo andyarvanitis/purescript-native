@@ -192,6 +192,10 @@ data JS
   --
   | JSNamespace String [JS]
   -- |
+  -- A sequence of statements
+  --
+  | JSSequence [JS]
+  -- |
   -- A class representing "data", including ADTs
   --
   | JSData String String [String] JS
@@ -279,6 +283,7 @@ everywhereOnJS f = go
   go (JSConditional j1 j2 j3) = f (JSConditional (go j1) (go j2) (go j3))
   go (JSBlock js) = f (JSBlock (map go js))
   go (JSNamespace nm js) = f (JSNamespace nm (map go js))
+  go (JSSequence js) = f (JSSequence (map go js))
   go (JSData name ty fields j) = f (JSData name ty fields (go j))
   go (JSCast j1 j2) = f (JSCast (go j1) (go j2))
   go (JSVariableIntroduction name j) = f (JSVariableIntroduction name (fmap go j))
@@ -310,6 +315,7 @@ everywhereOnJSTopDown f = go . f
   go (JSConditional j1 j2 j3) = JSConditional (go (f j1)) (go (f j2)) (go (f j3))
   go (JSBlock js) = JSBlock (map (go . f) js)
   go (JSNamespace nm js) = JSNamespace nm (map (go . f) js)
+  go (JSSequence js) = JSSequence (map (go . f) js)
   go (JSData name ty fields j) = JSData name ty fields (go (f j))
   go (JSCast j1 j2) = JSCast (go (f j1)) (go (f j2))
   go (JSVariableIntroduction name j) = JSVariableIntroduction name (fmap (go . f) j)
@@ -340,6 +346,7 @@ everythingOnJS (<>) f = go
   go j@(JSConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(JSBlock js) = foldl (<>) (f j) (map go js)
   go j@(JSNamespace _ js) = foldl (<>) (f j) (map go js)
+  go j@(JSSequence js) = foldl (<>) (f j) (map go js)
   go j@(JSData _ _ _ j1) = f j <> go j1
   go j@(JSCast j1 j2) = f j <> go j1 <> go j2
   go j@(JSVariableIntroduction _ (Just j1)) = f j <> go j1

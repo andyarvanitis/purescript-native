@@ -71,8 +71,7 @@ literals = mkPattern' match
     , return "}"
     ]
   match (JSNamespace name sts) =
-    if any notNoOp sts then
-      fmap concat $ sequence $
+    if any notNoOp sts then fmap concat $ sequence $
         [ return $ "namespace " ++ name ++ " {\n"
         , withIndent $ prettyStatements sts
         , return "\n"
@@ -81,13 +80,15 @@ literals = mkPattern' match
         ]
     else
       return []
+  match (JSSequence sts) = fmap concat $ sequence $
+        [ return "\n"
+        , prettyStatements sts
+        ]
   match (JSVar ident) = return . filter (/='#') $ takeWhile (/='@') ident
-  match (JSVariableIntroduction nm (Just (JSNamespace nm' sts))) =
-    let name = case nm' of [] -> nm
-                           "/**/" -> "/* " ++ nm ++ " */"
-                           _ -> nm' in fmap concat $ sequence
+  match (JSVariableIntroduction _ (Just (JSNamespace name sts))) = fmap concat $ sequence
     [ prettyPrintJS' (JSNamespace name sts)
     ]
+  match (JSVariableIntroduction _ (Just (JSSequence sts))) = prettyPrintJS' (JSSequence sts)
   match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence
     [ if null (dropWhile (/= '|') name) then
         return []
