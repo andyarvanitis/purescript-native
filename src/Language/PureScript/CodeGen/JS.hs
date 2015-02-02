@@ -165,11 +165,11 @@ valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
 
   toFn :: (Ident, Maybe T.Type) -> JS
   toFn (ident, ty@(Just _)) = JSVariableIntroduction (identToJs ident) (mkfunc ident ty)
-  toFn _ = noOp
+  toFn _ = JSNoOp
 
   mkfunc ident ty
-    | arg@(_:_) <- fnArgStr m ty = Just $ JSFunction (annotatedName ident ty) [arg] noOp
-    | otherwise = Just noOp
+    | arg@(_:_) <- fnArgStr m ty = Just $ JSFunction (annotatedName ident ty) [arg] JSNoOp
+    | otherwise = Just JSNoOp
   annotatedName ident ty = Just $ templTypes' m ty ++ fnRetStr m ty ++ ' ' : (identToJs ident)
 
 valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
@@ -179,7 +179,7 @@ valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
       dropAbs :: Int -> Expr Ann -> Expr Ann
       dropAbs n (Abs _ _ ann) | n > 0 = dropAbs (n-1) ann
       dropAbs _ a = a
-valueToJs m (Abs (_, _, Just ty, _) arg val) | isConstrained ty = return noOp
+valueToJs m (Abs (_, _, Just ty, _) arg val) | isConstrained ty = return JSNoOp
   where
     isConstrained :: T.Type -> Bool
     isConstrained (T.ForAll _ (T.ConstrainedType _ _) _) = True
@@ -215,7 +215,7 @@ valueToJs m e@App{} = do
 
   names ty = map fst (fst . T.rowToList $ fromMaybe T.REmpty ty)
   toVarDecl :: (String, JS) -> JS
-  toVarDecl (nm, js) | JSFunction _ _ _ <- js, C.__superclass_ `isPrefixOf` nm = noOp
+  toVarDecl (nm, js) | JSFunction _ _ _ <- js, C.__superclass_ `isPrefixOf` nm = JSNoOp
   toVarDecl (nm, js) =
     JSVariableIntroduction (identToJs $ Ident nm)
                            (Just $ case js of
@@ -252,7 +252,7 @@ valueToJs m (Let _ ds val) = do
   ret <- valueToJs m val
   return $ JSApp (JSFunction Nothing [] (JSBlock (decls ++ [JSReturn ret]))) []
 valueToJs m (Constructor (_, _, Just ty, Just IsNewtype) (ProperName typename) (ProperName ctor) _) =
-  return $ JSData (mkUnique ctor) typename [typestr m ty] noOp
+  return $ JSData (mkUnique ctor) typename [typestr m ty] JSNoOp
 valueToJs m (Constructor (_, _, ty, _) (ProperName typename) (ProperName ctor) arity) =
     return $ JSData (mkUnique ctor) typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (fields ty))
   where

@@ -90,8 +90,6 @@ headerPreamble =
   , JSRaw " "
   ]
 
-noOp :: JS
-noOp = JSRaw []
 -----------------------------------------------------------------------------------------------------------------------
 data Type = Native String
           | Function Type Type
@@ -224,32 +222,32 @@ declarations (JSSequence bs) = JSSequence (map declarations bs)
 declarations (JSComment c e) = JSComment c (declarations e)
 -- declarations (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
 --   | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
---declarations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ (JSRaw [])))) = noOp
--- declarations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
+--declarations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ JSNoOp))) = JSNoOp
+-- declarations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = JSNoOp
 declarations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ declarations expr)
-declarations (JSFunction fn args _) = JSFunction fn args noOp
+declarations (JSFunction fn args _) = JSFunction fn args JSNoOp
 declarations dat@(JSData _ _ _ _) = dat
-declarations _ = noOp
+declarations _ = JSNoOp
 -----------------------------------------------------------------------------------------------------------------------
 implementations :: JS -> JS
 implementations (JSNamespace name bs) = JSNamespace name (map implementations bs)
 implementations (JSSequence bs) = JSSequence (map implementations bs)
 implementations (JSComment c e) = JSComment c (implementations e)
 implementations (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
-  | ((last $ words arg) == arg') = noOp
-implementations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
+  | ((last $ words arg) == arg') = JSNoOp
+implementations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = JSNoOp
 implementations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ implementations expr)
-implementations (JSData _ _ _ _) = noOp
+implementations (JSData _ _ _ _) = JSNoOp
 implementations js = js
 -----------------------------------------------------------------------------------------------------------------------
 templates :: JS -> JS
 templates (JSNamespace name bs) = JSNamespace name (map templates bs)
 templates (JSSequence bs) = JSSequence (map templates bs)
 templates (JSComment c e) = JSComment c (templates e)
-templates (JSVariableIntroduction _ (Just (JSFunction (Just name) _ (JSRaw [])))) = noOp
+templates (JSVariableIntroduction _ (Just (JSFunction (Just name) _ JSNoOp))) = JSNoOp
 templates imp@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = imp
 templates (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ templates expr)
-templates _ = noOp
+templates _ = JSNoOp
 -----------------------------------------------------------------------------------------------------------------------
 dataTypes :: [Bind Ann] -> [JS]
 dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType

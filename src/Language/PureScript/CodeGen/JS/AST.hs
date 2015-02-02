@@ -256,6 +256,10 @@ data JS
   --
   | JSContinue String
   -- |
+  -- Empty statement/expression
+  --
+  | JSNoOp
+  -- |
   -- Raw Javascript (generated when parsing fails for an inline foreign import declaration)
   --
   | JSRaw String

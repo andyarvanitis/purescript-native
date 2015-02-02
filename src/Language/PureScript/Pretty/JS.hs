@@ -113,7 +113,7 @@ literals = mkPattern' match
     ]
   -- TODO: some of this should be moved out of here -- maybe apply optim to data too?
   --
-  match (JSVariableIntroduction name (Just (JSData ctor typename [typestr] (JSRaw [])))) = fmap concat $ sequence
+  match (JSVariableIntroduction name (Just (JSData ctor typename [typestr] JSNoOp))) = fmap concat $ sequence
     [ do indentString <- currentIndent
          return $ "// Using newtype optimizations\n" ++ indentString
     , do indentString <- currentIndent
@@ -414,7 +414,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                     ]
 
 notNoOp :: JS -> Bool
-notNoOp (JSRaw []) = False
+notNoOp JSNoOp = False
 notNoOp (JSComment _ js) = notNoOp js
 notNoOp (JSVariableIntroduction _ (Just js)) = notNoOp js
 notNoOp _ = True
