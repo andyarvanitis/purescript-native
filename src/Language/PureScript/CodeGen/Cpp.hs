@@ -222,10 +222,10 @@ declarations :: JS -> JS
 declarations (JSNamespace name bs) = JSNamespace name (map declarations bs)
 declarations (JSSequence bs) = JSSequence (map declarations bs)
 declarations (JSComment c e) = JSComment c (declarations e)
-declarations (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
-  | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
-declarations imp@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ (JSRaw [])))) = imp
-declarations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
+-- declarations (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
+--   | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
+--declarations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ (JSRaw [])))) = noOp
+-- declarations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
 declarations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ declarations expr)
 declarations (JSFunction fn args _) = JSFunction fn args noOp
 declarations dat@(JSData _ _ _ _) = dat
@@ -269,8 +269,8 @@ dataType _ = []
 getAppSpecType :: ModuleName -> Expr Ann -> Int -> String
 getAppSpecType m e l
     | (App (_, _, Just dty, _) _ _) <- e,
-      (_:ts) <- show $ dataCon m dty,
-      ty@(_:_) <- drop l (show ts) = '<' : intercalate "," (map show ty) ++ ">"
+      (_:ts) <- dataCon m dty,
+      ty@(_:_) <- drop l ts = '<' : intercalate "," (show <$> ty) ++ ">"
     | otherwise = []
 -----------------------------------------------------------------------------------------------------------------------
 qualifiedToStr :: ModuleName -> (a -> Ident) -> Qualified a -> String
@@ -374,8 +374,8 @@ templateArgs' args (Data t) (Data t') = templateArgs' args t t'
 templateArgs' args (Specialized t []) (Specialized t' []) = templateArgs' args t t'
 templateArgs' args (Specialized t ts) (Specialized t' ts') = args ++ (templateArgs' [] t t') ++ (concat $ zipWith (templateArgs' []) ts ts')
 templateArgs' args (List t) (List t') = templateArgs' args t t'
-templateArgs' args (Template a) (Template a') = args ++ [(a, a')]
-templateArgs' args (Template a) a' = args ++ [(a, show a')]
+templateArgs' args a@(Template _) a'@(Template _) = args ++ [(show a, show a')]
+templateArgs' args a@(Template _) a' = args ++ [(show a, show a')]
 -- templateArgs' args Empty Empty = args
 templateArgs' _ t1 t2 = error $ "Mismatched type structure! " ++ show t1 ++ " ; " ++ show t2
 -----------------------------------------------------------------------------------------------------------------------

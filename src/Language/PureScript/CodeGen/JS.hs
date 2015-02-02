@@ -157,7 +157,7 @@ valueToJs m (ObjectUpdate _ o ps) = do
   extendObj obj sts
 valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   let args = unAbs e
-  in return $ JSSequence $ map toFn args
+  in return $ JSSequence (toFn <$> args)
   where
   unAbs :: Expr Ann -> [(Ident, Maybe T.Type)]
   unAbs (Abs (_, _, ty, _) arg val) = (arg, ty) : unAbs val
@@ -167,7 +167,9 @@ valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   toFn (ident, ty@(Just _)) = JSVariableIntroduction (identToJs ident) (mkfunc ident ty)
   toFn _ = noOp
 
-  mkfunc ident ty = Just $ JSFunction (annotatedName ident ty) [fnArgStr m ty] noOp
+  mkfunc ident ty
+    | arg@(_:_) <- fnArgStr m ty = Just $ JSFunction (annotatedName ident ty) [arg] noOp
+    | otherwise = Just noOp
   annotatedName ident ty = Just $ templTypes' m ty ++ fnRetStr m ty ++ ' ' : (identToJs ident)
 
 valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
@@ -203,8 +205,9 @@ valueToJs m e@App{} = do
       convArgs <- mapM (valueToJs m) (instFn name' args)
       return $ JSSequence $ toVarDecl <$> zip (names ty) convArgs
 
-    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> (specialized' =<< valueToJs m f)
-
+    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> if typeinst $ head args then
+                                                          specialized' =<< valueToJs m f
+                                                        else valueToJs m f
   where
   unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
   unApp (App _ val arg) args = unApp val (arg : args)
