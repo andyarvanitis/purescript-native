@@ -182,7 +182,7 @@ exprToCoreFn _ _ _ _ (A.Abs _ _) =
 exprToCoreFn env ss com ty (A.App v1 v2) =
   App (ss, com, ty, Nothing) (exprToCoreFn env ss [] Nothing v1) (exprToCoreFn env ss [] Nothing v2)
 exprToCoreFn env ss com Nothing (A.Var ident@(Qualified (Just mn) name))
-  | Just (ty, _, _) <- M.lookup (mn, name) (names env) = Var (ss, com, Just ty, Nothing) ident
+  | Just (ty, TypeClassAccessorImport, _) <- M.lookup (mn, name) (names env) = Var (ss, com, Just ty, Nothing) ident
 exprToCoreFn _ ss com ty (A.Var ident) =
   Var (ss, com, ty, Nothing) ident
 exprToCoreFn env ss com ty (A.IfThenElse v1 v2 v3) =
@@ -197,14 +197,19 @@ exprToCoreFn env ss com ty (A.Case vs alts) =
   Case (ss, com, ty, Nothing) (map (exprToCoreFn env ss [] Nothing) vs) (map (altToCoreFn env ss) alts)
 exprToCoreFn env ss com ty@(Just _) (A.TypedValue _ v@(A.Constructor name) _) =
   exprToCoreFn env ss com ty v
+exprToCoreFn env ss com (Just ty') (A.TypedValue _ v@(A.TypeClassDictionaryConstructorApp name@(Qualified mn (ProperName cname)) c) ty)
+  | Just (parms, _, _) <- M.lookup name (typeClasses env) =
+  exprToCoreFn env ss com (Just ty') (A.TypeClassDictionaryConstructorApp (annotName parms) c)
+  where
+    annotName parms = Qualified mn (ProperName (cname ++ '@' : (show $ map fst parms)))
 exprToCoreFn env ss com _ (A.TypedValue _ v ty) =
   exprToCoreFn env ss com (Just ty) v
 exprToCoreFn env ss com ty (A.Let ds v) =
   Let (ss, com, ty, Nothing) (concatMap (declToCoreFn env ss []) ds) (exprToCoreFn env ss [] Nothing v)
-exprToCoreFn env ss com _  (A.TypeClassDictionaryConstructorApp name (A.TypedValue _ (A.ObjectLiteral vs) _)) =
+exprToCoreFn env ss com ty  (A.TypeClassDictionaryConstructorApp name (A.TypedValue _ (A.ObjectLiteral vs) _)) =
   let args = map (exprToCoreFn env ss [] Nothing . snd) $ sortBy (compare `on` fst) vs
       ctor = Var (ss, [], rowType, Just IsTypeClassConstructor) (fmap properToIdent name)
-  in foldl (App (ss, com, Nothing, Nothing)) ctor args
+  in foldl (App (ss, com, ty, Nothing)) ctor args
   where
     rowType = Just (mkRow . map fst $ sortBy (compare `on` fst) vs)
     mkRow :: [String] -> Type

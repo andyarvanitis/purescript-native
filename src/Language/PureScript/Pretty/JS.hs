@@ -82,7 +82,10 @@ literals = mkPattern' match
     else
       return []
   match (JSVar ident) = return . filter (/='#') $ takeWhile (/='@') ident
-  match (JSVariableIntroduction name (Just (JSNamespace _ sts))) = fmap concat $ sequence
+  match (JSVariableIntroduction nm (Just (JSNamespace nm' sts))) =
+    let name = case nm' of [] -> nm
+                           "/**/" -> "/* " ++ nm ++ " */"
+                           _ -> nm' in fmap concat $ sequence
     [ prettyPrintJS' (JSNamespace name sts)
     ]
   match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence

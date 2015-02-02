@@ -154,16 +154,21 @@ valueToJs m (ObjectUpdate _ o ps) = do
   obj <- valueToJs m o
   sts <- mapM (sndM (valueToJs m)) ps
   extendObj obj sts
-valueToJs _ e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
+valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   let args = unAbs e
-  in return $ noOp
+  in return $ JSNamespace (asComment []) $ map toFn args
   where
-  unAbs :: Expr Ann -> [Ident]
-  unAbs (Abs _ arg val) = arg : unAbs val
+  unAbs :: Expr Ann -> [(Ident, Maybe T.Type)]
+  unAbs (Abs (_, _, ty, _) arg val) = (arg, ty) : unAbs val
   unAbs _ = []
-  assign :: Ident -> JS
-  assign name = JSAssignment (accessorString (runIdent name) (JSVar "this"))
-                             (var name)
+
+  toFn :: (Ident, Maybe T.Type) -> JS
+  toFn (ident, ty@(Just _)) = JSVariableIntroduction (identToJs ident) (mkfunc ident ty)
+  toFn _ = noOp
+
+  mkfunc ident ty = Just $ JSFunction (annotatedName ident ty) [fnArgStr m ty] noOp
+  annotatedName ident ty = Just $ templTypes' m ty ++ fnRetStr m ty ++ ' ' : (identToJs ident)
+
 valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
     | (Abs (_, _, t, _) _ val') <- val, Nothing <- t = valueToJs m (dropAbs (length ts - 2) val') -- TODO: confirm '-2'
     | otherwise = valueToJs m val
@@ -183,9 +188,8 @@ valueToJs m (Abs (_, _, ty, _) arg val) = do
   where
     annotatedName = templTypes' m ty ++ fnRetStr m ty
 valueToJs m e@App{} = do
-  let (f, args, appTy) = unApp e [] Nothing
+  let (f, args) = unApp e []
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
-  let tci = instanceJs $ filter typeinst args
   case f of
     Var (_, _, _, Just IsNewtype) name ->
       return $ JSApp (JSVar . mkData $ qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0) (take 1 args')
@@ -194,15 +198,16 @@ valueToJs m e@App{} = do
     Var (_, _, _, Just (IsConstructor _ arity)) name | not (null args) ->
       return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr m mkUnique' name
                                                               ++ getAppSpecType m e (arity - length args + 1)) args'
-    Var (_, _, ty, Just IsTypeClassConstructor) name ->
-      return $ JSNamespace [] (map toVarDecl (zip (names ty) args'))
-    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> do fn <- valueToJs m f
-                                                           return $ instfn tci fn appTy
+    Var (_, _, ty, Just IsTypeClassConstructor) name'@(Qualified mn (Ident name)) -> do
+      convArgs <- mapM (valueToJs m) (instFn name' args)
+      return $ JSNamespace (asComment []) $ toVarDecl <$> zip (names ty) convArgs
+
+    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> (specialized' =<< valueToJs m f)
+
   where
-  unApp :: Expr Ann -> [Expr Ann] -> Maybe T.Type -> (Expr Ann, [Expr Ann], Maybe T.Type)
-  unApp (App (_, _, Just ty', _) val arg) args _ = unApp val (arg : args) (Just ty')
-  unApp (App _ val arg) args ty = unApp val (arg : args) ty
-  unApp other args ty = (other, args, ty)
+  unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
+  unApp (App _ val arg) args = unApp val (arg : args)
+  unApp other args = (other, args)
 
   names ty = map fst (fst . T.rowToList $ fromMaybe T.REmpty ty)
   toVarDecl :: (String, JS) -> JS
@@ -210,38 +215,42 @@ valueToJs m e@App{} = do
   toVarDecl (nm, js) =
     JSVariableIntroduction (identToJs $ Ident nm)
                            (Just $ case js of
-                                     JSFunction orig ags sts -> JSFunction (fnName orig nm) ags sts
+                                     JSFunction orig ags sts -> JSFunction (toTempl $ fnName orig nm) ags sts
                                      _ -> js)
+    where
+      toTempl fn | fn' <- fromMaybe "" fn = if '|' `elem` fn' then fn else Just ('|' : fn')
+
   typeinst :: Expr Ann -> Bool
   typeinst (Var (_, _, Nothing, Nothing) _) = True -- TODO: make sure this doesn't remove the wrong (untyped) args
   typeinst _ = False
 
-  instanceJs :: [Expr Ann] -> [JS]
-  instanceJs [Var (_, _, Nothing, Nothing) (Qualified (Just _) ident)] = [JSVar $ identToJs ident]
-  instanceJs _ = []
+  typeclassTypes :: Expr Ann -> Qualified Ident -> [(String, T.Type)]
+  typeclassTypes (App (_, _, Just ty, _) _ _) (Qualified _ name) = zip (read (drop 1 . getType $ runIdent name)) (typeList ty [])
+  typeclassTypes _ _ = []
 
-  instfn :: [JS] -> JS -> Maybe T.Type -> JS
-  instfn [JSVar inst] (JSVar name) ty
-    | ':' `elem` name = JSVar . intercalate "::" $ init parts ++ (inst : tail parts)
-    | otherwise = JSVar (inst ++ "::" ++ name')
-    where
-      parts = words $ map (\c -> case c of ':' -> ' '
-                                           _ -> c) name'
-      name' = specializedName name ty
-  instfn _ js _ = js
+  typeList :: T.Type -> [T.Type] -> [T.Type]
+  typeList (T.TypeApp (T.TypeConstructor _) t) ts = typeList t ts
+  typeList (T.TypeApp a b) ts = typeList a [] ++ typeList b ts
+  typeList t ts = ts ++ [t]
 
-  specializedName :: String -> Maybe T.Type -> String
-  specializedName name Nothing = name
-  specializedName name (Just ty)
-    | utys@(_:_) <- unresolvableTypes =
-        rmType name ++ '<' : (intercalate "," $ snd <$> filter (flip elem utys . fst) types) ++ ">"
-    | otherwise = name
-    where
-      unresolvableTypes = (templParms . getRet $ ftypeStr) \\ (templParms . getArg $ ftypeStr)
-      types = nubBy ((==) `on` fst) . sortBy (compare `on` fst) $
-              zip (extractTypes . getRet $ ftypeStr) (extractTypes $ typestr m ty)
-      ftypeStr | ('@':'f':'n':'<':ss) <- getType name = init ss
-               | otherwise = []
+  convExpr :: (T.Type -> T.Type) -> Expr Ann -> Expr Ann
+  convExpr f (Abs (ss, com, Just ty, tt) arg val) = Abs (ss, com, Just (f ty), tt) arg (convExpr f val)
+  convExpr f (App (ss, com, Just ty, tt) val args) = App (ss, com, Just (f ty), tt) (convExpr f val) (convExpr f args)
+  convExpr f (Var (ss, com, Just ty, tt) ident) = Var (ss, com, Just (f ty), tt) ident
+  convExpr _ expr = expr
+
+  skolemTo :: (String, T.Type) -> T.Type -> T.Type
+  skolemTo (name', ty) (T.Skolem name _ _) | name == name' = ty
+  skolemTo _ ty = ty
+
+  convTy :: [(String, T.Type)] -> T.Type -> T.Type
+  convTy cts = flip (foldl (flip ($))) (T.everywhereOnTypes . skolemTo <$> cts)
+
+  instFn :: Qualified Ident -> [Expr Ann] -> [Expr Ann]
+  instFn name = map $ convExpr (convTy $ typeclassTypes e name)
+
+  specialized (JSVar name) = JSVar $ (rmType name) ++ templateSpec (declFnTy m e) (exprFnTy m e)
+  specialized' = pure . specialized
 
 valueToJs m (Var (_, _, ty, Just IsNewtype) ident) =
   return $ JSVar . mkDataFn $ qualifiedToStr m (mkUnique' . mkUnique') ident ++ (getSpecialization $ fnRetStr m ty)

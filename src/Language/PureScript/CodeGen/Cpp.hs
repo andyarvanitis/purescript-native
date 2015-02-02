@@ -16,8 +16,9 @@
 
 module Language.PureScript.CodeGen.Cpp where
 
-import Data.List (elemIndices, intercalate, nub, sort)
+import Data.List (elemIndices, intercalate, nub, sort, sortBy)
 import Data.Char (isAlphaNum, toUpper)
+import Data.Function (on)
 
 import Control.Applicative
 
@@ -98,7 +99,6 @@ data Type = Native String
           | Specialized Type [Type]
           | List Type
           | Template String
-          | Empty
           deriving (Eq)
 
 -----------------------------------------------------------------------------------------------------------------------
@@ -110,14 +110,15 @@ instance Show Type where
   show (Specialized t ts) = show t ++ '<' : (intercalate "," $ map show ts) ++ ">"
   show (List t) = "list<" ++ show t ++ ">"
   show (Template (c:cs)) = '#' : toUpper c : cs
-  show (Empty) = []
+  show (Template []) = error "Bad template parameter"
+  -- show (Empty) = []
 
 -----------------------------------------------------------------------------------------------------------------------
-mktype :: ModuleName -> T.Type -> Type
+mktype :: ModuleName -> T.Type -> Maybe Type
 
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Native "long"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Native "string"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Native "bool"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just $ Native "long"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just $ Native "string"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just $ Native "bool"
 
 mktype _ (T.TypeApp
             (T.TypeApp
@@ -127,40 +128,45 @@ mktype _ (T.TypeApp
 mktype m (T.TypeApp
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-               a) b) = Function (mktype m a) (mktype m b)
+               a) b) | Just a' <- mktype m a, Just b' <- mktype m b = Just $ Function a' b'
+                     | otherwise = Nothing
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
-             a) = List (mktype m a)
+             a) | Just t <- mktype m a = Just $ List t
+                | otherwise = Nothing
 
 mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-             T.REmpty) = Native "std::nullptr_t"
+             T.REmpty) = Just $ Native "std::nullptr_t"
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-             a) = Native ("struct{" ++ typestr m a ++ "}")
+             a) = Just $ Native ("struct{" ++ typestr m a ++ "}")
 
 mktype m (T.TypeApp T.TypeVar{} b) = mktype m b
 mktype m (T.TypeApp T.Skolem{}  b) = mktype m b
 
 mktype m app@(T.TypeApp a b)
-  | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Data t
-  | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Data (Specialized t ts)
-  | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Data t
-  | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Data (Specialized t ts)
+  | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Just $ Data t
+  | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Just $ Data (Specialized t ts)
+  | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Just $ Data t
+  | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Just $ Data (Specialized t ts)
 
-mktype m (T.TypeApp a b) = Function (mktype m a) (mktype m b)
+mktype m (T.TypeApp a b) | Just a' <- mktype m a, Just b' <- mktype m b = Just $ Function a' b'
+                         | otherwise = Nothing
+
 mktype m (T.ForAll _ ty _) = mktype m ty
-mktype _ (T.Skolem name _ _) = Template name
-mktype _ (T.TypeVar name) = Template name
-mktype m a@(T.TypeConstructor _) = Data (Native $ qualDataTypeName m a)
+mktype _ (T.Skolem name _ _) = Just $ Template name
+mktype _ (T.TypeVar name) = Just $ Template name
+mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a)
 mktype m (T.ConstrainedType _ ty) = mktype m ty
-mktype _ T.REmpty = Empty
-mktype m b = error $ "Unknown type: " ++ show b
+mktype _ T.REmpty = Nothing
+mktype _ b = error $ "Unknown type: " ++ show b
 
 typestr :: ModuleName -> T.Type -> String
-typestr m t = show $ mktype m t
+typestr m t | Just t' <- mktype m t = show t'
+            | otherwise = []
 
 -----------------------------------------------------------------------------------------------------------------------
 fnArgStr :: ModuleName -> Maybe T.Type -> String
@@ -183,9 +189,13 @@ fnRetStr _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 dataCon :: ModuleName -> T.Type -> [Type]
 dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)
-dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _)) = [mktype m a]
+dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _))
+  | Just a' <- mktype m a = [a']
+  | otherwise = []
 dataCon m a@(T.TypeConstructor _) = [Native $ qualDataTypeName m a]
-dataCon m a = [mktype m a]
+dataCon m a
+  | Just a' <- mktype m a = [a']
+  | otherwise = []
 -----------------------------------------------------------------------------------------------------------------------
 qualDataTypeName :: ModuleName -> T.Type -> String
 qualDataTypeName m (T.TypeConstructor typ) = intercalate "::" . words $ brk tname
@@ -222,7 +232,7 @@ stripImpls _ = noOp
 stripDecls :: JS -> JS
 stripDecls (JSNamespace name bs) = JSNamespace name (map stripDecls bs)
 stripDecls (JSComment c e) = JSComment c (stripDecls e)
-stripDecls imp@(JSVariableIntroduction var (Just (JSFunction (Just name) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
+stripDecls (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
   | ((last $ words arg) == arg') = noOp
 stripDecls (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = noOp
 stripDecls (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ stripDecls expr)
@@ -326,13 +336,51 @@ extractTypes' (x:xs) | not (isAlphaNum x) = ' ' : extractTypes' xs
 extractTypes' (x:xs) = x : extractTypes' xs
 
 -----------------------------------------------------------------------------------------------------------------------
-fillTemplates :: Type -> Type -> Type
-fillTemplates (Native t) (Native t') | t == t' = (Native t')
-fillTemplates (Function a b) (Function a' b') = Function (fillTemplates a a') (fillTemplates b b')
-fillTemplates (Data t) (Data t') = Data (fillTemplates t t')
-fillTemplates (Specialized t []) (Specialized t' []) = Specialized (fillTemplates t t') []
-fillTemplates (Specialized t ts) (Specialized t' ts') = Specialized (fillTemplates t t') (zipWith fillTemplates ts ts')
-fillTemplates (List t) (List t') = List (fillTemplates t t')
-fillTemplates (Template a) a' = a'
-fillTemplates Empty Empty = Empty
-fillTemplates _ _ = error "Mismatched type structure!"
+-- fillTemplates :: Type -> Type -> Type
+-- fillTemplates (Native t) (Native t') | t == t' = (Native t')
+-- fillTemplates (Function a b) (Function a' b') = Function (fillTemplates a a') (fillTemplates b b')
+-- fillTemplates (Data t) (Data t') = Data (fillTemplates t t')
+-- fillTemplates (Specialized t []) (Specialized t' []) = Specialized (fillTemplates t t') []
+-- fillTemplates (Specialized t ts) (Specialized t' ts') = Specialized (fillTemplates t t') (zipWith fillTemplates ts ts')
+-- fillTemplates (List t) (List t') = List (fillTemplates t t')
+-- fillTemplates (Template _) a' = a'
+-- fillTemplates Empty Empty = Empty
+-- fillTemplates _ _ = error "Mismatched type structure!"
+
+templateSpec :: Maybe Type -> Maybe Type -> String
+templateSpec (Just t1) (Just t2)
+  | args@(_:_) <- filter (/='#') . intercalate "," $ snd <$> templateArgs t1 t2 = '<' : args ++ ">"
+templateSpec _ _ = []
+
+templateArgs :: Type -> Type -> [(String,String)]
+templateArgs t1 t2 = nub. sortBy (compare `on` fst) $ templateArgs' [] t1 t2
+
+templateArgs' :: [(String,String)] -> Type -> Type -> [(String,String)]
+templateArgs' args (Native t) (Native t') | t == t' = args
+templateArgs' args (Function a b) (Function a' b') = args ++ (templateArgs' [] a a') ++ (templateArgs' [] b b')
+templateArgs' args (Data t) (Data t') = templateArgs' args t t'
+templateArgs' args (Specialized t []) (Specialized t' []) = templateArgs' args t t'
+templateArgs' args (Specialized t ts) (Specialized t' ts') = args ++ (templateArgs' [] t t') ++ (concat $ zipWith (templateArgs' []) ts ts')
+templateArgs' args (List t) (List t') = templateArgs' args t t'
+templateArgs' args (Template a) (Template a') = args ++ [(a, a')]
+templateArgs' args (Template a) a' = args ++ [(a, show a')]
+-- templateArgs' args Empty Empty = args
+templateArgs' _ t1 t2 = error $ "Mismatched type structure! " ++ show t1 ++ " ; " ++ show t2
+-----------------------------------------------------------------------------------------------------------------------
+exprFnTy :: ModuleName -> Expr Ann -> Maybe Type
+exprFnTy m (App (_, _, Just ty, _) val a)
+  | Just nextTy <- exprFnTy m val = Just nextTy
+  | Just a' <- declFnTy m a,
+    Just b' <- mktype m ty = Just $ Function a' b'
+  | Just b' <- mktype m ty = Just b'
+exprFnTy _ _ = Nothing
+
+-----------------------------------------------------------------------------------------------------------------------
+declFnTy :: ModuleName -> Expr Ann -> Maybe Type
+declFnTy m (Var (_, _, Just ty, _) _) = mktype m ty -- drop 3 . init $ typestr m ty -- strip outer "fn<>"
+declFnTy m (App _ val _) = declFnTy m val
+declFnTy _ _ = Nothing -- error $ "Can't find type: " ++ show m ++ ' ' : show t
+
+-----------------------------------------------------------------------------------------------------------------------
+asComment :: String -> String
+asComment s = "/*" ++ s ++ "*/"
