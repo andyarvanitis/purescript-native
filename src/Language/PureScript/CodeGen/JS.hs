@@ -225,30 +225,8 @@ valueToJs m e@App{} = do
   typeinst (Var (_, _, Nothing, Nothing) _) = True -- TODO: make sure this doesn't remove the wrong (untyped) args
   typeinst _ = False
 
-  typeclassTypes :: Expr Ann -> Qualified Ident -> [(String, T.Type)]
-  typeclassTypes (App (_, _, Just ty, _) _ _) (Qualified _ name) = zip (read (drop 1 . getType $ runIdent name)) (typeList ty [])
-  typeclassTypes _ _ = []
-
-  typeList :: T.Type -> [T.Type] -> [T.Type]
-  typeList (T.TypeApp (T.TypeConstructor _) t) ts = typeList t ts
-  typeList (T.TypeApp a b) ts = typeList a [] ++ typeList b ts
-  typeList t ts = ts ++ [t]
-
-  convExpr :: (T.Type -> T.Type) -> Expr Ann -> Expr Ann
-  convExpr f (Abs (ss, com, Just ty, tt) arg val) = Abs (ss, com, Just (f ty), tt) arg (convExpr f val)
-  convExpr f (App (ss, com, Just ty, tt) val args) = App (ss, com, Just (f ty), tt) (convExpr f val) (convExpr f args)
-  convExpr f (Var (ss, com, Just ty, tt) ident) = Var (ss, com, Just (f ty), tt) ident
-  convExpr _ expr = expr
-
-  skolemTo :: (String, T.Type) -> T.Type -> T.Type
-  skolemTo (name', ty) (T.Skolem name _ _) | name == name' = ty
-  skolemTo _ ty = ty
-
-  convTy :: [(String, T.Type)] -> T.Type -> T.Type
-  convTy cts = flip (foldl (flip ($))) (T.everywhereOnTypes . skolemTo <$> cts)
-
   instFn :: Qualified Ident -> [Expr Ann] -> [Expr Ann]
-  instFn name = map $ convExpr (convTy $ typeclassTypes e name)
+  instFn name = map $ convExpr (convType $ typeclassTypes e name)
 
   specialized (JSVar name) = JSVar $ (rmType name) ++ templateSpec (declFnTy m e) (exprFnTy m e)
   specialized' = pure . specialized

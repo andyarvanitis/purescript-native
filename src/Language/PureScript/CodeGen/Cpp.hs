@@ -382,3 +382,28 @@ declFnTy :: ModuleName -> Expr Ann -> Maybe Type
 declFnTy m (Var (_, _, Just ty, _) _) = mktype m ty -- drop 3 . init $ typestr m ty -- strip outer "fn<>"
 declFnTy m (App _ val _) = declFnTy m val
 declFnTy _ _ = Nothing -- error $ "Can't find type: " ++ show m ++ ' ' : show t
+
+-----------------------------------------------------------------------------------------------------------------------
+typeclassTypes :: Expr Ann -> Qualified Ident -> [(String, T.Type)]
+typeclassTypes (App (_, _, Just ty, _) _ _) (Qualified _ name) = zip (read (drop 1 . getType $ runIdent name)) (typeList ty [])
+  where
+    typeList :: T.Type -> [T.Type] -> [T.Type]
+    typeList (T.TypeApp (T.TypeConstructor _) t) ts = typeList t ts
+    typeList (T.TypeApp a b) ts = typeList a [] ++ typeList b ts
+    typeList t ts = ts ++ [t]
+typeclassTypes _ _ = []
+
+convType :: [(String, T.Type)] -> T.Type -> T.Type
+convType cts = flip (foldl (flip ($))) (T.everywhereOnTypes . skolemTo <$> cts)
+
+convExpr :: (T.Type -> T.Type) -> Expr Ann -> Expr Ann
+convExpr f (Abs (ss, com, Just ty, tt) arg val) = Abs (ss, com, Just (f ty), tt) arg (convExpr f val)
+convExpr f (App (ss, com, Just ty, tt) val args) = App (ss, com, Just (f ty), tt) (convExpr f val) (convExpr f args)
+convExpr f (Var (ss, com, Just ty, tt) ident) = Var (ss, com, Just (f ty), tt) ident
+convExpr _ expr = expr
+
+skolemTo :: (String, T.Type) -> T.Type -> T.Type
+skolemTo (name', ty) (T.Skolem name _ _) | name == name' = ty
+skolemTo _ ty = ty
+
+-----------------------------------------------------------------------------------------------------------------------
