@@ -114,10 +114,15 @@ nonRecToJS mp ident val = do
     expr' :: Ident -> JS -> JS
     expr' var (JSVar name)
       | ('@':'f':'n':'<':ss) <- getType name, typ <- init ss
-        = JSFunction (Just (templTypes name ++ ' ' : getRet typ ++ ' ' : identToJs var))
+        = JSFunction (Just (toTempl name ++ ' ' : getRet typ ++ ' ' : identToJs var))
             [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp (JSVar name) [JSVar "arg"]])
     expr' _ (JSVariableIntroduction var (Just js)) = JSVariableIntroduction var (Just $ expr' (Ident var) js)
     expr' _ js = js
+
+    toTempl name
+      | (App (_, _, Just (T.TypeApp (T.TypeConstructor{}) T.RCons{}), _) _ _) <- val,
+        fn <- templTypes name,  not ('|' `elem` fn) = "|"
+      | otherwise = templTypes name
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a variable based on a
