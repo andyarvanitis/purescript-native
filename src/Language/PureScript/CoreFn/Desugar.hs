@@ -197,15 +197,30 @@ exprToCoreFn env ss com ty (A.Case vs alts) =
   Case (ss, com, ty, Nothing) (map (exprToCoreFn env ss [] Nothing) vs) (map (altToCoreFn env ss) alts)
 exprToCoreFn env ss com ty@(Just _) (A.TypedValue _ v@(A.Constructor name) _) =
   exprToCoreFn env ss com ty v
-exprToCoreFn env ss com (Just ty') (A.TypedValue _ v@(A.TypeClassDictionaryConstructorApp name@(Qualified mn (ProperName cname)) c) ty)
-  | Just (parms, _, _) <- M.lookup name (typeClasses env) =
-  exprToCoreFn env ss com (Just ty') (A.TypeClassDictionaryConstructorApp (annotName parms) c)
-  where
-    annotName parms = Qualified mn (ProperName (cname ++ '@' : (show $ map fst parms)))
+-- exprToCoreFn env ss com (Just ty') (A.TypedValue _ v@(A.TypeClassDictionaryConstructorApp name@(Qualified mn (ProperName cname)) c) ty)
+--   | Just (parms, _, _) <- M.lookup name (typeClasses env) =
+--   exprToCoreFn env ss com (Just ty') (A.TypeClassDictionaryConstructorApp (annotName parms) c)
+--   where
+--     annotName parms = Qualified mn (ProperName (cname ++ '@' : (show $ map fst parms)))
 exprToCoreFn env ss com _ (A.TypedValue _ v ty) =
   exprToCoreFn env ss com (Just ty) v
 exprToCoreFn env ss com ty (A.Let ds v) =
   Let (ss, com, ty, Nothing) (concatMap (declToCoreFn env ss []) ds) (exprToCoreFn env ss [] Nothing v)
+
+exprToCoreFn env ss com (Just ty) (A.TypeClassDictionaryConstructorApp name@(Qualified mn (ProperName cname)) c)
+  | Just (parms, _, _) <- M.lookup name (typeClasses env) =
+  exprToCoreFn env ss com (Just ty) (A.TypeClassDictionaryConstructorApp (annotName parms) c)
+  where
+    annotName parms = Qualified mn (ProperName (cname ++ '@' : (show $ map fst parms)))
+
+-- exprToCoreFn env ss com ty (A.TypeClassDictionaryConstructorApp name@(Qualified mn (ProperName cname)) (A.TypedValue _ (A.ObjectLiteral vs) _))
+--   | Just (parms, _, _) <- M.lookup name (typeClasses env) =
+--   let args = map (exprToCoreFn env ss [] Nothing . snd) $ sortBy (compare `on` fst) vs
+--       ctor = Var (ss, [], Nothing, Just IsTypeClassConstructor) (fmap properToIdent (annotName parms))
+--   in foldl (App (ss, com, ty, Nothing)) ctor args
+--   where
+--     annotName parms = Qualified mn (ProperName (traceShowId $ cname ++ '@' : (show $ map fst parms)))
+
 exprToCoreFn env ss com ty  (A.TypeClassDictionaryConstructorApp name (A.TypedValue _ (A.ObjectLiteral vs) _)) =
   let args = map (exprToCoreFn env ss [] Nothing . snd) $ sortBy (compare `on` fst) vs
       ctor = Var (ss, [], rowType, Just IsTypeClassConstructor) (fmap properToIdent name)

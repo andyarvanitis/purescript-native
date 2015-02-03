@@ -226,6 +226,8 @@ valueToJs m e@App{} = do
 
   typeinst :: Expr Ann -> Bool
   typeinst (Var (_, _, Nothing, Nothing) _) = True -- TODO: make sure this doesn't remove the wrong (untyped) args
+  typeinst (Accessor (_, _, Nothing, Nothing) _ v) = typeinst v
+  typeinst (App (_, _, Nothing, Nothing) _ v) = typeinst v
   typeinst _ = False
 
   instFn :: Qualified Ident -> [Expr Ann] -> [Expr Ann]

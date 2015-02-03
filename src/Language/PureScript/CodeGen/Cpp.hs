@@ -118,6 +118,11 @@ mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just $ Native "string"
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just $ Native "bool"
 
+mktype m (T.TypeApp
+            (T.TypeApp
+              (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                (T.TypeApp (T.TypeConstructor _) (T.RCons _ t _))) _) = mktype m t
+
 mktype _ (T.TypeApp
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
@@ -168,6 +173,10 @@ typestr m t | Just t' <- mktype m t = show t'
 
 -----------------------------------------------------------------------------------------------------------------------
 fnArgStr :: ModuleName -> Maybe T.Type -> String
+fnArgStr m (Just (T.TypeApp
+             (T.TypeApp
+               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                 (T.TypeApp (T.TypeConstructor _) (T.RCons _ t _))) _)) = fnArgStr m (Just t)
 fnArgStr m (Just ((T.TypeApp
                     (T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
@@ -177,6 +186,10 @@ fnArgStr m (Just (T.ForAll _ ty _)) = fnArgStr m (Just ty)
 fnArgStr _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 fnRetStr :: ModuleName -> Maybe T.Type -> String
+fnRetStr m (Just (T.TypeApp
+             (T.TypeApp
+               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                 (T.TypeApp (T.TypeConstructor _) (T.RCons _ t _))) _)) = fnRetStr m (Just t)
 fnRetStr m (Just ((T.TypeApp
                     (T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
@@ -396,6 +409,7 @@ typeclassTypes :: Expr Ann -> Qualified Ident -> [(String, T.Type)]
 typeclassTypes (App (_, _, Just ty, _) _ _) (Qualified _ name) = zip (read (drop 1 . getType $ runIdent name)) (typeList ty [])
   where
     typeList :: T.Type -> [T.Type] -> [T.Type]
+    typeList (T.TypeApp (T.TypeConstructor _) (T.RCons _ t _)) ts = typeList t ts
     typeList (T.TypeApp (T.TypeConstructor _) t) ts = typeList t ts
     typeList (T.TypeApp a b) ts = typeList a [] ++ typeList b ts
     typeList t ts = ts ++ [t]
