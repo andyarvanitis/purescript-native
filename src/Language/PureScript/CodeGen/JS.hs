@@ -107,7 +107,7 @@ nonRecToJS mp ident val = do
     expr :: Ident -> JS -> JS
     expr var (JSFunction orig args sts) = JSFunction (fnName orig (identToJs var)) args sts
     expr var js@(JSVar _) = expr' var js
-    expr var (JSNamespace [] jss) = JSNamespace [] (expr' var <$> jss)
+    -- expr var (JSNamespace [] jss) = JSNamespace [] (expr' var <$> jss)
     expr var (JSSequence jss) = JSSequence (expr' var <$> jss)
     expr var js = js
 

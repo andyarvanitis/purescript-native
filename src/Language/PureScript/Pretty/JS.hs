@@ -80,15 +80,15 @@ literals = mkPattern' match
         ]
     else
       return []
-  match (JSSequence sts) = fmap concat $ sequence $
+  match (JSSequence sts) =
+    if any notNoOp sts then fmap concat $ sequence $
         [ return "\n"
         , prettyStatements sts
         ]
+    else return []
   match (JSVar ident) = return . filter (/='#') $ takeWhile (/='@') ident
-  match (JSVariableIntroduction _ (Just (JSNamespace name sts))) = fmap concat $ sequence
-    [ prettyPrintJS' (JSNamespace name sts)
-    ]
-  match (JSVariableIntroduction _ (Just (JSSequence sts))) = prettyPrintJS' (JSSequence sts)
+  match (JSVariableIntroduction _ (Just js@(JSNamespace _ _))) = match js
+  match (JSVariableIntroduction _ (Just js@(JSSequence _))) = match js
   match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence
     [ if null (dropWhile (/= '|') name) then
         return []
@@ -115,8 +115,6 @@ literals = mkPattern' match
   --
   match (JSVariableIntroduction name (Just (JSData ctor typename [typestr] JSNoOp))) = fmap concat $ sequence
     [ do indentString <- currentIndent
-         return $ "// Using newtype optimizations\n" ++ indentString
-    , do indentString <- currentIndent
          return $ templateDecl indentString typename
     , do indentString <- currentIndent
          return $ "using " ++ takeWhile (/='@') typename ++ " = " ++ typestr ++ ";\n" ++ indentString
@@ -224,33 +222,35 @@ literals = mkPattern' match
     [ return $ lbl ++ ": "
     , prettyPrintJS' js
     ]
-  match (JSComment com js) = fmap concat $ sequence $
-    [ return "\n"
-    , currentIndent
-    , return "/**\n"
-    ] ++
-    map asLine (concatMap commentLines com) ++
-    [ currentIndent
-    , return " */\n"
-    , currentIndent
-    , prettyPrintJS' js
-    ]
-    where
-    commentLines :: Comment -> [String]
-    commentLines (LineComment s) = [s]
-    commentLines (BlockComment s) = lines s
-
-    asLine :: String -> StateT PrinterState Maybe String
-    asLine s = do
-      i <- currentIndent
-      return $ i ++ " * " ++ removeComments s ++ "\n"
-
-    removeComments :: String -> String
-    removeComments ('*' : '/' : s) = removeComments s
-    removeComments (c : s) = c : removeComments s
-
-    removeComments [] = []
+  match (JSComment _ js) = match js
+  -- match (JSComment com js) = fmap concat $ sequence $
+  --   [ return "\n"
+  --   , currentIndent
+  --   , return "/**\n"
+  --   ] ++
+  --   map asLine (concatMap commentLines com) ++
+  --   [ currentIndent
+  --   , return " */\n"
+  --   , currentIndent
+  --   , prettyPrintJS' js
+  --   ]
+  --   where
+  --   commentLines :: Comment -> [String]
+  --   commentLines (LineComment s) = [s]
+  --   commentLines (BlockComment s) = lines s
+  --
+  --   asLine :: String -> StateT PrinterState Maybe String
+  --   asLine s = do
+  --     i <- currentIndent
+  --     return $ i ++ " * " ++ removeComments s ++ "\n"
+  --
+  --   removeComments :: String -> String
+  --   removeComments ('*' : '/' : s) = removeComments s
+  --   removeComments (c : s) = c : removeComments s
+  --
+  --   removeComments [] = []
   match (JSRaw js) = return js
+  match JSNoOp = return []
   match _ = mzero
 
 string :: String -> String
@@ -350,7 +350,7 @@ prettyStatements :: [JS] -> StateT PrinterState Maybe String
 prettyStatements sts = do
   jss <- forM (filter notNoOp sts) prettyPrintJS'
   indentString <- currentIndent
-  return $ intercalate "\n" $ map (indentString ++) jss
+  return $ intercalate "\n" $ map (indentString ++) (filter (not . null) jss)
 
 -- |
 -- Generate a pretty-printed string representing a Javascript expression
@@ -415,6 +415,8 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
 
 notNoOp :: JS -> Bool
 notNoOp JSNoOp = False
+notNoOp (JSSequence []) = False
+notNoOp (JSNamespace _ []) = False
 notNoOp (JSComment _ js) = notNoOp js
 notNoOp (JSVariableIntroduction _ (Just js)) = notNoOp js
 notNoOp _ = True
