@@ -231,7 +231,7 @@ templTypes' _ _ = ""
 -----------------------------------------------------------------------------------------------------------------------
 declarations :: JS -> JS
 declarations (JSNamespace name bs) = JSNamespace name (map declarations bs)
-declarations (JSSequence bs) = JSSequence (map declarations bs)
+declarations (JSSequence s bs) = JSSequence s (map declarations bs)
 declarations (JSComment c e) = JSComment c (declarations e)
 -- declarations (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
 --   | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
@@ -242,7 +242,7 @@ declarations _ = JSNoOp
 -----------------------------------------------------------------------------------------------------------------------
 implementations :: JS -> JS
 implementations (JSNamespace name bs) = JSNamespace name (map implementations bs)
-implementations (JSSequence bs) = JSSequence (map implementations bs)
+implementations (JSSequence s bs) = JSSequence s (map implementations bs)
 implementations (JSComment c e) = JSComment c (implementations e)
 -- implementations (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
 --   | ((last $ words arg) == arg') = JSNoOp
@@ -253,7 +253,7 @@ implementations js = js
 -----------------------------------------------------------------------------------------------------------------------
 templates :: JS -> JS
 templates (JSNamespace name bs) = JSNamespace name (map templates bs)
-templates (JSSequence bs) = JSSequence (map templates bs)
+templates (JSSequence s bs) = JSSequence s (map templates bs)
 templates (JSComment c e) = JSComment c (templates e)
 -- templates (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
 --   | ((last $ words arg) == arg') = JSNoOp
@@ -430,5 +430,8 @@ convExpr _ expr = expr
 skolemTo :: (String, T.Type) -> T.Type -> T.Type
 skolemTo (name', ty) (T.Skolem name _ _) | name == name' = ty
 skolemTo _ ty = ty
+
+typeclassTypeNames :: ModuleName -> Expr Ann -> Qualified Ident -> [String]
+typeclassTypeNames m e ident = fst <$> typeclassTypes e ident
 
 -----------------------------------------------------------------------------------------------------------------------

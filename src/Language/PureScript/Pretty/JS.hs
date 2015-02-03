@@ -80,15 +80,17 @@ literals = mkPattern' match
         ]
     else
       return []
-  match (JSSequence sts) =
+  match (JSSequence s sts) =
     if any notNoOp sts then fmap concat $ sequence $
+        (if (not . null) s then ((return $ "// " ++ s) : ) else id)
         [ return "\n"
-        , prettyStatements sts
+        , prettyStatements $ sts ++ if (not . null) s then [JSRaw "//"] else []
         ]
     else return []
   match (JSVar ident) = return . filter (/='#') $ takeWhile (/='@') ident
   match (JSVariableIntroduction _ (Just js@(JSNamespace _ _))) = match js
-  match (JSVariableIntroduction _ (Just js@(JSSequence _))) = match js
+  match (JSVariableIntroduction s (Just (JSSequence [] jss))) = match $ JSSequence s jss
+  match (JSVariableIntroduction _ (Just js@(JSSequence _ _))) = match js
   match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence
     [ if null (dropWhile (/= '|') name) then
         return []
@@ -415,7 +417,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
 
 notNoOp :: JS -> Bool
 notNoOp JSNoOp = False
-notNoOp (JSSequence []) = False
+notNoOp (JSSequence _ []) = False
 notNoOp (JSNamespace _ []) = False
 notNoOp (JSComment _ js) = notNoOp js
 notNoOp (JSVariableIntroduction _ (Just js)) = notNoOp js

@@ -108,7 +108,7 @@ nonRecToJS mp ident val = do
     expr var (JSFunction orig args sts) = JSFunction (fnName orig (identToJs var)) args sts
     expr var js@(JSVar _) = expr' var js
     -- expr var (JSNamespace [] jss) = JSNamespace [] (expr' var <$> jss)
-    expr var (JSSequence jss) = JSSequence (expr' var <$> jss)
+    expr var (JSSequence s jss) = JSSequence s (expr' var <$> jss)
     expr var js = js
 
     expr' :: Ident -> JS -> JS
@@ -162,7 +162,7 @@ valueToJs m (ObjectUpdate _ o ps) = do
   extendObj obj sts
 valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   let args = unAbs e
-  in return $ JSSequence (toFn <$> args)
+  in return $ JSSequence [] (toFn <$> args)
   where
   unAbs :: Expr Ann -> [(Ident, Maybe T.Type)]
   unAbs (Abs (_, _, ty, _) arg val) = (arg, ty) : unAbs val
@@ -208,7 +208,8 @@ valueToJs m e@App{} = do
                                                               ++ getAppSpecType m e (arity - length args + 1)) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name'@(Qualified mn (Ident name)) -> do
       convArgs <- mapM (valueToJs m) (instFn name' args)
-      return $ JSSequence $ toVarDecl <$> zip (names ty) convArgs
+      return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames m e name')) $
+               toVarDecl <$> zip (names ty) convArgs
 
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> if typeinst $ head args then
                                                           specialized' =<< valueToJs m f
