@@ -52,6 +52,7 @@ import Language.PureScript.Errors
 import Language.PureScript.Kinds
 import Language.PureScript.Names
 import Language.PureScript.Pretty
+import Language.PureScript.Traversals
 import Language.PureScript.TypeChecker.Entailment
 import Language.PureScript.TypeChecker.Kinds
 import Language.PureScript.TypeChecker.Monad
@@ -271,8 +272,8 @@ infer' v@(Constructor c) = do
   env <- getEnv
   case M.lookup c (dataConstructors env) of
     Nothing -> throwError . strMsg $ "Constructor " ++ show c ++ " is undefined"
-    Just (_, _, ty) -> do ty' <- introduceSkolemScope <=< replaceAllTypeSynonyms $ ty
-                          return $ TypedValue True v ty'
+    Just (_, _, ty) -> do (v', ty') <- sndM (introduceSkolemScope <=< replaceAllTypeSynonyms) <=< instantiatePolyTypeWithUnknowns v $ ty
+                          return $ TypedValue True v' ty'
 infer' (Case vals binders) = do
   ts <- mapM infer vals
   ret <- fresh
@@ -581,18 +582,14 @@ containsTypeSynonyms = everythingOnTypes (||) go where
 checkProperties :: [(String, Expr)] -> Type -> Bool -> UnifyT Type Check [(String, Expr)]
 checkProperties ps row lax = let (ts, r') = rowToList row in go ps ts r' where
   go [] [] REmpty = return []
-  go [] [] u@(TUnknown _) = do u =?= REmpty
-                               return []
+  go [] [] u@(TUnknown _) 
+    | lax = return []
+    | otherwise = do u =?= REmpty
+                     return []
   go [] [] Skolem{} | lax = return []
   go [] ((p, _): _) _ | lax = return []
                       | otherwise = throwError $ mkErrorStack ("Object does not have property " ++ p) (Just (ExprError (ObjectLiteral ps)))
   go ((p,_):_) [] REmpty = throwError $ mkErrorStack ("Property " ++ p ++ " is not present in closed object type " ++ prettyPrintRow row) (Just (ExprError (ObjectLiteral ps)))
-  go ((p,v):ps') [] u@(TUnknown _) = do
-    v'@(TypedValue _ _ ty) <- infer v
-    rest <- fresh
-    u =?= RCons p ty rest
-    ps'' <- go ps' [] rest
-    return $ (p, v') : ps''
   go ((p,v):ps') ts r =
     case lookup p ts of
       Nothing -> do
