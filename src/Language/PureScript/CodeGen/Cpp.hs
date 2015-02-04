@@ -235,6 +235,7 @@ declarations (JSSequence s bs) = JSSequence s (map declarations bs)
 declarations (JSComment c e) = JSComment c (declarations e)
 -- declarations (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
 --   | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
+declarations (JSVariableIntroduction var js@(Just JSApp{})) = JSNoOp
 declarations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ declarations expr)
 declarations (JSFunction fn args _) = JSFunction fn args JSNoOp
 declarations dat@(JSData _ _ _ _) = dat
@@ -246,6 +247,7 @@ implementations (JSSequence s bs) = JSSequence s (map implementations bs)
 implementations (JSComment c e) = JSComment c (implementations e)
 -- implementations (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
 --   | ((last $ words arg) == arg') = JSNoOp
+implementations (JSVariableIntroduction var js@(Just JSApp{})) = JSNoOp
 implementations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = JSNoOp
 implementations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ implementations expr)
 implementations (JSData _ _ _ _) = JSNoOp
@@ -257,6 +259,7 @@ templates (JSSequence s bs) = JSSequence s (map templates bs)
 templates (JSComment c e) = JSComment c (templates e)
 -- templates (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
 --   | ((last $ words arg) == arg') = JSNoOp
+templates (JSVariableIntroduction var js@(Just JSApp{})) = JSVariableIntroduction var js
 templates (JSVariableIntroduction _ (Just (JSFunction (Just name) _ JSNoOp))) = JSNoOp
 templates (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
   | '|' `elem` name, ((last $ words arg) == arg')
