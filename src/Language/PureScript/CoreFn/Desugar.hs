@@ -17,6 +17,7 @@ module Language.PureScript.CoreFn.Desugar (moduleToCoreFn) where
 import Data.Function (on)
 import Data.List (sort, sortBy, nub)
 import Data.Maybe (mapMaybe)
+import Data.Char (toUpper)
 import qualified Data.Map as M
 
 import Control.Arrow (second, (***))
@@ -108,7 +109,8 @@ declToCoreFn _ ss com (A.DataDeclaration Newtype tyName parms [(ctor, tys)]) =
     -- rowType [] = REmpty
     -- rowType (t:ts) = RCons [] t (rowType ts)
     annotTyName = ProperName $ (runProperName tyName) ++ ('@' : asTemplate)
-    asTemplate = show $ map fst parms
+    asTemplate = show $ map (cap . fst) parms
+    cap (c:cs) = toUpper c : cs
 declToCoreFn _ _ _ d@(A.DataDeclaration Newtype _ _ _) =
   error $ "Found newtype with multiple constructors: " ++ show d
 declToCoreFn _ ss com (A.DataDeclaration Data tyName parms ctors) =
@@ -119,8 +121,8 @@ declToCoreFn _ ss com (A.DataDeclaration Data tyName parms ctors) =
     rowType [] = REmpty
     rowType (t:ts) = RCons [] t (rowType ts)
     annotTyName = ProperName $ (runProperName tyName) ++ ('@' : asTemplate)
-    asTemplate = show $ map fst parms
-
+    asTemplate = show $ map (cap . fst) parms
+    cap (c:cs) = toUpper c : cs
 declToCoreFn env ss _   (A.DataBindingGroupDeclaration ds) = concatMap (declToCoreFn env ss []) ds
 declToCoreFn env ss com (A.ValueDeclaration name _ _ (Right e)) =
   [NonRec name (exprToCoreFn env ss com Nothing e)]

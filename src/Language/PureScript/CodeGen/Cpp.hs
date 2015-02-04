@@ -286,8 +286,10 @@ dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType
     mkClass s = templateDecl ++ "struct " ++ rmType s ++ " { virtual ~" ++ rmType s ++ "(){} };"
       where
         templateDecl
-          | t@('[':_:_:_) <- drop 1 $ getType s = "template " ++ '<' : intercalate ", " (("typename " ++) <$> read t) ++ "> "
+          | t@('[':_:_:_) <- drop 1 $ getType s
+            = "template " ++ '<' : intercalate ", " (tname <$> read t) ++ "> "
           | otherwise = []
+        tname (s:ss) = "typename " ++ (toUpper s : ss)
 -----------------------------------------------------------------------------------------------------------------------
 dataType :: Bind Ann -> String
 dataType (NonRec _ (Constructor (_, _, _, Just IsNewtype) _ _ _)) = []

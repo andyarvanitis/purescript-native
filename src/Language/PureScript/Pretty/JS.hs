@@ -19,7 +19,7 @@ module Language.PureScript.Pretty.JS (
 
 import Data.List
 import Data.Maybe (fromMaybe)
-import Data.Char (isAlphaNum)
+import Data.Char (isAlphaNum, toUpper)
 
 import Control.Applicative
 import Control.Arrow ((<+>))
@@ -426,8 +426,10 @@ notNoOp _ = True
 templateDecl :: String -> String -> String
 templateDecl sp s
   | t@('[':_:_:_) <- drop 1 $ dropWhile (/='@') s =
-      "template " ++ '<' : intercalate ", " (("typename " ++) <$> read t) ++ ">\n" ++ sp
+      "template " ++ '<' : intercalate ", " (tname <$> read t) ++ ">\n" ++ sp
   | otherwise = []
+  where
+    tname (s:ss) = "typename " ++ (toUpper s : ss)
 
 dataType :: String -> String
 dataType s = takeWhile (/='@') s ++ case ty of
