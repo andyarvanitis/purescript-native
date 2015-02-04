@@ -239,8 +239,8 @@ valueToJs m e@App{} = do
   instFn :: Qualified Ident -> [Expr Ann] -> [Expr Ann]
   instFn name = map $ convExpr (convType $ typeclassTypes e name)
 
-  specialized (JSVar name) = JSVar $ (rmType name) ++ templateSpec (declFnTy m e) (exprFnTy m e)
-  specialized' = pure . specialized
+  specialized (JSVar name) = rmType name ++ templateSpec (declFnTy m e) (exprFnTy m e) ++ getType name
+  specialized' = pure . JSVar . specialized
 
   isQualified :: Expr Ann -> Bool
   isQualified (Var _ (Qualified (Just _) _)) = True
