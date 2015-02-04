@@ -396,9 +396,15 @@ templateArgs' _ t1 t2 = error $ "Mismatched type structure! " ++ show t1 ++ " ; 
 exprFnTy :: ModuleName -> Expr Ann -> Maybe Type
 exprFnTy m (App (_, _, Just ty, _) val a)
   | Just nextTy <- exprFnTy m val = Just nextTy
-  | Just a' <- declFnTy m a,
+  | Just a' <- argty m a,
     Just b' <- mktype m ty = Just $ Function a' b'
-  | Just b' <- mktype m ty = Just b'
+  | Just t' <- mktype m ty = Just t'
+  where
+    argty m (App (_, _, Just tt, _) _ _) = mktype m tt
+    argty m (App (_, _, Nothing, _) val _) = argty m val
+    argty m (Var (_, _, Just ty, _) _) = mktype m ty
+    argty _ _ = Nothing
+exprFnTy m (App (_, _, Nothing, _) val _) = exprFnTy m val
 exprFnTy _ _ = Nothing
 
 -----------------------------------------------------------------------------------------------------------------------
