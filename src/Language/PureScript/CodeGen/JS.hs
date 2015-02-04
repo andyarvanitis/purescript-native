@@ -211,7 +211,7 @@ valueToJs m e@App{} = do
       return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames m e name')) $
                toVarDecl <$> zip (names ty) convArgs
 
-    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> if typeinst $ head args then
+    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> if isQualified f || (typeinst $ head args) then
                                                           specialized' =<< valueToJs m f
                                                         else valueToJs m f
   where
@@ -241,6 +241,10 @@ valueToJs m e@App{} = do
 
   specialized (JSVar name) = JSVar $ (rmType name) ++ templateSpec (declFnTy m e) (exprFnTy m e)
   specialized' = pure . specialized
+
+  isQualified :: Expr Ann -> Bool
+  isQualified (Var _ (Qualified (Just _) _)) = True
+  isQualified _ = False
 
 valueToJs m (Var (_, _, ty, Just IsNewtype) ident) =
   return $ JSVar . mkDataFn $ qualifiedToStr m (mkUnique' . mkUnique') ident ++ (getSpecialization $ fnRetStr m ty)
