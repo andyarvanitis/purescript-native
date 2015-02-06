@@ -19,7 +19,7 @@ module Language.PureScript.Pretty.JS (
 
 import Data.List
 import Data.Maybe (fromMaybe)
-import Data.Char (isAlphaNum, toUpper)
+import Data.Char (isAlphaNum, isDigit, toUpper)
 
 import Control.Applicative
 import Control.Arrow ((<+>))
@@ -87,7 +87,7 @@ literals = mkPattern' match
         , prettyStatements $ sts ++ if (not . null) s then [JSRaw "//"] else []
         ]
     else return []
-  match (JSVar ident) = return . filter (/='#') $ takeWhile (/='@') ident
+  match (JSVar ident) = return $ takeWhile (/='@') ident
   match (JSVariableIntroduction _ (Just js@(JSNamespace _ _))) = match js
   match (JSVariableIntroduction s (Just (JSSequence [] jss))) = match $ JSSequence s jss
   match (JSVariableIntroduction _ (Just js@(JSSequence _ _))) = match js
@@ -104,7 +104,7 @@ literals = mkPattern' match
                else
                  "auto " ++ last ws
     , return "("
-    , return $ intercalate ", " $ filter (/='#') <$> args
+    , return $ intercalate ", " $ cleanParams args
     , return ")"
     , return $ returnType name
     , if notNoOp sts then do
@@ -140,7 +140,7 @@ literals = mkPattern' match
          return $ indentString ++ "};"
     ]
   match (JSVariableIntroduction name (Just (JSData ctor typename fs fn))) =
-    let fields = filter (/='#') <$> fs in fmap concat $ sequence
+    let fields = cleanParams fs in fmap concat $ sequence
     [ do indentString <- currentIndent
          return $ templateDecl indentString typename
     , return "struct "
@@ -380,9 +380,9 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
                   , [ unary JSNew "new " ]
-                  , [ Wrap lam $ \(name, args) ret -> filter (/='#') $
+                  , [ Wrap lam $ \(name, args) ret -> let args' = cleanParams args in
                            "[=]"
-                        ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args) ++ ")"
+                        ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args') ++ ")"
                         ++ maybe "" returnType name
                         ++ " "
                         ++ ret ]
@@ -443,5 +443,19 @@ returnType fn
   | length (words fn) > 1, name@(_:_) <- stripped = " -> " ++ name
   | otherwise = []
   where
-    stripped = filter (/='#') . concat . init . filter (/="inline") . words $
+    stripped = cleanParam . concat . init . filter (/="inline") . words $
                  drop ((fromMaybe (-1) $ elemIndex '|' fn) + 1) fn
+
+cleanParam :: String -> String
+cleanParam s
+  | hs@(_:_) <- dropWhile (/='#') s = takeWhile (/='#') s ++ (cleanParam $ unhash hs)
+ where
+   unhash :: String -> String
+   unhash ('#':c:cs)
+     | str@(_:_) <- dropWhile isDigit (c:cs) = str
+     | otherwise = c:cs
+   unhash cs = cs
+cleanParam s = s
+
+cleanParams :: [String] -> [String]
+cleanParams = map cleanParam

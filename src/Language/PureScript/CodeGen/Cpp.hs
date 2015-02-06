@@ -17,7 +17,7 @@
 module Language.PureScript.CodeGen.Cpp where
 
 import Data.List (elemIndices, intercalate, nub, sort, sortBy)
-import Data.Char (isAlphaNum, toUpper)
+import Data.Char (isAlphaNum, isDigit, toUpper)
 import Data.Function (on)
 
 import Control.Applicative
@@ -97,6 +97,7 @@ data Type = Native String
           | Specialized Type [Type]
           | List Type
           | Template String
+          | ParamTemplate String [Type]
           deriving (Eq)
 
 -----------------------------------------------------------------------------------------------------------------------
@@ -109,7 +110,9 @@ instance Show Type where
   show (List t) = "list<" ++ show t ++ ">"
   show (Template (c:cs)) = '#' : toUpper c : cs
   show (Template []) = error "Bad template parameter"
-  -- show (Empty) = []
+  show (ParamTemplate name ts) = pname name ++ '<' : (intercalate "," $ map show ts) ++ ">"
+    where
+    pname (s:ss) = '#' : show (length ts) ++ toUpper s : ss
 
 -----------------------------------------------------------------------------------------------------------------------
 mktype :: ModuleName -> T.Type -> Maybe Type
@@ -147,7 +150,16 @@ mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
              a) = Just $ Native ("struct{" ++ typestr m a ++ "}")
 
-mktype m (T.TypeApp T.TypeVar{} b) = mktype m b
+
+mktype m app@(T.TypeApp a b)
+  | (name, tys@(_:_)) <- tyapp app [] = Just $ ParamTemplate name tys
+  where
+    tyapp :: T.Type -> [Type] -> (String, [Type])
+    tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (name, b':ts)
+    tyapp (T.TypeApp (T.Skolem name _ _) b) ts | Just b' <- mktype m b = (name, b':ts)
+    tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t' : ts)
+    tyapp _ _ = ([],[])
+
 mktype m (T.TypeApp T.Skolem{}  b) = mktype m b
 
 mktype m app@(T.TypeApp a b)
@@ -155,9 +167,6 @@ mktype m app@(T.TypeApp a b)
   | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Just $ Data (Specialized t ts)
   | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Just $ Data t
   | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Just $ Data (Specialized t ts)
-
-mktype m (T.TypeApp a b) | Just a' <- mktype m a, Just b' <- mktype m b = Just $ Function a' b'
-                         | otherwise = Nothing
 
 mktype m (T.ForAll _ ty _) = mktype m ty
 mktype _ (T.Skolem name _ _) = Just $ Template name
@@ -221,7 +230,12 @@ fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
 -----------------------------------------------------------------------------------------------------------------------
 templTypes :: String -> String
 templTypes s
-  | ('#' `elem` s) = intercalate ", " (("typename "++) <$> templParms s) ++ "|"
+  | ('#' `elem` s) = intercalate ", " (paramstr <$> templParms s) ++ "|"
+  where
+    paramstr name@(c:_) | isDigit c = (subtype $ takeWhile isDigit name) ++ "class " ++ dropWhile isDigit name
+    paramstr p = "typename " ++ dropWhile isDigit p
+    subtype p = "template <" ++ intercalate "," ((++) "typename " <$> mkTs p) ++ "> "
+    mkTs p = (('T' :) . show) <$> [1 .. read p]
 templTypes _ = []
 -----------------------------------------------------------------------------------------------------------------------
 templTypes' :: ModuleName -> Maybe T.Type -> String
@@ -366,7 +380,7 @@ getRet ('f':'n':'<':xs) = drop 1 $ afterAngles xs 1
 getRet xs = drop 1 $ dropWhile (/=',') xs
 -----------------------------------------------------------------------------------------------------------------------
 templParms :: String -> [String]
-templParms s = nub . sort $ (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
+templParms s = nub . sortBy (compare `on` dropWhile isDigit) $ (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
 
 extractTypes :: String -> [String]
 extractTypes = words . extractTypes'
@@ -391,11 +405,14 @@ extractTypes' (x:xs) = x : extractTypes' xs
 
 templateSpec :: Maybe Type -> Maybe Type -> String
 templateSpec (Just t1) (Just t2)
-  | args@(_:_) <- filter (/='#') . intercalate "," $ snd <$> templateArgs t1 t2 = '<' : args ++ ">"
+  | args@(_:_) <- intercalate "," $ (dropWhile isDigit . filter (/='#') . snd) <$> templateArgs t1 t2 = '<' : args ++ ">"
 templateSpec _ _ = []
 
 templateArgs :: Type -> Type -> [(String,String)]
-templateArgs t1 t2 = nub. sortBy (compare `on` fst) $ templateArgs' [] t1 t2
+templateArgs t1 t2 = nub . sortBy (compare `on` (clean . fst)) $ templateArgs' [] t1 t2
+  where
+    clean :: String -> String
+    clean = takeWhile (/='<') . dropWhile isDigit . drop 1
 
 templateArgs' :: [(String,String)] -> Type -> Type -> [(String,String)]
 templateArgs' args (Native t) (Native t') | t == t' = args
@@ -406,8 +423,11 @@ templateArgs' args (Specialized t ts) (Specialized t' ts') = args ++ (templateAr
 templateArgs' args (List t) (List t') = templateArgs' args t t'
 templateArgs' args a@(Template _) a'@(Template _) = args ++ [(show a, show a')]
 templateArgs' args a@(Template _) a' = args ++ [(show a, show a')]
+templateArgs' args (ParamTemplate name ts) (ParamTemplate name' ts') = args ++ (concat $ zipWith (templateArgs' []) ts ts')
+templateArgs' args a@(ParamTemplate name ts) a' = args ++ [(show a, show a')]
 -- templateArgs' args Empty Empty = args
 templateArgs' _ t1 t2 = error $ "Mismatched type structure! " ++ show t1 ++ " ; " ++ show t2
+
 -----------------------------------------------------------------------------------------------------------------------
 exprFnTy :: ModuleName -> Expr Ann -> Maybe Type
 exprFnTy m (App (_, _, Just ty, _) val a)
