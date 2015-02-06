@@ -103,16 +103,23 @@ data Type = Native String
 -----------------------------------------------------------------------------------------------------------------------
 instance Show Type where
   show (Native name) = name
-  show (Function a b) = "fn<" ++ show a ++ "," ++ show b ++ ">"
-  show (Data t) = "data<" ++ show t ++ ">"
+  show tt@(Function a b) = typeName tt ++ '<' : show a ++ "," ++ show b ++ ">"
+  show tt@(Data t) = typeName tt ++ '<' : show t ++ ">"
   show (Specialized t []) = show t
   show (Specialized t ts) = show t ++ '<' : (intercalate "," $ map show ts) ++ ">"
-  show (List t) = "list<" ++ show t ++ ">"
-  show (Template (c:cs)) = '#' : toUpper c : cs
+  show tt@(List t) = typeName tt ++ '<' : show t ++ ">"
+  show tt@(Template (c:cs)) =  typeName tt ++ toUpper c : cs
   show (Template []) = error "Bad template parameter"
   show (ParamTemplate name ts) = pname name ++ '<' : (intercalate "," $ map show ts) ++ ">"
     where
     pname (s:ss) = '#' : show (length ts) ++ toUpper s : ss
+
+typeName :: Type -> String
+typeName Function{} = "fn"
+typeName Data{} = "data"
+typeName List{} = "list"
+typeName Template{} = "#"
+typeName _ = ""
 
 -----------------------------------------------------------------------------------------------------------------------
 mktype :: ModuleName -> T.Type -> Maybe Type
@@ -157,7 +164,7 @@ mktype m app@(T.TypeApp a b)
     tyapp :: T.Type -> [Type] -> (String, [Type])
     tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (name, b':ts)
     tyapp (T.TypeApp (T.Skolem name _ _) b) ts | Just b' <- mktype m b = (name, b':ts)
-    tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t' : ts)
+    tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t':ts)
     tyapp _ _ = ([],[])
 
 mktype m (T.TypeApp T.Skolem{}  b) = mktype m b
@@ -423,10 +430,26 @@ templateArgs' args (Specialized t ts) (Specialized t' ts') = args ++ (templateAr
 templateArgs' args (List t) (List t') = templateArgs' args t t'
 templateArgs' args a@(Template _) a'@(Template _) = args ++ [(show a, show a')]
 templateArgs' args a@(Template _) a' = args ++ [(show a, show a')]
-templateArgs' args (ParamTemplate name ts) (ParamTemplate name' ts') = args ++ (concat $ zipWith (templateArgs' []) ts ts')
-templateArgs' args a@(ParamTemplate name ts) a' = args ++ [(show a, show a')]
+templateArgs' args (ParamTemplate name ts) (ParamTemplate name' ts') = args ++ zip (show <$> ts) (show <$> ts')
+templateArgs' args a@(ParamTemplate name ts) a' = args ++ fromParamTemplate a a'
 -- templateArgs' args Empty Empty = args
 templateArgs' _ t1 t2 = error $ "Mismatched type structure! " ++ show t1 ++ " ; " ++ show t2
+
+fromParamTemplate :: Type -> Type -> [(String,String)]
+fromParamTemplate (ParamTemplate name [a, b]) t@(Function a' b') =
+  [ (name, typeName t)
+  , (show a, show a')
+  , (show b, show b')
+  ]
+fromParamTemplate (ParamTemplate name [a]) t@(List a') =
+  [ (name, typeName t)
+  , (show a, show a')
+  ]
+fromParamTemplate (ParamTemplate name [a]) t@(Data a') =
+  [ (name, typeName t)
+  , (show a, show a')
+  ]
+fromParamTemplate ts t = error $ show "Can't map types! " ++ show ts ++ " ; " ++ show t
 
 -----------------------------------------------------------------------------------------------------------------------
 exprFnTy :: ModuleName -> Expr Ann -> Maybe Type
