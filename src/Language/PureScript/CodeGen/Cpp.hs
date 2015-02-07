@@ -16,7 +16,7 @@
 
 module Language.PureScript.CodeGen.Cpp where
 
-import Data.List (elemIndices, intercalate, nub, sort, sortBy)
+import Data.List (elemIndices, intercalate, nub, nubBy, sortBy)
 import Data.Char (isAlphaNum, isDigit, toUpper)
 import Data.Function (on)
 
@@ -108,11 +108,11 @@ instance Show Type where
   show (Specialized t []) = show t
   show (Specialized t ts) = show t ++ '<' : (intercalate "," $ map show ts) ++ ">"
   show tt@(List t) = typeName tt ++ '<' : show t ++ ">"
-  show tt@(Template (c:cs)) =  typeName tt ++ toUpper c : cs
+  show tt@(Template name) =  typeName tt ++ capitalize name
   show (Template []) = error "Bad template parameter"
   show (ParamTemplate name ts) = pname name ++ '<' : (intercalate "," $ map show ts) ++ ">"
     where
-    pname (s:ss) = '#' : show (length ts) ++ toUpper s : ss
+    pname s = '#' : show (length ts) ++ capitalize s
 
 typeName :: Type -> String
 typeName Function{} = "fn"
@@ -167,7 +167,7 @@ mktype m app@(T.TypeApp a b)
     tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t':ts)
     tyapp _ _ = ([],[])
 
-mktype m (T.TypeApp T.Skolem{}  b) = mktype m b
+mktype m (T.TypeApp T.Skolem{} b) = mktype m b
 
 mktype m app@(T.TypeApp a b)
   | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Just $ Data t
@@ -310,7 +310,7 @@ dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType
           | t@('[':_:_:_) <- drop 1 $ getType s
             = "template " ++ '<' : intercalate ", " (tname <$> read t) ++ "> "
           | otherwise = []
-        tname (s:ss) = "typename " ++ (toUpper s : ss)
+        tname s = "typename " ++ capitalize s
 -----------------------------------------------------------------------------------------------------------------------
 dataType :: Bind Ann -> String
 dataType (NonRec _ (Constructor (_, _, _, Just IsNewtype) _ _ _)) = []
@@ -379,15 +379,28 @@ afterAngles ('>':xs) n = afterAngles xs (n-1)
 afterAngles (_:xs)   n = afterAngles xs n
 -----------------------------------------------------------------------------------------------------------------------
 getArg :: String -> String
-getArg ('f':'n':'<':xs) = "fn<" ++ fromAngles xs 1
+getArg ('f':'n':'<':xs) = typeName (Function {}) ++ '<' : fromAngles xs 1
+getArg xs
+  | xs' <- takeWhile (/=',') xs,
+   '<' `elem` xs' = takeWhile (/='<') xs ++ '<' : fromAngles (drop 1 $ dropWhile (/='<') xs) 1
 getArg xs = takeWhile (/=',') xs
 -----------------------------------------------------------------------------------------------------------------------
 getRet :: String -> String
 getRet ('f':'n':'<':xs) = drop 1 $ afterAngles xs 1
+getRet xs
+  | xs' <- takeWhile (/=',') xs,
+   '<' `elem` xs' = drop 1 $ afterAngles (drop 1 $ dropWhile (/='<') xs) 1
 getRet xs = drop 1 $ dropWhile (/=',') xs
 -----------------------------------------------------------------------------------------------------------------------
 templParms :: String -> [String]
-templParms s = nub . sortBy (compare `on` dropWhile isDigit) $ (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
+templParms s = nub' . sortBy (compare `on` dropWhile isDigit) $
+                 (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
+  where
+    nub' :: [String] -> [String]
+    nub' (s1@(h1:_):s2:ss)
+      | (dropWhile isDigit s1) == (dropWhile isDigit s2) = nub' $ (if isDigit h1 then s1 else s2) : ss
+    nub' (s:ss) = s : nub' ss
+    nub' _ = []
 
 extractTypes :: String -> [String]
 extractTypes = words . extractTypes'
@@ -412,11 +425,11 @@ extractTypes' (x:xs) = x : extractTypes' xs
 
 templateSpec :: Maybe Type -> Maybe Type -> String
 templateSpec (Just t1) (Just t2)
-  | args@(_:_) <- intercalate "," $ (dropWhile isDigit . filter (/='#') . snd) <$> templateArgs t1 t2 = '<' : args ++ ">"
+  | args@(_:_) <- intercalate "," $ snd <$> templateArgs t1 t2 = '<' : args ++ ">"
 templateSpec _ _ = []
 
 templateArgs :: Type -> Type -> [(String,String)]
-templateArgs t1 t2 = nub . sortBy (compare `on` (clean . fst)) $ templateArgs' [] t1 t2
+templateArgs t1 t2 = nubBy ((==) `on` (clean . fst)) . sortBy (compare `on` (clean . fst)) $ templateArgs' [] t1 t2
   where
     clean :: String -> String
     clean = takeWhile (/='<') . dropWhile isDigit . drop 1
@@ -431,22 +444,22 @@ templateArgs' args (List t) (List t') = templateArgs' args t t'
 templateArgs' args a@(Template _) a'@(Template _) = args ++ [(show a, show a')]
 templateArgs' args a@(Template _) a' = args ++ [(show a, show a')]
 templateArgs' args (ParamTemplate name ts) (ParamTemplate name' ts') = args ++ zip (show <$> ts) (show <$> ts')
-templateArgs' args a@(ParamTemplate name ts) a' = args ++ fromParamTemplate a a'
+templateArgs' args a@(ParamTemplate _ _) a' = args ++ fromParamTemplate a a'
 -- templateArgs' args Empty Empty = args
 templateArgs' _ t1 t2 = error $ "Mismatched type structure! " ++ show t1 ++ " ; " ++ show t2
 
 fromParamTemplate :: Type -> Type -> [(String,String)]
 fromParamTemplate (ParamTemplate name [a, b]) t@(Function a' b') =
-  [ (name, typeName t)
+  [ (capitalize name, typeName t)
   , (show a, show a')
   , (show b, show b')
   ]
 fromParamTemplate (ParamTemplate name [a]) t@(List a') =
-  [ (name, typeName t)
+  [ (capitalize name, typeName t)
   , (show a, show a')
   ]
 fromParamTemplate (ParamTemplate name [a]) t@(Data a') =
-  [ (name, typeName t)
+  [ (capitalize name, typeName t)
   , (show a, show a')
   ]
 fromParamTemplate ts t = error $ show "Can't map types! " ++ show ts ++ " ; " ++ show t
@@ -499,4 +512,7 @@ skolemTo _ ty = ty
 typeclassTypeNames :: ModuleName -> Expr Ann -> Qualified Ident -> [String]
 typeclassTypeNames m e ident = fst <$> typeclassTypes e ident
 
+capitalize :: String -> String
+capitalize (c:cs) = toUpper c : cs
+capitalize s = s
 -----------------------------------------------------------------------------------------------------------------------
