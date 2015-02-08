@@ -108,21 +108,40 @@ nonRecToJS mp ident val = do
     expr var (JSFunction orig args sts) = JSFunction (fnName orig (identToJs var)) args sts
     expr var js@(JSVar _) = expr' var js
     -- expr var (JSNamespace [] jss) = JSNamespace [] (expr' var <$> jss)
+    expr var js@(JSApp _ _) = expr' var js
     expr var (JSSequence s jss) = JSSequence s (expr' var <$> jss)
     expr var js = js
 
     expr' :: Ident -> JS -> JS
     expr' var (JSVar name)
-      | ('@':'f':'n':'<':ss) <- getType name, typ <- init ss
-        = JSFunction (Just (toTempl name ++ ' ' : getRet typ ++ ' ' : identToJs var))
-            [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp (JSVar name) [JSVar "arg"]])
+      | ('@':'f':'n':'<':_) <- getType name
+        = appfn var name (JSVar name)
     expr' _ (JSVariableIntroduction var (Just js)) = JSVariableIntroduction var (Just $ expr' (Ident var) js)
+    expr' var js@(JSApp _ _)
+      | (name, '@':'f':'n':'<':ss, n) <- unApp js 0, n > 0, typ <- rty (init ss) n
+        = appfn var (name ++ '@' : typ) js
+      where
+        unApp :: JS -> Int -> (String, String, Int)
+        unApp (JSApp a _) n = unApp a (n + 1)
+        unApp (JSVar v) n = (rmType v, getType v, n)
+        unApp _ n = ([], [], n)
+        rty :: String -> Int -> String
+        rty s 0 = s
+        rty s 1 = getRet s
+        rty s n | ('f':'n':'<':ss) <- init (getRet s) = rty ss (n - 1)
+        rty s _ = s
     expr' _ js = js
 
     toTempl name
       | (App (_, _, Just (T.TypeApp (T.TypeConstructor{}) T.RCons{}), _) _ _) <- val,
         fn <- templTypes name,  not ('|' `elem` fn) = "|"
       | otherwise = templTypes name
+
+    appfn var fn js
+      | ('@':'f':'n':'<':ss) <- getType fn, typ <- init ss
+        = JSFunction (Just (toTempl fn ++ ' ' : getRet typ ++ ' ' : identToJs var))
+            [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp js [JSVar "arg"]])
+    appfn _ _ js = js
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a variable based on a
