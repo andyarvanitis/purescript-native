@@ -378,7 +378,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
   operators =
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "." ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
-                  , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
+                  , [ Wrap app $ \args val -> filter (/='#') val ++ "(" ++ args ++ ")" ]
                   , [ unary JSNew "new " ]
                   , [ Wrap lam $ \(name, args) ret -> let args' = cleanParams args in
                            "[=]"

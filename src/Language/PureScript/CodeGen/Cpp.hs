@@ -429,10 +429,10 @@ templateSpec (Just t1) (Just t2)
 templateSpec _ _ = []
 
 templateArgs :: Type -> Type -> [(String,String)]
-templateArgs t1 t2 = nubBy ((==) `on` (clean . fst)) . sortBy (compare `on` (clean . fst)) $ templateArgs' [] t1 t2
+templateArgs t1 t2 = nubBy ((==) `on` (normalize . fst)) . sortBy (compare `on` (normalize . fst)) $ templateArgs' [] t1 t2
   where
-    clean :: String -> String
-    clean = takeWhile (/='<') . dropWhile isDigit . drop 1
+    normalize :: String -> String
+    normalize = takeWhile (/='<') . dropWhile isDigit . drop 1
 
 templateArgs' :: [(String,String)] -> Type -> Type -> [(String,String)]
 templateArgs' args (Native t) (Native t') | t == t' = args
