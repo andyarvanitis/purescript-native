@@ -150,8 +150,8 @@ accessorString prop | identNeedsEscaping prop = JSIndexer (JSStringLiteral prop)
 valueToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> Expr Ann -> SupplyT m JS
 valueToJs m (Literal _ l) =
   literalToValueJS m l
-valueToJs m (Var (_, _, _, Just (IsConstructor _ 0)) name) =
-  return $ JSAccessor "value" $ qualifiedToJS m id name
+valueToJs m (Var (_, _, ty, Just (IsConstructor _ 0)) name) =
+  return $ JSApp (JSVar . mkDataFn $ qualifiedToStr m mkUnique' name ++ (getSpecialization $ fnRetStr m ty)) []
 valueToJs m (Var (_, _, ty, Just (IsConstructor _ _)) name) =
   return $ JSVar . mkDataFn $ qualifiedToStr m mkUnique' name ++ (getSpecialization $ fnRetStr m ty)
 valueToJs m (Accessor _ prop val) =
