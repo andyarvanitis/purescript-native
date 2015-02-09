@@ -105,9 +105,7 @@ nonRecToJS mp ident val = do
   return $ JSVariableIntroduction (identToJs ident) (Just $ expr ident js)
   where
     expr :: Ident -> JS -> JS
-    expr var (JSFunction orig args sts) = JSFunction (fnName orig (identToJs var)) args sts
     expr var js@(JSVar _) = expr' var js
-    -- expr var (JSNamespace [] jss) = JSNamespace [] (expr' var <$> jss)
     expr var js@(JSApp _ _) = expr' var js
     expr var (JSSequence s jss) = JSSequence s (expr' var <$> jss)
     expr var js = js
@@ -213,7 +211,7 @@ valueToJs m (Abs (_, _, ty, _) arg val) = do
   ret <- valueToJs m val
   return $ JSFunction (Just annotatedName) [fnArgStr m ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
   where
-    annotatedName = templTypes' m ty ++ fnRetStr m ty
+    annotatedName = templTypes' m ty ++ fnRetStr m ty ++ " _"
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
@@ -244,7 +242,7 @@ valueToJs m e@App{} = do
   toVarDecl (nm, js) =
     JSVariableIntroduction (identToJs $ Ident nm)
                            (Just $ case js of
-                                     JSFunction orig ags sts -> JSFunction (toTempl $ fnName orig nm) ags sts
+                                     JSFunction orig ags sts -> JSFunction (toTempl orig) ags sts
                                      _ -> js)
     where
       toTempl fn | fn' <- fromMaybe "" fn = if '|' `elem` fn' then fn else Just ('|' : fn')
@@ -285,7 +283,8 @@ valueToJs m (Let _ ds val) = do
 valueToJs m (Constructor (_, _, Just ty, Just IsNewtype) (ProperName typename) (ProperName ctor) _) =
   return $ JSData (mkUnique ctor) typename [typestr m ty] JSNoOp
 valueToJs m (Constructor (_, _, ty, _) (ProperName typename) (ProperName ctor) arity) =
-    return $ JSData (mkUnique ctor) typename (fields ty) (JSVariableIntroduction [] $ Just $ mkfn fname (fields ty))
+    return $ JSData (mkUnique ctor) typename (fields ty) $
+               JSVariableIntroduction dataCtorName (Just . mkfn fname $ fields ty)
   where
     fields :: Maybe T.Type -> [String]
     fields ty = map (\(t,n) -> t ++ ' ' : ("value" ++ show n)) $ zip (types ty) ([0..] :: [Int])
@@ -300,7 +299,7 @@ valueToJs m (Constructor (_, _, ty, _) (ProperName typename) (ProperName ctor) a
     mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
     mkfn Nothing [] = JSApp (JSVar $ mkData (mkUnique ctor)) (JSVar <$> last . words <$> fields ty)
 
-    fname = Just $ fty (types ty) ++ ' ': dataCtorName;
+    fname = Just $ fty (types ty) ++ " _"
 
     fty :: [String] -> String
     fty [] = asDataTy $ mkUnique ctor

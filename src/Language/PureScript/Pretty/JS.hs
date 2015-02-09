@@ -91,22 +91,19 @@ literals = mkPattern' match
   match (JSVariableIntroduction _ (Just js@(JSNamespace _ _))) = match js
   match (JSVariableIntroduction s (Just (JSSequence [] jss))) = match $ JSSequence s jss
   match (JSVariableIntroduction _ (Just js@(JSSequence _ _))) = match js
-  match (JSVariableIntroduction _ (Just (JSFunction (Just name) args sts))) = fmap concat $ sequence
-    [ if null (dropWhile (/= '|') name) then
+  match (JSVariableIntroduction name (Just (JSFunction (Just fname) args sts))) = fmap concat $ sequence
+    [ if null (dropWhile (/= '|') fname) then
         return []
       else do
         indentString <- currentIndent
-        return $ "template <" ++ (takeWhile (/= '|') name) ++ ">"
+        return $ "template <" ++ (takeWhile (/= '|') fname) ++ ">"
               ++ if notNoOp sts then '\n':indentString else " "
-    , return $ let ws = words name in
-               if "inline" `elem` ws then
-                 "inline auto " ++ last (filter (/="inline") ws)
-               else
-                 "auto " ++ last ws
+    , return "auto "
+    , return name
     , return "("
     , return $ intercalate ", " $ cleanParams args
     , return ")"
-    , return $ returnType name
+    , return $ returnType fname
     , if notNoOp sts then do
         s <- prettyPrintJS' sts
         return $ ' ' : s ++ " "
@@ -130,8 +127,8 @@ literals = mkPattern' match
     , return "\n"
     , withIndent $ do
          indentString <- currentIndent
-         f <- prettyPrintJS' $ JSVariableIntroduction [] $ Just $
-                JSFunction (Just $ typestr ++ " ctor") [typestr ++ ' ' : "value"] $
+         f <- match $ JSVariableIntroduction "ctor" $ Just $
+                JSFunction (Just $ typestr ++ " _") [typestr ++ ' ' : "value"] $
                   JSBlock [JSReturn (JSApp (JSVar typestr) [JSVar "value"])]
          return $ indentString ++ "static " ++ f
     , currentIndent
@@ -162,7 +159,7 @@ literals = mkPattern' match
     , currentIndent
     , currentIndent
     , withIndent $ do
-        f <- prettyPrintJS' fn
+        f <- match fn
         return $ "static " ++ f
     , return "\n"
     , do
@@ -385,7 +382,8 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                         ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args') ++ ")"
                         ++ maybe "" returnType name
                         ++ " "
-                        ++ ret ]
+                        ++ ret
+                    ]
                   , [ AssocR cast $ \typ val -> "cast<" ++ typ ++ ">" ++ parens val ]
                   , [ binary    LessThan             "<" ]
                   , [ binary    LessThanOrEqualTo    "<=" ]
@@ -443,7 +441,7 @@ returnType fn
   | length (words fn) > 1, name@(_:_) <- stripped = " -> " ++ name
   | otherwise = []
   where
-    stripped = cleanParam . concat . init . filter (/="inline") . words $
+    stripped = cleanParam . intercalate " " . init . filter (/="inline") . words $
                  drop ((fromMaybe (-1) $ elemIndex '|' fn) + 1) fn
 
 cleanParam :: String -> String

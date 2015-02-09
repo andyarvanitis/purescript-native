@@ -231,10 +231,6 @@ qualDataTypeName m (T.TypeConstructor typ) = intercalate "::" . words $ brk tnam
     brk = map (\c -> if c=='.' then ' ' else c)
 qualDataTypeName _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
-fnName :: Maybe String -> String -> Maybe String
-fnName Nothing name = Just name
-fnName (Just t) name = Just (t ++ ' ' : (identToJs $ Ident name))
------------------------------------------------------------------------------------------------------------------------
 templTypes :: String -> String
 templTypes s
   | ('#' `elem` s) = intercalate ", " (paramstr <$> templParms s) ++ "|"
@@ -293,9 +289,9 @@ templates (JSVariableIntroduction var js@(Just JSStringLiteral{})) = JSVariableI
 templates (JSVariableIntroduction var js@(Just JSBooleanLiteral{})) = JSVariableIntroduction var js
 templates (JSVariableIntroduction var js@(Just JSArrayLiteral{})) = JSVariableIntroduction var js
 templates (JSVariableIntroduction _ (Just (JSFunction (Just name) _ JSNoOp))) = JSNoOp
-templates (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
-  | '|' `elem` name, ((last $ words arg) == arg')
-  = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
+templates (JSVariableIntroduction var js@(Just (JSFunction (Just name) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
+  | '|' `elem` name, (last $ words arg) == arg'
+  = JSVariableIntroduction ("inline " ++ var) js
 templates imp@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = imp
 templates (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ templates expr)
 templates _ = JSNoOp
