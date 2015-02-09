@@ -492,3 +492,7 @@ capitalize :: String -> String
 capitalize (c:cs) = toUpper c : cs
 capitalize s = s
 -----------------------------------------------------------------------------------------------------------------------
+isPrelude :: ModuleName -> Bool
+isPrelude (ModuleName [ProperName "Prelude"]) = True
+isPrelude _ = False
+-----------------------------------------------------------------------------------------------------------------------

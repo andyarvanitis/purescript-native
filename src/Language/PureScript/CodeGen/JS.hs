@@ -63,31 +63,30 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
                   ++ (templates <$> optimized)
   let moduleBody = implementations <$> optimized
   let exps' = JSObjectLiteral $ (runIdent &&& JSVar . identToJs) <$> exps
-  return $ -- case optionsAdditional opts of
---    MakeOptions -> moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
---    CompileOptions ns _ _ | not isModuleEmpty ->
-      -- headerPreamble
-      []
-      ++ [ JSRaw $ "#ifndef " ++ moduleNameToJs name ++ "_H"
+  return $
+         [ JSRaw $ "#ifndef " ++ moduleNameToJs name ++ "_H"
          , JSRaw $ "#define " ++ moduleNameToJs name ++ "_H\n"
+         ]
+      ++ (if isPrelude name then headerPreamble else [])
+      ++ jsImports
+      ++ [ JSRaw "//"
          , JSNamespace (moduleNameToJs name) moduleHeader
          , JSRaw $ "#endif // " ++ moduleNameToJs name ++ "_H"
          , JSEndOfHeader
          ]
-      ++ [JSNamespace (moduleNameToJs name) moduleBody]
---    _ -> []
-
+      ++ [ importToJs opts name
+         , JSRaw "//"
+         , JSNamespace (moduleNameToJs name) moduleBody
+         ]
 -- |
 -- Generates Javascript code for a module import.
 --
 importToJs :: Options mode -> ModuleName -> JS
 importToJs opts mn =
-  JSVariableIntroduction (moduleNameToJs mn) (Just moduleBody)
+  JSRaw $ "#include " ++ '"' : (dotsTo '/' $ runModuleName mn) ++ ".hh\""
   where
-  moduleBody = case optionsAdditional opts of
-    MakeOptions -> JSApp (JSVar "require") [JSStringLiteral (runModuleName mn)]
-    CompileOptions ns _ _ -> JSAccessor (moduleNameToJs mn) (JSVar ns)
-
+    dotsTo :: Char -> String -> String
+    dotsTo chr = map (\c -> if c == '.' then chr else c)
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a declaration
 --
