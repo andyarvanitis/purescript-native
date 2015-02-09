@@ -66,10 +66,15 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   return $ -- case optionsAdditional opts of
 --    MakeOptions -> moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
 --    CompileOptions ns _ _ | not isModuleEmpty ->
-      headerPreamble
-      ++ [JSNamespace (moduleNameToJs name ++ " /* module header */") (moduleHeader)
-        , JSRaw "// end of header"]
-      ++ [JSNamespace (moduleNameToJs name ++ " /* module source */") (moduleBody)]
+      -- headerPreamble
+      []
+      ++ [ JSRaw $ "#ifndef " ++ moduleNameToJs name ++ "_H"
+         , JSRaw $ "#define " ++ moduleNameToJs name ++ "_H\n"
+         , JSNamespace (moduleNameToJs name) moduleHeader
+         , JSRaw $ "#endif // " ++ moduleNameToJs name ++ "_H"
+         , JSEndOfHeader
+         ]
+      ++ [JSNamespace (moduleNameToJs name) moduleBody]
 --    _ -> []
 
 -- |

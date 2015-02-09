@@ -248,6 +248,7 @@ literals = mkPattern' match
   --   removeComments (c : s) = c : removeComments s
   --
   --   removeComments [] = []
+  match JSEndOfHeader = return []
   match (JSRaw js) = return js
   match JSNoOp = return []
   match _ = mzero

@@ -161,11 +161,13 @@ make outputDir opts ms prefix = do
   toRebuild <- foldM (\s (Module moduleName' _ _) -> do
     let filePath = dotsTo '/' $ runModuleName moduleName'
 
-        jsFile = outputDir </> filePath </> (last . words . dotsTo ' ' $ runModuleName moduleName') ++ ".cc"
+        fileBase = outputDir </> filePath </> (last . words . dotsTo ' ' $ runModuleName moduleName')
+        srcFile = fileBase ++ ".cc"
+        headerFile = fileBase ++ ".hh"
         externsFile = outputDir </> filePath </> "externs.purs"
         inputFile = fromMaybe (error "Module has no filename in 'make'") $ M.lookup moduleName' filePathMap
 
-    jsTimestamp <- getTimestamp jsFile
+    jsTimestamp <- getTimestamp srcFile
     externsTimestamp <- getTimestamp externsFile
     inputTimestamp <- traverseEither getTimestamp inputFile
 
@@ -189,7 +191,9 @@ make outputDir opts ms prefix = do
     go env' ms'
   go env ((True, m@(Module moduleName' _ exps)) : ms') = do
     let filePath = dotsTo '/' $ runModuleName moduleName'
-        jsFile = outputDir </> filePath </> (last . words . dotsTo ' ' $ runModuleName moduleName') ++ ".cc"
+        fileBase = outputDir </> filePath </> (last . words . dotsTo ' ' $ runModuleName moduleName')
+        srcFile = fileBase ++ ".cc"
+        headerFile = fileBase ++ ".hh"
         externsFile = outputDir </> filePath </> "externs.purs"
 
     lift . progress $ "Compiling " ++ runModuleName moduleName'
@@ -202,11 +206,18 @@ make outputDir opts ms prefix = do
     let corefn = CoreFn.moduleToCoreFn env' mod'
     let [renamed] = renameInModules [corefn]
 
-    pjs <- prettyPrintJS <$> moduleToJs opts renamed
-    let js = unlines $ map ("// " ++) prefix ++ [pjs]
+    jss <- moduleToJs opts renamed
+    let (hdrs,srcs) = span (/= JSEndOfHeader) jss
+
+    psrcs <- prettyPrintJS <$> pure srcs
+    phdrs <- prettyPrintJS <$> pure hdrs
+
+    let src = unlines $ map ("// " ++) prefix ++ [psrcs]
+    let hdr = unlines $ map ("// " ++) prefix ++ [phdrs]
     let exts = unlines $ map ("-- " ++) prefix ++ [moduleToPs mod' env']
 
-    lift $ writeTextFile jsFile js
+    lift $ writeTextFile srcFile src
+    lift $ writeTextFile headerFile hdr
     lift $ writeTextFile externsFile exts
 
     go env' ms'

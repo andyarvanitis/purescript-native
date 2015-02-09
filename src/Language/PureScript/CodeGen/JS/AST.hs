@@ -260,6 +260,10 @@ data JS
   --
   | JSNoOp
   -- |
+  -- Marker for header/source split
+  --
+  | JSEndOfHeader
+  -- |
   -- Raw Javascript (generated when parsing fails for an inline foreign import declaration)
   --
   | JSRaw String
