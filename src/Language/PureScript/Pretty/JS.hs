@@ -19,7 +19,7 @@ module Language.PureScript.Pretty.JS (
 
 import Data.List
 import Data.Maybe (fromMaybe)
-import Data.Char (isAlphaNum, isDigit, toUpper)
+import Data.Char (isDigit, toUpper)
 
 import Control.Applicative
 import Control.Arrow ((<+>))

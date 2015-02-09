@@ -159,11 +159,11 @@ mktype m (T.TypeApp
 
 
 mktype m app@(T.TypeApp a b)
-  | (name, tys@(_:_)) <- tyapp app [] = Just $ ParamTemplate name tys
+  | (name, tys@(_:_)) <- tyapp app [] = Just $ ParamTemplate (identToJs $ Ident name) tys
   where
     tyapp :: T.Type -> [Type] -> (String, [Type])
-    tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (name, b':ts)
-    tyapp (T.TypeApp (T.Skolem name _ _) b) ts | Just b' <- mktype m b = (name, b':ts)
+    tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (identToJs $ Ident name, b':ts)
+    tyapp (T.TypeApp (T.Skolem name _ _) b) ts | Just b' <- mktype m b = (identToJs $ Ident name, b':ts)
     tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t':ts)
     tyapp _ _ = ([],[])
 
@@ -176,8 +176,8 @@ mktype m app@(T.TypeApp a b)
   | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Just $ Data (Specialized t ts)
 
 mktype m (T.ForAll _ ty _) = mktype m ty
-mktype _ (T.Skolem name _ _) = Just $ Template name
-mktype _ (T.TypeVar name) = Just $ Template name
+mktype _ (T.Skolem name _ _) = Just $ Template (identToJs $ Ident name)
+mktype _ (T.TypeVar name) = Just $ Template (identToJs $ Ident name)
 mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a)
 mktype m (T.ConstrainedType _ ty) = mktype m ty
 mktype _ T.REmpty = Nothing
@@ -390,7 +390,7 @@ getRet xs = drop 1 $ dropWhile (/=',') xs
 -----------------------------------------------------------------------------------------------------------------------
 templParms :: String -> [String]
 templParms s = nub' . sortBy (compare `on` dropWhile isDigit) $
-                 (takeWhile isAlphaNum . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
+                 (takeWhile (\c -> isAlphaNum c || c=='_') . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
   where
     nub' :: [String] -> [String]
     nub' (s1@(h1:_):s2:ss)
@@ -398,27 +398,7 @@ templParms s = nub' . sortBy (compare `on` dropWhile isDigit) $
     nub' (s:ss) = s : nub' ss
     nub' _ = []
 
-extractTypes :: String -> [String]
-extractTypes = words . extractTypes'
-
-extractTypes' :: String -> String
-extractTypes' [] = []
-extractTypes' ('f':'n':'<':xs) = ' ' : extractTypes' xs
-extractTypes' (x:xs) | not (isAlphaNum x) = ' ' : extractTypes' xs
-extractTypes' (x:xs) = x : extractTypes' xs
-
 -----------------------------------------------------------------------------------------------------------------------
--- fillTemplates :: Type -> Type -> Type
--- fillTemplates (Native t) (Native t') | t == t' = (Native t')
--- fillTemplates (Function a b) (Function a' b') = Function (fillTemplates a a') (fillTemplates b b')
--- fillTemplates (Data t) (Data t') = Data (fillTemplates t t')
--- fillTemplates (Specialized t []) (Specialized t' []) = Specialized (fillTemplates t t') []
--- fillTemplates (Specialized t ts) (Specialized t' ts') = Specialized (fillTemplates t t') (zipWith fillTemplates ts ts')
--- fillTemplates (List t) (List t') = List (fillTemplates t t')
--- fillTemplates (Template _) a' = a'
--- fillTemplates Empty Empty = Empty
--- fillTemplates _ _ = error "Mismatched type structure!"
-
 templateSpec :: Maybe Type -> Maybe Type -> String
 templateSpec (Just t1) (Just t2)
   | args@(_:_) <- intercalate "," $ snd <$> templateArgs t1 t2 = '<' : args ++ ">"
