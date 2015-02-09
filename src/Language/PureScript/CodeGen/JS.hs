@@ -57,17 +57,16 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   jsDecls <- mapM (bindToJs name) decls
   let optimized = concatMap (map $ optimize opts) jsDecls
   let isModuleEmpty = null exps
-  let moduleHeader = dataTypes decls ++ (declarations <$> optimized) ++ (templates <$> optimized)
+  let moduleHeader = dataTypes decls
+                  ++ (declarations <$> optimized)
+                  ++ foreigns'
+                  ++ (templates <$> optimized)
   let moduleBody = implementations <$> optimized
   let exps' = JSObjectLiteral $ (runIdent &&& JSVar . identToJs) <$> exps
   return $ case optionsAdditional opts of
     MakeOptions -> moduleBody -- ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
     CompileOptions ns _ _ | not isModuleEmpty ->
       headerPreamble
-      ++ (if (not.null) foreigns' then
-            [JSNamespace (moduleNameToJs name ++ " /* foreign imports */") (foreigns')
-            , JSRaw "// end of foreign imports"]
-          else [])
       ++ [JSNamespace (moduleNameToJs name ++ " /* module header */") (moduleHeader)
         , JSRaw "// end of header"]
       ++ [JSNamespace (moduleNameToJs name ++ " /* module source */") (moduleBody)]
