@@ -83,7 +83,8 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
 --
 importToJs :: Options mode -> ModuleName -> JS
 importToJs opts mn =
-  JSRaw $ "#include " ++ '"' : (dotsTo '/' $ runModuleName mn) ++ ".hh\""
+  JSRaw $ "#include " ++ '"' : (dotsTo '/' $ runModuleName mn)
+                      ++ '/' : (last . words . dotsTo ' ' $ runModuleName mn) ++ ".hh\""
   where
     dotsTo :: Char -> String -> String
     dotsTo chr = map (\c -> if c == '.' then chr else c)
