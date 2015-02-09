@@ -159,9 +159,9 @@ make outputDir opts ms prefix = do
   (sorted, graph) <- liftError $ sortModules $ map importPrim $ if optionsNoPrelude opts then map snd ms else map (importPrelude . snd) ms
 
   toRebuild <- foldM (\s (Module moduleName' _ _) -> do
-    let filePath = runModuleName moduleName'
+    let filePath = dotsTo '/' $ runModuleName moduleName'
 
-        jsFile = outputDir </> filePath </> "index.js"
+        jsFile = outputDir </> filePath </> (last . words . dotsTo ' ' $ runModuleName moduleName') ++ ".cc"
         externsFile = outputDir </> filePath </> "externs.purs"
         inputFile = fromMaybe (error "Module has no filename in 'make'") $ M.lookup moduleName' filePathMap
 
@@ -188,8 +188,8 @@ make outputDir opts ms prefix = do
 
     go env' ms'
   go env ((True, m@(Module moduleName' _ exps)) : ms') = do
-    let filePath = runModuleName moduleName'
-        jsFile = outputDir </> filePath </> "index.js"
+    let filePath = dotsTo '/' $ runModuleName moduleName'
+        jsFile = outputDir </> filePath </> (last . words . dotsTo ' ' $ runModuleName moduleName') ++ ".cc"
         externsFile = outputDir </> filePath </> "externs.purs"
 
     lift . progress $ "Compiling " ++ runModuleName moduleName'
@@ -251,3 +251,6 @@ importPrelude = addDefaultImport (ModuleName [ProperName C.prelude])
 
 prelude :: String
 prelude = BU.toString $(embedFile "prelude/prelude.purs")
+
+dotsTo :: Char -> String -> String
+dotsTo chr = map (\c -> if c == '.' then chr else c)

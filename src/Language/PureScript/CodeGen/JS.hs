@@ -63,14 +63,14 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
                   ++ (templates <$> optimized)
   let moduleBody = implementations <$> optimized
   let exps' = JSObjectLiteral $ (runIdent &&& JSVar . identToJs) <$> exps
-  return $ case optionsAdditional opts of
-    MakeOptions -> moduleBody -- ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
-    CompileOptions ns _ _ | not isModuleEmpty ->
+  return $ -- case optionsAdditional opts of
+--    MakeOptions -> moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
+--    CompileOptions ns _ _ | not isModuleEmpty ->
       headerPreamble
       ++ [JSNamespace (moduleNameToJs name ++ " /* module header */") (moduleHeader)
         , JSRaw "// end of header"]
       ++ [JSNamespace (moduleNameToJs name ++ " /* module source */") (moduleBody)]
-    _ -> []
+--    _ -> []
 
 -- |
 -- Generates Javascript code for a module import.
