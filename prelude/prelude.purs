@@ -15,7 +15,7 @@ module Prelude
   , Monad, return, liftM1, ap
   , Num, (+), (-), (*), (/), (%)
   , negate
-  , Eq, (==), (/=), refEq, refIneq
+  , Eq, (==), (/=) -- , refEq, refIneq
   , Ord, Ordering(..), compare, (<), (>), (<=), (>=)
   , Bits, (.&.), (.|.), (.^.), shl, shr, zshr, complement
   , BoolLike, (&&), (||)
@@ -70,9 +70,13 @@ module Prelude
 
   foreign import cons
     """
-    function cons(e) {
-      return function(l) {
-        return [e].concat(l);
+    template <typename T>
+    inline auto cons(T e) -> fn<list<T>, list<T>> {
+      return [=](list<T> l) {
+        list<T> v = { e };
+        v.reserve(l.size() + 1);
+        v.insert(v.end(), l.begin(), l.end());
+        return v;
       };
     }
     """ :: forall a. a -> [a] -> [a]
@@ -82,8 +86,8 @@ module Prelude
 
   foreign import showStringImpl
     """
-    function showStringImpl(s) {
-      return JSON.stringify(s);
+    inline auto showStringImpl(string s) -> string {
+      return '"' + s + '"';
     }
     """ :: String -> String
 
@@ -99,8 +103,9 @@ module Prelude
 
   foreign import showNumberImpl
     """
-    function showNumberImpl(n) {
-      return n.toString();
+    template <typename T>
+    inline auto showNumberImpl(T n) -> string {
+      return std::to_string(n);
     }
     """ :: Number -> String
 
@@ -109,13 +114,15 @@ module Prelude
 
   foreign import showArrayImpl
     """
-    function showArrayImpl(f) {
-      return function(xs) {
-        var ss = [];
-        for (var i = 0, l = xs.length; i < l; i++) {
-          ss[i] = f(xs[i]);
+    template <typename T>
+    inline auto showArrayImpl(fn<T,string> f) -> fn<list<T>,string> {
+      return [=](list<T> xs) -> string {
+        string s("[");
+        for (auto it = xs.begin(); it != xs.end(); it++) {
+          s.append(f(*it));
+          if (it != xs.end() - 1) s.append(",");
         }
-        return '[' + ss.join(',') + ']';
+        return s + "]";
       };
     }
     """ :: forall a. (a -> String) -> [a] -> String
@@ -196,65 +203,71 @@ module Prelude
     (%) :: a -> a -> a
     negate :: a -> a
 
-  foreign import numAdd
+  foreign import binary_add_operator
     """
-    function numAdd(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_add_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 + n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numSub
+  foreign import binary_sub_operator
     """
-    function numSub(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_sub_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 - n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numMul
+  foreign import binary_mul_operator
     """
-    function numMul(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_mul_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 * n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numDiv
+  foreign import binary_div_operator
     """
-    function numDiv(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_div_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 / n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numMod
+  foreign import binary_mod_operator
     """
-    function numMod(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_mod_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 % n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numNegate
+  foreign import unary_neg_operator
     """
-    function numNegate(n) {
+    template <typename T>
+    inline auto unary_neg_operator(T n) -> T {
       return -n;
     }
-    """ :: Number -> Number
+    """ :: forall a. a -> a
 
   instance numNumber :: Num Number where
-    (+) = numAdd
-    (-) = numSub
-    (*) = numMul
-    (/) = numDiv
-    (%) = numMod
-    negate = numNegate
+    (+) = binary_add_operator
+    (-) = binary_sub_operator
+    (*) = binary_mul_operator
+    (/) = binary_div_operator
+    (%) = binary_mod_operator
+    negate = unary_neg_operator
 
   newtype Unit = Unit {}
 
@@ -268,20 +281,22 @@ module Prelude
     (==) :: a -> a -> Boolean
     (/=) :: a -> a -> Boolean
 
-  foreign import refEq
+  foreign import binary_eq_operator
     """
-    function refEq(r1) {
-      return function(r2) {
-        return r1 === r2;
+    template <typename T>
+    inline auto binary_eq_operator(T r1) -> fn<T,bool> {
+      return [=](T r2) {
+        return r1 == r2;
       };
     }
     """ :: forall a. a -> a -> Boolean
 
-  foreign import refIneq
+  foreign import binary_neq_operator
     """
-    function refIneq(r1) {
-      return function(r2) {
-        return r1 !== r2;
+    template <typename T>
+    inline auto binary_neq_operator(T r1) -> fn<T,bool> {
+      return [=](T r2) {
+        return r1 != r2;
       };
     }
     """ :: forall a. a -> a -> Boolean
@@ -291,35 +306,20 @@ module Prelude
     (/=) (Unit {}) (Unit {}) = false
 
   instance eqString :: Eq String where
-    (==) = refEq
-    (/=) = refIneq
+    (==) = binary_eq_operator
+    (/=) = binary_neq_operator
 
   instance eqNumber :: Eq Number where
-    (==) = refEq
-    (/=) = refIneq
+    (==) = binary_eq_operator
+    (/=) = binary_neq_operator
 
   instance eqBoolean :: Eq Boolean where
-    (==) = refEq
-    (/=) = refIneq
-
-  foreign import eqArrayImpl
-    """
-    function eqArrayImpl(f) {
-      return function(xs) {
-        return function(ys) {
-          if (xs.length !== ys.length) return false;
-          for (var i = 0; i < xs.length; i++) {
-            if (!f(xs[i])(ys[i])) return false;
-          }
-          return true;
-        };
-      };
-    }
-    """ :: forall a. (a -> a -> Boolean) -> [a] -> [a] -> Boolean
+    (==) = binary_eq_operator
+    (/=) = binary_neq_operator
 
   instance eqArray :: (Eq a) => Eq [a] where
-    (==) xs ys = eqArrayImpl (==) xs ys
-    (/=) xs ys = not (xs == ys)
+    (==) = binary_eq_operator
+    (/=) = binary_neq_operator
 
   data Ordering = LT | GT | EQ
 
@@ -368,11 +368,12 @@ module Prelude
 
   foreign import unsafeCompareImpl
     """
-    function unsafeCompareImpl(lt) {
-      return function(eq) {
-        return function(gt) {
-          return function(x) {
-            return function(y) {
+    template <typename T>
+    inline auto unsafeCompareImpl(data<Ordering> lt) -> fn<data<Ordering>,fn<data<Ordering>,fn<T,fn<T,data<Ordering>>>>> {
+      return [=](data<Ordering> eq) -> fn<data<Ordering>,fn<T,fn<T,data<Ordering>>>> {
+        return [=](data<Ordering> gt) -> fn<T,fn<T,data<Ordering>>> {
+          return [=](T x) -> fn<T,data<Ordering>> {
+            return [=](T y) -> data<Ordering> {
               return x < y ? lt : x > y ? gt : eq;
             };
           };
@@ -420,75 +421,72 @@ module Prelude
     zshr :: b -> Number -> b
     complement :: b -> b
 
-  foreign import numShl
+  foreign import binary_shl_operator
     """
-    function numShl(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_shl_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 << n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numShr
+  foreign import binary_shr_operator
     """
-    function numShr(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_shr_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 >> n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numZshr
+  foreign import binary_bitand_operator
     """
-    function numZshr(n1) {
-      return function(n2) {
-        return n1 >>> n2;
-      };
-    }
-    """ :: Number -> Number -> Number
-
-  foreign import numAnd
-    """
-    function numAnd(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_bitand_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 & n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numOr
+  foreign import binary_bitor_operator
     """
-    function numOr(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_bitor_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 | n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numXor
+  foreign import binary_bitxor_operator
     """
-    function numXor(n1) {
-      return function(n2) {
+    template <typename T>
+    inline auto binary_bitxor_operator(T n1) -> fn<T,T> {
+      return [=](T n2) {
         return n1 ^ n2;
       };
     }
-    """ :: Number -> Number -> Number
+    """ :: forall a. a -> a -> a
 
-  foreign import numComplement
+  foreign import unary_comp_operator
     """
-    function numComplement(n) {
+    template <typename T>
+    inline auto unary_comp_operator(T n) -> T {
       return ~n;
     }
-    """ :: Number -> Number
+    """ :: forall a. a -> a
 
   instance bitsNumber :: Bits Number where
-    (.&.) = numAnd
-    (.|.) = numOr
-    (.^.) = numXor
-    shl = numShl
-    shr = numShr
-    zshr = numZshr
-    complement = numComplement
+    (.&.) = binary_bitand_operator
+    (.|.) = binary_bitor_operator
+    (.^.) = binary_bitxor_operator
+    shl = binary_shl_operator
+    shr = binary_shr_operator
+    zshr = binary_shr_operator
+    complement = unary_comp_operator
 
   infixr 2 ||
   infixr 3 &&
@@ -498,55 +496,49 @@ module Prelude
     (||) :: b -> b -> b
     not :: b -> b
 
-  foreign import boolAnd
+  foreign import binary_and_operator
     """
-    function boolAnd(b1) {
-      return function(b2) {
-        return b1 && b2;
+    template <typename T>
+    inline auto binary_and_operator(T r1) -> fn<T,bool> {
+      return [=](T r2) {
+        return r1 && r2;
       };
     }
-    """  :: Boolean -> Boolean -> Boolean
+    """ :: forall a. a -> a -> Boolean
 
-  foreign import boolOr
+  foreign import binary_or_operator
     """
-    function boolOr(b1) {
-      return function(b2) {
-        return b1 || b2;
+    template <typename T>
+    inline auto binary_or_operator(T r1) -> fn<T,bool> {
+      return [=](T r2) {
+        return r1 || r2;
       };
     }
-    """ :: Boolean -> Boolean -> Boolean
+    """ :: forall a. a -> a -> Boolean
 
-  foreign import boolNot
+  foreign import unary_not_operator
     """
-    function boolNot(b) {
-      return !b;
+    template <typename T>
+    inline auto unary_not_operator(T n) -> bool {
+      return !n;
     }
-    """ :: Boolean -> Boolean
+    """ :: forall a. a -> Boolean
 
   instance boolLikeBoolean :: BoolLike Boolean where
-    (&&) = boolAnd
-    (||) = boolOr
-    not = boolNot
+    (&&) = binary_and_operator
+    (||) = binary_or_operator
+    not = unary_not_operator
 
   infixr 5 <>
 
   class Semigroup a where
     (<>) :: a -> a -> a
 
-  foreign import concatString
-    """
-    function concatString(s1) {
-      return function(s2) {
-        return s1 + s2;
-      };
-    }
-    """ :: String -> String -> String
-
   instance semigroupUnit :: Semigroup Unit where
     (<>) (Unit {}) (Unit {}) = Unit {}
 
   instance semigroupString :: Semigroup String where
-    (<>) = concatString
+    (<>) = binary_add_operator
 
   instance semigroupArr :: (Semigroup s') => Semigroup (s -> s') where
     (<>) f g = \x -> f x <> g x
@@ -556,6 +548,7 @@ module Prelude
   (++) :: forall s. (Semigroup s) => s -> s -> s
   (++) = (<>)
 
+{-
 module Data.Function where
 
   on :: forall a b c. (b -> b -> c) -> (a -> b) -> a -> a -> c
@@ -1057,3 +1050,5 @@ module Control.Monad.ST where
 
   pureST :: forall a. (forall h r. Eff (st :: ST h | r) a) -> a
   pureST st = runPure (runST st)
+
+-}
