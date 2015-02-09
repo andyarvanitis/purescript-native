@@ -41,6 +41,7 @@ import Language.PureScript.Parser.Common
 import Language.PureScript.Parser.Types
 import Language.PureScript.Parser.Kinds
 import Language.PureScript.Parser.Lexer
+import Language.PureScript.Names
 import Language.PureScript.CodeGen.JS.AST
 import Language.PureScript.Environment
 
@@ -345,6 +346,7 @@ parseValueAtom = P.choice
             , P.try parseBooleanLiteral
             , parseArrayLiteral
             , P.try parseObjectLiteral
+            , P.try parseObjectGetter
             , parseAbs
             , P.try parseConstructor
             , P.try parseVar
@@ -352,13 +354,27 @@ parseValueAtom = P.choice
             , parseIfThenElse
             , parseDo
             , parseLet
-            , Parens <$> parens parseValue ]
+            , P.try $ Parens <$> parens parseValue
+            , parseOperatorSection ]
 
-parsePropertyUpdate :: TokenParser (String, Expr)
+-- |
+-- Parse an expression in backticks or an operator
+--
+parseInfixExpr :: TokenParser Expr
+parseInfixExpr = P.between tick tick parseValue 
+                 <|> Var <$> parseQualified (Op <$> symbol)
+
+parseOperatorSection :: TokenParser Expr
+parseOperatorSection = parens $ left <|> right
+  where
+  right = OperatorSection <$> parseInfixExpr <* indented <*> (Right <$> parseValueAtom)
+  left = flip OperatorSection <$> (Left <$> parseValueAtom) <* indented <*> parseInfixExpr
+
+parsePropertyUpdate :: TokenParser (String, Maybe Expr)
 parsePropertyUpdate = do
   name <- lname <|> stringLiteral
   _ <- C.indented *> equals
-  value <- C.indented *> parseValue
+  value <- C.indented *> (underscore *> pure Nothing) <|> (Just <$> parseValue)
   return (name, value)
 
 parseAccessor :: Expr -> TokenParser Expr
@@ -383,6 +399,9 @@ parseDoNotationElement = P.choice
             , parseDoNotationLet
             , P.try (DoNotationValue <$> parseValue) ]
 
+parseObjectGetter :: TokenParser Expr
+parseObjectGetter = ObjectGetter <$> parens (dot *> C.indented *> (lname <|> stringLiteral))
+
 -- |
 -- Parse a value
 --
@@ -394,13 +413,13 @@ parseValue = withSourceSpan PositionedValue
   where
   indexersAndAccessors = C.buildPostfixParser postfixTable1 parseValueAtom
   postfixTable1 = [ parseAccessor
-                  , \v -> P.try $ flip ObjectUpdate <$> (C.indented *> braces (commaSep1 (C.indented *> parsePropertyUpdate))) <*> pure v ]
+                  , \v -> P.try $ flip ObjectUpdater <$> (C.indented *> braces (commaSep1 (C.indented *> parsePropertyUpdate))) <*> pure v ]
   postfixTable2 = [ \v -> P.try (flip App <$> (C.indented *> indexersAndAccessors)) <*> pure v
                   , \v -> flip (TypedValue True) <$> (P.try (C.indented *> doubleColon) *> parsePolyType) <*> pure v
                   ]
   operators = [ [ P.Prefix (P.try (C.indented *> symbol' "-") >> return UnaryMinus)
                 ]
-              , [ P.Infix (P.try (C.indented *> C.parseIdentInfix P.<?> "operator") >>= \ident ->
+              , [ P.Infix (P.try (C.indented *> parseInfixExpr P.<?> "infix expression") >>= \ident ->
                     return (BinaryNoParens ident)) P.AssocRight
                 ]
               ]
