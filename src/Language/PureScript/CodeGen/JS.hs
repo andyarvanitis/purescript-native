@@ -57,11 +57,14 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
   jsDecls <- mapM (bindToJs name) decls
   let optimized = concatMap (map $ optimize opts) jsDecls
   let isModuleEmpty = null exps
+  let (moduleDecls, moduleBody, extTempls, templs) = sections optimized
   let moduleHeader = dataTypes decls
-                  ++ (declarations <$> optimized)
+                  ++ moduleDecls
                   ++ foreigns'
-                  ++ (templates <$> optimized)
-  let moduleBody = implementations <$> optimized
+                  ++ [JSRaw $ "#ifndef " ++ moduleNameToJs name ++ "_CC"]
+                  ++ extTempls
+                  ++ [JSRaw $ "#endif // " ++ moduleNameToJs name ++ "_CC\n"]
+                  ++ templs
   let exps' = JSObjectLiteral $ (runIdent &&& JSVar . identToJs) <$> exps
   return $
          [ JSRaw $ "#ifndef " ++ moduleNameToJs name ++ "_H"
@@ -74,7 +77,8 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
          , JSRaw $ "#endif // " ++ moduleNameToJs name ++ "_H"
          , JSEndOfHeader
          ]
-      ++ [ importToJs opts name
+      ++ [ JSRaw $ "#define " ++ moduleNameToJs name ++ "_CC\n"
+         , importToJs opts name
          , JSRaw "//"
          , JSNamespace (moduleNameToJs name) moduleBody
          ]
@@ -111,6 +115,7 @@ nonRecToJS mp ident val = do
     expr :: Ident -> JS -> JS
     expr var js@(JSVar _) = expr' var js
     expr var js@(JSApp _ _) = expr' var js
+    expr var (JSSequence [] jss) = JSSequence (identToJs ident) (expr' var <$> jss)
     expr var (JSSequence s jss) = JSSequence s (expr' var <$> jss)
     expr var js = js
 

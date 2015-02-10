@@ -88,9 +88,9 @@ literals = mkPattern' match
         ]
     else return []
   match (JSVar ident) = return $ takeWhile (/='@') ident
-  match (JSVariableIntroduction _ (Just js@(JSNamespace _ _))) = match js
-  match (JSVariableIntroduction s (Just (JSSequence [] jss))) = match $ JSSequence s jss
-  match (JSVariableIntroduction _ (Just js@(JSSequence _ _))) = match js
+  -- match (JSVariableIntroduction _ (Just js@(JSNamespace _ _))) = match js
+  -- match (JSVariableIntroduction s (Just (JSSequence [] jss))) = match $ JSSequence s jss
+  -- match (JSVariableIntroduction _ (Just js@(JSSequence _ _))) = match js
   match (JSVariableIntroduction name (Just (JSFunction (Just fname) args sts))) = fmap concat $ sequence $
     let ns = words name in
     [ if null (dropWhile (/= '|') fname) then

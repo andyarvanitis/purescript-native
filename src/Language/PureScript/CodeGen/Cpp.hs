@@ -246,41 +246,118 @@ templTypes' m (Just t)
   | s <- typestr m t = templTypes s
 templTypes' _ _ = ""
 -----------------------------------------------------------------------------------------------------------------------
-declarations :: JS -> JS
-declarations (JSNamespace name bs) = JSNamespace name (map declarations bs)
-declarations (JSSequence s bs) = JSSequence s (map declarations bs)
-declarations (JSComment c e) = JSComment c (declarations e)
-declarations (JSVariableIntroduction var js@(Just (JSFunction (Just name) args _)))
-  | ('|':_) <- filter (not . isSpace) name
-  = JSVariableIntroduction ("extern " ++ var) (Just $ JSFunction (Just name) args JSNoOp)
--- declarations (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
---   | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
-declarations (JSVariableIntroduction var js@(Just JSVar{})) = JSNoOp
-declarations (JSVariableIntroduction var js@(Just JSApp{})) = JSNoOp
-declarations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ declarations expr)
-declarations (JSFunction fn args _) = JSFunction fn args JSNoOp
-declarations dat@(JSData _ _ _ _) = dat
-declarations _ = JSNoOp
------------------------------------------------------------------------------------------------------------------------
-implementations :: JS -> JS
-implementations (JSNamespace name bs) = JSNamespace name (map implementations bs)
-implementations (JSSequence s bs) = JSSequence s (map implementations bs)
-implementations (JSComment c e) = JSComment c (implementations e)
--- implementations (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
---   | ((last $ words arg) == arg') = JSNoOp
-implementations (JSVariableIntroduction var js@(Just JSVar{})) = JSNoOp
-implementations (JSVariableIntroduction var js@(Just JSApp{})) = JSNoOp
-implementations (JSVariableIntroduction var js@(Just JSNumericLiteral{})) = JSNoOp
-implementations (JSVariableIntroduction var js@(Just JSStringLiteral{})) = JSNoOp
-implementations (JSVariableIntroduction var js@(Just JSBooleanLiteral{})) = JSNoOp
-implementations (JSVariableIntroduction var js@(Just JSArrayLiteral{})) = JSNoOp
-implementations (JSVariableIntroduction var js@(Just (JSFunction (Just name) _ _)))
-  | ('|':_) <- filter (not . isSpace) name = JSVariableIntroduction var js
-implementations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _)))
-  | '|' `elem` name = JSNoOp
-implementations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ implementations expr)
-implementations (JSData _ _ _ _) = JSNoOp
-implementations js = js
+sections :: [JS] -> ([JS], [JS], [JS], [JS])
+sections jss  = foldl (flip section) ([],[],[],[]) jss
+  where
+    section :: JS -> ([JS], [JS], [JS], [JS]) -> ([JS], [JS], [JS], [JS])
+
+    section (JSNamespace name bs) (decls, impls, extTempls, templs) =
+      let (ds, is, es, ts) = sections bs in
+        (decls ++ take (length ds) [JSNamespace name ds],
+         impls ++ take (length is) [JSNamespace name is],
+         extTempls ++ take (length es) [JSNamespace name es],
+         templs ++ take (length ts) [JSNamespace name ts])
+
+    section (JSSequence name bs) (decls, impls, extTempls, templs) =
+      let (ds, is, es, ts) = sections bs in
+        (decls ++  take (length ds) [JSSequence name ds],
+         impls ++ take (length is) [JSSequence name is],
+         extTempls ++ take (length es) [JSSequence name es],
+         templs ++ take (length ts) [JSSequence name ts])
+
+    section (JSComment c js) (decls, impls, extTempls, templs) =
+      let (ds, is, es, ts) = section js ([],[],[],[]) in
+        (decls ++ ds,
+         impls ++ is,
+         extTempls ++ es,
+         templs ++ ts)
+
+    section (JSVariableIntroduction var (Just js@JSNamespace{})) (decls, impls, extTempls, templs) =
+      section js (decls, impls, extTempls, templs)
+
+    section (JSVariableIntroduction var (Just js@JSSequence{})) (decls, impls, extTempls, templs) =
+      section js (decls, impls, extTempls, templs)
+
+    section js@(JSVariableIntroduction var (Just (JSFunction (Just name) args _))) (decls, impls, extTempls, templs)
+      | ('|':_) <- filter (not . isSpace) name
+      = (decls,
+         impls ++ [js],
+         extTempls ++ [JSVariableIntroduction ("extern " ++ var) (Just $ JSFunction (Just name) args JSNoOp)],
+         templs)
+
+    section (JSVariableIntroduction var js@(Just (JSFunction (Just name) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
+            (decls, impls, extTempls, templs)
+      | (last $ words arg) == arg'
+      = (decls ++ [JSVariableIntroduction ("inline " ++ var) (Just $ JSFunction (Just name) [arg] JSNoOp)],
+         impls,
+         extTempls,
+         templs ++ [JSVariableIntroduction ("inline " ++ var) js])
+
+    section js@(JSVariableIntroduction var (Just (JSFunction (Just name) args _))) (decls, impls, extTempls, templs)
+      | '|' `elem` name
+      = (decls ++ [JSVariableIntroduction var (Just $ JSFunction (Just name) args JSNoOp)],
+         impls,
+         extTempls,
+         templs ++ [js])
+
+    section js@(JSVariableIntroduction var (Just (JSFunction (Just name) args _))) (decls, impls, extTempls, templs)
+      = (decls ++ [JSVariableIntroduction var (Just $ JSFunction (Just name) args JSNoOp)],
+         impls ++ [js],
+         extTempls,
+         templs)
+
+    section js@(JSVariableIntroduction var (Just JSVar{})) (decls, impls, extTempls, templs)
+      = (decls,
+         impls,
+         extTempls,
+         templs ++ [js])
+
+    section js@(JSVariableIntroduction var (Just JSNumericLiteral{})) (decls, impls, extTempls, templs)
+      = (decls,
+         impls,
+         extTempls,
+         templs ++ [js])
+
+    section js@(JSVariableIntroduction var (Just JSStringLiteral{})) (decls, impls, extTempls, templs)
+      = (decls,
+         impls,
+         extTempls,
+         templs ++ [js])
+
+    section js@(JSVariableIntroduction var (Just JSBooleanLiteral{})) (decls, impls, extTempls, templs)
+      = (decls,
+         impls,
+         extTempls,
+         templs ++ [js])
+
+    section js@(JSVariableIntroduction var (Just JSArrayLiteral{})) (decls, impls, extTempls, templs)
+      = (decls,
+         impls,
+         extTempls,
+         templs ++ [js])
+
+    section js@(JSVariableIntroduction var (Just JSApp{})) (decls, impls, extTempls, templs)
+      = (decls,
+         impls,
+         extTempls,
+         templs ++ [js])
+
+    section js@(JSVariableIntroduction var (Just JSData{})) (decls, impls, extTempls, templs)
+      = (decls ++ [js],
+         impls,
+         extTempls,
+         templs)
+
+    -- TODO: check this case
+    section (JSVariableIntroduction var (Just js)) (decls, impls, extTempls, templs) =
+      let (ds, is, es, ts) = section js ([],[],[],[]) in
+        (decls ++ ds,
+         impls ++ is,
+         extTempls ++ es,
+         templs ++ ts)
+
+    section _ (decls, impls, extTempls, templs) = (decls, impls, extTempls, templs)
+
 -----------------------------------------------------------------------------------------------------------------------
 templates :: JS -> JS
 templates (JSNamespace name bs) = JSNamespace name (map templates bs)
