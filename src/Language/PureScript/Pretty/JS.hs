@@ -91,15 +91,19 @@ literals = mkPattern' match
   match (JSVariableIntroduction _ (Just js@(JSNamespace _ _))) = match js
   match (JSVariableIntroduction s (Just (JSSequence [] jss))) = match $ JSSequence s jss
   match (JSVariableIntroduction _ (Just js@(JSSequence _ _))) = match js
-  match (JSVariableIntroduction name (Just (JSFunction (Just fname) args sts))) = fmap concat $ sequence
+  match (JSVariableIntroduction name (Just (JSFunction (Just fname) args sts))) = fmap concat $ sequence $
+    let ns = words name in
     [ if null (dropWhile (/= '|') fname) then
         return []
       else do
         indentString <- currentIndent
-        return $ "template <" ++ (takeWhile (/= '|') fname) ++ ">"
-              ++ if notNoOp sts then '\n':indentString else " "
-    , return "auto "
-    , return name
+        return $ (if head ns == "extern" then
+                    "extern template"
+                  else
+                    "template <" ++ (takeWhile (/= '|') fname) ++ ">")
+               ++ if notNoOp sts then '\n':indentString else " "
+    , return $ if head ns == "inline" then "inline auto " else "auto "
+    , return $ last ns
     , return "("
     , return $ intercalate ", " $ cleanParams args
     , return ")"

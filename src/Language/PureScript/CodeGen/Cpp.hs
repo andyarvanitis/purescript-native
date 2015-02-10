@@ -16,8 +16,8 @@
 
 module Language.PureScript.CodeGen.Cpp where
 
-import Data.List (elemIndices, intercalate, nub, nubBy, sortBy)
-import Data.Char (isAlphaNum, isDigit, toUpper)
+import Data.List (elemIndices, intercalate, isPrefixOf, nub, nubBy, sortBy)
+import Data.Char (isAlphaNum, isDigit, isSpace, toUpper)
 import Data.Function (on)
 
 import Control.Applicative
@@ -250,6 +250,9 @@ declarations :: JS -> JS
 declarations (JSNamespace name bs) = JSNamespace name (map declarations bs)
 declarations (JSSequence s bs) = JSSequence s (map declarations bs)
 declarations (JSComment c e) = JSComment c (declarations e)
+declarations (JSVariableIntroduction var js@(Just (JSFunction (Just name) args _)))
+  | ('|':_) <- filter (not . isSpace) name
+  = JSVariableIntroduction ("extern " ++ var) (Just $ JSFunction (Just name) args JSNoOp)
 -- declarations (JSVariableIntroduction var (Just (JSFunction (Just name) [arg] ret@(JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
 --   | ((last $ words arg) == arg') = JSVariableIntroduction var (Just (JSFunction (Just $ name ++ " inline") [arg] ret))
 declarations (JSVariableIntroduction var js@(Just JSVar{})) = JSNoOp
@@ -271,7 +274,10 @@ implementations (JSVariableIntroduction var js@(Just JSNumericLiteral{})) = JSNo
 implementations (JSVariableIntroduction var js@(Just JSStringLiteral{})) = JSNoOp
 implementations (JSVariableIntroduction var js@(Just JSBooleanLiteral{})) = JSNoOp
 implementations (JSVariableIntroduction var js@(Just JSArrayLiteral{})) = JSNoOp
-implementations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = JSNoOp
+implementations (JSVariableIntroduction var js@(Just (JSFunction (Just name) _ _)))
+  | ('|':_) <- filter (not . isSpace) name = JSVariableIntroduction var js
+implementations (JSVariableIntroduction _ (Just (JSFunction (Just name) _ _)))
+  | '|' `elem` name = JSNoOp
 implementations (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ implementations expr)
 implementations (JSData _ _ _ _) = JSNoOp
 implementations js = js
@@ -289,6 +295,8 @@ templates (JSVariableIntroduction var js@(Just JSStringLiteral{})) = JSVariableI
 templates (JSVariableIntroduction var js@(Just JSBooleanLiteral{})) = JSVariableIntroduction var js
 templates (JSVariableIntroduction var js@(Just JSArrayLiteral{})) = JSVariableIntroduction var js
 templates (JSVariableIntroduction _ (Just (JSFunction (Just name) _ JSNoOp))) = JSNoOp
+templates (JSVariableIntroduction var (Just (JSFunction (Just name) _ _)))
+  | ('|':_) <- filter (not . isSpace) name = JSNoOp
 templates (JSVariableIntroduction var js@(Just (JSFunction (Just name) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
   | '|' `elem` name, (last $ words arg) == arg'
   = JSVariableIntroduction ("inline " ++ var) js
