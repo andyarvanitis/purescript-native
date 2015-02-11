@@ -139,16 +139,27 @@ nonRecToJS mp ident val = do
         rty s _ = s
     expr' _ js = js
 
-    toTempl name
+    toTempl s
       | (App (_, _, Just (T.TypeApp (T.TypeConstructor{}) T.RCons{}), _) _ _) <- val,
-        fn <- templTypes name,  not ('|' `elem` fn) = "|"
-      | otherwise = templTypes name
+        fn <- templTypes s,  not ('|' `elem` fn) = "|"
+      | otherwise = templTypes s
 
-    appfn var fn js
-      | ('@':'f':'n':'<':ss) <- getType fn, typ <- init ss
-        = JSFunction (Just (toTempl fn ++ ' ' : getRet typ ++ ' ' : identToJs var))
+    appfn var _ js
+      | (Just ty) <- absTy val, ('f':'n':'<':typ) <- (init $ show ty)
+        = JSFunction (Just $ toTempl typ ++ ' ' : getRet typ ++ ' ' : identToJs var)
             [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp js [JSVar "arg"]])
-    appfn _ _ js = js
+      where
+        absTy :: Expr Ann -> Maybe Type
+        absTy (Abs (_, _, Just ty, _) _ _) = mktype mp ty
+        absTy (Var (_, _, Just ty, _) _) = mktype mp ty
+        absTy _ = Nothing
+
+    appfn var name js -- TODO: investigate using name or typ in call to toTempl
+      | ('@':'f':'n':'<':ss) <- getType name, typ <- init ss
+        = JSFunction (Just $ toTempl name ++ ' ' : getRet typ ++ ' ' : identToJs var)
+            [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp js [JSVar "arg"]])
+
+    appfn var name _ = error $ show var ++ " = " ++ name
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a variable based on a
