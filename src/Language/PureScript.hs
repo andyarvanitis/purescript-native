@@ -178,6 +178,9 @@ make outputDir opts ms prefix = do
 
   marked <- rebuildIfNecessary (reverseDependencies graph) toRebuild sorted
 
+  when (any fst marked) $ -- TODO: it should only be updated if any files have been added/removed
+    writeTextFile (outputDir </> "CMakeLists.txt") cmakeListsTxt
+
   (desugared, nextVar) <- liftError $ stringifyErrorStack True $ runSupplyT 0 $ zip (map fst marked) <$> desugar (map snd marked)
 
   evalSupplyT nextVar (go initEnvironment desugared)
@@ -229,7 +232,7 @@ make outputDir opts ms prefix = do
         toRebuild' = toRebuild `S.union` S.fromList deps
     (:) (True, m) <$> rebuildIfNecessary graph toRebuild' ms'
   rebuildIfNecessary graph toRebuild (Module moduleName' _ _ : ms') = do
-    let externsFile = outputDir </> runModuleName moduleName' </> "externs.purs"
+    let externsFile = outputDir </> (dotsTo '/' $ runModuleName moduleName') </> "externs.purs"
     externs <- readTextFile externsFile
     externsModules <- liftError . fmap (map snd) . either (Left . show) Right $ P.parseModulesFromFiles id [(externsFile, externs)]
     case externsModules of
@@ -265,3 +268,15 @@ prelude = BU.toString $(embedFile "prelude/prelude.purs")
 
 dotsTo :: Char -> String -> String
 dotsTo chr = map (\c -> if c == '.' then chr else c)
+
+-- TODO: quick and dirty for now -- explicit file list would be better
+cmakeListsTxt :: String
+cmakeListsTxt = intercalate "\n" lines
+  where lines = [ "cmake_minimum_required (VERSION 3.0)"
+                , "project (Main)"
+                , "file (GLOB_RECURSE SRCS *.cc)"
+                , "file (GLOB_RECURSE HDRS *.hh)"
+                , "add_executable (Main ${SRCS} ${HDRS})"
+                , "include_directories (${CMAKE_CURRENT_SOURCE_DIR})"
+                , "set (CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} \"-std=c++11\")"
+                ]
