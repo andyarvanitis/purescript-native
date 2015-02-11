@@ -90,6 +90,15 @@ headerPreamble =
   , JSRaw " "
   ]
 
+nativeMain :: [JS]
+nativeMain =
+  [ JSRaw "\n"
+  , JSRaw "int main(int argc, char *argv[]) {"
+  , JSRaw "    auto args = argc ? list<string>(argv + 1, argv + argc) : list<string>();"
+  , JSRaw "    return Main::main(argc)(args);"
+  , JSRaw "}"
+  ]
+
 -----------------------------------------------------------------------------------------------------------------------
 data Type = Native String
           | Function Type Type
@@ -558,6 +567,10 @@ capitalize s = s
 isPrelude :: ModuleName -> Bool
 isPrelude (ModuleName [ProperName "Prelude"]) = True
 isPrelude _ = False
+
+isMain :: ModuleName -> Bool
+isMain (ModuleName [ProperName "Main"]) = True
+isMain _ = False
 -----------------------------------------------------------------------------------------------------------------------
 depSort :: [(String, JS)] -> [(String, JS)]
 depSort ps = sortBy vardep ps

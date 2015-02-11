@@ -82,6 +82,7 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
          , JSRaw "//"
          , JSNamespace (moduleNameToJs name) moduleBody
          ]
+      ++ (if isMain name then nativeMain else [])
 -- |
 -- Generates Javascript code for a module import.
 --
