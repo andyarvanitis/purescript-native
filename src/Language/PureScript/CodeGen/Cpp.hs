@@ -359,28 +359,6 @@ sections jss  = foldl (flip section) ([],[],[],[]) jss
     section _ (decls, impls, extTempls, templs) = (decls, impls, extTempls, templs)
 
 -----------------------------------------------------------------------------------------------------------------------
-templates :: JS -> JS
-templates (JSNamespace name bs) = JSNamespace name (map templates bs)
-templates (JSSequence s bs) = JSSequence s (map templates bs)
-templates (JSComment c e) = JSComment c (templates e)
--- templates (JSVariableIntroduction _ (Just (JSFunction (Just _) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
---   | ((last $ words arg) == arg') = JSNoOp
-templates (JSVariableIntroduction var js@(Just JSVar{})) = JSVariableIntroduction var js
-templates (JSVariableIntroduction var js@(Just JSApp{})) = JSVariableIntroduction var js
-templates (JSVariableIntroduction var js@(Just JSNumericLiteral{})) = JSVariableIntroduction var js
-templates (JSVariableIntroduction var js@(Just JSStringLiteral{})) = JSVariableIntroduction var js
-templates (JSVariableIntroduction var js@(Just JSBooleanLiteral{})) = JSVariableIntroduction var js
-templates (JSVariableIntroduction var js@(Just JSArrayLiteral{})) = JSVariableIntroduction var js
-templates (JSVariableIntroduction _ (Just (JSFunction (Just name) _ JSNoOp))) = JSNoOp
-templates (JSVariableIntroduction var (Just (JSFunction (Just name) _ _)))
-  | ('|':_) <- filter (not . isSpace) name = JSNoOp
-templates (JSVariableIntroduction var js@(Just (JSFunction (Just name) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
-  | '|' `elem` name, (last $ words arg) == arg'
-  = JSVariableIntroduction ("inline " ++ var) js
-templates imp@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ _))) | '|' `elem` name = imp
-templates (JSVariableIntroduction var (Just expr)) = JSVariableIntroduction var (Just $ templates expr)
-templates _ = JSNoOp
------------------------------------------------------------------------------------------------------------------------
 dataTypes :: [Bind Ann] -> [JS]
 dataTypes = map (JSVar . mkClass) . nub . filter (not . null) . map dataType
   where
