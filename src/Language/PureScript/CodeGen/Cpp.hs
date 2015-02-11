@@ -523,7 +523,10 @@ exprFnTy m (App (_, _, Just ty, _) val a)
     argty m (App (_, _, Just tt, _) _ _) = mktype m tt
     argty m (App (_, _, Nothing, _) val _) = argty m val
     argty m (Var (_, _, Just ty, _) _) = mktype m ty
-    argty _ _ = Nothing
+    argty m (Literal (_, _, Just ty, _) _) = mktype m ty
+    argty m (Var (_, _, Nothing, Nothing) _) = Nothing
+    argty m (Accessor (_, _, Nothing, Nothing) _ _) = Nothing
+    argty _ e = error $ "Unknown expression type! " ++ show e
 exprFnTy m (App (_, _, Nothing, _) val _) = exprFnTy m val
 exprFnTy _ _ = Nothing
 
