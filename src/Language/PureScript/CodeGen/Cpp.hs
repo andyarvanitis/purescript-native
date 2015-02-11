@@ -581,3 +581,16 @@ isPrelude :: ModuleName -> Bool
 isPrelude (ModuleName [ProperName "Prelude"]) = True
 isPrelude _ = False
 -----------------------------------------------------------------------------------------------------------------------
+depSort :: [(String, JS)] -> [(String, JS)]
+depSort ps = sortBy vardep ps
+  where
+    getVars js = AST.everythingOnJS (++) getVar js
+
+    getVar :: JS -> [String]
+    getVar (JSVar name) = [takeWhile (/='<') $ rmType name]
+    getVar _ = []
+
+    vardep :: (String, JS) -> (String,JS) -> Ordering
+    vardep (n1,j1) (n2,j2) | (identToJs $ Ident n1) `elem` (getVars j2) = LT
+    vardep (n1,j1) (n2,j2) | (identToJs $ Ident n2) `elem` (getVars j1) = GT
+    vardep _ _ = EQ

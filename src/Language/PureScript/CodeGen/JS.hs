@@ -246,7 +246,7 @@ valueToJs m e@App{} = do
     Var (_, _, ty, Just IsTypeClassConstructor) name'@(Qualified mn (Ident name)) -> do
       convArgs <- mapM (valueToJs m) (instFn name' args)
       return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames m e name')) $
-               toVarDecl <$> zip (names ty) convArgs
+               toVarDecl <$> (depSort $ zip (names ty) convArgs)
 
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> if isQualified f || (typeinst $ head args) then
                                                           specialized' =<< valueToJs m f
