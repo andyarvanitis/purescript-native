@@ -160,6 +160,11 @@ nonRecToJS mp ident val = do
         = JSFunction (Just $ toTempl name ++ ' ' : getRet typ ++ ' ' : identToJs var)
             [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp js [JSVar "arg"]])
 
+    appfn var name js
+      | '#' `elem` name, typ <- drop 1 $ getType name
+        = JSFunction (Just $ toTempl name ++ ' ' : typ ++ ' ' : identToJs var)
+            [] (JSBlock [JSReturn $ JSApp js []])
+
     appfn var name _ = error $ show var ++ " = " ++ name
 
 -- |

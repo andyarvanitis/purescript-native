@@ -94,9 +94,9 @@ headerPreamble =
 nativeMain :: [JS]
 nativeMain =
   [ JSRaw "\n"
-  , JSRaw "int main(int argc, char *argv[]) {"
-  , JSRaw "    auto args = argc ? list<string>(argv + 1, argv + argc) : list<string>();"
-  , JSRaw "    return Main::main(argc)(args);"
+  , JSRaw "int main(int, char *[]) {"
+  , JSRaw "    Main::main<void>();"
+  , JSRaw "    return 0;"
   , JSRaw "}"
   ]
 
