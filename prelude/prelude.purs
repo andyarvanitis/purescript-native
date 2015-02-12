@@ -868,14 +868,16 @@ module Data.Function where
       };
     }
     """ :: forall a b c d e f g h i j k. Fn10 a b c d e f g h i j k -> a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> k
+-}
 
 module Prelude.Unsafe where
 
   foreign import unsafeIndex
     """
-    function unsafeIndex(xs) {
-      return function(n) {
-        return xs[n];
+    template <typename T>
+    inline auto unsafeIndex(list<T> xs) -> fn<list_index_type,T> {
+      return [=](list_index_type n) {
+        return xs[n]; // consider using at() instead, which does bounds checking
       };
     }
     """ :: forall a. [a] -> Number -> a
@@ -884,14 +886,24 @@ module Control.Monad.Eff where
 
   foreign import data Eff :: # ! -> * -> *
 
+  -- TODO: investigate generating this automatically from foreign import data above
+  foreign import eff_stub
+    """
+    template <typename RowType, typename A>
+    using Eff = A;
+    """ :: Unit
+
   foreign import returnE
     """
-    function returnE(a) {
-      return function() {
+    template <typename A, typename E>
+    inline auto returnE(A a) -> std::function<Eff<E,A>()> {
+      return [=]() {
         return a;
       };
     }
     """ :: forall e a. a -> Eff e a
+
+{-
 
   foreign import bindE
     """
@@ -991,6 +1003,8 @@ module Control.Monad.Eff.Unsafe where
     }
     """ :: forall eff1 eff2 a. Eff eff1 a -> Eff eff2 a
 
+-}
+
 module Debug.Trace where
 
   import Control.Monad.Eff
@@ -999,16 +1013,19 @@ module Debug.Trace where
 
   foreign import trace
     """
-    function trace(s) {
-      return function() {
-        console.log(s);
-        return {};
+    template <typename RowType>
+    inline auto trace(string s) -> std::function<data<Control_Monad_Eff::Eff<RowType,Prelude::Unit>>()> {
+      return [=]() {
+        std::cout << s << std::endl;
+        return Prelude::unit;
       };
     }
     """ :: forall r. String -> Eff (trace :: Trace | r) Unit
 
   print :: forall a r. (Show a) => a -> Eff (trace :: Trace | r) Unit
   print o = trace (show o)
+
+{-
 
 module Control.Monad.ST where
 
