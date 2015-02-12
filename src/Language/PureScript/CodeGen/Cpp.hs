@@ -69,6 +69,7 @@ headerPreamble =
   , JSRaw "template <typename T, typename U> using fn = std::function<U(T)>;"
   , JSRaw "template <typename T> using data = typename ADT<T>::type;"
   , JSRaw "template <typename T> using list = std::vector<T>;"
+  , JSRaw "using list_index_type = list<void*>::size_type;"
   , JSRaw "using string = std::string;"
   , JSRaw " "
   , JSRaw "// Function aliases"
