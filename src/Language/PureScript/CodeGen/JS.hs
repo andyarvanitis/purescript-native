@@ -388,7 +388,7 @@ bindersToJs m binders vals = do
     return (ret', retType result)
   let jss = fst <$> fn'
   let name = listToMaybe . filter (not . null) $ map snd fn'
-  return $ JSApp (JSFunction name [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSStringLiteral "Failed pattern match"])))
+  return $ JSApp (JSFunction Nothing [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSStringLiteral "Failed pattern match"])))
                  []
   where
     go :: (Functor m, Applicative m, Monad m) => [String] -> [JS] -> [Binder Ann] -> SupplyT m [JS]

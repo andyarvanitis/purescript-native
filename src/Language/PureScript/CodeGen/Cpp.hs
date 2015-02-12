@@ -321,35 +321,35 @@ sections jss  = foldl (flip section) ([],[],[],[]) jss
          extTempls,
          templs ++ [js])
 
-    section js@(JSVariableIntroduction var (Just JSNumericLiteral{})) (decls, impls, extTempls, templs)
+    section (JSVariableIntroduction var js@(Just JSNumericLiteral{})) (decls, impls, extTempls, templs)
       = (decls,
          impls,
          extTempls,
-         templs ++ [js])
+         templs ++ [JSVariableIntroduction ("const " ++ var) js])
 
-    section js@(JSVariableIntroduction var (Just JSStringLiteral{})) (decls, impls, extTempls, templs)
+    section (JSVariableIntroduction var js@(Just JSStringLiteral{})) (decls, impls, extTempls, templs)
       = (decls,
          impls,
          extTempls,
-         templs ++ [js])
+         templs ++ [JSVariableIntroduction ("const " ++ var) js])
 
-    section js@(JSVariableIntroduction var (Just JSBooleanLiteral{})) (decls, impls, extTempls, templs)
+    section (JSVariableIntroduction var js@(Just JSBooleanLiteral{})) (decls, impls, extTempls, templs)
       = (decls,
          impls,
          extTempls,
-         templs ++ [js])
+         templs ++ [JSVariableIntroduction ("const " ++ var) js])
 
-    section js@(JSVariableIntroduction var (Just JSArrayLiteral{})) (decls, impls, extTempls, templs)
+    section (JSVariableIntroduction var js@(Just JSArrayLiteral{})) (decls, impls, extTempls, templs)
       = (decls,
          impls,
          extTempls,
-         templs ++ [js])
+         templs ++ [JSVariableIntroduction ("const " ++ var) js])
 
-    section js@(JSVariableIntroduction var (Just JSApp{})) (decls, impls, extTempls, templs)
+    section (JSVariableIntroduction var js@(Just JSApp{})) (decls, impls, extTempls, templs)
       = (decls,
          impls,
          extTempls,
-         templs ++ [js])
+         templs ++ [JSVariableIntroduction ("const " ++ var) js])
 
     section js@(JSVariableIntroduction var (Just JSData{})) (decls, impls, extTempls, templs)
       = (decls ++ [js],
@@ -429,8 +429,25 @@ getSpecialization s = case spec of
   where
     spec = dropWhile (/='<') . drop 1 $ dropWhile (/='<') s
 -----------------------------------------------------------------------------------------------------------------------
+rmTempl :: String -> String
+rmTempl s | '|' `elem` s = drop 1 $ dropWhile (/='|') s
+rmTempl s = s
+-----------------------------------------------------------------------------------------------------------------------
 rmType :: String -> String
-rmType = takeWhile (/='@')
+rmType = takeWhile (/='@') . rmTempl
+-----------------------------------------------------------------------------------------------------------------------
+cleanName :: String -> String
+cleanName s = last $ words $ (\c -> if c == ':' then ' ' else c) <$> (rmType s)
+-----------------------------------------------------------------------------------------------------------------------
+cleanName' :: String -> String
+cleanName' = takeWhile (/='<') . cleanName
+-----------------------------------------------------------------------------------------------------------------------
+argType :: String -> String
+argType s | (typ:_:_) <- words $ rmType s = typ
+argType _ = []
+
+argName :: String -> String
+argName s = last . words $ rmType s
 -----------------------------------------------------------------------------------------------------------------------
 fromAngles :: String -> Int -> String
 fromAngles [] _ = []

@@ -18,6 +18,7 @@ module Language.PureScript.CodeGen.JS.Optimizer.Common where
 import Data.Maybe (fromMaybe)
 
 import Language.PureScript.CodeGen.JS.AST
+import Language.PureScript.CodeGen.Cpp (cleanName)
 
 applyAll :: [a -> a] -> a -> a
 applyAll = foldl1 (.)
@@ -25,7 +26,7 @@ applyAll = foldl1 (.)
 replaceIdent :: String -> JS -> JS -> JS
 replaceIdent var1 js = everywhereOnJS replace
   where
-  replace (JSVar var2) | (takeWhile (/='@') var1) == (takeWhile (/='@') var2) = js
+  replace (JSVar var2) | cleanName var1 == cleanName var2 = js
   replace other = other
 
 replaceIdents :: [(String, JS)] -> JS -> JS

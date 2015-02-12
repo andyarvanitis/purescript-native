@@ -17,6 +17,7 @@ module Language.PureScript.CodeGen.JS.Optimizer.TCO (tco) where
 
 import Language.PureScript.Options
 import Language.PureScript.CodeGen.JS.AST
+import Language.PureScript.CodeGen.Cpp (argType, argName, cleanName, cleanName')
 
 -- |
 -- Eliminate tail calls
@@ -31,15 +32,17 @@ tco' = everywhereOnJS convert
   tcoLabel :: String
   tcoLabel = "tco"
   tcoVar :: String -> String
-  tcoVar arg = "__tco_" ++ arg
+  tcoVar arg = "__tco_" ++ cleanName' arg
   copyVar :: String -> String
-  copyVar arg = "__copy_" ++ arg
+  copyVar arg = "__copy_" ++ cleanName' arg
+  copyVar' :: String -> String
+  copyVar' arg = argType arg ++ ' ' : "__copy_" ++ cleanName' arg
   convert :: JS -> JS
   convert js@(JSVariableIntroduction name (Just fn@JSFunction {})) =
     let
       (argss, body', replace) = collectAllFunctionArgs [] id fn
     in case () of
-      _ | isTailCall name body' ->
+      _ | isTailCall (cleanName name) body' ->
             let
               allArgs = concat $ reverse argss
             in
@@ -48,13 +51,13 @@ tco' = everywhereOnJS convert
   convert js = js
   collectAllFunctionArgs :: [[String]] -> (JS -> JS) -> JS -> ([[String]], JS, JS -> JS)
   collectAllFunctionArgs allArgs f (JSFunction ident args (JSBlock (body@(JSReturn _):_))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (JSFunction ident (map copyVar args) (JSBlock [b]))) body
+    collectAllFunctionArgs (args : allArgs) (\b -> f (JSFunction ident (map copyVar' args) (JSBlock [b]))) body
   collectAllFunctionArgs allArgs f (JSFunction ident args body@(JSBlock _)) =
-    (args : allArgs, body, f . JSFunction ident (map copyVar args))
+    (args : allArgs, body, f . JSFunction ident (map copyVar' args))
   collectAllFunctionArgs allArgs f (JSReturn (JSFunction ident args (JSBlock [body]))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (JSReturn (JSFunction ident (map copyVar args) (JSBlock [b])))) body
+    collectAllFunctionArgs (args : allArgs) (\b -> f (JSReturn (JSFunction ident (map copyVar' args) (JSBlock [b])))) body
   collectAllFunctionArgs allArgs f (JSReturn (JSFunction ident args body@(JSBlock _))) =
-    (args : allArgs, body, f . JSReturn . JSFunction ident (map copyVar args))
+    (args : allArgs, body, f . JSReturn . JSFunction ident (map copyVar' args))
   collectAllFunctionArgs allArgs f body = (allArgs, body, f)
   isTailCall :: String -> JS -> Bool
   isTailCall ident js =
@@ -68,7 +71,7 @@ tco' = everywhereOnJS convert
       && numSelfCallsUnderFunctions == 0
     where
     countSelfCalls :: JS -> Int
-    countSelfCalls (JSApp (JSVar ident') _) | ident == ident' = 1
+    countSelfCalls (JSApp (JSVar ident') _) | ident == (cleanName ident') = 1
     countSelfCalls _ = 0
     countSelfCallsInTailPosition :: JS -> Int
     countSelfCallsInTailPosition (JSReturn ret) | isSelfCall ident ret = 1
@@ -77,7 +80,7 @@ tco' = everywhereOnJS convert
     countSelfCallsUnderFunctions _ = 0
   toLoop :: String -> [String] -> JS -> JS
   toLoop ident allArgs js = JSBlock $
-        map (\arg -> JSVariableIntroduction arg (Just (JSVar (copyVar arg)))) allArgs ++
+        map (\arg -> JSVariableIntroduction (argName arg) (Just (JSVar (copyVar arg)))) allArgs ++
         [ JSLabel tcoLabel $ JSWhile (JSBooleanLiteral True) (JSBlock [ everywhereOnJS loopify js ]) ]
     where
     loopify :: JS -> JS
@@ -88,14 +91,14 @@ tco' = everywhereOnJS convert
         JSBlock $ zipWith (\val arg ->
                     JSVariableIntroduction (tcoVar arg) (Just val)) allArgumentValues allArgs
                   ++ map (\arg ->
-                    JSAssignment (JSVar arg) (JSVar (tcoVar arg))) allArgs
+                    JSAssignment (JSVar $ argName arg) (JSVar (tcoVar arg))) allArgs
                   ++ [ JSContinue tcoLabel ]
     loopify other = other
     collectSelfCallArgs :: [[JS]] -> JS -> [[JS]]
     collectSelfCallArgs allArgumentValues (JSApp fn args') = collectSelfCallArgs (args' : allArgumentValues) fn
     collectSelfCallArgs allArgumentValues _ = allArgumentValues
   isSelfCall :: String -> JS -> Bool
-  isSelfCall ident (JSApp (JSVar ident') args) | ident == ident' && not (any isFunction args) = True
+  isSelfCall ident (JSApp (JSVar ident') args) | ident == (cleanName ident') && not (any isFunction args) = True
   isSelfCall ident (JSApp fn args) | not (any isFunction args) = isSelfCall ident fn
   isSelfCall _ _ = False
   isFunction :: JS -> Bool

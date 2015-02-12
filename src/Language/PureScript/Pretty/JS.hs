@@ -171,7 +171,7 @@ literals = mkPattern' match
         return $ indentString ++ "};"
     ]
   match (JSVariableIntroduction ident value) = fmap concat $ sequence
-    [ return "const auto "
+    [ return "auto "
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintJS') value
     , return ";"
