@@ -138,11 +138,6 @@ mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just $ Native "string"
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just $ Native "bool"
 
-mktype m (T.TypeApp
-            (T.TypeApp
-              (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                (T.TypeApp (T.TypeConstructor _) (T.RCons _ t _))) _) = mktype m t
-
 mktype _ (T.TypeApp
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
@@ -165,8 +160,7 @@ mktype _ (T.TypeApp
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-             a) = Just $ Native ("struct{" ++ typestr m a ++ "}")
-
+             t@(T.RCons _ _ _)) = mktype m t
 
 mktype m app@(T.TypeApp a b)
   | (name, tys@(_:_)) <- tyapp app [] = Just $ ParamTemplate (identToJs $ Ident name) tys
@@ -190,6 +184,7 @@ mktype _ (T.Skolem name _ _) = Just $ Template (identToJs $ Ident name)
 mktype _ (T.TypeVar name) = Just $ Template (identToJs $ Ident name)
 mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a)
 mktype m (T.ConstrainedType _ ty) = mktype m ty
+mktype m (T.RCons _ _ _) = Just $ Template "rowType"
 mktype _ T.REmpty = Nothing
 mktype _ b = error $ "Unknown type: " ++ show b
 
@@ -199,10 +194,6 @@ typestr m t | Just t' <- mktype m t = show t'
 
 -----------------------------------------------------------------------------------------------------------------------
 fnArgStr :: ModuleName -> Maybe T.Type -> String
-fnArgStr m (Just (T.TypeApp
-             (T.TypeApp
-               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                 (T.TypeApp (T.TypeConstructor _) (T.RCons _ t _))) _)) = fnArgStr m (Just t)
 fnArgStr m (Just ((T.TypeApp
                     (T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
@@ -212,10 +203,6 @@ fnArgStr m (Just (T.ForAll _ ty _)) = fnArgStr m (Just ty)
 fnArgStr _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 fnRetStr :: ModuleName -> Maybe T.Type -> String
-fnRetStr m (Just (T.TypeApp
-             (T.TypeApp
-               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                 (T.TypeApp (T.TypeConstructor _) (T.RCons _ t _))) _)) = fnRetStr m (Just t)
 fnRetStr m (Just ((T.TypeApp
                     (T.TypeApp
                       (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))

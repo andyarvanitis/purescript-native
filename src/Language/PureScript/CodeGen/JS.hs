@@ -307,18 +307,29 @@ valueToJs m (Constructor (_, _, ty, _) (ProperName typename) (ProperName ctor) a
     return $ JSData (mkUnique ctor) typename (fields ty) $
                JSVariableIntroduction dataCtorName (Just . mkfn fname $ fields ty)
   where
-    fields :: Maybe T.Type -> [String]
-    fields ty = map (\(t,n) -> t ++ ' ' : ("value" ++ show n)) $ zip (types ty) ([0..] :: [Int])
+    types = map fst . rows
+    names = map snd . rows
+    fields = map (\(t,n) -> t ++ ' ' : n) . rows
 
-    types :: Maybe T.Type -> [String]
-    types Nothing = []
-    types (Just (T.RCons _ ty row)) = (typestr m ty) : types (Just row)
-    types (Just T.REmpty) = []
+    rows :: Maybe T.Type -> [(String, String)]
+    rows = go 0
+      where
+      go _ Nothing = []
+      go n (Just (T.RCons _
+                   (T.TypeApp
+                     (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
+                       row@(T.RCons _ _ _)) _)) = go n (Just row)
+      go n (Just (T.RCons name ty row)) = (typestr m ty, name') : go (n + 1) (Just row)
+        where
+          name' = case name of
+                    [] -> "value" ++ show n
+                    _ -> name
+      go _ (Just T.REmpty) = []
 
     mkfn :: Maybe String -> [String] -> JS
     mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar $ mkData (mkUnique ctor)) []]
     mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
-    mkfn Nothing [] = JSApp (JSVar $ mkData (mkUnique ctor)) (JSVar <$> last . words <$> fields ty)
+    mkfn Nothing [] = JSApp (JSVar $ mkData (mkUnique ctor)) (JSVar <$> names ty)
 
     fname = Just $ fty (types ty) ++ " _"
 
