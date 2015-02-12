@@ -23,9 +23,11 @@ module Language.PureScript.CodeGen.JS.Optimizer.Inliner (
 ) where
 
 import Data.Maybe (fromMaybe)
+import Data.List (stripPrefix)
 
 import Language.PureScript.CodeGen.JS.AST
 import Language.PureScript.CodeGen.JS.Common
+import Language.PureScript.CodeGen.Cpp (cleanName')
 import Language.PureScript.Names
 import Language.PureScript.CodeGen.JS.Optimizer.Common
 import qualified Language.PureScript.Constants as C
@@ -134,7 +136,8 @@ inlineCommonOperators = applyAll $
     convert (JSApp (JSApp fn [x]) [y]) | isOp fn = JSBinary op x y
     convert (JSApp (JSApp (JSApp fn [dict]) [x]) [y]) | isOp fn && isOpDict dictName dict = JSBinary op x y
     convert other = other
-    isOp (JSVar fnName) = fnName == identToJs (Op opString)
+    isOp (JSVar varName)
+      | (Just varName') <- stripPrefix C.prelude varName = cleanName' varName' == identToJs (Op opString)
     isOp (JSAccessor longForm (JSAccessor prelude (JSVar _))) = prelude == C.prelude && longForm == identToJs (Op opString)
     isOp (JSIndexer (JSStringLiteral op') (JSVar prelude)) = prelude == C.prelude && opString == op'
     isOp _ = False
@@ -145,7 +148,8 @@ inlineCommonOperators = applyAll $
     convert (JSApp (JSApp fn [x]) [y]) | isOp fn = JSBinary op x y
     convert (JSApp (JSApp (JSApp fn [dict]) [x]) [y]) | isOp fn && isOpDict dictName dict = JSBinary op x y
     convert other = other
-    isOp (JSVar fnName') = fnName == fnName'
+    isOp (JSVar varName)
+      | (Just varName') <- stripPrefix C.prelude varName = cleanName' varName' == fnName
     isOp (JSAccessor fnName' (JSVar prelude)) = prelude == C.prelude && fnName == fnName'
     isOp _ = False
   unary :: String -> String -> UnaryOperator -> JS -> JS
@@ -155,7 +159,8 @@ inlineCommonOperators = applyAll $
     convert (JSApp fn [x]) | isOp fn = JSUnary op x
     convert (JSApp (JSApp fn [dict]) [x]) | isOp fn && isOpDict dictName dict = JSUnary op x
     convert other = other
-    isOp (JSVar fnName') = fnName == fnName'
+    isOp (JSVar varName)
+      | (Just varName') <- stripPrefix C.prelude varName = cleanName' varName' == fnName
     isOp (JSAccessor fnName' (JSVar prelude)) = prelude == C.prelude && fnName' == fnName
     isOp _ = False
   isOpDict dictName (JSAccessor prop (JSVar prelude)) = prelude == C.prelude && prop == dictName
