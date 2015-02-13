@@ -886,41 +886,35 @@ module Control.Monad.Eff where
 
   foreign import data Eff :: # ! -> * -> *
 
-  -- TODO: investigate generating this automatically from foreign import data above
-  foreign import eff_stub
-    """
-    template <typename RowType, typename A>
-    using Eff = A;
-    """ :: Unit
-
   foreign import returnE
     """
     template <typename A, typename E>
-    inline auto returnE(A a) -> eff_fn<Eff<E,A>> {
+    inline auto returnE(A a) -> eff_fn<A> {
       return [=]() {
         return a;
       };
     }
     """ :: forall e a. a -> Eff e a
 
-{-
-
   foreign import bindE
     """
-    function bindE(a) {
-      return function(f) {
-        return function() {
+    template <typename A, typename B, typename E>
+    inline auto bindE(eff_fn<A> a) -> fn<fn<A,eff_fn<B>>,eff_fn<B>> {
+      return [=](fn<A,eff_fn<B>> f) {
+        return [=]() {
           return f(a())();
         };
       };
     }
     """ :: forall e a b. Eff e a -> (a -> Eff e b) -> Eff e b
 
+  -- TODO: can we get this info and use to create type aliases on the C++ side?
   type Pure a = forall e. Eff e a
 
   foreign import runPure
     """
-    function runPure(f) {
+    template <typename A, typename E>
+    inline auto runPure(eff_fn<A> f) -> A {
       return f();
     }
     """ :: forall a. Pure a -> a
@@ -938,6 +932,8 @@ module Control.Monad.Eff where
     (>>=) = bindE
 
   instance monadEff :: Monad (Eff e)
+
+{-
 
   foreign import untilE
     """
@@ -1013,8 +1009,7 @@ module Debug.Trace where
 
   foreign import trace
     """
-    template <typename RowType>
-    inline auto trace(string s) -> eff_fn<data<Control_Monad_Eff::Eff<RowType,Prelude::Unit>>> {
+    inline auto trace(string s) -> eff_fn<data<Prelude::Unit>> {
       return [=]() {
         std::cout << s << std::endl;
         return Prelude::unit;

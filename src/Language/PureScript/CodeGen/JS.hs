@@ -160,8 +160,8 @@ nonRecToJS mp ident val = do
         = JSFunction (Just $ toTempl name ++ ' ' : getRet typ ++ ' ' : identToJs var)
             [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp js [JSVar "arg"]])
 
-    appfn var name js
-      | '#' `elem` name, typ <- drop 1 $ getType name
+    appfn var name js -- TODO: investigate using name or typ in call to toTempl
+      | ('@':'e':'f':'f':'_':'f':'n':'<':ss) <- getType name, typ <- init ss
         = JSFunction (Just $ toTempl name ++ ' ' : typ ++ ' ' : identToJs var)
             [] (JSBlock [JSReturn $ JSApp js []])
 
@@ -251,8 +251,9 @@ valueToJs m e@App{} = do
                                                               ++ getAppSpecType m e (arity - length args + 1)) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name'@(Qualified mn (Ident name)) -> do
       convArgs <- mapM (valueToJs m) (instFn name' args)
+      let convArgs' = addTyIfNeeded <$> (zip args convArgs)
       return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames m e name')) $
-               toVarDecl <$> (depSort $ zip (names ty) convArgs)
+               toVarDecl <$> (depSort $ zip (names ty) convArgs')
 
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> if isQualified f || (typeinst $ head args) then
                                                           specialized' =<< valueToJs m f
@@ -281,6 +282,12 @@ valueToJs m e@App{} = do
 
   instFn :: Qualified Ident -> [Expr Ann] -> [Expr Ann]
   instFn name = map $ convExpr (convType $ typeclassTypes e name)
+
+  addTyIfNeeded :: (Expr Ann, JS) -> JS
+  addTyIfNeeded (expr, js@(JSVar s))
+    | '@' `elem` s = js
+    | (Just typ) <- exprFnTy m expr = JSVar $ s ++ ('@' : show typ)
+  addTyIfNeeded (_, js) = js
 
   specialized (JSVar name) = rmType name ++ templateSpec (declFnTy m e) (exprFnTy m e) ++ getType name
   specialized' = pure . JSVar . specialized

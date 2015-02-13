@@ -96,7 +96,7 @@ nativeMain :: [JS]
 nativeMain =
   [ JSRaw "\n"
   , JSRaw "int main(int, char *[]) {"
-  , JSRaw "    Main::main<void>();"
+  , JSRaw "    Main::main();"
   , JSRaw "    return 0;"
   , JSRaw "}"
   ]
@@ -171,6 +171,17 @@ mktype m app@(T.TypeApp a b)
     tyapp (T.TypeApp (T.Skolem name _ _) b) ts | Just b' <- mktype m b = (identToJs $ Ident name, b':ts)
     tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t':ts)
     tyapp _ _ = ([],[])
+
+mktype m app@(T.TypeApp a b)
+  | (name, tys@(_:_)) <- tyapp app [] = Just $ Native $ "eff_fn<" ++ (show $ last tys) ++ ">" -- Specialized (Native name) tys
+  where
+    tyapp :: T.Type -> [Type] -> (String, [Type])
+    -- tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (identToJs $ Ident name, b':ts)
+    tyapp (T.TypeApp (T.Skolem name _ _) b) ts | Just b' <- mktype m b = (identToJs $ Ident name, b':ts)
+    tyapp z@(T.TypeApp (T.TypeConstructor name@(Qualified (Just _) (ProperName _))) b) ts
+      | Just b' <- mktype m b = (qualifiedToStr m (Ident . runProperName) name, b':ts)
+    tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t':ts)
+    tyapp z _ = ([],[])
 
 mktype m (T.TypeApp T.Skolem{} b) = mktype m b
 
@@ -582,7 +593,7 @@ isMain (ModuleName [ProperName "Main"]) = True
 isMain _ = False
 -----------------------------------------------------------------------------------------------------------------------
 depSort :: [(String, JS)] -> [(String, JS)]
-depSort ps = sortBy vardep ps
+depSort = sortBy vardep
   where
     getVars js = AST.everythingOnJS (++) getVar js
 
