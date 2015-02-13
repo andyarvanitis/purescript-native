@@ -896,7 +896,7 @@ module Control.Monad.Eff where
   foreign import returnE
     """
     template <typename A, typename E>
-    inline auto returnE(A a) -> std::function<Eff<E,A>()> {
+    inline auto returnE(A a) -> eff_fn<Eff<E,A>> {
       return [=]() {
         return a;
       };
@@ -1014,7 +1014,7 @@ module Debug.Trace where
   foreign import trace
     """
     template <typename RowType>
-    inline auto trace(string s) -> std::function<data<Control_Monad_Eff::Eff<RowType,Prelude::Unit>>()> {
+    inline auto trace(string s) -> eff_fn<data<Control_Monad_Eff::Eff<RowType,Prelude::Unit>>> {
       return [=]() {
         std::cout << s << std::endl;
         return Prelude::unit;
