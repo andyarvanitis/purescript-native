@@ -67,11 +67,11 @@ headerPreamble =
   , JSRaw "// Type aliases"
   , JSRaw "//"
   , JSRaw "template <typename A, typename B> using fn = std::function<B(A)>;"
-  , JSRaw "template <typename B> using eff_fn = std::function<B()>;"
   , JSRaw "template <typename T> using data = typename ADT<T>::type;"
   , JSRaw "template <typename T> using list = std::vector<T>;"
   , JSRaw "using list_index_type = list<void*>::size_type;"
   , JSRaw "using string = std::string;"
+  , JSRaw "template <typename B> using eff_fn = std::function<B(data<std::nullptr_t>)>;"
   , JSRaw " "
   , JSRaw "// Function aliases"
   , JSRaw " "
@@ -96,7 +96,7 @@ nativeMain :: [JS]
 nativeMain =
   [ JSRaw "\n"
   , JSRaw "int main(int, char *[]) {"
-  , JSRaw "    Main::main();"
+  , JSRaw "    Main::main(Prelude::unit);"
   , JSRaw "    return 0;"
   , JSRaw "}"
   ]
@@ -109,12 +109,14 @@ data Type = Native String
           | List Type
           | Template String
           | ParamTemplate String [Type]
+          | EffectFunction Type
           deriving (Eq)
 
 -----------------------------------------------------------------------------------------------------------------------
 instance Show Type where
   show (Native name) = name
   show tt@(Function a b) = typeName tt ++ '<' : show a ++ "," ++ show b ++ ">"
+  show tt@(EffectFunction b) = typeName tt ++ '<' : show b ++ ">"
   show tt@(Data t) = typeName tt ++ '<' : show t ++ ">"
   show (Specialized t []) = show t
   show (Specialized t ts) = show t ++ '<' : (intercalate "," $ map show ts) ++ ">"
@@ -127,6 +129,7 @@ instance Show Type where
 
 typeName :: Type -> String
 typeName Function{} = "fn"
+typeName EffectFunction{} = "eff_fn"
 typeName Data{} = "data"
 typeName List{} = "list"
 typeName Template{} = "#"
@@ -173,7 +176,7 @@ mktype m app@(T.TypeApp a b)
     tyapp _ _ = ([],[])
 
 mktype m app@(T.TypeApp a b)
-  | (name, tys@(_:_)) <- tyapp app [] = Just $ Native $ "eff_fn<" ++ (show $ last tys) ++ ">" -- Specialized (Native name) tys
+  | (name, tys@(_:_)) <- tyapp app [] = Just $ EffectFunction (last tys)
   where
     tyapp :: T.Type -> [Type] -> (String, [Type])
     -- tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (identToJs $ Ident name, b':ts)
@@ -206,21 +209,28 @@ typestr m t | Just t' <- mktype m t = show t'
 
 -----------------------------------------------------------------------------------------------------------------------
 fnArgStr :: ModuleName -> Maybe T.Type -> String
-fnArgStr m (Just ((T.TypeApp
-                    (T.TypeApp
-                      (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                       a) _)))
-                         = typestr m a
+fnArgStr m (Just (T.TypeApp
+                   (T.TypeApp
+                     (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                       a) _)) = typestr m a
 fnArgStr m (Just (T.ForAll _ ty _)) = fnArgStr m (Just ty)
+fnArgStr m (Just (T.TypeApp
+                   (T.TypeApp
+                     (T.TypeConstructor _) T.RCons{}) b)) = typestr m b  -- TODO: this looks wrong
+fnArgStr m (Just (T.TypeApp
+                   (T.TypeApp
+                     (T.TypeConstructor _) a) _)) = typestr m a
 fnArgStr _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 fnRetStr :: ModuleName -> Maybe T.Type -> String
-fnRetStr m (Just ((T.TypeApp
-                    (T.TypeApp
-                      (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                       _) b)))
-                         = typestr m b
+fnRetStr m (Just (T.TypeApp
+                   (T.TypeApp
+                     (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                       _) b)) = typestr m b
 fnRetStr m (Just (T.ForAll _ ty _)) = fnRetStr m (Just ty)
+fnRetStr m (Just (T.TypeApp
+                   (T.TypeApp
+                     (T.TypeConstructor _) _) b)) = typestr m b
 fnRetStr _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
 dataCon :: ModuleName -> T.Type -> [Type]
@@ -296,7 +306,7 @@ sections jss  = foldl (flip section) ([],[],[],[]) jss
 
     section (JSVariableIntroduction var js@(Just (JSFunction (Just name) [arg] (JSBlock [JSReturn (JSApp _ [JSVar arg'])]))))
             (decls, impls, extTempls, templs)
-      | (last $ words arg) == arg'
+      | ws@(_:_) <- words arg, last ws == arg'
       = (decls ++ [JSVariableIntroduction ("inline " ++ var) (Just $ JSFunction (Just name) [arg] JSNoOp)],
          impls,
          extTempls,
@@ -437,7 +447,8 @@ rmType :: String -> String
 rmType = takeWhile (/='@') . rmTempl
 -----------------------------------------------------------------------------------------------------------------------
 cleanName :: String -> String
-cleanName s = last $ words $ (\c -> if c == ':' then ' ' else c) <$> (rmType s)
+cleanName s | ws@(_:_) <- words $ (\c -> if c == ':' then ' ' else c) <$> (rmType s) = last ws
+cleanName s = s
 -----------------------------------------------------------------------------------------------------------------------
 cleanName' :: String -> String
 cleanName' = takeWhile (/='<') . cleanName
@@ -447,35 +458,8 @@ argType s | (typ:_:_) <- words $ rmType s = typ
 argType _ = []
 
 argName :: String -> String
-argName s = last . words $ rmType s
------------------------------------------------------------------------------------------------------------------------
-fromAngles :: String -> Int -> String
-fromAngles [] _ = []
-fromAngles _ 0 = []
-fromAngles (x@'<':xs) n = x : fromAngles xs (n+1)
-fromAngles (x@'>':xs) n = x : fromAngles xs (n-1)
-fromAngles (x:xs)     n = x : fromAngles xs n
------------------------------------------------------------------------------------------------------------------------
-afterAngles :: String -> Int -> String
-afterAngles [] _ = []
-afterAngles xs 0 = xs
-afterAngles ('<':xs) n = afterAngles xs (n+1)
-afterAngles ('>':xs) n = afterAngles xs (n-1)
-afterAngles (_:xs)   n = afterAngles xs n
------------------------------------------------------------------------------------------------------------------------
-getArg :: String -> String
-getArg ('f':'n':'<':xs) = typeName (Function {}) ++ '<' : fromAngles xs 1
-getArg xs
-  | xs' <- takeWhile (/=',') xs,
-   '<' `elem` xs' = takeWhile (/='<') xs ++ '<' : fromAngles (drop 1 $ dropWhile (/='<') xs) 1
-getArg xs = takeWhile (/=',') xs
------------------------------------------------------------------------------------------------------------------------
-getRet :: String -> String
-getRet ('f':'n':'<':xs) = drop 1 $ afterAngles xs 1
-getRet xs
-  | xs' <- takeWhile (/=',') xs,
-   '<' `elem` xs' = drop 1 $ afterAngles (drop 1 $ dropWhile (/='<') xs) 1
-getRet xs = drop 1 $ dropWhile (/=',') xs
+argName s | ws@(_:_) <- words $ rmType s = last ws
+argName s = s
 -----------------------------------------------------------------------------------------------------------------------
 templParms :: String -> [String]
 templParms s = nub' . sortBy (compare `on` dropWhile isDigit) $
@@ -497,11 +481,12 @@ templateArgs :: Type -> Type -> [(String,String)]
 templateArgs t1 t2 = nubBy ((==) `on` (normalize . fst)) . sortBy (compare `on` (normalize . fst)) $ templateArgs' [] t1 t2
   where
     normalize :: String -> String
-    normalize = takeWhile (/='<') . dropWhile isDigit . drop 1
+    normalize = takeWhile (/='<') . dropWhile isDigit . filter (/='#')
 
 templateArgs' :: [(String,String)] -> Type -> Type -> [(String,String)]
 templateArgs' args (Native t) (Native t') | t == t' = args
 templateArgs' args (Function a b) (Function a' b') = args ++ (templateArgs' [] a a') ++ (templateArgs' [] b b')
+templateArgs' args (EffectFunction b) (EffectFunction b') = args ++ (templateArgs' [] b b')
 templateArgs' args (Data t) (Data t') = templateArgs' args t t'
 templateArgs' args (Specialized t []) (Specialized t' []) = templateArgs' args t t'
 templateArgs' args (Specialized t ts) (Specialized t' ts') = args ++ (templateArgs' [] t t') ++ (concat $ zipWith (templateArgs' []) ts ts')
@@ -515,17 +500,21 @@ templateArgs' _ t1 t2 = error $ "Mismatched type structure! " ++ show t1 ++ " ; 
 
 fromParamTemplate :: Type -> Type -> [(String,String)]
 fromParamTemplate (ParamTemplate name [a, b]) t@(Function a' b') =
-  [ (capitalize name, typeName t)
-  , (show a, show a')
+  -- [ (capitalize name, typeName t)
+  [ (show a, show a')
   , (show b, show b')
   ]
+fromParamTemplate (ParamTemplate name [b]) t@(EffectFunction b') =
+  -- [ (capitalize name, typeName t)
+  [ (show b, show b')
+  ]
 fromParamTemplate (ParamTemplate name [a]) t@(List a') =
-  [ (capitalize name, typeName t)
-  , (show a, show a')
+  -- [ (capitalize name, typeName t)
+  [ (show a, show a')
   ]
 fromParamTemplate (ParamTemplate name [a]) t@(Data a') =
-  [ (capitalize name, typeName t)
-  , (show a, show a')
+  -- [ (capitalize name, typeName t)
+  [ (show a, show a')
   ]
 fromParamTemplate ts t = error $ show "Can't map types! " ++ show ts ++ " ; " ++ show t
 
@@ -605,3 +594,21 @@ depSort = sortBy vardep
     vardep (n1,j1) (n2,j2) | (identToJs $ Ident n1) `elem` (getVars j2) = LT
     vardep (n1,j1) (n2,j2) | (identToJs $ Ident n2) `elem` (getVars j1) = GT
     vardep _ _ = EQ
+
+-----------------------------------------------------------------------------------------------------------------------
+dropApp :: Expr Ann -> (Expr Ann, Int)
+dropApp app = dropApp' app 0
+
+dropApp' :: Expr Ann -> Int -> (Expr Ann, Int)
+dropApp' (App _ val _) n = dropApp' val (n + 1)
+dropApp' other n = (other, n)
+-----------------------------------------------------------------------------------------------------------------------
+valToAbs val@(Var vv@(ss, com, _, _) ident) = let argid = Ident "arg" in
+  Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+valToAbs val@(App vv@(ss, com, _, _) _ _) = let argid = Ident "arg" in
+  Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+-- valToAbs val@(Accessor vv@(ss, com, _, _) _ _) = let argid = Ident "arg" in
+--   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+valToAbs (Abs (ss, com, _, _) _ val@(App vv _ _)) = let argid = Ident "arg" in
+  Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+valToAbs val = val

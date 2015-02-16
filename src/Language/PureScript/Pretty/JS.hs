@@ -443,11 +443,12 @@ dataType s = takeWhile (/='@') s ++ case ty of
 
 returnType :: String -> String
 returnType fn
-  | length (words fn) > 1, name@(_:_) <- stripped = " -> " ++ name
+  | ws <- words $ drop ((fromMaybe (-1) $ elemIndex '|' fn) + 1) fn,
+    length ws > 1,
+    name@(_:_) <- stripped ws = " -> " ++ name
   | otherwise = []
   where
-    stripped = cleanParam . intercalate " " . init . filter (/="inline") . words $
-                 drop ((fromMaybe (-1) $ elemIndex '|' fn) + 1) fn
+    stripped ws = cleanParam . intercalate " " . init . filter (/="inline") $ ws
 
 cleanParam :: String -> String
 cleanParam s

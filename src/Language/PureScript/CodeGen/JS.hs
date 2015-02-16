@@ -23,7 +23,7 @@ module Language.PureScript.CodeGen.JS (
 ) where
 
 import Data.List ((\\), delete)
-import Data.List (intercalate, isPrefixOf, nubBy, sortBy)
+import Data.List (intercalate, isInfixOf, isPrefixOf, nubBy, sortBy)
 import Data.Function (on)
 import Data.Maybe (mapMaybe)
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -52,13 +52,16 @@ import Debug.Trace
 --
 moduleToJs :: (Functor m, Applicative m, Monad m) => Options mode -> Module Ann -> SupplyT m [JS]
 moduleToJs opts (Module name imps exps foreigns decls) = do
-  let jsImports = map (importToJs opts) . delete (ModuleName [ProperName C.prim]) . (\\ [name]) $ imps
+  let imps' = delete (ModuleName [ProperName C.prim]) . (\\ [name]) $ imps
+  let jsImports = map (importToJs opts) imps'
   let foreigns' = mapMaybe (\(_, js, _) -> js) foreigns
   jsDecls <- mapM (bindToJs name) decls
   let optimized = concatMap (map $ optimize opts) jsDecls
   let isModuleEmpty = null exps
   let (moduleDecls, moduleBody, extTempls, templs) = sections optimized
-  let moduleHeader = dataTypes decls
+  let moduleHeader = (JSRaw . (++ ";") . ("using namespace " ++) . moduleNameToJs <$> imps')
+                  ++ [JSRaw " "]
+                  ++ dataTypes decls
                   ++ moduleDecls
                   ++ foreigns'
                   ++ [JSRaw $ "#ifndef " ++ moduleNameToJs name ++ "_CC"]
@@ -109,63 +112,26 @@ bindToJs mp (Rec vals) = forM vals (uncurry (nonRecToJS mp))
 nonRecToJS :: (Functor m, Applicative m, Monad m) => ModuleName -> Ident -> Expr Ann -> SupplyT m JS
 nonRecToJS m i e@(extractAnn -> (_, com, _, _)) | not (null com) =
   JSComment com <$> nonRecToJS m i (modifyAnn removeComments e)
+
+nonRecToJS mp ident val@(App{}) | (f, n) <- dropApp val,
+                                  (Var (_, _, _, Just (IsConstructor _ arity)) _) <- f,
+                                  n == arity = do
+  js <- valueToJs mp val
+  return $ JSVariableIntroduction (identToJs ident) (Just js)
+
+nonRecToJS mp ident val@(App{}) | (f, n) <- dropApp val,
+                                  (Var (_, _, _, Just IsNewtype) _) <- f,
+                                  n == 1 = do
+  js <- valueToJs mp val
+  return $ JSVariableIntroduction (identToJs ident) (Just js)
+
 nonRecToJS mp ident val = do
   js <- valueToJs mp val
-  return $ JSVariableIntroduction (identToJs ident) (Just $ expr ident js)
-  where
-    expr :: Ident -> JS -> JS
-    expr var js@(JSVar _) = expr' var js
-    expr var js@(JSApp _ _) = expr' var js
-    expr var (JSSequence [] jss) = JSSequence (identToJs ident) (expr' var <$> jss)
-    expr var (JSSequence s jss) = JSSequence s (expr' var <$> jss)
-    expr var js = js
-
-    expr' :: Ident -> JS -> JS
-    expr' var (JSVar name)
-      | ('@':'f':'n':'<':_) <- getType name
-        = appfn var name (JSVar name)
-    expr' _ (JSVariableIntroduction var (Just js)) = JSVariableIntroduction var (Just $ expr' (Ident var) js)
-    expr' var js@(JSApp _ _)
-      | (name, '@':'f':'n':'<':ss, n) <- unApp js 0, n > 0, typ <- rty (init ss) n
-        = appfn var (name ++ '@' : typ) js
-      where
-        unApp :: JS -> Int -> (String, String, Int)
-        unApp (JSApp a _) n = unApp a (n + 1)
-        unApp (JSVar v) n = (rmType v, getType v, n)
-        unApp _ n = ([], [], n)
-        rty :: String -> Int -> String
-        rty s 0 = s
-        rty s 1 = getRet s
-        rty s n | ('f':'n':'<':ss) <- init (getRet s) = rty ss (n - 1)
-        rty s _ = s
-    expr' _ js = js
-
-    toTempl s
-      | (App (_, _, Just (T.TypeApp (T.TypeConstructor{}) T.RCons{}), _) _ _) <- val,
-        fn <- templTypes s,  not ('|' `elem` fn) = "|"
-      | otherwise = templTypes s
-
-    appfn var _ js
-      | (Just ty) <- absTy val, ('f':'n':'<':typ) <- (init $ show ty)
-        = JSFunction (Just $ toTempl typ ++ ' ' : getRet typ ++ ' ' : identToJs var)
-            [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp js [JSVar "arg"]])
-      where
-        absTy :: Expr Ann -> Maybe Type
-        absTy (Abs (_, _, Just ty, _) _ _) = mktype mp ty
-        absTy (Var (_, _, Just ty, _) _) = mktype mp ty
-        absTy _ = Nothing
-
-    appfn var name js -- TODO: investigate using name or typ in call to toTempl
-      | ('@':'f':'n':'<':ss) <- getType name, typ <- init ss
-        = JSFunction (Just $ toTempl name ++ ' ' : getRet typ ++ ' ' : identToJs var)
-            [getArg typ ++ " arg"] (JSBlock [JSReturn $ JSApp js [JSVar "arg"]])
-
-    appfn var name js -- TODO: investigate using name or typ in call to toTempl
-      | ('@':'e':'f':'f':'_':'f':'n':'<':ss) <- getType name, typ <- init ss
-        = JSFunction (Just $ toTempl name ++ ' ' : typ ++ ' ' : identToJs var)
-            [] (JSBlock [JSReturn $ JSApp js []])
-
-    appfn var name _ = error $ show var ++ " = " ++ name
+  case js of
+    JSVar{} -> nonRecToJS mp ident (valToAbs val)
+    JSApp{} -> nonRecToJS mp ident (valToAbs val)
+    JSSequence [] jss -> return $ JSSequence (identToJs ident) jss
+    _ -> return $ JSVariableIntroduction (identToJs ident) (Just js)
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a variable based on a
@@ -251,12 +217,10 @@ valueToJs m e@App{} = do
                                                               ++ getAppSpecType m e (arity - length args + 1)) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name'@(Qualified mn (Ident name)) -> do
       convArgs <- mapM (valueToJs m) (instFn name' args)
-      let convArgs' = addTyIfNeeded <$> (zip args convArgs)
-      return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames m e name')) $
-               toVarDecl <$> (depSort $ zip (names ty) convArgs')
-
+      let convArgs' = map toVarDecl (depSort $ zip (names ty) convArgs)
+      return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames m e name')) convArgs'
     _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> if isQualified f || (typeinst $ head args) then
-                                                          specialized' =<< valueToJs m f
+                                                          specialized' f (head args)
                                                         else valueToJs m f
   where
   unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
@@ -281,16 +245,16 @@ valueToJs m e@App{} = do
   typeinst _ = False
 
   instFn :: Qualified Ident -> [Expr Ann] -> [Expr Ann]
-  instFn name = map $ convExpr (convType $ typeclassTypes e name)
+  instFn name = map $ convExpr (convType $ typeclassTypes e name) . valToAbs
 
-  addTyIfNeeded :: (Expr Ann, JS) -> JS
-  addTyIfNeeded (expr, js@(JSVar s))
-    | '@' `elem` s = js
-    | (Just typ) <- exprFnTy m expr = JSVar $ s ++ ('@' : show typ)
-  addTyIfNeeded (_, js) = js
+  specialized name ty = name ++ templateSpec (declFnTy m e) (exprFnTy m e)
 
-  specialized (JSVar name) = rmType name ++ templateSpec (declFnTy m e) (exprFnTy m e) ++ getType name
-  specialized' = pure . JSVar . specialized
+  specialized' f@(Var (_, _, ty, _) (Qualified q ident)) a =
+    pure . JSVar $ specialized (qualifiedToStr m id (Qualified qual ident)) ty
+    where
+      qual | (Var _ (Qualified _ _)) <- a, typeinst a = Nothing
+           | otherwise = q
+  specialized' f a = pure . JSVar $ traceShow f []
 
   isQualified :: Expr Ann -> Bool
   isQualified (Var _ (Qualified (Just _) _)) = True
@@ -298,6 +262,7 @@ valueToJs m e@App{} = do
 
 valueToJs m (Var (_, _, ty, Just IsNewtype) ident) =
   return $ JSVar . mkDataFn $ qualifiedToStr m (mkUnique' . mkUnique') ident ++ (getSpecialization $ fnRetStr m ty)
+
 valueToJs m (Var (_, _, Just ty, _) ident) =
   return $ varJs m ident
   where
