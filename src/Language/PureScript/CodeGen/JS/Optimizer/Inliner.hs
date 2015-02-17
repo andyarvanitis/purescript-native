@@ -200,8 +200,9 @@ isPreludeDict dictName (JSAccessor prop (JSVar prelude)) = prelude == C.prelude 
 isPreludeDict _ _ = False
 
 isPreludeFn :: String -> JS -> Bool
+isPreludeFn fnName (JSVar varName) = cleanName' varName == (identToJs $ Op fnName)
 isPreludeFn fnName (JSVar varName)
-  | (Just varName') <- stripPrefix C.prelude varName = cleanName' varName' == fnName
+  | (Just varName') <- stripPrefix C.prelude varName = cleanName' varName' == (identToJs $ Op fnName)
 isPreludeFn fnName (JSAccessor fnName' (JSVar prelude)) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (JSIndexer (JSStringLiteral fnName') (JSVar prelude)) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (JSAccessor longForm (JSAccessor prelude (JSVar _))) = prelude == C.prelude && longForm == identToJs (Op fnName)
