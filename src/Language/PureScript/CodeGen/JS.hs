@@ -13,12 +13,11 @@
 --
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE GADTs, ViewPatterns, PatternGuards #-}
+{-# LANGUAGE GADTs, ViewPatterns, FlexibleContexts #-}
 
 module Language.PureScript.CodeGen.JS (
     module AST,
     module Common,
-    bindToJs,
     moduleToJs
 ) where
 
@@ -27,10 +26,12 @@ import Data.List (intercalate, isInfixOf, isPrefixOf, nubBy, sortBy)
 import Data.Function (on)
 import Data.Maybe (mapMaybe)
 import Data.Maybe (fromMaybe, listToMaybe)
+import qualified Data.Traversable as T (traverse)
 
 import Control.Applicative
 import Control.Arrow ((&&&))
 import Control.Monad (foldM, replicateM, forM)
+import Control.Monad.Reader (MonadReader, asks, lift)
 
 import Language.PureScript.CodeGen.JS.AST as AST
 import Language.PureScript.CodeGen.JS.Common as Common
@@ -50,15 +51,18 @@ import Debug.Trace
 -- Generate code in the simplified Javascript intermediate representation for all declarations in a
 -- module.
 --
-moduleToJs :: (Functor m, Applicative m, Monad m) => Options mode -> Module Ann -> SupplyT m [JS]
-moduleToJs opts (Module name imps exps foreigns decls) = do
+moduleToJs :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+           => Module Ann -> SupplyT m [JS]
+moduleToJs (Module name imps exps foreigns decls) = do
+--  additional <- lift $ asks optionsAdditional
   let imps' = delete (ModuleName [ProperName C.prim]) . (\\ [name]) $ imps
-  let jsImports = map (importToJs opts) imps'
+  jsImports <- lift . T.traverse importToJs $ imps'
+  ownImport <- lift . importToJs $ name
   let foreigns' = mapMaybe (\(_, js, _) -> js) foreigns
   jsDecls <- mapM (bindToJs name) decls
-  let optimized = concatMap (map $ optimize opts) jsDecls
+  optimized <- lift $ T.traverse (T.traverse optimize) jsDecls
   let isModuleEmpty = null exps
-  let (moduleDecls, moduleBody, extTempls, templs) = sections optimized
+  let (moduleDecls, moduleBody, extTempls, templs) = sections $ concat optimized
   let moduleHeader = (JSRaw . (++ ";") . ("using namespace " ++) . moduleNameToJs <$> imps')
                   ++ [JSRaw " "]
                   ++ dataTypes decls
@@ -81,7 +85,7 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
          , JSEndOfHeader
          ]
       ++ [ JSRaw $ "#define " ++ moduleNameToJs name ++ "_CC\n"
-         , importToJs opts name
+         , ownImport
          , JSRaw "//"
          , JSNamespace (moduleNameToJs name) moduleBody
          ]
@@ -89,17 +93,19 @@ moduleToJs opts (Module name imps exps foreigns decls) = do
 -- |
 -- Generates Javascript code for a module import.
 --
-importToJs :: Options mode -> ModuleName -> JS
-importToJs opts mn =
-  JSRaw $ "#include " ++ '"' : (dotsTo '/' $ runModuleName mn)
-                      ++ '/' : (last . words . dotsTo ' ' $ runModuleName mn) ++ ".hh\""
+importToJs :: (Monad m, MonadReader (Options mode) m) => ModuleName -> m JS
+importToJs mn = do
+  additional <- asks optionsAdditional
+  return $ JSRaw $ "#include " ++ '"' : (dotsTo '/' $ runModuleName mn)
+                               ++ '/' : (last . words . dotsTo ' ' $ runModuleName mn) ++ ".hh\""
   where
     dotsTo :: Char -> String -> String
     dotsTo chr = map (\c -> if c == '.' then chr else c)
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a declaration
 --
-bindToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> Bind Ann -> SupplyT m [JS]
+bindToJs :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+         => ModuleName -> Bind Ann -> SupplyT m [JS]
 bindToJs mp (NonRec ident val) = return <$> nonRecToJS mp ident val
 bindToJs mp (Rec vals) = forM vals (uncurry (nonRecToJS mp))
 
@@ -109,9 +115,13 @@ bindToJs mp (Rec vals) = forM vals (uncurry (nonRecToJS mp))
 --
 -- The main purpose of this function is to handle code generation for comments.
 --
-nonRecToJS :: (Functor m, Applicative m, Monad m) => ModuleName -> Ident -> Expr Ann -> SupplyT m JS
-nonRecToJS m i e@(extractAnn -> (_, com, _, _)) | not (null com) =
-  JSComment com <$> nonRecToJS m i (modifyAnn removeComments e)
+nonRecToJS :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+           => ModuleName -> Ident -> Expr Ann -> SupplyT m JS
+nonRecToJS m i e@(extractAnn -> (_, com, _, _)) | not (null com) = do
+  withoutComment <- lift $ asks optionsNoComments
+  if withoutComment
+     then nonRecToJS m i (modifyAnn removeComments e)
+     else JSComment com <$> nonRecToJS m i (modifyAnn removeComments e)
 
 nonRecToJS mp ident val@(App{}) | (f, n) <- dropApp val,
                                   (Var (_, _, _, Just (IsConstructor _ arity)) _) <- f,
@@ -156,7 +166,8 @@ accessorString prop | identNeedsEscaping prop = JSIndexer (JSStringLiteral prop)
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a value or expression.
 --
-valueToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> Expr Ann -> SupplyT m JS
+valueToJs :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+          => ModuleName -> Expr Ann -> SupplyT m JS
 valueToJs m (Literal _ l) =
   literalToValueJS m l
 valueToJs m (Var (_, _, ty, Just (IsConstructor _ 0)) name) =
@@ -167,7 +178,7 @@ valueToJs m (Accessor _ prop val) =
   accessorString prop <$> valueToJs m val
 valueToJs m (ObjectUpdate _ o ps) = do
   obj <- valueToJs m o
-  sts <- mapM (sndM (valueToJs m)) ps
+  sts <- mapM (sndM $ valueToJs m) ps
   extendObj obj sts
 valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   let args = unAbs e
@@ -318,7 +329,8 @@ valueToJs m (Constructor (_, _, ty, _) (ProperName typename) (ProperName ctor) a
 iife :: String -> [JS] -> JS
 iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []
 
-literalToValueJS :: (Functor m, Applicative m, Monad m) => ModuleName -> Literal (Expr Ann) -> SupplyT m JS
+literalToValueJS :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+                 => ModuleName -> Literal (Expr Ann) -> SupplyT m JS
 literalToValueJS _ (NumericLiteral n) = return $ JSNumericLiteral n
 literalToValueJS _ (StringLiteral s) = return $ JSStringLiteral s
 literalToValueJS _ (BooleanLiteral b) = return $ JSBooleanLiteral b
@@ -365,7 +377,8 @@ qualifiedToJS _ f (Qualified _ a) = JSVar $ identToJs (f a)
 -- Generate code in the simplified Javascript intermediate representation for pattern match binders
 -- and guards.
 --
-bindersToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> [CaseAlternative Ann] -> [JS] -> SupplyT m JS
+bindersToJs :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+            => ModuleName -> [CaseAlternative Ann] -> [JS] -> SupplyT m JS
 bindersToJs m binders vals = do
   untypedValNames <- replicateM (length vals) freshName
   let valNames = copyTyInfo <$> zip untypedValNames vals
@@ -379,14 +392,16 @@ bindersToJs m binders vals = do
   return $ JSApp (JSFunction Nothing [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSStringLiteral "Failed pattern match"])))
                  []
   where
-    go :: (Functor m, Applicative m, Monad m) => [String] -> [JS] -> [Binder Ann] -> SupplyT m [JS]
+    go :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+       => [String] -> [JS] -> [Binder Ann] -> SupplyT m [JS]
     go _ done [] = return done
     go (v:vs) done' (b:bs) = do
       done'' <- go vs done' bs
       binderToJs m v done'' b
     go _ _ _ = error "Invalid arguments to bindersToJs"
 
-    guardsToJs :: (Functor m, Applicative m, Monad m) => Either [(Guard Ann, Expr Ann)] (Expr Ann) -> SupplyT m [JS]
+    guardsToJs :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+               => Either [(Guard Ann, Expr Ann)] (Expr Ann) -> SupplyT m [JS]
     guardsToJs (Left gs) = forM gs $ \(cond, val) -> do
       cond' <- valueToJs m cond
       done  <- valueToJs m val
@@ -406,7 +421,8 @@ bindersToJs m binders vals = do
 -- Generate code in the simplified Javascript intermediate representation for a pattern match
 -- binder.
 --
-binderToJs :: (Functor m, Applicative m, Monad m) => ModuleName -> String -> [JS] -> Binder Ann -> SupplyT m [JS]
+binderToJs :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+           => ModuleName -> String -> [JS] -> Binder Ann -> SupplyT m [JS]
 binderToJs _ _ done (NullBinder{}) = return done
 binderToJs m varName done (LiteralBinder _ l) =
   literalToBinderJS m varName done l
@@ -423,7 +439,8 @@ binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorT
                 (JSBlock js)
                 Nothing]
   where
-  go :: (Functor m, Applicative m, Monad m) => Integer -> [JS] -> [Binder Ann] -> SupplyT m [JS]
+  go :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+     => Integer -> [JS] -> [Binder Ann] -> SupplyT m [JS]
   go _ done' [] = return done'
   go index done' (binder:bs') = do
     argVar <- freshName
@@ -457,7 +474,8 @@ binderToJs m varName done (NamedBinder _ ident binder) = do
   js <- binderToJs m varName done binder
   return (JSVariableIntroduction (identToJs ident) (Just (JSVar varName)) : js)
 
-literalToBinderJS :: (Functor m, Applicative m, Monad m) => ModuleName -> String -> [JS] -> Literal (Binder Ann) -> SupplyT m [JS]
+literalToBinderJS :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+                  => ModuleName -> String -> [JS] -> Literal (Binder Ann) -> SupplyT m [JS]
 literalToBinderJS _ varName done (NumericLiteral num) =
   return [JSIfElse (JSBinary EqualTo (JSVar varName) (JSNumericLiteral num)) (JSBlock done) Nothing]
 literalToBinderJS _ varName done (StringLiteral str) =
@@ -468,7 +486,8 @@ literalToBinderJS _ varName done (BooleanLiteral False) =
   return [JSIfElse (JSUnary Not (JSVar varName)) (JSBlock done) Nothing]
 literalToBinderJS m varName done (ObjectLiteral bs) = go done bs
   where
-  go :: (Functor m, Applicative m, Monad m) => [JS] -> [(String, Binder Ann)] -> SupplyT m [JS]
+  go :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+     => [JS] -> [(String, Binder Ann)] -> SupplyT m [JS]
   go done' [] = return done'
   go done' ((prop, binder):bs') = do
     propVar <- freshName
@@ -479,7 +498,8 @@ literalToBinderJS m varName done (ArrayLiteral bs) = do
   js <- go done 0 bs
   return [JSIfElse (JSBinary EqualTo (JSAccessor "length" (JSVar varName)) (JSNumericLiteral (Left (fromIntegral $ length bs)))) (JSBlock js) Nothing]
   where
-  go :: (Functor m, Applicative m, Monad m) => [JS] -> Integer -> [Binder Ann] -> SupplyT m [JS]
+  go :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
+     => [JS] -> Integer -> [Binder Ann] -> SupplyT m [JS]
   go done' _ [] = return done'
   go done' index (binder:bs') = do
     elVar <- freshName

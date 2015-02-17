@@ -13,8 +13,13 @@ module Prelude
   , Applicative, pure, liftA1
   , Bind, (>>=)
   , Monad, return, liftM1, ap
-  , Num, (+), (-), (*), (/), (%)
+  , Semiring, (+), zero, (*), one
+  , ModuloSemiring, (/), mod
+  , Ring, (-)
+  , (%)
   , negate
+  , DivisionRing
+  , Num
   , Eq, (==), (/=) -- , refEq, refIneq
   , Ord, Ordering(..), compare, (<), (>), (<=), (>=)
   , Bits, (.&.), (.|.), (.^.), shl, shr, zshr, complement
@@ -24,28 +29,28 @@ module Prelude
   , Unit(..), unit
   ) where
 
-  -- | An alias for `true`, which can be useful in guard clauses: 
-  -- | 
+  -- | An alias for `true`, which can be useful in guard clauses:
+  -- |
   -- | E.g.
-  -- | 
-  -- |     max x y | x >= y = x 
+  -- |
+  -- |     max x y | x >= y = x
   -- |             | otherwise = y
   otherwise :: Boolean
   otherwise = true
 
-  -- | Flips the order of the arguments to a function of two arguments. 
+  -- | Flips the order of the arguments to a function of two arguments.
   flip :: forall a b c. (a -> b -> c) -> b -> a -> c
   flip f b a = f a b
 
-  -- | Returns its first argument and ignores its second. 
+  -- | Returns its first argument and ignores its second.
   const :: forall a b. a -> b -> a
   const a _ = a
 
   -- | This function returns its first argument, and can be used to assert type equalities.
-  -- | This can be useful when types are otherwise ambiguous. 
-  -- | 
+  -- | This can be useful when types are otherwise ambiguous.
+  -- |
   -- | E.g.
-  -- | 
+  -- |
   -- |     main = print $ [] `asTypeOf` [0]
   -- |
   -- | If instead, we had written `main = print []`, the type of the argument `[]` would have
@@ -212,13 +217,32 @@ module Prelude
   infixl 6 -
   infixl 6 +
 
-  class Num a where
-    (+) :: a -> a -> a
-    (-) :: a -> a -> a
-    (*) :: a -> a -> a
+  -- | Addition and multiplication
+  class Semiring a where
+    (+)  :: a -> a -> a
+    zero :: a
+    (*)  :: a -> a -> a
+    one  :: a
+
+  -- | Semiring with modulo operation and division where
+  -- | ```a / b * b + (a `mod` b) = a```
+  class (Semiring a) <= ModuloSemiring a where
     (/) :: a -> a -> a
-    (%) :: a -> a -> a
-    negate :: a -> a
+    mod :: a -> a -> a
+
+  -- | Addition, multiplication, and subtraction
+  class (Semiring a) <= Ring a where
+    (-) :: a -> a -> a
+
+  negate :: forall a. (Ring a) => a -> a
+  negate a = zero - a
+
+  -- | Ring where every nonzero element has a multiplicative inverse (possibly
+  -- | a non-commutative field) so that ```a `mod` b = zero```
+  class (Ring a, ModuloSemiring a) <= DivisionRing a
+
+  -- | A commutative field
+  class (DivisionRing a) <= Num a
 
   foreign import binary_add_operator
     """
@@ -277,14 +301,24 @@ module Prelude
       return -n;
     }
     """ :: forall a. a -> a
+  (%) = binary_mod_operator
 
-  instance numNumber :: Num Number where
+  instance semiringNumber :: Semiring Number where
     (+) = binary_add_operator
-    (-) = binary_sub_operator
+    zero = 0
     (*) = binary_mul_operator
+    one = 1
+
+  instance ringNumber :: Ring Number where
+    (-) = binary_sub_operator
+
+  instance moduloSemiringNumber :: ModuloSemiring Number where
     (/) = binary_div_operator
-    (%) = binary_mod_operator
-    negate = unary_neg_operator
+    mod _ _ = 0
+
+  instance divisionRingNumber :: DivisionRing Number
+
+  instance numNumber :: Num Number
 
   newtype Unit = Unit {}
 
