@@ -127,8 +127,8 @@ nonRecToJS m i e@(extractAnn -> (_, com, _, _)) | not (null com) = do
      else JSComment com <$> nonRecToJS m i (modifyAnn removeComments e)
 
 nonRecToJS mp ident val@(App{}) | (f, n) <- dropApp val,
-                                  (Var (_, _, _, Just (IsConstructor _ arity)) _) <- f,
-                                  n == arity = do
+                                  (Var (_, _, _, Just (IsConstructor _ fields)) _) <- f,
+                                  n == length fields = do
   js <- valueToJs mp val
   return $ JSVariableIntroduction (identToJs ident) (Just js)
 
@@ -230,9 +230,9 @@ valueToJs m e@App{} = do
       return $ JSApp (JSVar . mkData $ qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0) (take 1 args')
     Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
       return $ JSApp (JSVar . mkData $ qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0) args'
-    Var (_, _, _, Just (IsConstructor _ arity)) name | not (null args) ->
+    Var (_, _, _, Just (IsConstructor _ fields)) name | not (null args) ->
       return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr m mkUnique' name
-                                                              ++ getAppSpecType m e (arity - length args + 1)) args'
+                                                              ++ getAppSpecType m e (length fields - length args + 1)) args'
     Var (_, _, ty, Just IsTypeClassConstructor) name'@(Qualified mn (Ident name)) -> do
       convArgs <- mapM (valueToJs m) (instFn name' args)
       let convArgs' = map toVarDecl (depSort $ zip (names ty) convArgs)
@@ -300,40 +300,37 @@ valueToJs m (Let _ ds val) = do
   return $ JSApp (JSFunction Nothing [] (JSBlock (decls ++ [JSReturn ret]))) []
 valueToJs m (Constructor (_, _, Just ty, Just IsNewtype) (ProperName typename) (ProperName ctor) _) =
   return $ JSData (mkUnique ctor) typename [typestr m ty] JSNoOp
-valueToJs m (Constructor (_, _, ty, _) (ProperName typename) (ProperName ctor) arity) =
-    return $ JSData (mkUnique ctor) typename (fields ty) $
-               JSVariableIntroduction dataCtorName (Just . mkfn fname $ fields ty)
+valueToJs m (Constructor (_, _, Just ty, _) (ProperName typename) (ProperName ctor) []) =
+  return $ JSData (mkUnique ctor) typename [] $
+             JSVariableIntroduction dataCtorName $ Just $
+               JSFunction (Just $ typestr m ty ++ ' ' : dataCtorName)
+                 [fnRetStr m (Just ty)] (JSBlock [JSReturn $ JSApp (JSVar . mkData $ mkUnique ctor) []])
+valueToJs m (Constructor (_, _, Just ty, _) (ProperName typename) (ProperName ctor) fields) =
+  return $ JSData (mkUnique ctor) typename fields' $
+             JSVariableIntroduction dataCtorName $ Just $
+               JSFunction (Just $ fnRetStr m (Just ty) ++ ' ' : dataCtorName)
+                 [head types ++ ' ' : head names] (JSBlock [JSReturn (ctorBody $ tail fields')])
   where
-    types = map fst . rows
-    names = map snd . rows
-    fields = map (\(t,n) -> t ++ ' ' : n) . rows
+    types = typestr m <$> (fieldTys ty)
+    names = identToJs <$> fields
+    fields' = zipWith (\t n -> t ++ ' ' : n) types names
 
-    rows :: Maybe T.Type -> [(String, String)]
-    rows = go 0
+    fieldTys (T.TypeApp
+               (T.TypeApp
+                 (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                   a) b) = typs a [] ++ fieldTys b
       where
-      go _ Nothing = []
-      go n (Just (T.RCons _
-                   (T.TypeApp
-                     (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-                       row@(T.RCons _ _ _)) _)) = go n (Just row)
-      go n (Just (T.RCons name ty row)) = (typestr m ty, name') : go (n + 1) (Just row)
-        where
-          name' = case name of
-                    [] -> "value" ++ show n
-                    _ -> name
-      go _ (Just T.REmpty) = []
+        typs ty@(T.TypeApp
+                  (T.TypeApp
+                    (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                      _) _) tys = tys ++ [ty]
+        typs ty tys = tys ++ [ty]
+    fieldTys (T.ForAll _ ty _) = fieldTys ty
+    fieldTys _ = []
 
-    mkfn :: Maybe String -> [String] -> JS
-    mkfn name@(Just _) [] = JSFunction name [] $ JSBlock [JSReturn $ JSApp (JSVar $ mkData (mkUnique ctor)) []]
-    mkfn name (arg:args) = JSFunction name [arg] $ JSBlock [JSReturn $ mkfn Nothing args]
-    mkfn Nothing [] = JSApp (JSVar $ mkData (mkUnique ctor)) (JSVar <$> names ty)
-
-    fname = Just $ fty (types ty) ++ " _"
-
-    fty :: [String] -> String
-    fty [] = asDataTy $ mkUnique ctor
-    fty [_] = asDataTy $ mkUnique ctor
-    fty (_:t:ts) = "fn<" ++ t ++ "," ++ fty ts ++ ">"
+    ctorBody :: [String] -> JS
+    ctorBody (arg:args) = JSFunction Nothing [arg] $ JSBlock [JSReturn $ ctorBody args]
+    ctorBody [] = JSApp (JSVar . mkData $ mkUnique ctor) (JSVar <$> names)
 
 iife :: String -> [JS] -> JS
 iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []

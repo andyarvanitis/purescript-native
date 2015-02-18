@@ -58,15 +58,21 @@ moduleToCoreFn env (A.Module mn decls (Just exps)) =
   -- Desugars member declarations from AST to CoreFn representation.
   --
   declToCoreFn :: Maybe SourceSpan -> [Comment] -> A.Declaration -> [Bind Ann]
+  declToCoreFn ss com (A.DataDeclaration Newtype a b ctors) = -- TODO: optim disabled for now
+    declToCoreFn ss com (A.DataDeclaration Data a b ctors)
   declToCoreFn ss com (A.DataDeclaration Newtype _ _ [(ctor, _)]) =
     [NonRec (properToIdent ctor) $
       Abs (ss, com, Nothing, Just IsNewtype) (Ident "x") (Var nullAnn $ Qualified Nothing (Ident "x"))]
   declToCoreFn _ _ d@(A.DataDeclaration Newtype _ _ _) =
     error $ "Found newtype with multiple constructors: " ++ show d
-  declToCoreFn ss com (A.DataDeclaration Data tyName _ ctors) =
+  declToCoreFn ss com (A.DataDeclaration Data tyName parms ctors) =
     flip map ctors $ \(ctor, _) ->
-      let (_, _, _, fields) = lookupConstructor env (Qualified (Just mn) ctor)
-      in NonRec (properToIdent ctor) $ Constructor (ss, com, Nothing, Nothing) tyName ctor fields
+      let (_, _, ty, fields) = lookupConstructor env (Qualified (Just mn) ctor)
+      in NonRec (properToIdent ctor) $ Constructor (ss, com, Just ty, Nothing) annotTyName ctor fields
+    where
+    annotTyName = ProperName $ (runProperName tyName) ++ ('@' : asTemplate)
+    asTemplate = show $ map (cap . fst) parms
+    cap (c:cs) = toUpper c : cs
   declToCoreFn ss _   (A.DataBindingGroupDeclaration ds) = concatMap (declToCoreFn ss []) ds
   declToCoreFn ss com (A.ValueDeclaration name _ _ (Right e)) =
     [NonRec name (exprToCoreFn ss com Nothing e)]
@@ -102,6 +108,8 @@ moduleToCoreFn env (A.Module mn decls (Just exps)) =
     error "Abs with Binder argument was not desugared before exprToCoreFn mn"
   exprToCoreFn ss com ty (A.App v1 v2) =
     App (ss, com, ty, Nothing) (exprToCoreFn ss [] Nothing v1) (exprToCoreFn ss [] Nothing v2)
+  exprToCoreFn ss com Nothing (A.Var ident@(Qualified (Just mn) name))
+    | Just (ty, TypeClassAccessorImport, _) <- M.lookup (mn, name) (names env) = Var (ss, com, Just ty, Nothing) ident
   exprToCoreFn ss com ty (A.Var ident) =
     Var (ss, com, ty, Nothing) ident
   exprToCoreFn ss com ty (A.IfThenElse v1 v2 v3) =
@@ -114,14 +122,26 @@ moduleToCoreFn env (A.Module mn decls (Just exps)) =
     Var (ss, com, ty, Just $ getConstructorMeta name) $ fmap properToIdent name
   exprToCoreFn ss com ty (A.Case vs alts) =
     Case (ss, com, ty, Nothing) (map (exprToCoreFn ss [] Nothing) vs) (map (altToCoreFn ss) alts)
+  -- exprToCoreFn ss com ty@(Just _) (A.TypedValue _ v@(A.Constructor name) _) =
+  --   exprToCoreFn ss com ty v
   exprToCoreFn ss com _ (A.TypedValue _ v ty) =
     exprToCoreFn ss com (Just ty) v
   exprToCoreFn ss com ty (A.Let ds v) =
     Let (ss, com, ty, Nothing) (concatMap (declToCoreFn ss []) ds) (exprToCoreFn ss [] Nothing v)
-  exprToCoreFn ss com _  (A.TypeClassDictionaryConstructorApp name (A.TypedValue _ (A.ObjectLiteral vs) _)) =
+  exprToCoreFn ss com (Just ty) (A.TypeClassDictionaryConstructorApp name@(Qualified mn (ProperName cname)) c)
+    | Just (parms, _, _) <- M.lookup name (typeClasses env) =
+    exprToCoreFn ss com (Just ty) (A.TypeClassDictionaryConstructorApp (annotName parms) c)
+    where
+      annotName parms = Qualified mn (ProperName (cname ++ '@' : (show $ map fst parms)))
+  exprToCoreFn ss com ty (A.TypeClassDictionaryConstructorApp name (A.TypedValue _ (A.ObjectLiteral vs) _)) =
     let args = map (exprToCoreFn ss [] Nothing . snd) $ sortBy (compare `on` fst) vs
-        ctor = Var (ss, [], Nothing, Just IsTypeClassConstructor) (fmap properToIdent name)
-    in foldl (App (ss, com, Nothing, Nothing)) ctor args
+        ctor = Var (ss, [], rowType, Just IsTypeClassConstructor) (fmap properToIdent name)
+    in foldl (App (ss, com, ty, Nothing)) ctor args
+    where
+      rowType = Just (mkRow . map fst $ sortBy (compare `on` fst) vs)
+      mkRow :: [String] -> Type
+      mkRow [] = REmpty
+      mkRow (n:ns) = RCons n REmpty (mkRow ns)
   exprToCoreFn ss com ty  (A.TypeClassDictionaryAccessor _ ident) =
     Abs (ss, com, ty, Nothing) (Ident "dict")
       (Accessor nullAnn (runIdent ident) (Var nullAnn $ Qualified Nothing (Ident "dict")))
