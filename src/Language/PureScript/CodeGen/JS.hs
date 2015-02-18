@@ -68,9 +68,12 @@ moduleToJs (Module name imps exps foreigns decls) = do
                   ++ dataTypes decls
                   ++ moduleDecls
                   ++ foreigns'
-                  ++ [JSRaw $ "#ifndef " ++ moduleNameToJs name ++ "_CC"]
-                  ++ extTempls
-                  ++ [JSRaw $ "#endif // " ++ moduleNameToJs name ++ "_CC\n"]
+                  ++ (if not $ null extTempls then
+                        [JSRaw ("#ifndef " ++ moduleNameToJs name ++ "_CC")]
+                     ++ extTempls
+                     ++ [JSRaw ("#endif // " ++ moduleNameToJs name ++ "_CC\n")]
+                      else []
+                     )
                   ++ templs
   let exps' = JSObjectLiteral $ (runIdent &&& JSVar . identToJs) <$> exps
   return $
