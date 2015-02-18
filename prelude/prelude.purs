@@ -924,7 +924,7 @@ module Control.Monad.Eff where
     """
     template <typename A>
     inline auto returnE(A a) -> eff_fn<A> {
-      return [=](data<Prelude::Unit>) {
+      return [=]() {
         return a;
       };
     }
@@ -935,8 +935,8 @@ module Control.Monad.Eff where
     template <typename A, typename B>
     inline auto bindE(eff_fn<A> a) -> fn<fn<A,eff_fn<B>>,eff_fn<B>> {
       return [=](fn<A,eff_fn<B>> f) {
-        return [=](data<Prelude::Unit>) {
-          return f(a(Prelude::unit))(Prelude::unit);
+        return [=]() {
+          return f(a())();
         };
       };
     }
@@ -949,7 +949,7 @@ module Control.Monad.Eff where
     """
     template <typename A, typename E>
     inline auto runPure(eff_fn<A> f) -> A {
-      return f(Prelude::unit);
+      return f();
     }
     """ :: forall a. Pure a -> a
 
@@ -1044,7 +1044,7 @@ module Debug.Trace where
   foreign import trace
     """
     inline auto trace(string s) -> eff_fn<data<Prelude::Unit>> {
-      return [=](data<Prelude::Unit>) {
+      return [=]() {
         std::cout << s << std::endl;
         return Prelude::unit;
       };

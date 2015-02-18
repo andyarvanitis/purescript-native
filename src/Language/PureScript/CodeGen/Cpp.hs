@@ -71,7 +71,7 @@ headerPreamble =
   , JSRaw "template <typename T> using list = std::vector<T>;"
   , JSRaw "using list_index_type = list<void*>::size_type;"
   , JSRaw "using string = std::string;"
-  , JSRaw "template <typename B> using eff_fn = std::function<B(data<std::nullptr_t>)>;"
+  , JSRaw "template <typename B> using eff_fn = std::function<B()>;"
   , JSRaw " "
   , JSRaw "// Function aliases"
   , JSRaw " "
@@ -96,7 +96,7 @@ nativeMain :: [JS]
 nativeMain =
   [ JSRaw "\n"
   , JSRaw "int main(int, char *[]) {"
-  , JSRaw "    Main::main(Prelude::unit);"
+  , JSRaw "    Main::main();"
   , JSRaw "    return 0;"
   , JSRaw "}"
   ]
@@ -216,7 +216,7 @@ fnArgStr m (Just (T.TypeApp
 fnArgStr m (Just (T.ForAll _ ty _)) = fnArgStr m (Just ty)
 fnArgStr m (Just (T.TypeApp
                    (T.TypeApp
-                     (T.TypeConstructor _) T.RCons{}) b)) = typestr m b  -- TODO: this looks wrong
+                     (T.TypeConstructor _) T.RCons{}) _)) = []  -- TODO:
 fnArgStr m (Just (T.TypeApp
                    (T.TypeApp
                      (T.TypeConstructor _) a) _)) = typestr m a
@@ -605,13 +605,21 @@ dropApp' other n = (other, n)
 -----------------------------------------------------------------------------------------------------------------------
 valToAbs val@(Var vv@(ss, com, _, _) ident) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
-valToAbs val@(App vv@(ss, com, _, _) _ _) = let argid = Ident "arg" in
+
+valToAbs val@(App vv@(ss, com, ty, _) _ _) = let argid = Ident $ argName ty in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+  where
+    -- TODO: this is probably too specific
+    argName (Just (T.ForAll _ ty' _)) = argName (Just ty')
+    argName (Just (T.TypeApp (T.TypeApp (T.TypeConstructor _) (T.RCons _ (T.TypeConstructor _) (T.TUnknown _))) _)) = []
+    argName _ = "arg"
+
 valToAbs val@(Literal vv@(ss, com, _, _) ident) =
   Abs vv (Ident []) val
 
 -- valToAbs val@(Accessor vv@(ss, com, _, _) _ _) = let argid = Ident "arg" in
 --   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+
 valToAbs (Abs (ss, com, _, _) _ val@(App vv _ _)) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
 valToAbs val = val
