@@ -173,7 +173,7 @@ valueToJs :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
           => ModuleName -> Expr Ann -> SupplyT m JS
 valueToJs m (Literal _ l) =
   literalToValueJS m l
-valueToJs m (Var (_, _, ty, Just (IsConstructor _ 0)) name) =
+valueToJs m (Var (_, _, ty, Just (IsConstructor _ [])) name) =
   return $ JSApp (JSVar . mkDataFn $ qualifiedToStr m mkUnique' name ++ (getSpecialization $ fnRetStr m ty)) []
 valueToJs m (Var (_, _, ty, Just (IsConstructor _ _)) name) =
   return $ JSVar . mkDataFn $ qualifiedToStr m mkUnique' name ++ (getSpecialization $ fnRetStr m ty)
@@ -228,7 +228,7 @@ valueToJs m e@App{} = do
   case f of
     Var (_, _, _, Just IsNewtype) name ->
       return $ JSApp (JSVar . mkData $ qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0) (take 1 args')
-    Var (_, _, _, Just (IsConstructor _ arity)) name | arity == length args ->
+    Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
       return $ JSApp (JSVar . mkData $ qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0) args'
     Var (_, _, _, Just (IsConstructor _ arity)) name | not (null args) ->
       return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr m mkUnique' name
@@ -439,8 +439,8 @@ binderToJs _ varName done (VarBinder _ ident) =
   return (JSVariableIntroduction (identToJs ident) (Just (JSVar varName)) : done)
 binderToJs m varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
   binderToJs m varName done b
-binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType _)) _ ctor bs) = do
-  js <- go 0 done bs
+binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields)) _ ctor bs) = do
+  js <- go (zip fields bs) done
   return $ case ctorType of
     ProductType -> js
     SumType ->
@@ -449,13 +449,13 @@ binderToJs m varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorT
                 Nothing]
   where
   go :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
-     => Integer -> [JS] -> [Binder Ann] -> SupplyT m [JS]
-  go _ done' [] = return done'
-  go index done' (binder:bs') = do
+     => [(Ident, Binder Ann)] -> [JS] -> SupplyT m [JS]
+  go [] done' = return done'
+  go ((field, binder) : remain) done' = do
     argVar <- freshName
-    done'' <- go (index + 1) done' bs'
+    done'' <- go remain done'
     js <- binderToJs m argVar done'' binder
-    return (JSVariableIntroduction argVar (Just (JSAccessor ("value" ++ show index) (JSCast (JSVar ctorName) (JSVar varName)))) : js)
+    return (JSVariableIntroduction argVar (Just (JSAccessor (identToJs field) (JSCast (JSVar ctorName) (JSVar varName)))) : js)
   ctorName = qualifiedToStr m (Ident . mkUnique . runProperName) ctor ++ getSpecialization varName
 binderToJs m varName done binder@(ConstructorBinder _ _ ctor _) | isCons ctor = do
   let (headBinders, tailBinder) = uncons [] binder
