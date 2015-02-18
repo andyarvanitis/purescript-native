@@ -607,6 +607,9 @@ valToAbs val@(Var vv@(ss, com, _, _) ident) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
 valToAbs val@(App vv@(ss, com, _, _) _ _) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+valToAbs val@(Literal vv@(ss, com, _, _) ident) =
+  Abs vv (Ident []) val
+
 -- valToAbs val@(Accessor vv@(ss, com, _, _) _ _) = let argid = Ident "arg" in
 --   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
 valToAbs (Abs (ss, com, _, _) _ val@(App vv _ _)) = let argid = Ident "arg" in

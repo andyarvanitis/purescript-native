@@ -193,9 +193,10 @@ valueToJs m e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
   toFn _ = JSNoOp
 
   mkfunc ident ty
-    | arg@(_:_) <- fnArgStr m ty = Just $ JSFunction (annotatedName ident ty) [arg] JSNoOp
+    | arg@(_:_) <- fnArgStr m ty = Just $ JSFunction (annotatedName ident ty $ fnRetStr m ty) [arg] JSNoOp
+    | Just ty' <- ty = Just $ JSFunction (annotatedName ident ty $ typestr m ty') [] JSNoOp
     | otherwise = Just JSNoOp
-  annotatedName ident ty = Just $ templTypes' m ty ++ fnRetStr m ty ++ ' ' : (identToJs ident)
+  annotatedName ident ty rty = Just $ templTypes' m ty ++ rty ++ ' ' : (identToJs ident)
 
 valueToJs m (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
     | (Abs (_, _, t, _) _ val') <- val, Nothing <- t = valueToJs m (dropAbs (length ts - 2) val') -- TODO: confirm '-2'
@@ -214,7 +215,10 @@ valueToJs m (Abs (_, _, ty, _) arg val) = do
   ret <- valueToJs m val
   return $ JSFunction (Just annotatedName) [fnArgStr m ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
   where
-    annotatedName = templTypes' m ty ++ fnRetStr m ty ++ " _"
+    annotatedName = templTypes' m ty ++ (case arg of
+                                           (Ident []) -> maybe "" (typestr m) ty
+                                           _ -> fnRetStr m ty)
+                                     ++ " _"
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
@@ -230,9 +234,11 @@ valueToJs m e@App{} = do
       convArgs <- mapM (valueToJs m) (instFn name' args)
       let convArgs' = map toVarDecl (depSort $ zip (names ty) convArgs)
       return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames m e name')) convArgs'
-    _ -> flip (foldl (\fn a -> JSApp fn [a])) args' <$> if isQualified f || (typeinst $ head args) then
-                                                          specialized' f (head args)
-                                                        else valueToJs m f
+    _ -> if null args' then flip JSApp [] <$> fn'
+         else flip (foldl (\fn a -> JSApp fn [a])) args' <$> fn'
+      where
+        fn' | isQualified f || typeinst (head args) = specialized' f (head args)
+            | otherwise = valueToJs m f
   where
   unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
   unApp (App _ val arg) args = unApp val (arg : args)

@@ -342,7 +342,7 @@ negateOperator = unary' Negate (\v -> if isNegate v then "- " else "-")
   isNegate _ = False
 
 binary :: BinaryOperator -> String -> Operator PrinterState JS String
-binary op str = AssocL match (\v1 v2 -> v1 ++ " " ++ str ++ " " ++ v2)
+binary op str = AssocL match (\v1 v2 -> cleanParam v1 ++ " " ++ str ++ " " ++ cleanParam v2)
   where
   match :: Pattern PrinterState JS (JS, JS)
   match = mkPattern match'
