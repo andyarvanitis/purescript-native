@@ -22,7 +22,7 @@ module Language.PureScript.CodeGen.JS (
 ) where
 
 import Data.List ((\\), delete)
-import Data.List (intercalate, isInfixOf, isPrefixOf, nubBy, sortBy)
+import Data.List (intercalate, isInfixOf, isPrefixOf, nub, nubBy, sortBy)
 import Data.Function (on)
 import Data.Maybe (mapMaybe)
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -30,7 +30,7 @@ import qualified Data.Traversable as T (traverse)
 
 import Control.Applicative
 import Control.Arrow ((&&&))
-import Control.Monad (foldM, replicateM, forM)
+import Control.Monad (foldM, replicateM, forM, when)
 import Control.Monad.Reader (MonadReader, asks, lift)
 
 import Language.PureScript.CodeGen.JS.AST as AST
@@ -216,8 +216,16 @@ valueToJs m (Abs (_, _, Just ty, _) arg val) | isConstrained ty = return JSNoOp
     isConstrained _ = False
 valueToJs m (Abs (_, _, ty, _) arg val) = do
   ret <- valueToJs m val
-  return $ JSFunction (Just annotatedName) [fnArgStr m ty ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
+  return $ JSFunction (Just annotatedName) [argtyp ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
   where
+    argtyp | Nothing <- ty = typestr m aty
+           | otherwise = fnArgStr m ty
+    (f, _, _, _) = everythingOnValues (++) (const []) values (const []) (const [])
+    values :: Expr Ann -> [T.Type]
+    values (Var (_, _, Just t, _) (Qualified _ ident)) | ident == arg = [t]
+    values _ = []
+    [aty] = nub . f $ NonRec arg val -- TODO: intentional possibility of failure for now
+
     annotatedName = templTypes' m ty ++ (case arg of
                                            (Ident []) -> maybe "" (typestr m) ty
                                            _ -> fnRetStr m ty)
