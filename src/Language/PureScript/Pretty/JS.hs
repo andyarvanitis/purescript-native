@@ -384,7 +384,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ unary JSNew "new " ]
                   , [ Wrap lam $ \(name, args) ret -> let args' = cleanParams args in
                            "[=]"
-                        ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto " ++ a) else a) args') ++ ")"
+                        ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto" ++ a) else a) args') ++ ")"
                         ++ maybe "" returnType name
                         ++ " "
                         ++ ret

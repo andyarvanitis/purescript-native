@@ -181,10 +181,10 @@ mktype m app@(T.TypeApp a b)
     tyapp :: T.Type -> [Type] -> (String, [Type])
     -- tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (identToJs $ Ident name, b':ts)
     tyapp (T.TypeApp (T.Skolem name _ _) b) ts | Just b' <- mktype m b = (identToJs $ Ident name, b':ts)
-    tyapp z@(T.TypeApp (T.TypeConstructor name@(Qualified (Just _) (ProperName _))) b) ts
+    tyapp (T.TypeApp (T.TypeConstructor name@(Qualified (Just _) (ProperName _))) b) ts
       | Just b' <- mktype m b = (qualifiedToStr m (Ident . runProperName) name, b':ts)
     tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t':ts)
-    tyapp z _ = ([],[])
+    tyapp _ _ = ([],[])
 
 mktype m (T.TypeApp T.Skolem{} b) = mktype m b
 
@@ -606,12 +606,12 @@ dropApp' other n = (other, n)
 valToAbs val@(Var vv@(ss, com, _, _) ident) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
 
-valToAbs val@(App vv@(ss, com, ty, _) _ _) = let argid = (Ident . fst $ abs' ty) in
-  Abs (ss, com, snd $ abs' ty, Nothing) argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+valToAbs val@(App vv@(ss, com, Just ty, _) _ _) = let argid = (Ident . fst $ abs' ty) in
+  Abs (ss, com, Just . snd $ abs' ty, Nothing) argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
   where
     -- TODO: this is probably too specific
-    abs' (Just (T.ForAll _ ty' _)) = abs' (Just ty')
-    abs' (Just (T.TypeApp (T.TypeApp (T.TypeConstructor _) (T.RCons _ (T.TypeConstructor _) (T.TUnknown _))) b)) = ([], Just b)
+    abs' (T.ForAll _ ty' _) = abs' ty'
+    abs' (T.TypeApp (T.TypeApp (T.TypeConstructor _) (T.RCons _ (T.TypeConstructor _) (T.TUnknown _))) b) = ([], b)
     abs' ty' = ("arg", ty')
 
 valToAbs val@(Literal vv@(ss, com, _, _) ident) =
@@ -622,4 +622,5 @@ valToAbs val@(Literal vv@(ss, com, _, _) ident) =
 
 valToAbs (Abs (ss, com, _, _) _ val@(App vv _ _)) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+
 valToAbs val = val

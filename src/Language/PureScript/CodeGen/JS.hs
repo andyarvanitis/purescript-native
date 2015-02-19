@@ -141,9 +141,13 @@ nonRecToJS mp ident val@(App{}) | (f, n) <- dropApp val,
 nonRecToJS mp ident val = do
   js <- valueToJs mp val
   case js of
-    JSVar{} -> nonRecToJS mp ident (valToAbs val)
-    JSApp{} -> nonRecToJS mp ident (valToAbs val)
     JSSequence [] jss -> return $ JSSequence (identToJs ident) jss
+    JSVar{} -> do
+      js' <- valueToJs mp (valToAbs val)
+      return $ JSVariableIntroduction (identToJs ident) (Just js')
+    JSApp{} -> do
+      js' <- valueToJs mp (valToAbs val)
+      return $ JSVariableIntroduction (identToJs ident) (Just js')
     _ -> return $ JSVariableIntroduction (identToJs ident) (Just js)
 
 -- |
@@ -216,20 +220,24 @@ valueToJs m (Abs (_, _, Just ty, _) arg val) | isConstrained ty = return JSNoOp
     isConstrained _ = False
 valueToJs m (Abs (_, _, ty, _) arg val) = do
   ret <- valueToJs m val
-  return $ JSFunction (Just annotatedName) [argtyp ++ ' ' : identToJs arg] (JSBlock [JSReturn ret])
+  return $ JSFunction annotatedName [argtype ++ argname] (JSBlock [JSReturn ret])
   where
-    argtyp | Nothing <- ty = typestr m aty
-           | otherwise = fnArgStr m ty
+    argtype | Nothing <- ty, [aty] <- atys = typestr m aty
+            | otherwise = fnArgStr m ty
+    argname | name@(_:_) <- identToJs arg = ' ' : name
+            | otherwise = []
+
+    atys = nub . f $ NonRec arg val
     (f, _, _, _) = everythingOnValues (++) (const []) values (const []) (const [])
     values :: Expr Ann -> [T.Type]
     values (Var (_, _, Just t, _) (Qualified _ ident)) | ident == arg = [t]
     values _ = []
-    [aty] = nub . f $ NonRec arg val -- TODO: intentional possibility of failure for now
 
-    annotatedName = templTypes' m ty ++ (case arg of
-                                           (Ident []) -> maybe "" (typestr m) ty
-                                           _ -> fnRetStr m ty)
-                                     ++ " _"
+    annotatedName
+      | Just ty' <- ty, Ident [] <- arg = Just $ templTypes' m ty ++ typestr m ty' ++ " _"
+      | typ@(_:_) <- fnRetStr m ty = Just $ templTypes' m ty ++ typ ++ " _"
+      | otherwise = Nothing
+
 valueToJs m e@App{} = do
   let (f, args) = unApp e []
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
