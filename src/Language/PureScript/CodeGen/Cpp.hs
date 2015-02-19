@@ -606,13 +606,13 @@ dropApp' other n = (other, n)
 valToAbs val@(Var vv@(ss, com, _, _) ident) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
 
-valToAbs val@(App vv@(ss, com, ty, _) _ _) = let argid = Ident $ argName ty in
-  Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
+valToAbs val@(App vv@(ss, com, ty, _) _ _) = let argid = (Ident . fst $ abs' ty) in
+  Abs (ss, com, snd $ abs' ty, Nothing) argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
   where
     -- TODO: this is probably too specific
-    argName (Just (T.ForAll _ ty' _)) = argName (Just ty')
-    argName (Just (T.TypeApp (T.TypeApp (T.TypeConstructor _) (T.RCons _ (T.TypeConstructor _) (T.TUnknown _))) _)) = []
-    argName _ = "arg"
+    abs' (Just (T.ForAll _ ty' _)) = abs' (Just ty')
+    abs' (Just (T.TypeApp (T.TypeApp (T.TypeConstructor _) (T.RCons _ (T.TypeConstructor _) (T.TUnknown _))) b)) = ([], Just b)
+    abs' ty' = ("arg", ty')
 
 valToAbs val@(Literal vv@(ss, com, _, _) ident) =
   Abs vv (Ident []) val
