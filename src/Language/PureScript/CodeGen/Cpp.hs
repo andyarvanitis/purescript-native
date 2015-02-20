@@ -197,6 +197,7 @@ mktype m app@(T.TypeApp a b)
 mktype m (T.ForAll _ ty _) = mktype m ty
 mktype _ (T.Skolem name _ _) = Just $ Template (identToJs $ Ident name)
 mktype _ (T.TypeVar name) = Just $ Template (identToJs $ Ident name)
+mktype _ (T.TUnknown n) = Just $ Template ('T' : show n)
 mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a)
 mktype m (T.ConstrainedType _ ty) = mktype m ty
 mktype m (T.RCons _ _ _) = Just $ Template "rowType"

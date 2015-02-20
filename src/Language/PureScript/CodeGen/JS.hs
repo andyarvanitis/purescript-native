@@ -518,7 +518,7 @@ literalToBinderJS m varName done (ObjectLiteral bs) = go done bs
     return (JSVariableIntroduction propVar (Just (accessorString prop (JSVar varName))) : js)
 literalToBinderJS m varName done (ArrayLiteral bs) = do
   js <- go done 0 bs
-  return [JSIfElse (JSBinary EqualTo (JSAccessor "length" (JSVar varName)) (JSNumericLiteral (Left (fromIntegral $ length bs)))) (JSBlock js) Nothing]
+  return [JSIfElse (JSBinary EqualTo (JSAccessor "size()" (JSVar varName)) (JSNumericLiteral (Left (fromIntegral $ length bs)))) (JSBlock js) Nothing]
   where
   go :: (Functor m, Applicative m, Monad m, MonadReader (Options mode) m)
      => [JS] -> Integer -> [Binder Ann] -> SupplyT m [JS]
