@@ -947,7 +947,7 @@ module Control.Monad.Eff where
 
   foreign import runPure
     """
-    template <typename A, typename E>
+    template <typename A>
     inline auto runPure(eff_fn<A> f) -> A {
       return f();
     }
@@ -967,56 +967,58 @@ module Control.Monad.Eff where
 
   instance monadEff :: Monad (Eff e)
 
-{-
-
   foreign import untilE
     """
-    function untilE(f) {
-      return function() {
+    inline auto untilE(eff_fn<bool> f) -> eff_fn<data<Prelude::Unit>> {
+      return [=]() {
         while (!f());
-        return {};
+        return Prelude::unit;
       };
     }
     """ :: forall e. Eff e Boolean -> Eff e Unit
 
   foreign import whileE
     """
-    function whileE(f) {
-      return function(a) {
-        return function() {
+    template <typename A>
+    inline auto whileE(eff_fn<bool> f) -> fn<eff_fn<A>,eff_fn<Prelude::Unit>> {
+      return [=](eff_fn<A> a) {
+        return [=]() {
           while (f()) {
             a();
           }
-          return {};
+          return Prelude::unit;
         };
       };
     }
     """ :: forall e a. Eff e Boolean -> Eff e a -> Eff e Unit
 
+
   foreign import forE
     """
-    function forE(lo) {
-      return function(hi) {
-        return function(f) {
-          return function() {
-            for (var i = lo; i < hi; i++) {
+    inline auto forE(long lo) -> fn<long,fn<fn<long,eff_fn<Prelude::Unit>>,eff_fn<data<Prelude::Unit>>>> {
+      return [=](long hi) {
+        return [=](fn<long,eff_fn<Prelude::Unit>> f) {
+          return [=]() {
+            for (auto i = lo; i < hi; i++) {
               f(i)();
             }
+            return Prelude::unit;
           };
         };
       };
     }
     """ :: forall e. Number -> Number -> (Number -> Eff e Unit) -> Eff e Unit
 
-
   foreign import foreachE
     """
-    function foreachE(as) {
-      return function(f) {
-        return function() {
-          for (var i = 0; i < as.length; i++) {
+    template <typename A>
+    inline auto foreachE(list<A> as) -> fn<fn<A,eff_fn<Prelude::Unit>>,eff_fn<data<Prelude::Unit>>> {
+      return [=](fn<A,eff_fn<Prelude::Unit>> f) {
+        return [=]() {
+          for (auto i = 0; i < as.size(); i++) {
             f(as[i])();
           }
+          return Prelude::unit;
         };
       };
     }
@@ -1028,12 +1030,11 @@ module Control.Monad.Eff.Unsafe where
 
   foreign import unsafeInterleaveEff
     """
-    function unsafeInterleaveEff(f) {
+    template <typename A>
+    inline auto unsafeInterleaveEff(eff_fn<A> f) -> eff_fn<A> {
       return f;
     }
     """ :: forall eff1 eff2 a. Eff eff1 a -> Eff eff2 a
-
--}
 
 module Debug.Trace where
 
