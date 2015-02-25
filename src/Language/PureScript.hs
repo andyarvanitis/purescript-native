@@ -13,9 +13,21 @@
 --
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE DataKinds, QuasiQuotes, TemplateHaskell, FlexibleContexts #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
-module Language.PureScript (module P, compile, compile', RebuildPolicy(..), MonadMake(..), make, prelude) where
+module Language.PureScript
+  ( module P
+  , compile
+  , compile'
+  , RebuildPolicy(..)
+  , MonadMake(..)
+  , make
+  , prelude
+  ) where
 
 import Data.FileEmbed (embedFile)
 import Data.Function (on)
@@ -29,7 +41,7 @@ import qualified Data.Set as S
 
 import Control.Applicative
 import Control.Arrow ((&&&))
-import Control.Monad.Error
+import Control.Monad.Except
 import Control.Monad.Reader
 
 import System.FilePath ((</>))
@@ -48,7 +60,7 @@ import Language.PureScript.Parser as P
 import Language.PureScript.Pretty as P
 import Language.PureScript.Renamer as P
 import Language.PureScript.Sugar as P
-import Language.PureScript.Supply as P
+import Control.Monad.Supply as P
 import Language.PureScript.TypeChecker as P
 import Language.PureScript.Types as P
 import qualified Language.PureScript.CoreFn as CoreFn
@@ -84,15 +96,15 @@ compile' env ms prefix = do
   additional <- asks optionsAdditional
   mainModuleIdent <- asks (fmap moduleNameFromString . optionsMain)
   (sorted, _) <- sortModules $ map importPrim $ if noPrelude then ms else map importPrelude ms
-  (desugared, nextVar) <- stringifyErrorStack True $ runSupplyT 0 $ desugar sorted
+  (desugared, nextVar) <- interpretMultipleErrors True $ runSupplyT 0 $ desugar sorted
   (elaborated, env') <- runCheck' env $ forM desugared $ typeCheckModule mainModuleIdent
-  regrouped <- stringifyErrorStack True $ createBindingGroupsModule . collapseBindingGroupsModule $ elaborated
+  regrouped <- interpretMultipleErrors True $ createBindingGroupsModule . collapseBindingGroupsModule $ elaborated
   let corefn = map (CoreFn.moduleToCoreFn env') regrouped
   let entryPoints = moduleNameFromString `map` entryPointModules additional
   let elim = if null entryPoints then corefn else eliminateDeadCode entryPoints corefn
   let renamed = renameInModules elim
   let codeGenModuleNames = moduleNameFromString `map` codeGenModules additional
-  let modulesToCodeGen = if null codeGenModuleNames then renamed else filter (\(CoreFn.Module mn _ _ _ _) -> mn `elem` codeGenModuleNames) renamed
+  let modulesToCodeGen = if null codeGenModuleNames then renamed else filter (\(CoreFn.Module _ mn _ _ _ _) -> mn `elem` codeGenModuleNames) renamed
   js <- concat <$> (evalSupplyT nextVar $ T.traverse moduleToJs modulesToCodeGen)
   let exts = intercalate "\n" . map (`moduleToPs` env') $ regrouped
   js' <- generateMain env' js
@@ -154,15 +166,15 @@ traverseEither f (Right y) = Right <$> f y
 -- If timestamps have not changed, the externs file can be used to provide the module's types without
 -- having to typecheck the module again.
 --
-make :: (Functor m, Applicative m, Monad m, MonadMake m)
+make :: forall m. (Functor m, Applicative m, Monad m, MonadMake m)
      => FilePath -> [(Either RebuildPolicy FilePath, Module)] -> [String] -> m Environment
 make outputDir ms prefix = do
   noPrelude <- asks optionsNoPrelude
-  let filePathMap = M.fromList (map (\(fp, Module mn _ _) -> (mn, fp)) ms)
+  let filePathMap = M.fromList (map (\(fp, Module _ mn _ _) -> (mn, fp)) ms)
 
   (sorted, graph) <- sortModules $ map importPrim $ if noPrelude then map snd ms else map (importPrelude . snd) ms
 
-  toRebuild <- foldM (\s (Module moduleName' _ _) -> do
+  toRebuild <- foldM (\s (Module _ moduleName' _ _) -> do
     let filePath = dotsTo '/' $ runModuleName moduleName'
 
         fileBase = outputDir </> filePath </> (last . words . dotsTo ' ' $ runModuleName moduleName')
@@ -185,19 +197,18 @@ make outputDir ms prefix = do
   when (any fst marked) $ -- TODO: it should only be updated if any files have been added/removed
     writeTextFile (outputDir </> "CMakeLists.txt") cmakeListsTxt
 
-  (desugared, nextVar) <- stringifyErrorStack True $ runSupplyT 0 $ zip (map fst marked) <$> desugar (map snd marked)
+  (desugared, nextVar) <- interpretMultipleErrors True $ runSupplyT 0 $ zip (map fst marked) <$> desugar (map snd marked)
 
   evalSupplyT nextVar $ go initEnvironment desugared
 
   where
-  go :: (Functor m, Applicative m, Monad m, MonadMake m)
-     => Environment -> [(Bool, Module)] -> SupplyT m Environment
+  go :: Environment -> [(Bool, Module)] -> SupplyT m Environment
   go env [] = return env
   go env ((False, m) : ms') = do
     (_, env') <- lift . runCheck' env $ typeCheckModule Nothing m
 
     go env' ms'
-  go env ((True, m@(Module moduleName' _ exps)) : ms') = do
+  go env ((True, m@(Module coms moduleName' _ exps)) : ms') = do
     let filePath = dotsTo '/' $ runModuleName moduleName'
         fileBase = outputDir </> filePath </> (last . words . dotsTo ' ' $ runModuleName moduleName')
         srcFile = fileBase ++ ".cc"
@@ -206,11 +217,11 @@ make outputDir ms prefix = do
 
     lift . progress $ "Compiling " ++ runModuleName moduleName'
 
-    (Module _ elaborated _, env') <- lift . runCheck' env $ typeCheckModule Nothing m
+    (Module _ _ elaborated _, env') <- lift . runCheck' env $ typeCheckModule Nothing m
 
-    regrouped <- stringifyErrorStack True . createBindingGroups moduleName' . collapseBindingGroups $ elaborated
+    regrouped <- interpretMultipleErrors True . createBindingGroups moduleName' . collapseBindingGroups $ elaborated
 
-    let mod' = Module moduleName' regrouped exps
+    let mod' = Module coms moduleName' regrouped exps
     let corefn = CoreFn.moduleToCoreFn env' mod'
     let [renamed] = renameInModules [corefn]
 
@@ -230,18 +241,18 @@ make outputDir ms prefix = do
 
     go env' ms'
 
-  rebuildIfNecessary :: (Functor m, Monad m, MonadMake m) => M.Map ModuleName [ModuleName] -> S.Set ModuleName -> [Module] -> m [(Bool, Module)]
+  rebuildIfNecessary :: M.Map ModuleName [ModuleName] -> S.Set ModuleName -> [Module] -> m [(Bool, Module)]
   rebuildIfNecessary _ _ [] = return []
-  rebuildIfNecessary graph toRebuild (m@(Module moduleName' _ _) : ms') | moduleName' `S.member` toRebuild = do
+  rebuildIfNecessary graph toRebuild (m@(Module _ moduleName' _ _) : ms') | moduleName' `S.member` toRebuild = do
     let deps = fromMaybe [] $ moduleName' `M.lookup` graph
         toRebuild' = toRebuild `S.union` S.fromList deps
     (:) (True, m) <$> rebuildIfNecessary graph toRebuild' ms'
-  rebuildIfNecessary graph toRebuild (Module moduleName' _ _ : ms') = do
+  rebuildIfNecessary graph toRebuild (Module _ moduleName' _ _ : ms') = do
     let externsFile = outputDir </> (dotsTo '/' $ runModuleName moduleName') </> "externs.purs"
     externs <- readTextFile externsFile
     externsModules <- fmap (map snd) . either (throwError . show) return $ P.parseModulesFromFiles id [(externsFile, externs)]
     case externsModules of
-      [m'@(Module moduleName'' _ _)] | moduleName'' == moduleName' -> (:) (False, m') <$> rebuildIfNecessary graph toRebuild ms'
+      [m'@(Module _ moduleName'' _ _)] | moduleName'' == moduleName' -> (:) (False, m') <$> rebuildIfNecessary graph toRebuild ms'
       _ -> throwError $ "Externs file " ++ externsFile ++ " was invalid"
 
 reverseDependencies :: ModuleGraph -> M.Map ModuleName [ModuleName]
@@ -254,9 +265,9 @@ reverseDependencies g = combine [ (dep, mn) | (mn, deps) <- g, dep <- deps ]
 -- Add an import declaration for a module if it does not already explicitly import it.
 --
 addDefaultImport :: ModuleName -> Module -> Module
-addDefaultImport toImport m@(Module mn decls exps)  =
+addDefaultImport toImport m@(Module coms mn decls exps)  =
   if isExistingImport `any` decls || mn == toImport then m
-  else Module mn (ImportDeclaration toImport Unqualified Nothing : decls) exps
+  else Module coms mn (ImportDeclaration toImport Unqualified Nothing : decls) exps
   where
   isExistingImport (ImportDeclaration mn' _ _) | mn' == toImport = True
   isExistingImport (PositionedDeclaration _ _ d) = isExistingImport d

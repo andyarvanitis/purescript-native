@@ -31,27 +31,38 @@ module Prelude
 
   -- | An alias for `true`, which can be useful in guard clauses:
   -- |
-  -- | E.g.
+  -- | ```purescript
+  -- | max x y | x >= y = x
+  -- |         | otherwise = y
+  -- | ```
   -- |
-  -- |     max x y | x >= y = x
-  -- |             | otherwise = y
   otherwise :: Boolean
   otherwise = true
 
   -- | Flips the order of the arguments to a function of two arguments.
+  -- |
+  -- | ```purescript
+  -- | flip const 1 2 = const 2 1 = 2
+  -- | ```
+  -- |
   flip :: forall a b c. (a -> b -> c) -> b -> a -> c
   flip f b a = f a b
 
   -- | Returns its first argument and ignores its second.
+  -- |
+  -- | ```purescript
+  -- | const 1 "hello" = 1
+  -- | ```
+  -- |
   const :: forall a b. a -> b -> a
   const a _ = a
 
   -- | This function returns its first argument, and can be used to assert type equalities.
   -- | This can be useful when types are otherwise ambiguous.
   -- |
-  -- | E.g.
-  -- |
-  -- |     main = print $ [] `asTypeOf` [0]
+  -- | ```purescript
+  -- | main = print $ [] `asTypeOf` [0]
+  -- | ```
   -- |
   -- | If instead, we had written `main = print []`, the type of the argument `[]` would have
   -- | been ambiguous, resulting in a compile-time error.
@@ -61,6 +72,14 @@ module Prelude
   infixr 9 >>>
   infixr 9 <<<
 
+  -- | A `Semigroupoid` is similar to a [`Category`](#category) but does not require an identity
+  -- | element `id`, just composable morphisms.
+  -- |
+  -- | `Semigroupoid`s should obey the following rule:
+  -- |
+  -- | Association:
+  -- |     `forall p q r. p <<< (q <<< r) = (p <<< q) <<< r`
+  -- |
   class Semigroupoid a where
     (<<<) :: forall b c d. a c d -> a b c -> a b d
 
@@ -70,6 +89,17 @@ module Prelude
   (>>>) :: forall a b c d. (Semigroupoid a) => a b c -> a c d -> a b d
   (>>>) f g = g <<< f
 
+  -- | `Category`s consist of objects and composable morphisms between them, and as such are
+  -- | [`Semigroupoids`](#semigroupoid), but unlike `semigroupoids` must have an identity element.
+  -- |
+  -- | `Category`s should obey the following rules.
+  -- |
+  -- | Left Identity:
+  -- |     `forall p. id <<< p = p`
+  -- |
+  -- | Right Identity:
+  -- |     `forall p. p <<< id = p`
+  -- |
   class (Semigroupoid a) <= Category a where
     id :: forall t. a t t
 
@@ -79,14 +109,50 @@ module Prelude
   infixr 0 $
   infixl 0 #
 
+  -- | Applies a function to its argument
+  -- |
+  -- | ```purescript
+  -- | length $ groupBy productCategory $ filter isInStock products
+  -- | ```
+  -- |
+  -- | is equivalent to
+  -- |
+  -- | ```purescript
+  -- | length (groupBy productCategory (filter isInStock (products)))
+  -- | ```
+  -- |
+  -- | `($)` is different from [`(#)`](#-2) because it is right-infix instead of left, so
+  -- | `a $ b $ c $ d x` = `a (b (c (d x)))`
+  -- |
   ($) :: forall a b. (a -> b) -> a -> b
   ($) f x = f x
 
+  -- | Applies a function to its argument
+  -- |
+  -- | ```purescript
+  -- | products # groupBy productCategory # filter isInStock # length
+  -- | ```
+  -- |
+  -- | is equivalent to
+  -- |
+  -- | ```purescript
+  -- | length (groupBy productCategory (filter isInStock (products)))
+  -- | ```
+  -- |
+  -- | `(#)` is different from [`($)`](#-1) because it is left-infix instead of right, so
+  -- | `x # a # b # c # d` = `(((x a) b) c) d`
+  -- |
   (#) :: forall a b. a -> (a -> b) -> b
   (#) x f = f x
 
   infixr 6 :
 
+  -- | Attaches an element to the front of a list.
+  -- |
+  -- | ```purescript
+  -- | 1 : [2, 3, 4] = [1, 2, 3, 4]
+  -- | ```
+  -- |
   (:) :: forall a. a -> [a] -> [a]
   (:) = cons
 
@@ -155,6 +221,17 @@ module Prelude
   infixl 4 <$>
   infixl 1 <#>
 
+  -- | A `Functor` is intuitively a type which can be mapped over, and more formally a mapping
+  -- | between [`Category`](#category)s that preserves structure.
+  -- |
+  -- | `Functor`s should obey the following rules.
+  -- |
+  -- | Identity:
+  -- |     `(<$>) id = id`
+  -- |
+  -- | Composition:
+  -- |     `forall f g. (<$>) (f . g) = ((<$>) f) . ((<$>) g)`
+  -- |
   class Functor f where
     (<$>) :: forall a b. (a -> b) -> f a -> f b
 
@@ -166,9 +243,34 @@ module Prelude
 
   infixl 4 <*>
 
+  -- | `Apply`s are intuitively [`Applicative`](#applicative)s less `pure`, and more formally a
+  -- | strong lax semi-monoidal endofunctor.
+  -- |
+  -- | `Apply`s should obey the following rules.
+  -- |
+  -- | Associative Composition:
+  -- |     `forall f g h. (.) <$> f <*> g <*> h = f <*> (g <*> h)`
+  -- |
   class (Functor f) <= Apply f where
     (<*>) :: forall a b. f (a -> b) -> f a -> f b
 
+  -- | `Applicative`s are [`Functor`](#functor)s which can be "applied" by sequencing composition
+  -- | (`<*>`) or embedding pure expressions (`pure`).
+  -- |
+  -- | `Applicative`s should obey the following rules.
+  -- |
+  -- | Identity:
+  -- |     `forall v. (pure id) <*> v = v`
+  -- |
+  -- | Composition:
+  -- |     `forall f g h. (pure (.)) <*> f <*> g <*> h = f <*> (g <*> h)`
+  -- |
+  -- | Homomorphism:
+  -- |     `forall f x. (pure f) <*> (pure x) = pure (f x)`
+  -- |
+  -- | Interchange:
+  -- |     `forall u y. u <*> (pure y) = (pure (($) y)) <*> u`
+  -- |
   class (Apply f) <= Applicative f where
     pure :: forall a. a -> f a
 
@@ -177,9 +279,27 @@ module Prelude
 
   infixl 1 >>=
 
+  -- | A `Bind` is an [`Apply`](#apply) with a bind operation which sequentially composes actions.
+  -- |
+  -- | `Bind`s should obey the following rule.
+  -- |
+  -- | Associativity:
+  -- |     `forall f g x. (x >>= f) >>= g = x >>= (\k => f k >>= g)`
+  -- |
   class (Apply m) <= Bind m where
     (>>=) :: forall a b. m a -> (a -> m b) -> m b
 
+  -- | `Monad` is a class which can be intuitively thought of as an abstract datatype of actions or
+  -- | more formally though of as a monoid in the category of endofunctors.
+  -- |
+  -- | `Monad`s should obey the following rules.
+  -- |
+  -- | Left Identity:
+  -- |     `forall f x. pure x >>= f = f x`
+  -- |
+  -- | Right Identity:
+  -- |     `forall x. x >>= pure = x`
+  -- |
   class (Applicative m, Bind m) <= Monad m
 
   return :: forall m a. (Monad m) => a -> m a
@@ -385,6 +505,12 @@ module Prelude
     show LT = "LT"
     show GT = "GT"
     show EQ = "EQ"
+
+  instance semigroupOrdening :: Semigroup Ordering where
+    (<>) LT _ = LT
+    (<>) GT _ = GT
+    (<>) EQ y = y
+
 
   class (Eq a) <= Ord a where
     compare :: a -> a -> Ordering
