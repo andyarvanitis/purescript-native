@@ -44,9 +44,9 @@ literals = mkPattern' match
   match (JSBooleanLiteral True) = return "true"
   match (JSBooleanLiteral False) = return "false"
   match (JSArrayLiteral xs) = fmap concat $ sequence
-    [ return "[ "
+    [ return "{"
     , fmap (intercalate ", ") $ forM xs prettyPrintJS'
-    , return " ]"
+    , return "}"
     ]
   match (JSObjectLiteral []) = return "nullptr"
   match (JSObjectLiteral ps) = fmap concat $ sequence

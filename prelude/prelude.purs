@@ -161,10 +161,7 @@ module Prelude
     template <typename T>
     inline auto cons(T e) -> fn<list<T>, list<T>> {
       return [=](list<T> l) {
-        list<T> v = { e };
-        v.reserve(l.size() + 1);
-        v.insert(v.end(), l.begin(), l.end());
-        return v;
+        return list<T>(e,l);
       };
     }
     """ :: forall a. a -> [a] -> [a]
@@ -206,9 +203,10 @@ module Prelude
     inline auto showArrayImpl(fn<T,string> f) -> fn<list<T>,string> {
       return [=](list<T> xs) -> string {
         string s("[");
-        for (auto it = xs.begin(); it != xs.end(); it++) {
-          s.append(f(*it));
-          if (it != xs.end() - 1) s.append(",");
+        const auto sz = xs.size();
+        for (auto i = 0; i < sz; i++) {
+          s.append(f(xs[i]));
+          if (i != sz - 1) s.append(",");
         }
         return s + "]";
       };

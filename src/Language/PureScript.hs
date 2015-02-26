@@ -194,8 +194,9 @@ make outputDir ms prefix = do
 
   marked <- rebuildIfNecessary (reverseDependencies graph) toRebuild sorted
 
-  when (any fst marked) $ -- TODO: it should only be updated if any files have been added/removed
+  when (any fst marked) $ do -- TODO: it should only be updated if any files have been added/removed
     writeTextFile (outputDir </> "CMakeLists.txt") cmakeListsTxt
+    writeTextFile (outputDir </> "shared_list.h") $ BU.toString $(embedFile "prelude/shared_list.h")
 
   (desugared, nextVar) <- interpretMultipleErrors True $ runSupplyT 0 $ zip (map fst marked) <$> desugar (map snd marked)
 
