@@ -219,11 +219,10 @@ literals = mkPattern' match
     , prettyPrintJS' value
     , return ";"
     ]
-  match (JSBreak lbl) = return $ "goto " ++ lbl ++ ";"
-  match (JSContinue lbl) = return $ "goto " ++ lbl ++ ";"
+  match (JSBreak lbl) = return []
+  match (JSContinue lbl) = return []
   match (JSLabel lbl js) = fmap concat $ sequence
-    [ return $ lbl ++ ": "
-    , prettyPrintJS' js
+    [ prettyPrintJS' js
     ]
   match (JSComment _ js) = match js
   -- match (JSComment com js) = fmap concat $ sequence $
