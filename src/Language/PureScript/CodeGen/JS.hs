@@ -61,6 +61,7 @@ moduleToJs (Module coms name imps exps foreigns decls) = do
 --  additional <- lift $ asks optionsAdditional
   let imps' = delete (ModuleName [ProperName C.prim]) . (\\ [name]) $ imps
   jsImports <- T.traverse importToJs $ imps'
+  preambleImport <- importToJs $ preambleHeader
   ownImport <- importToJs $ name
   let foreigns' = mapMaybe (\(_, js, _) -> js) foreigns
   jsDecls <- mapM (bindToJs name) decls
@@ -84,7 +85,7 @@ moduleToJs (Module coms name imps exps foreigns decls) = do
          [ JSRaw $ "#ifndef " ++ moduleNameToJs name ++ "_H"
          , JSRaw $ "#define " ++ moduleNameToJs name ++ "_H\n"
          ]
-      ++ (if isPrelude name then headerPreamble else [])
+      ++ (if isPrelude name then [preambleImport] else [])
       ++ jsImports
       ++ [ JSRaw "//"
          , JSNamespace (moduleNameToJs name) moduleHeader
