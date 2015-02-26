@@ -105,6 +105,41 @@ private:
   shared_list(std::shared_ptr<Node> node)
       : _node(node)
       , _size(0) {}
+
+public:
+  class const_iterator : public std::iterator<std::forward_iterator_tag, T> {
+  public:
+    ~const_iterator() {}
+    inline auto operator !=(const const_iterator& it) const -> bool {
+      return _node != it._node;
+    }
+    inline auto operator ==(const const_iterator& it) const -> bool {
+      return _node == it._node;
+    }
+    inline auto operator ++() -> const_iterator& {
+      if (_node) {
+        _node = _node->_next;
+      }
+      return *this;
+    }
+    inline auto operator *() const -> const T& {
+      return _node->_value;
+    }
+  private:
+    friend class shared_list<T>;
+    const_iterator(std::shared_ptr<Node> node)
+      : _node(node) {}
+    std::shared_ptr<Node> _node;
+  };
+
+  inline auto begin() const -> const_iterator {
+    return const_iterator(_node);
+  }
+
+  inline auto end() const -> const const_iterator& {
+    static const const_iterator _end = const_iterator(nullptr);
+    return _end;
+  }
 };
 
 #endif // shared_list_H_
