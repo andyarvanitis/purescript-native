@@ -436,27 +436,28 @@ templateArgs' args (Specialized t ts) (Specialized t' ts') = args ++ (templateAr
 templateArgs' args (List t) (List t') = templateArgs' args t t'
 templateArgs' args a@(Template _) a'@(Template _) = args ++ [(show a, show a')]
 templateArgs' args a@(Template _) a' = args ++ [(show a, show a')]
-templateArgs' args (ParamTemplate name ts) (ParamTemplate name' ts') = args ++ zip (show <$> ts) (show <$> ts')
+templateArgs' args (ParamTemplate _ ts) (ParamTemplate _ ts') = args ++ zip (show <$> ts) (show <$> ts')
 templateArgs' args a@(ParamTemplate _ _) a' = args ++ fromParamTemplate a a'
 -- templateArgs' args Empty Empty = args
 templateArgs' _ t1 t2 = error $ "Mismatched type structure! " ++ show t1 ++ " ; " ++ show t2
 
 fromParamTemplate :: Type -> Type -> [(String,String)]
-fromParamTemplate (ParamTemplate name [a, b]) t@(Function a' b') =
-  -- [ (capitalize name, typeName t)
+fromParamTemplate (ParamTemplate name ts) t
+  | not (any isTemplate ts) = [(capitalize name, typeName t)]
+  where
+    isTemplate Template{} = True
+    isTemplate _ = False
+fromParamTemplate (ParamTemplate _ [a, b]) (Function a' b') =
   [ (show a, show a')
   , (show b, show b')
   ]
-fromParamTemplate (ParamTemplate name [b]) t@(EffectFunction b') =
-  -- [ (capitalize name, typeName t)
+fromParamTemplate (ParamTemplate _ [b]) (EffectFunction b') =
   [ (show b, show b')
   ]
-fromParamTemplate (ParamTemplate name [a]) t@(List a') =
-  -- [ (capitalize name, typeName t)
+fromParamTemplate (ParamTemplate _ [a]) (List a') =
   [ (show a, show a')
   ]
-fromParamTemplate (ParamTemplate name [a]) t@(Data a') =
-  -- [ (capitalize name, typeName t)
+fromParamTemplate (ParamTemplate _ [a]) (Data a') =
   [ (show a, show a')
   ]
 fromParamTemplate ts t = error $ show "Can't map types! " ++ show ts ++ " ; " ++ show t

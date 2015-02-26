@@ -265,7 +265,7 @@ valueToJs m e@App{} = do
       convArgs <- mapM (valueToJs m) (instFn name' args)
       let convArgs' = map toVarDecl (depSort $ zip (names ty) convArgs)
       return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames m e name')) convArgs'
-    _ -> if null args' then flip JSApp [] <$> fn'
+    _ -> if null args then flip JSApp [] <$> fn'
          else flip (foldl (\fn a -> JSApp fn [a])) args' <$> fn'
       where
         fn' | isQualified f || typeinst (head args) = specialized' f (head args)
