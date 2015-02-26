@@ -18,6 +18,7 @@ author: Phil Freeman <paf31@cantab.net>,
 extra-source-files: prelude/prelude.purs
                   , examples/passing/*.purs
                   , examples/failing/*.purs
+                  , pure11/*.hh
 
 source-repository head
     type: git
