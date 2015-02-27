@@ -325,7 +325,16 @@ valueToJs m (Case _ values binders) = do
 valueToJs m (Let _ ds val) = do
   decls <- concat <$> mapM (bindToJs m) ds
   ret <- valueToJs m val
-  return $ JSApp (JSFunction Nothing [] (JSBlock (decls ++ [JSReturn ret]))) []
+  return $ JSApp (JSFunction Nothing [] (JSBlock ((asLambda <$> zip ds decls) ++ [JSReturn ret]))) []
+  where
+    -- TODO: refactor this (shouldn't be adding qualifiers here or relying on them later)
+    asLambda (d, JSVariableIntroduction v (Just (JSFunction name args ret))) =
+      JSVariableIntroduction ("static " ++ absType d ++ " const " ++ v) (Just $ JSFunction name args ret)
+    asLambda (_, js) = js
+    absType d
+      | (NonRec _ (Abs (_, _, Just ty, _) _ _)) <- d = typestr m ty
+      | otherwise = []
+
 valueToJs m (Constructor (_, _, Just ty, Just IsNewtype) (ProperName typename) (ProperName ctor) _) =
   return $ JSData (mkUnique ctor) typename [typestr m ty] JSNoOp
 valueToJs m (Constructor (_, _, Just ty, _) (ProperName typename) (ProperName ctor) []) =

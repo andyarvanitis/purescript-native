@@ -88,9 +88,6 @@ literals = mkPattern' match
         ]
     else return []
   match (JSVar ident) = return $ takeWhile (/='@') ident
-  -- match (JSVariableIntroduction _ (Just js@(JSNamespace _ _))) = match js
-  -- match (JSVariableIntroduction s (Just (JSSequence [] jss))) = match $ JSSequence s jss
-  -- match (JSVariableIntroduction _ (Just js@(JSSequence _ _))) = match js
   match (JSVariableIntroduction name (Just (JSFunction (Just fname) args sts))) = fmap concat $ sequence $
     let ns = words name in
     [ if null (dropWhile (/= '|') fname) then
@@ -102,15 +99,19 @@ literals = mkPattern' match
                   else
                     "template <" ++ (takeWhile (/= '|') fname) ++ ">")
                ++ if notNoOp sts then '\n':indentString else " "
-    , return $ if head ns == "inline" then "inline auto " else "auto "
-    , return $ last ns
+    , do
+      indentString <- currentIndent
+      return $ case head ns of
+                 "inline" -> "inline auto " ++ last ns
+                 "static" -> name ++ " =\n" ++ indentString ++ "[=]"
+                 _ -> "auto " ++ last ns
     , return "("
     , return $ intercalate ", " $ cleanParams args
     , return ")"
     , return $ returnType fname
     , if notNoOp sts then do
         s <- prettyPrintJS' sts
-        return $ ' ' : s ++ " "
+        return $ ' ' : s ++ " " ++ if head ns == "static" then ";" else []
       else
         return ";"
     ]

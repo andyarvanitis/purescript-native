@@ -46,7 +46,7 @@ tco' = everywhereOnJS convert
             let
               allArgs = concat $ reverse argss
             in
-              JSVariableIntroduction name (Just (replace (toLoop name allArgs body')))
+              JSVariableIntroduction name (Just (replace (toLoop (cleanName name) allArgs body')))
         | otherwise -> js
   convert js = js
   collectAllFunctionArgs :: [[String]] -> (JS -> JS) -> JS -> ([[String]], JS, JS -> JS)
