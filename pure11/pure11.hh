@@ -58,4 +58,15 @@ constexpr auto instanceof(const std::shared_ptr<U>& a) -> std::shared_ptr<T> {
   return std::dynamic_pointer_cast<T>(a);
 }
 
+// Records support
+//
+#define record(...) \
+  []() {            \
+    struct {        \
+      __VA_ARGS__;  \
+    } s;            \
+    return std::make_shared<decltype(s)>(); \
+  }()
+
+
 #endif // Pure11_H

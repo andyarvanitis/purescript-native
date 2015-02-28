@@ -434,6 +434,7 @@ templateArgs' args (Data t) (Data t') = templateArgs' args t t'
 templateArgs' args (Specialized t []) (Specialized t' []) = templateArgs' args t t'
 templateArgs' args (Specialized t ts) (Specialized t' ts') = args ++ (templateArgs' [] t t') ++ (concat $ zipWith (templateArgs' []) ts ts')
 templateArgs' args (List t) (List t') = templateArgs' args t t'
+templateArgs' args a@(Template "rowType") a'@(Template "rowType") = args ++ [(show a, [])]
 templateArgs' args a@(Template _) a'@(Template _) = args ++ [(show a, show a')]
 templateArgs' args a@(Template _) a' = args ++ [(show a, show a')]
 templateArgs' args (ParamTemplate _ ts) (ParamTemplate _ ts') = args ++ zip (show <$> ts) (show <$> ts')

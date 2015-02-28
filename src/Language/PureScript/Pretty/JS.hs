@@ -50,14 +50,14 @@ literals = mkPattern' match
     ]
   match (JSObjectLiteral []) = return "nullptr"
   match (JSObjectLiteral ps) = fmap concat $ sequence
-    [ return "{\n"
+    [ return "record(\n"
     , withIndent $ do
-        jss <- forM ps $ \(key, value) -> fmap ((objectPropertyToString key ++ ": ") ++) . prettyPrintJS' $ value
+        jss <- forM ps $ \(field, value) -> fmap ((field ++ " = ") ++) . prettyPrintJS' $ value
         indentString <- currentIndent
-        return $ intercalate ", \n" $ map (indentString ++) jss
+        return $ intercalate "; \n" $ map (indentString ++) jss
     , return "\n"
     , currentIndent
-    , return "}"
+    , return ")"
     ]
     where
     objectPropertyToString :: String -> String
@@ -285,6 +285,12 @@ accessor = mkPattern match
   match (JSAccessor prop val) = Just (prop, val)
   match _ = Nothing
 
+fromPtr :: Pattern PrinterState JS ((), JS)
+fromPtr = mkPattern match
+  where
+  match (JSFromPtr val) = Just ((), val)
+  match _ = Nothing
+
 cast :: Pattern PrinterState JS (JS, JS)
 cast = mkPattern match
   where
@@ -379,6 +385,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
   operators :: OperatorTable PrinterState JS String
   operators =
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "." ++ prop ]
+                  , [ Wrap fromPtr $ \_ val -> ('*' : val) ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> filter (/='#') val ++ "(" ++ args ++ ")" ]
                   , [ unary JSNew "new " ]

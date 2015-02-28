@@ -80,7 +80,6 @@ moduleToJs (Module coms name imps exps foreigns decls) = do
                       else []
                      )
                   ++ templs
-  let exps' = JSObjectLiteral $ (runIdent &&& JSVar . identToJs) <$> exps
   return $
          [ JSRaw $ "#ifndef " ++ moduleNameToJs name ++ "_H"
          , JSRaw $ "#define " ++ moduleNameToJs name ++ "_H\n"
@@ -194,7 +193,7 @@ valueToJs m (Var (_, _, ty, Just (IsConstructor _ [])) name) =
 valueToJs m (Var (_, _, ty, Just (IsConstructor _ _)) name) =
   return $ JSVar . mkDataFn $ qualifiedToStr m mkUnique' name ++ (getSpecialization $ fnRetStr m ty)
 valueToJs m (Accessor _ prop val) =
-  accessorString prop <$> valueToJs m val
+  (accessorString prop . JSFromPtr) <$> valueToJs m val
 valueToJs m (ObjectUpdate _ o ps) = do
   obj <- valueToJs m o
   sts <- mapM (sndM $ valueToJs m) ps
@@ -378,7 +377,13 @@ literalToValueJS _ (NumericLiteral n) = return $ JSNumericLiteral n
 literalToValueJS _ (StringLiteral s) = return $ JSStringLiteral s
 literalToValueJS _ (BooleanLiteral b) = return $ JSBooleanLiteral b
 literalToValueJS m (ArrayLiteral xs) = JSArrayLiteral <$> mapM (valueToJs m) xs
-literalToValueJS m (ObjectLiteral ps) = JSObjectLiteral <$> mapM (sndM (valueToJs m)) ps
+literalToValueJS m (ObjectLiteral ps) = do
+  jss <- mapM (valueToJs m . snd) ps
+  let names = toField <$> ps
+  return $ JSObjectLiteral $ zip names jss
+  where
+  toField (name, Literal (_, _, Just ty, _) _) = typestr m ty ++ ' ' : name
+  toField (name, _) = name
 
 -- |
 -- Shallow copy an object.
@@ -528,7 +533,7 @@ literalToBinderJS m varName done (ObjectLiteral bs) = go done bs
     propVar <- freshName
     done'' <- go done' bs'
     js <- binderToJs m propVar done'' binder
-    return (JSVariableIntroduction propVar (Just (accessorString prop (JSVar varName))) : js)
+    return (JSVariableIntroduction propVar (Just (accessorString prop (JSFromPtr $ JSVar varName))) : js)
 literalToBinderJS m varName done (ArrayLiteral bs) = do
   js <- go done 0 bs
   return [JSIfElse (JSBinary EqualTo (JSAccessor "size()" (JSVar varName)) (JSNumericLiteral (Left (fromIntegral $ length bs)))) (JSBlock js) Nothing]
