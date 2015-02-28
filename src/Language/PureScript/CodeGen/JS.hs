@@ -254,9 +254,11 @@ valueToJs m e@App{} = do
   args' <- mapM (valueToJs m) (filter (not . typeinst) args)
   case f of
     Var (_, _, _, Just IsNewtype) name ->
-      return $ JSApp (JSVar . mkData $ qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0) (take 1 args')
+      let dataName = qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0 in
+      return $ JSApp (JSVar . mkData $ dataName) (dataFields dataName $ take 1 args')
     Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
-      return $ JSApp (JSVar . mkData $ qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0) args'
+      let dataName = qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0 in
+      return $ JSApp (JSVar . mkData $ dataName) (dataFields dataName args')
     Var (_, _, _, Just (IsConstructor _ fields)) name | not (null args) ->
       return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr m mkUnique' name
                                                               ++ getAppSpecType m e (length fields - length args + 1)) args'
@@ -402,7 +404,7 @@ extendObj obj sts = do
     assign = JSBlock [JSAssignment (JSIndexer jsKey jsNewObj) (JSIndexer jsKey obj)]
     stToAssign (s, js) = JSAssignment (JSAccessor s jsNewObj) js
     extend = map stToAssign sts
-  return $ JSApp (JSFunction Nothing [] block) []
+  return . error . show $ JSApp (JSFunction Nothing [] block) []
 
 -- |
 -- Generate code in the simplified Javascript intermediate representation for a reference to a

@@ -60,12 +60,19 @@ constexpr auto instanceof(const std::shared_ptr<U>& a) -> std::shared_ptr<T> {
 
 // Records support
 //
-#define record(...) \
+#define RECORD(...) \
   []() {            \
     struct {        \
       __VA_ARGS__;  \
     } s;            \
-    return std::make_shared<decltype(s)>(); \
+    return make_data<decltype(s)>(); \
+  }()
+
+#define DATA_RECORD(data_type, ...) \
+  []() { \
+    auto _ = make_data<data_type::RowType>(); \
+    __VA_ARGS__; \
+    return _;    \
   }()
 
 

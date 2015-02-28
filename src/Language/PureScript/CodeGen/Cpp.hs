@@ -569,3 +569,9 @@ valToAbs (Abs (ss, com, _, _) _ val@(App vv _ _)) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
 
 valToAbs val = val
+-----------------------------------------------------------------------------------------------------------------------
+dataFields :: String -> [JS] -> [JS]
+dataFields name jss = dataField <$> jss
+  where
+    dataField (JSObjectLiteral fields) = JSObjectLiteral ((name, JSNoOp) : fields)
+    dataField js = js

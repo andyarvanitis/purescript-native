@@ -49,15 +49,27 @@ literals = mkPattern' match
     , return "}"
     ]
   match (JSObjectLiteral []) = return "nullptr"
-  match (JSObjectLiteral ps) = fmap concat $ sequence
-    [ return "record(\n"
+  match (JSObjectLiteral ps) = let isData = (snd (head ps) == JSNoOp) in fmap concat $ sequence
+    [ return "\n"
     , withIndent $ do
-        jss <- forM ps $ \(field, value) -> fmap ((field ++ " = ") ++) . prettyPrintJS' $ value
         indentString <- currentIndent
-        return $ intercalate "; \n" $ map (indentString ++) jss
-    , return "\n"
+        return $ indentString ++ if isData then "DATA_RECORD" else "RECORD"
+    , return "(\n"
+    , withIndent $ do
+        indentString <- currentIndent
+        withIndent $ do
+          let fn = if isData then
+                     \(field, value) -> fmap (("(*_)." ++ (last $ words field) ++ " = ") ++) . prettyPrintJS' $ value
+                   else
+                     \(field, value) -> fmap ((field ++ " = ") ++) . prettyPrintJS' $ value
+          jss <- forM (if isData then tail ps else ps) fn
+          indentString' <- currentIndent
+          let dtyp = if isData then
+                       indentString' ++ fst (head ps) ++ ",\n"
+                     else []
+          return $ dtyp ++ (intercalate ";\n" $ map (indentString' ++) jss) ++ "\n" ++ indentString
+    , return ")\n"
     , currentIndent
-    , return ")"
     ]
     where
     objectPropertyToString :: String -> String
