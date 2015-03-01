@@ -356,12 +356,21 @@ valueToJs m (Constructor (_, _, Just ty, _) (ProperName typename) (ProperName ct
     fieldTys (T.TypeApp
                (T.TypeApp
                  (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+                   (T.TypeApp
+                     (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
+                      r@(T.RCons _ _ _))) b) = (traceShow (T.rowToList r) r) : fieldTys b
+    fieldTys (T.TypeApp
+               (T.TypeApp
+                 (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                    a) b) = typs a [] ++ fieldTys b
       where
         typs ty@(T.TypeApp
                   (T.TypeApp
                     (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                       _) _) tys = tys ++ [ty]
+        -- typs ty@(T.TypeApp
+        --           (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
+        --            r@(T.RCons _ _ _)) tys = error $ show r
         typs ty tys = tys ++ [ty]
     fieldTys (T.ForAll _ ty _) = fieldTys ty
     fieldTys _ = []

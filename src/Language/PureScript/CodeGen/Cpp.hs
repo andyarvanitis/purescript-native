@@ -571,7 +571,7 @@ valToAbs (Abs (ss, com, _, _) _ val@(App vv _ _)) = let argid = Ident "arg" in
 valToAbs val = val
 -----------------------------------------------------------------------------------------------------------------------
 dataFields :: String -> [JS] -> [JS]
-dataFields name jss = dataField <$> jss
+dataFields name jss = dataField <$> (zip jss [0..])
   where
-    dataField (JSObjectLiteral fields) = JSObjectLiteral ((name, JSNoOp) : fields)
-    dataField js = js
+    dataField (JSObjectLiteral fields, n) = JSObjectLiteral ((name ++ ' ' : show n, JSNoOp) : fields)
+    dataField (js, _) = js

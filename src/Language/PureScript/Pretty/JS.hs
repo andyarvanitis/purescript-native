@@ -49,7 +49,12 @@ literals = mkPattern' match
     , return "}"
     ]
   match (JSObjectLiteral []) = return "nullptr"
-  match (JSObjectLiteral ps) = let isData = (snd (head ps) == JSNoOp) in fmap concat $ sequence
+  match (JSObjectLiteral ps) =
+    let (isData, name) = (case snd $ head ps of
+                            JSNoOp -> let ws = (words . fst $ head ps) in
+                                      (True, head ws ++ "::RowType" ++ last ws)
+                            _ -> (False, [])) in
+    fmap concat $ sequence
     [ return "\n"
     , withIndent $ do
         indentString <- currentIndent
@@ -65,7 +70,7 @@ literals = mkPattern' match
           jss <- forM (if isData then tail ps else ps) fn
           indentString' <- currentIndent
           let dtyp = if isData then
-                       indentString' ++ fst (head ps) ++ ",\n"
+                       indentString' ++ name ++ ",\n"
                      else []
           return $ dtyp ++ (intercalate ";\n" $ map (indentString' ++) jss) ++ "\n" ++ indentString
     , return ")\n"

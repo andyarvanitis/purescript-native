@@ -70,7 +70,7 @@ constexpr auto instanceof(const std::shared_ptr<U>& a) -> std::shared_ptr<T> {
 
 #define DATA_RECORD(data_type, ...) \
   []() { \
-    auto _ = make_data<data_type::RowType>(); \
+    auto _ = make_data<data_type>(); \
     __VA_ARGS__; \
     return _;    \
   }()
