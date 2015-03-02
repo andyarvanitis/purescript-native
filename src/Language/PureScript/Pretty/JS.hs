@@ -134,7 +134,7 @@ literals = mkPattern' match
     ]
   -- TODO: some of this should be moved out of here -- maybe apply optim to data too?
   --
-  match (JSVariableIntroduction name (Just (JSData ctor typename [typestr] JSNoOp))) = fmap concat $ sequence
+  match (JSVariableIntroduction name (Just (JSData ctor typename _ [typestr] JSNoOp))) = fmap concat $ sequence
     [ do indentString <- currentIndent
          return $ templateDecl indentString typename
     , do indentString <- currentIndent
@@ -158,7 +158,7 @@ literals = mkPattern' match
     , do indentString <- currentIndent
          return $ indentString ++ "};"
     ]
-  match (JSVariableIntroduction name (Just (JSData ctor typename fs fn))) =
+  match (JSVariableIntroduction name (Just (JSData ctor typename records fs fn))) =
     let fields = cleanParams fs in fmap concat $ sequence
     [ do indentString <- currentIndent
          return $ templateDecl indentString typename
@@ -167,6 +167,14 @@ literals = mkPattern' match
     , return " : public "
     , return $ dataType typename ++ " {"
     , return "\n"
+    , withIndent $ do
+        indentString <- currentIndent
+        withIndent $ do
+          indentString' <- currentIndent
+          return $ concatMap (\(rname, xs) ->
+            indentString ++ "struct " ++ (filter (/='#') rname) ++ " {\n" ++
+            (concatMap (\(nm, typ) -> indentString' ++ typ ++ ' ' : nm ++ ";\n") xs)
+            ++ indentString ++ "};\n") records
     , withIndent $ do
         indentString <- currentIndent
         return $ concatMap ((++ ";\n") . (indentString ++)) fields

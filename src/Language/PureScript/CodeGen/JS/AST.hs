@@ -202,7 +202,7 @@ data JS
   -- |
   -- A class representing "data", including ADTs
   --
-  | JSData String String [String] JS
+  | JSData String String [(String,[(String,String)])] [String] JS
   -- |
   -- A type cast expression
   --
@@ -297,7 +297,7 @@ everywhereOnJS f = go
   go (JSBlock js) = f (JSBlock (map go js))
   go (JSNamespace nm js) = f (JSNamespace nm (map go js))
   go (JSSequence s js) = f (JSSequence s (map go js))
-  go (JSData name ty fields j) = f (JSData name ty fields (go j))
+  go (JSData name ty records fields j) = f (JSData name ty records fields (go j))
   go (JSCast j1 j2) = f (JSCast (go j1) (go j2))
   go (JSVariableIntroduction name j) = f (JSVariableIntroduction name (fmap go j))
   go (JSAssignment j1 j2) = f (JSAssignment (go j1) (go j2))
@@ -330,7 +330,7 @@ everywhereOnJSTopDown f = go . f
   go (JSBlock js) = JSBlock (map (go . f) js)
   go (JSNamespace nm js) = JSNamespace nm (map (go . f) js)
   go (JSSequence s js) = JSSequence s (map (go . f) js)
-  go (JSData name ty fields j) = JSData name ty fields (go (f j))
+  go (JSData name ty records fields j) = JSData name ty records fields (go (f j))
   go (JSCast j1 j2) = JSCast (go (f j1)) (go (f j2))
   go (JSVariableIntroduction name j) = JSVariableIntroduction name (fmap (go . f) j)
   go (JSAssignment j1 j2) = JSAssignment (go (f j1)) (go (f j2))
@@ -362,7 +362,7 @@ everythingOnJS (<>) f = go
   go j@(JSBlock js) = foldl (<>) (f j) (map go js)
   go j@(JSNamespace _ js) = foldl (<>) (f j) (map go js)
   go j@(JSSequence _ js) = foldl (<>) (f j) (map go js)
-  go j@(JSData _ _ _ j1) = f j <> go j1
+  go j@(JSData _ _ _ _ j1) = f j <> go j1
   go j@(JSCast j1 j2) = f j <> go j1 <> go j2
   go j@(JSVariableIntroduction _ (Just j1)) = f j <> go j1
   go j@(JSAssignment j1 j2) = f j <> go j1 <> go j2

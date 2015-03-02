@@ -337,47 +337,54 @@ valueToJs m (Let _ ds val) = do
       | otherwise = []
 
 valueToJs m (Constructor (_, _, Just ty, Just IsNewtype) (ProperName typename) (ProperName ctor) _) =
-  return $ JSData (mkUnique ctor) typename [typestr m ty] JSNoOp
+  return $ JSData (mkUnique ctor) typename [] [typestr m ty] JSNoOp
 valueToJs m (Constructor (_, _, Just ty, _) (ProperName typename) (ProperName ctor) []) =
-  return $ JSData (mkUnique ctor) typename [] $
+  return $ JSData (mkUnique ctor) typename [] [] $
              JSVariableIntroduction dataCtorName $ Just $
                JSFunction (Just $ typestr m ty ++ ' ' : dataCtorName)
                  [fnRetStr m (Just ty)] (JSBlock [JSReturn $ JSApp (JSVar . mkData $ mkUnique ctor) []])
 valueToJs m (Constructor (_, _, Just ty, _) (ProperName typename) (ProperName ctor) fields) =
-  return $ JSData (mkUnique ctor) typename fields' $
+  return $ JSData (mkUnique ctor) typename records' fields' $
              JSVariableIntroduction dataCtorName $ Just $
-               JSFunction (Just $ fnRetStr m (Just ty) ++ ' ' : dataCtorName)
-                 [head types ++ ' ' : head names] (JSBlock [JSReturn (ctorBody $ tail fields')])
+               JSFunction (Just $ rty (tail types')  ++ ' ' : dataCtorName)
+                 [head fields'] (JSBlock [JSReturn (ctorBody $ tail fields')])
   where
-    types = typestr m <$> (fieldTys ty)
-    names = identToJs <$> fields
-    fields' = zipWith (\t n -> t ++ ' ' : n) types names
+    types = fieldTys ty
+    types' = zipWith (\(t,_) n -> varType t n) (fieldTys ty) [0..]
+    names' = identToJs <$> fields
+    fields' = zipWith (\t nm -> t ++ ' ' : nm) types' names'
+
+    typename'
+      | typ <- drop 1 $ getType typename,
+        ('[':c:_) <- typ, c /= ']' = rmType typename ++ '<' : intercalate "," (read typ) ++ ">"
+      | otherwise = rmType typename
+
+    rty (t:tys) = "fn<" ++ t ++ "," ++ rty tys ++ ">"
+    rty [] = asDataTy typename'
+
+    varType vty@T.RCons{} n = asDataTy $ (typestr m vty) ++ show n
+    varType vty _ = typestr m vty
+
+    records = filter (not . null . snd . snd) $ zip [0..] types
+    records' = (\(n, (recnm, xs)) -> (typestr m recnm ++ show n, struct <$> xs)) <$> records
+      where
+      struct (x, xty) = (x, typestr m xty)
 
     fieldTys (T.TypeApp
                (T.TypeApp
                  (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                   (T.TypeApp
-                     (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-                      r@(T.RCons _ _ _))) b) = (traceShow (T.rowToList r) r) : fieldTys b
-    fieldTys (T.TypeApp
-               (T.TypeApp
-                 (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                   a) b) = typs a [] ++ fieldTys b
+                   a) b) = typs a ++ fieldTys b
       where
         typs ty@(T.TypeApp
-                  (T.TypeApp
-                    (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-                      _) _) tys = tys ++ [ty]
-        -- typs ty@(T.TypeApp
-        --           (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-        --            r@(T.RCons _ _ _)) tys = error $ show r
-        typs ty tys = tys ++ [ty]
+                  (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
+                   r@(T.RCons _ _ _)) = [(r, fst $ T.rowToList r)]
+        typs ty = [(ty,[])]
     fieldTys (T.ForAll _ ty _) = fieldTys ty
     fieldTys _ = []
 
     ctorBody :: [String] -> JS
     ctorBody (arg:args) = JSFunction Nothing [arg] $ JSBlock [JSReturn $ ctorBody args]
-    ctorBody [] = JSApp (JSVar . mkData $ mkUnique ctor) (JSVar <$> names)
+    ctorBody [] = JSApp (JSVar . mkData $ mkUnique ctor) (JSVar <$> names')
 
 iife :: String -> [JS] -> JS
 iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []

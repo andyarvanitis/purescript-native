@@ -573,5 +573,6 @@ valToAbs val = val
 dataFields :: String -> [JS] -> [JS]
 dataFields name jss = dataField <$> (zip jss [0..])
   where
-    dataField (JSObjectLiteral fields, n) = JSObjectLiteral ((name ++ ' ' : show n, JSNoOp) : fields)
+    dataField (JSObjectLiteral fields, n)
+      | (_:_) <- fields = JSObjectLiteral ((name ++ ' ' : show n, JSNoOp) : fields)
     dataField (js, _) = js
