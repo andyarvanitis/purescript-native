@@ -208,6 +208,9 @@ templTypes' m (Just t)
   | s <- typestr m t = templTypes s
 templTypes' _ _ = ""
 -----------------------------------------------------------------------------------------------------------------------
+hasTemplates :: String -> Bool
+hasTemplates s = '#' `elem` s
+-----------------------------------------------------------------------------------------------------------------------
 sections :: [JS] -> ([JS], [JS], [JS], [JS])
 sections jss  = foldl (flip section) ([],[],[],[]) jss
   where

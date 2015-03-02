@@ -334,7 +334,12 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
         JSVariableIntroduction ("static " ++ absType d ++ " const " ++ v) (Just $ JSFunction name args ret)
       asLambda (_, js) = js
       absType d
-        | (NonRec _ (Abs (_, _, Just ty, _) _ _)) <- d = typestr mn ty
+        | (NonRec _ (Abs (ss, _, Just ty, _) _ _)) <- d,
+          typ <- typestr mn ty = if hasTemplates typ then
+                                   error $ "Error at " ++ (maybe "?" show ss) ++ ":\n  "
+                                     ++ "Introducing polymorphic types in 'where' or 'let' is "
+                                     ++ "not currently supported in the C++11 backend (type inference is ok)"
+                                 else typ
         | otherwise = []
 
   valueToJs (Constructor (_, _, Just ty, Just IsNewtype) (ProperName typename) (ProperName ctor) _) =
