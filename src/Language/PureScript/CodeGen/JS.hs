@@ -185,14 +185,14 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
       (T.TypeApp
         (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
           a) <- ty = do
-    literals <- literalToValueJS m l
-    return $ JSApp (JSVar $ typestr m ty) [literals]
+    literals <- literalToValueJS l
+    return $ JSApp (JSVar $ typestr mn ty) [literals]
   valueToJs (Literal _ l) =
     literalToValueJS l
   valueToJs (Var (_, _, ty, Just (IsConstructor _ [])) name) =
-    return $ JSApp (JSVar . mkDataFn $ qualifiedToStr m mkUnique' name ++ (getSpecialization $ fnRetStr m ty)) []
+    return $ JSApp (JSVar . mkDataFn $ qualifiedToStr mn mkUnique' name ++ (getSpecialization $ fnRetStr mn ty)) []
   valueToJs (Var (_, _, ty, Just (IsConstructor _ _)) name) =
-    return $ JSVar . mkDataFn $ qualifiedToStr m mkUnique' name ++ (getSpecialization $ fnRetStr m ty)
+    return $ JSVar . mkDataFn $ qualifiedToStr mn mkUnique' name ++ (getSpecialization $ fnRetStr mn ty)
   valueToJs (Accessor _ prop val) =
     (accessorString prop . JSFromPtr) <$> valueToJs val
   valueToJs (ObjectUpdate _ o ps) = do
@@ -212,10 +212,10 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     toFn _ = JSNoOp
 
     mkfunc ident ty
-      | arg@(_:_) <- fnArgStr m ty = Just $ JSFunction (annotatedName ident ty $ fnRetStr m ty) [arg] JSNoOp
-      | Just ty' <- ty = Just $ JSFunction (annotatedName ident ty $ typestr m ty') [] JSNoOp
+      | arg@(_:_) <- fnArgStr mn ty = Just $ JSFunction (annotatedName ident ty $ fnRetStr mn ty) [arg] JSNoOp
+      | Just ty' <- ty = Just $ JSFunction (annotatedName ident ty $ typestr mn ty') [] JSNoOp
       | otherwise = Just JSNoOp
-    annotatedName ident ty rty = Just $ templTypes' m ty ++ rty ++ ' ' : (identToJs ident)
+    annotatedName ident ty rty = Just $ templTypes' mn ty ++ rty ++ ' ' : (identToJs ident)
 
   valueToJs (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
       | (Abs (_, _, t, _) _ val') <- val, Nothing <- t = valueToJs (dropAbs (length ts - 2) val') -- TODO: confirm '-2'
@@ -234,8 +234,8 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     ret <- valueToJs val
     return $ JSFunction annotatedName [argtype ++ argname] (JSBlock [JSReturn ret])
     where
-      argtype | Nothing <- ty, [aty] <- atys = typestr m aty
-              | otherwise = fnArgStr m ty
+      argtype | Nothing <- ty, [aty] <- atys = typestr mn aty
+              | otherwise = fnArgStr mn ty
       argname | name@(_:_) <- identToJs arg = ' ' : name
               | otherwise = []
 
@@ -246,8 +246,8 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
       values _ = []
 
       annotatedName
-        | Just ty' <- ty, Ident [] <- arg = Just $ templTypes' m ty ++ typestr m ty' ++ " _"
-        | typ@(_:_) <- fnRetStr m ty = Just $ templTypes' m ty ++ typ ++ " _"
+        | Just ty' <- ty, Ident [] <- arg = Just $ templTypes' mn ty ++ typestr mn ty' ++ " _"
+        | typ@(_:_) <- fnRetStr mn ty = Just $ templTypes' mn ty ++ typ ++ " _"
         | otherwise = Nothing
 
   valueToJs e@App{} = do
@@ -255,18 +255,18 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     args' <- mapM valueToJs (filter (not . typeinst) args)
     case f of
       Var (_, _, _, Just IsNewtype) name ->
-        let dataName = qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0 in
+        let dataName = qualifiedToStr mn mkUnique' name ++ getAppSpecType mn e 0 in
         return $ JSApp (JSVar . mkData $ dataName) (dataFields dataName $ take 1 args')
       Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
-        let dataName = qualifiedToStr m mkUnique' name ++ getAppSpecType m e 0 in
+        let dataName = qualifiedToStr mn mkUnique' name ++ getAppSpecType mn e 0 in
         return $ JSApp (JSVar . mkData $ dataName) (dataFields dataName args')
       Var (_, _, _, Just (IsConstructor _ fields)) name | not (null args) ->
-        return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr m mkUnique' name
-                                                                ++ getAppSpecType m e (length fields - length args + 1)) args'
+        return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr mn mkUnique' name
+                                                                ++ getAppSpecType mn e (length fields - length args + 1)) args'
       Var (_, _, ty, Just IsTypeClassConstructor) name'@(Qualified mn (Ident name)) -> do
-        convArgs <- mapM (valueToJs m) (instFn name' args)
+        convArgs <- mapM valueToJs (instFn name' args)
         let convArgs' = map toVarDecl (depSort $ zip (names ty) convArgs)
-        return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames m e name')) convArgs'
+        return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames e name')) convArgs'
       _ -> if null args then flip JSApp [] <$> fn'
            else flip (foldl (\fn a -> JSApp fn [a])) args' <$> fn'
         where
@@ -297,10 +297,10 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     instFn :: Qualified Ident -> [Expr Ann] -> [Expr Ann]
     instFn name = map $ convExpr (convType $ typeclassTypes e name) . valToAbs
 
-    specialized name ty = name ++ templateSpec (declFnTy m e) (exprFnTy m e)
+    specialized name ty = name ++ templateSpec (declFnTy mn e) (exprFnTy mn e)
 
     specialized' f@(Var (_, _, ty, _) (Qualified q ident)) a =
-      pure . JSVar $ specialized (qualifiedToStr m id (Qualified qual ident)) ty
+      pure . JSVar $ specialized (qualifiedToStr mn id (Qualified qual ident)) ty
       where
         qual | (Var _ (Qualified _ _)) <- a, typeinst a = Nothing
              | otherwise = q
@@ -311,14 +311,14 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     isQualified _ = False
 
   valueToJs (Var (_, _, ty, Just IsNewtype) ident) =
-    return $ JSVar . mkDataFn $ qualifiedToStr m (mkUnique' . mkUnique') ident ++ (getSpecialization $ fnRetStr m ty)
+    return $ JSVar . mkDataFn $ qualifiedToStr mn (mkUnique' . mkUnique') ident ++ (getSpecialization $ fnRetStr mn ty)
 
   valueToJs (Var (_, _, Just ty, _) ident) =
-    return $ varJs m ident
+    return $ varJs ident
     where
-      varJs :: ModuleName -> Qualified Ident -> JS
-      varJs _ (Qualified Nothing ident) = JSVar $ identToJs ident ++ addType (typestr m ty)
-      varJs m qual = JSVar $ (qualifiedToStr m id qual) ++ addType (typestr m ty)
+      varJs :: Qualified Ident -> JS
+      varJs (Qualified Nothing ident) = JSVar $ identToJs ident ++ addType (typestr mn ty)
+      varJs qual = JSVar $ (qualifiedToStr mn id qual) ++ addType (typestr mn ty)
   valueToJs (Var _ ident) =
     return $ varToJs ident
   valueToJs (Case _ values binders) = do
@@ -334,16 +334,16 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
         JSVariableIntroduction ("static " ++ absType d ++ " const " ++ v) (Just $ JSFunction name args ret)
       asLambda (_, js) = js
       absType d
-        | (NonRec _ (Abs (_, _, Just ty, _) _ _)) <- d = typestr m ty
+        | (NonRec _ (Abs (_, _, Just ty, _) _ _)) <- d = typestr mn ty
         | otherwise = []
 
   valueToJs (Constructor (_, _, Just ty, Just IsNewtype) (ProperName typename) (ProperName ctor) _) =
-    return $ JSData (mkUnique ctor) typename [] [typestr m ty] JSNoOp
+    return $ JSData (mkUnique ctor) typename [] [typestr mn ty] JSNoOp
   valueToJs (Constructor (_, _, Just ty, _) (ProperName typename) (ProperName ctor) []) =
     return $ JSData (mkUnique ctor) typename [] [] $
                JSVariableIntroduction dataCtorName $ Just $
-                 JSFunction (Just $ typestr m ty ++ ' ' : dataCtorName)
-                   [fnRetStr m (Just ty)] (JSBlock [JSReturn $ JSApp (JSVar . mkData $ mkUnique ctor) []])
+                 JSFunction (Just $ typestr mn ty ++ ' ' : dataCtorName)
+                   [fnRetStr mn (Just ty)] (JSBlock [JSReturn $ JSApp (JSVar . mkData $ mkUnique ctor) []])
   valueToJs (Constructor (_, _, Just ty, _) (ProperName typename) (ProperName ctor) fields) =
     return $ JSData (mkUnique ctor) typename records' fields' $
                JSVariableIntroduction dataCtorName $ Just $
@@ -363,13 +363,13 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
       rty (t:tys) = "fn<" ++ t ++ "," ++ rty tys ++ ">"
       rty [] = asDataTy typename'
 
-      varType vty@T.RCons{} n = asDataTy $ (typestr m vty) ++ show n
-      varType vty _ = typestr m vty
+      varType vty@T.RCons{} n = asDataTy $ (typestr mn vty) ++ show n
+      varType vty _ = typestr mn vty
 
       records = filter (not . null . snd . snd) $ zip [0..] types
-      records' = (\(n, (recnm, xs)) -> (typestr m recnm ++ show n, struct <$> xs)) <$> records
+      records' = (\(n, (recnm, xs)) -> (typestr mn recnm ++ show n, struct <$> xs)) <$> records
         where
-        struct (x, xty) = (x, typestr m xty)
+        struct (x, xty) = (x, typestr mn xty)
 
       fieldTys (T.TypeApp
                  (T.TypeApp
@@ -400,7 +400,7 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     let names = toField <$> ps
     return $ JSObjectLiteral $ zip names jss
     where
-    toField (name, Literal (_, _, Just ty, _) _) = typestr m ty ++ ' ' : name
+    toField (name, Literal (_, _, Just ty, _) _) = typestr mn ty ++ ' ' : name
     toField (name, _) = name
 
   -- |
@@ -476,7 +476,7 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
       copyTyInfo (s, _) = s
 
       retType :: Either [(Guard Ann, Expr Ann)] (Expr Ann) -> String
-      retType (Right (App (_, _, Just ty, _) _ _)) = typestr m ty ++ " f"
+      retType (Right (App (_, _, Just ty, _) _ _)) = typestr mn ty ++ " f"
       retType (Left vs@(_:_)) = retType (Right . snd $ last vs)
       retType _ = []
 
@@ -508,7 +508,7 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
       done'' <- go remain done'
       js <- binderToJs argVar done'' binder
       return (JSVariableIntroduction argVar (Just (JSAccessor (identToJs field) (JSCast (JSVar ctorName) (JSVar varName)))) : js)
-    ctorName = qualifiedToStr m (Ident . mkUnique . runProperName) ctor ++ getSpecialization varName
+    ctorName = qualifiedToStr mn (Ident . mkUnique . runProperName) ctor ++ getSpecialization varName
   binderToJs varName done binder@(ConstructorBinder _ _ ctor _) | isCons ctor = do
     let (headBinders, tailBinder) = uncons [] binder
         numberOfHeadBinders = fromIntegral $ length headBinders

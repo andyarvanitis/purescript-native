@@ -511,8 +511,8 @@ skolemTo :: (String, T.Type) -> T.Type -> T.Type
 skolemTo (name', ty) (T.Skolem name _ _) | name == name' = ty
 skolemTo _ ty = ty
 
-typeclassTypeNames :: ModuleName -> Expr Ann -> Qualified Ident -> [String]
-typeclassTypeNames m e ident = fst <$> typeclassTypes e ident
+typeclassTypeNames :: Expr Ann -> Qualified Ident -> [String]
+typeclassTypeNames e ident = fst <$> typeclassTypes e ident
 
 capitalize :: String -> String
 capitalize (c:cs) = toUpper c : cs
