@@ -211,6 +211,7 @@ infer val = rethrow (onErrorMessages (ErrorInferringType val)) $ infer' val
 -- Infer a type for a value
 --
 infer' :: Expr -> UnifyT Type Check Expr
+infer' v@(NumericLiteral (Left _)) = return $ TypedValue True v tyIntegral
 infer' v@(NumericLiteral _) = return $ TypedValue True v tyNumber
 infer' v@(StringLiteral _) = return $ TypedValue True v tyString
 infer' v@(BooleanLiteral _) = return $ TypedValue True v tyBoolean
@@ -347,6 +348,16 @@ inferProperty _ _ = return Nothing
 inferBinder :: Type -> Binder -> UnifyT Type Check (M.Map Ident Type)
 inferBinder _ NullBinder = return M.empty
 inferBinder val (StringBinder _) = val =?= tyString >> return M.empty
+inferBinder val (NumberBinder (Left _))
+  | val == tyInt = val =?= tyInt >> return M.empty
+inferBinder val (NumberBinder (Left _))
+  | val == tyInteger = val =?= tyInteger >> return M.empty
+inferBinder val (NumberBinder (Left _))
+  | val == tyNumber = val =?= tyNumber >> return M.empty
+inferBinder val (NumberBinder (Left _))
+  | val == tyChar = val =?= tyChar >> return M.empty
+inferBinder val (NumberBinder (Right _))
+  | val == tyNumber = val =?= tyNumber >> return M.empty
 inferBinder val (NumberBinder _) = val =?= tyNumber >> return M.empty
 inferBinder val (BooleanBinder _) = val =?= tyBoolean >> return M.empty
 inferBinder val (VarBinder name) = return $ M.singleton name val
@@ -455,6 +466,8 @@ check' val u@(TUnknown _) = do
   (val'', ty') <- instantiatePolyTypeWithUnknowns val' ty
   ty' =?= u
   return $ TypedValue True val'' ty'
+check' v@(NumericLiteral (Left _)) t | t == tyInt || t == tyInteger || t == tyChar || t == tyNumber =
+  return $ TypedValue True v t
 check' v@(NumericLiteral _) t | t == tyNumber =
   return $ TypedValue True v t
 check' v@(StringLiteral _) t | t == tyString =

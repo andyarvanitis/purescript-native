@@ -80,9 +80,13 @@ typeName _ = ""
 -----------------------------------------------------------------------------------------------------------------------
 mktype :: ModuleName -> T.Type -> Maybe Type
 
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just $ Native "long"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just $ Native "string"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just $ Native "bool"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))   = Just $ Native "double"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))   = Just $ Native "string"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean")))  = Just $ Native "bool"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Integral"))) = Just $ Native "int"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Int")))      = Just $ Native "int"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Integer")))  = Just $ Native "long long"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Char")))     = Just $ Native "char"
 
 mktype _ (T.TypeApp
             (T.TypeApp
@@ -393,14 +397,17 @@ rmType :: String -> String
 rmType = takeWhile (/='@') . rmTempl
 -----------------------------------------------------------------------------------------------------------------------
 cleanName :: String -> String
-cleanName s | ws@(_:_) <- words $ (\c -> if c == ':' then ' ' else c) <$> (rmType s) = last ws
-cleanName s = s
+cleanName s | ns@(_:_) <- elemIndices ':' s = takeWhile (/='<') $ drop (last ns + 1) (rmType s)
+cleanName s | ws@(_:_) <- words (rmType s), head ws == "static" = last ws -- TODO: need better check
+cleanName s = last . words $ takeWhile (/='<') (rmType s)
 -----------------------------------------------------------------------------------------------------------------------
 cleanName' :: String -> String
-cleanName' = takeWhile (/='<') . cleanName
+-- cleanName' = takeWhile (/='<') . cleanName
+cleanName' = cleanName
 -----------------------------------------------------------------------------------------------------------------------
 argType :: String -> String
-argType s | (typ:_:_) <- words $ rmType s = typ
+argType s | ws@(_:_:_) <- (words $ rmType s) = intercalate " " $ init ws
+-- argType s | (typ:_:_) <- words $ rmType s = typ
 argType _ = []
 
 argName :: String -> String

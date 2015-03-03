@@ -191,6 +191,30 @@ tyNumber :: Type
 tyNumber = primTy "Number"
 
 -- |
+-- Type constructor for any integer-like type
+--
+tyIntegral :: Type
+tyIntegral = primTy "Integral"
+
+-- |
+-- Type constructor for machine-native integer
+--
+tyInt :: Type
+tyInt = primTy "Int"
+
+-- |
+-- Type constructor for large machine-native integer
+--
+tyInteger :: Type
+tyInteger = primTy "Integer"
+
+-- |
+-- Type constructor for machine-native character
+--
+tyChar :: Type
+tyChar = primTy "Char"
+
+-- |
 -- Type constructor for booleans
 --
 tyBoolean :: Type
@@ -223,6 +247,10 @@ primTypes = M.fromList [ (primName "Function" , (FunKind Star (FunKind Star Star
                        , (primName "Object"   , (FunKind (Row Star) Star, ExternData))
                        , (primName "String"   , (Star, ExternData))
                        , (primName "Number"   , (Star, ExternData))
+                       , (primName "Integral" , (Star, ExternData))
+                       , (primName "Int"      , (Star, ExternData))
+                       , (primName "Integer"  , (Star, ExternData))
+                       , (primName "Char"     , (Star, ExternData))
                        , (primName "Boolean"  , (Star, ExternData)) ]
 
 -- |

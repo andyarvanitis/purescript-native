@@ -193,16 +193,16 @@ module Prelude
     show true = "true"
     show false = "false"
 
-  foreign import showNumberImpl
+  foreign import showNumImpl
     """
     template <typename T>
-    inline auto showNumberImpl(T n) -> string {
+    inline auto showNumImpl(T n) -> string {
       return std::to_string(n);
     }
-    """ :: Number -> String
+    """ :: forall a. (Num a) => a -> String
 
   instance showNumber :: Show Number where
-    show = showNumberImpl
+    show = showNumImpl
 
   foreign import showArrayImpl
     """
@@ -716,30 +716,30 @@ module Prelude
     (.&.) :: b -> b -> b
     (.|.) :: b -> b -> b
     (.^.) :: b -> b -> b
-    shl :: b -> Number -> b
-    shr :: b -> Number -> b
-    zshr :: b -> Number -> b
+    shl :: b -> Int -> b
+    shr :: b -> Int -> b
+    zshr :: b -> Int -> b
     complement :: b -> b
 
   foreign import binary_shl_operator
     """
     template <typename T>
-    inline auto binary_shl_operator(T n1) -> fn<T,T> {
-      return [=](T n2) {
+    inline auto binary_shl_operator(T n1) -> fn<int,T> {
+      return [=](int n2) {
         return n1 << n2;
       };
     }
-    """ :: forall a. a -> a -> a
+    """ :: forall a. a -> Int -> a
 
   foreign import binary_shr_operator
     """
     template <typename T>
-    inline auto binary_shr_operator(T n1) -> fn<T,T> {
-      return [=](T n2) {
+    inline auto binary_shr_operator(T n1) -> fn<int,T> {
+      return [=](int n2) {
         return n1 >> n2;
       };
     }
-    """ :: forall a. a -> a -> a
+    """ :: forall a. a -> Int -> a
 
   foreign import binary_bitand_operator
     """
@@ -779,14 +779,14 @@ module Prelude
     }
     """ :: forall a. a -> a
 
-  instance bitsNumber :: Bits Number where
-    (.&.) = binary_bitand_operator
-    (.|.) = binary_bitor_operator
-    (.^.) = binary_bitxor_operator
-    shl = binary_shl_operator
-    shr = binary_shr_operator
-    zshr = binary_shr_operator
-    complement = unary_comp_operator
+  -- instance bitsNumber :: Bits Number where
+  --   (.&.) = binary_bitand_operator
+  --   (.|.) = binary_bitor_operator
+  --   (.^.) = binary_bitxor_operator
+  --   shl = binary_shl_operator
+  --   shr = binary_shr_operator
+  --   zshr = binary_shr_operator
+  --   complement = unary_comp_operator
 
   infixr 2 ||
   infixr 3 &&
@@ -859,6 +859,90 @@ module Prelude
   -- | `(++)` is an alias for `(<>)`.
   (++) :: forall s. (Semigroup s) => s -> s -> s
   (++) = (<>)
+
+  instance semiringInt :: Semiring Int where
+    (+) = binary_add_operator
+    zero = 0
+    (*) = binary_mul_operator
+    one = 1
+
+  instance ringInt :: Ring Int where
+    (-) = binary_sub_operator
+
+  instance moduloSemiringInt :: ModuloSemiring Int where
+    (/) = binary_div_operator
+    mod _ _ = 0
+
+  instance divisionRingInt :: DivisionRing Int
+
+  instance numInt :: Num Int
+
+  instance bitsInt :: Bits Int where
+    (.&.) = binary_bitand_operator
+    (.|.) = binary_bitor_operator
+    (.^.) = binary_bitxor_operator
+    shl = binary_shl_operator
+    shr = binary_shr_operator
+    zshr = binary_shr_operator
+    complement = unary_comp_operator
+
+  instance showInt :: Show Int where
+    show = showNumImpl
+
+  instance semiringInteger :: Semiring Integer where
+    (+) = binary_add_operator
+    zero = 0
+    (*) = binary_mul_operator
+    one = 1
+
+  instance ringInteger :: Ring Integer where
+    (-) = binary_sub_operator
+
+  instance moduloSemiringInteger :: ModuloSemiring Integer where
+    (/) = binary_div_operator
+    mod _ _ = 0
+
+  instance divisionRingInteger :: DivisionRing Integer
+
+  instance numInteger :: Num Integer
+
+  instance bitsInteger :: Bits Integer where
+    (.&.) = binary_bitand_operator
+    (.|.) = binary_bitor_operator
+    (.^.) = binary_bitxor_operator
+    shl = binary_shl_operator
+    shr = binary_shr_operator
+    zshr = binary_shr_operator
+    complement = unary_comp_operator
+
+  instance showInteger :: Show Integer where
+    show = showNumImpl
+
+  instance semiringChar :: Semiring Char where
+    (+) = binary_add_operator
+    zero = 0
+    (*) = binary_mul_operator
+    one = 1
+
+  instance ringChar :: Ring Char where
+    (-) = binary_sub_operator
+
+  instance moduloSemiringChar :: ModuloSemiring Char where
+    (/) = binary_div_operator
+    mod _ _ = 0
+
+  instance divisionRingChar :: DivisionRing Char
+
+  instance numChar :: Num Char
+
+  instance bitsChar :: Bits Char where
+    (.&.) = binary_bitand_operator
+    (.|.) = binary_bitor_operator
+    (.^.) = binary_bitxor_operator
+    shl = binary_shl_operator
+    shr = binary_shr_operator
+    zshr = binary_shr_operator
+    complement = unary_comp_operator
 
 {-
 module Data.Function where
