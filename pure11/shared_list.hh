@@ -3,6 +3,8 @@
 
 #include <memory>
 #include <cassert>
+#include <vector>
+#include <string>
 
 template<class T>
 class shared_list {
@@ -140,6 +142,28 @@ public:
     static const const_iterator _end = const_iterator(nullptr);
     return _end;
   }
+
+  // Implict conversion to std::vector
+  inline operator std::vector<T>() const {
+    std::vector<T> v;
+    v.reserve(size());
+    for (const_iterator it = begin(); it != end(); ++it) {
+      v.emplace_back(*it);
+    }
+    return v;
+  }
+
+  // Implict conversion to std::string (if T == char)
+  inline operator std::string() const {
+    static_assert(std::is_same<T, char>::value, "T must be type 'char'");
+    std::string s;
+    s.reserve(size());
+    for (const_iterator it = begin(); it != end(); ++it) {
+      s.push_back(*it);
+    }
+    return s;
+  }
+
 };
 
 #endif // shared_list_H_
