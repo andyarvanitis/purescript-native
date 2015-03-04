@@ -149,10 +149,10 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     case js of
       JSSequence [] jss -> return $ JSSequence (identToJs ident) jss
       JSVar{} -> do
-        js' <- valueToJs (valToAbs val)
+        js' <- valueToJs (valToAbs Nothing val)
         return $ JSVariableIntroduction (identToJs ident) (Just js')
       JSApp{} -> do
-        js' <- valueToJs (valToAbs val)
+        js' <- valueToJs (valToAbs Nothing val)
         return $ JSVariableIntroduction (identToJs ident) (Just js')
       _ -> return $ JSVariableIntroduction (identToJs ident) (Just js)
 
@@ -295,7 +295,7 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     typeinst _ = False
 
     instFn :: Qualified Ident -> [Expr Ann] -> [Expr Ann]
-    instFn name = map $ convExpr (convType $ typeclassTypes e name) . valToAbs
+    instFn name = map $ convExpr (convType $ typeclassTypes e name) . valToAbs (Just IsTypeClassConstructor)
 
     specialized name ty = name ++ templateSpec (declFnTy mn e) (exprFnTy mn e)
 

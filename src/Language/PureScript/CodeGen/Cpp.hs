@@ -558,10 +558,10 @@ dropApp' :: Expr Ann -> Int -> (Expr Ann, Int)
 dropApp' (App _ val _) n = dropApp' val (n + 1)
 dropApp' other n = (other, n)
 -----------------------------------------------------------------------------------------------------------------------
-valToAbs val@(Var vv@(ss, com, _, _) ident) = let argid = Ident "arg" in
+valToAbs _ val@(Var vv@(ss, com, _, _) ident) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
 
-valToAbs val@(App vv@(ss, com, Just ty, _) _ _) = let argid = (Ident . fst $ abs' ty) in
+valToAbs _ val@(App vv@(ss, com, Just ty, _) _ _) = let argid = (Ident . fst $ abs' ty) in
   Abs (ss, com, Just . snd $ abs' ty, Nothing) argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
   where
     -- TODO: this is probably too specific
@@ -569,16 +569,16 @@ valToAbs val@(App vv@(ss, com, Just ty, _) _ _) = let argid = (Ident . fst $ abs
     abs' (T.TypeApp (T.TypeApp (T.TypeConstructor _) (T.RCons _ (T.TypeConstructor _) (T.TUnknown _))) b) = ([], b)
     abs' ty' = ("arg", ty')
 
-valToAbs val@(Literal vv@(ss, com, _, _) ident) =
+valToAbs (Just IsTypeClassConstructor) val@(Literal vv@(ss, com, ty, _) _) =
   Abs vv (Ident []) val
 
 -- valToAbs val@(Accessor vv@(ss, com, _, _) _ _) = let argid = Ident "arg" in
 --   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
 
-valToAbs (Abs (ss, com, _, _) _ val@(App vv _ _)) = let argid = Ident "arg" in
+valToAbs _ (Abs (ss, com, _, _) _ val@(App vv _ _)) = let argid = Ident "arg" in
   Abs vv argid (App vv val (Var (ss, com, Just T.REmpty, Nothing) (Qualified Nothing argid)))
 
-valToAbs val = val
+valToAbs _ val = val
 -----------------------------------------------------------------------------------------------------------------------
 dataFields :: String -> [JS] -> [JS]
 dataFields name jss = dataField <$> (zip jss [0..])
