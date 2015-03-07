@@ -28,7 +28,7 @@ import Data.List (stripPrefix)
 
 import Language.PureScript.CodeGen.JS.AST
 import Language.PureScript.CodeGen.JS.Common
-import Language.PureScript.CodeGen.Cpp (cleanName')
+import Language.PureScript.CodeGen.Cpp (cleanName)
 import Language.PureScript.Names
 import Language.PureScript.CodeGen.JS.Optimizer.Common
 import qualified Language.PureScript.Constants as C
@@ -200,9 +200,9 @@ isPreludeDict dictName (JSAccessor prop (JSVar prelude)) = prelude == C.prelude 
 isPreludeDict _ _ = False
 
 isPreludeFn :: String -> JS -> Bool
-isPreludeFn fnName (JSVar varName) = cleanName' varName == (identToJs $ Op fnName)
+isPreludeFn fnName (JSVar varName) = cleanName varName == (identToJs $ Op fnName)
 isPreludeFn fnName (JSVar varName)
-  | (Just varName') <- stripPrefix C.prelude varName = cleanName' varName' == (identToJs $ Op fnName)
+  | (Just varName') <- stripPrefix C.prelude varName = cleanName varName' == (identToJs $ Op fnName)
 isPreludeFn fnName (JSAccessor fnName' (JSVar prelude)) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (JSIndexer (JSStringLiteral fnName') (JSVar prelude)) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (JSAccessor longForm (JSAccessor prelude (JSVar _))) = prelude == C.prelude && longForm == identToJs (Op fnName)

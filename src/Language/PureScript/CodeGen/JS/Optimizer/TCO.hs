@@ -17,7 +17,7 @@ module Language.PureScript.CodeGen.JS.Optimizer.TCO (tco) where
 
 import Language.PureScript.Options
 import Language.PureScript.CodeGen.JS.AST
-import Language.PureScript.CodeGen.Cpp (argType, argName, cleanName, cleanName')
+import Language.PureScript.CodeGen.Cpp (argType, argName, cleanName)
 
 -- |
 -- Eliminate tail calls
@@ -32,11 +32,11 @@ tco' = everywhereOnJS convert
   tcoLabel :: String
   tcoLabel = "tco"
   tcoVar :: String -> String
-  tcoVar arg = "__tco_" ++ cleanName' arg
+  tcoVar arg = "__tco_" ++ cleanName arg
   copyVar :: String -> String
-  copyVar arg = "__copy_" ++ cleanName' arg
+  copyVar arg = "__copy_" ++ cleanName arg
   copyVar' :: String -> String
-  copyVar' arg = argType arg ++ ' ' : "__copy_" ++ cleanName' arg
+  copyVar' arg = argType arg ++ ' ' : "__copy_" ++ cleanName arg
   convert :: JS -> JS
   convert js@(JSVariableIntroduction name (Just fn@JSFunction {})) =
     let

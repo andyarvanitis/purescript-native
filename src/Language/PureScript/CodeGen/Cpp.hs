@@ -414,10 +414,6 @@ cleanName s | ns@(_:_) <- elemIndices ':' s = takeWhile (/='<') $ drop (last ns 
 cleanName s | ws@(_:_) <- words (rmType s), head ws == "static" = last ws -- TODO: need better check
 cleanName s = last . words $ takeWhile (/='<') (rmType s)
 -----------------------------------------------------------------------------------------------------------------------
-cleanName' :: String -> String
--- cleanName' = takeWhile (/='<') . cleanName
-cleanName' = cleanName
------------------------------------------------------------------------------------------------------------------------
 argType :: String -> String
 argType s | ws@(_:_:_) <- (words $ rmType s) = intercalate " " $ init ws
 -- argType s | (typ:_:_) <- words $ rmType s = typ
