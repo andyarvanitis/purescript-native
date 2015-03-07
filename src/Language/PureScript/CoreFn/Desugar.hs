@@ -78,8 +78,8 @@ moduleToCoreFn env (A.Module coms mn decls (Just exps)) =
     [NonRec name (exprToCoreFn ss com Nothing e)]
   declToCoreFn ss _   (A.BindingGroupDeclaration ds) =
     [Rec $ map (\(name, _, e) -> (name, exprToCoreFn ss [] Nothing e)) ds]
-  declToCoreFn ss com (A.TypeClassDeclaration name _ supers members) =
-    [NonRec (properToIdent name) $ mkTypeClassConstructor ss com supers members]
+  declToCoreFn ss com (A.TypeClassDeclaration name ps supers members) =
+    [NonRec (properToIdent name) $ mkTypeClassConstructor ss com (runProperName name) ps supers members]
   declToCoreFn _  com (A.PositionedDeclaration ss com1 d) =
     declToCoreFn (Just ss) (com ++ com1) d
   declToCoreFn _ _ _ = []
@@ -138,10 +138,15 @@ moduleToCoreFn env (A.Module coms mn decls (Just exps)) =
         ctor = Var (ss, [], rowType, Just IsTypeClassConstructor) (fmap properToIdent name)
     in foldl (App (ss, com, ty, Nothing)) ctor args
     where
-      rowType = Just (mkRow . map fst $ sortBy (compare `on` fst) vs)
-      mkRow :: [String] -> Type
-      mkRow [] = REmpty
-      mkRow (n:ns) = RCons n REmpty (mkRow ns)
+      rowType
+        | Qualified m (ProperName pname) <- name,
+          Just (_, tys, _) <- M.lookup (Qualified m (ProperName $ takeWhile (/='@') pname)) (typeClasses env)
+        = Just $ rowFromList ((sortBy (compare `on` fst) ((map (\(i,t) -> (rmParens $ runIdent i,t)) tys))), REmpty)
+        -- TODO: remove after testing
+        | otherwise = error $ show $ map fst vs
+      rmParens ('(':ss) = init ss
+      rmParens s = s
+
   exprToCoreFn ss com ty  (A.TypeClassDictionaryAccessor _ ident) =
     Abs (ss, com, ty, Nothing) (Ident "dict")
       (Accessor nullAnn (runIdent ident) (Var nullAnn $ Qualified Nothing (Ident "dict")))
@@ -255,16 +260,16 @@ exportToCoreFn _ = []
 -- is a function that accepts the superclass instances and member
 -- implementations and returns a record for the instance dictionary.
 --
-mkTypeClassConstructor :: Maybe SourceSpan -> [Comment] -> [Constraint] -> [A.Declaration] -> Expr Ann
-mkTypeClassConstructor ss com [] [] = Literal (ss, com, Nothing, Just IsTypeClassConstructor) (ObjectLiteral [])
-mkTypeClassConstructor ss com supers members =
+mkTypeClassConstructor :: Maybe SourceSpan -> [Comment] -> String -> [(String, a)] -> [Constraint] -> [A.Declaration] -> Expr Ann
+mkTypeClassConstructor ss com _ _ [] [] = Literal (ss, com, Nothing, Just IsTypeClassConstructor) (ObjectLiteral [])
+mkTypeClassConstructor ss com name parms supers members =
   let args@(a:as) = sort $ map typeClassMemberName members ++ superClassDictionaryNames supers
       as' = sortBy (compare `on` fst) $ map (\m -> (typeClassMemberName m, typeClassMemberType m)) members
                                      ++ map (\m -> (m, Nothing)) (superClassDictionaryNames supers)
       props = [ (arg, Var nullAnn $ Qualified Nothing (Ident arg)) | arg <- args ]
       dict = Literal nullAnn (ObjectLiteral props)
   in Abs (ss, com, Nothing, Just IsTypeClassConstructor)
-         (Ident a)
+         (Ident $ name ++ '@' : (show $ map fst parms))
          (foldr mkAbs dict as')
   where
     typeClassMemberType :: A.Declaration -> Maybe Type
@@ -273,7 +278,7 @@ mkTypeClassConstructor ss com supers members =
     typeClassMemberType d = error $ "Invalid declaration in type class definition: " ++ show d
 
     mkAbs :: (String, Maybe Type) -> Expr Ann -> Expr Ann
-    mkAbs (name, ty) = Abs (Nothing, [], ty, Nothing) (Ident name)
+    mkAbs (nm, ty) = Abs (Nothing, [], ty, Nothing) (Ident nm)
 
 -- |
 -- Converts a ProperName to an Ident.

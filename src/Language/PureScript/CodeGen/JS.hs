@@ -29,6 +29,7 @@ import Data.List (intercalate, isInfixOf, isPrefixOf, nub, nubBy, sortBy)
 import Data.Function (on)
 import Data.Maybe (mapMaybe)
 import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Char (isAlphaNum, isDigit)
 import qualified Data.Traversable as T (traverse)
 
 import Control.Applicative
@@ -147,7 +148,6 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
   nonRecToJS ident val = do
     js <- valueToJs val
     case js of
-      JSSequence [] jss -> return $ JSSequence (identToJs ident) jss
       JSVar{} -> do
         js' <- valueToJs (valToAbs Nothing val)
         return $ JSVariableIntroduction (identToJs ident) (Just js')
@@ -199,9 +199,10 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     obj <- valueToJs o
     sts <- mapM (sndM valueToJs) ps
     extendObj obj sts
-  valueToJs e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
+  valueToJs e@(Abs (_, _, _, Just IsTypeClassConstructor) (Ident name) _) =
     let args = unAbs e
-    in return $ JSSequence [] (toFn <$> args)
+        comm = "typeclass " ++ rmType name ++ concatMap (' ':) parms
+    in return $ JSSequence comm (toFn <$> args)
     where
     unAbs :: Expr Ann -> [(Ident, Maybe T.Type)]
     unAbs (Abs (_, _, ty, _) arg val) = (arg, ty) : unAbs val
@@ -215,7 +216,16 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
       | arg@(_:_) <- fnArgStr mn ty = Just $ JSFunction (annotatedName ident ty $ fnRetStr mn ty) [arg] JSNoOp
       | Just ty' <- ty = Just $ JSFunction (annotatedName ident ty $ typestr mn ty') [] JSNoOp
       | otherwise = Just JSNoOp
-    annotatedName ident ty rty = Just $ templTypes' mn ty ++ rty ++ ' ' : (identToJs ident)
+
+    annotatedName ident ty rty = Just $ templ ++ rty ++ ' ' : (identToJs ident)
+      where
+        templ | ts@(_:_) <- templDecl' mn ty = ts
+              | not (null parms) = templDecl Sort . intercalate "," $ (typestr mn . T.TypeVar) <$> parms
+              | otherwise = []
+
+    parms :: [String]
+    parms | ('@':typ) <- getType name = read typ
+          | otherwise = []
 
   valueToJs (Abs (_, _, (Just (T.ConstrainedType ts _)), _) _ val)
       | (Abs (_, _, t, _) _ val') <- val, Nothing <- t = valueToJs (dropAbs (length ts - 2) val') -- TODO: confirm '-2'
@@ -246,29 +256,40 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
       values _ = []
 
       annotatedName
-        | Just ty' <- ty, Ident [] <- arg = Just $ templTypes' mn ty ++ typestr mn ty' ++ " _"
-        | typ@(_:_) <- fnRetStr mn ty = Just $ templTypes' mn ty ++ typ ++ " _"
+        | Just ty' <- ty, Ident [] <- arg = Just $ templDecl' mn ty ++ typestr mn ty' ++ " _"
+        | typ@(_:_) <- fnRetStr mn ty = Just $ templDecl' mn ty ++ typ ++ " _"
         | otherwise = Nothing
 
   valueToJs e@App{} = do
     let (f, args) = unApp e []
-    args' <- mapM valueToJs (filter (not . typeinst) args)
+        args' = filter (not . typeinst) args
+    jss <- mapM valueToJs args'
     case f of
       Var (_, _, _, Just IsNewtype) name ->
         let dataName = qualifiedToStr mn mkUnique' name ++ getAppSpecType mn e 0 in
-        return $ JSApp (JSVar . mkData $ dataName) (dataFields dataName $ take 1 args')
+        return $ JSApp (JSVar . mkData $ dataName) (dataFields dataName $ take 1 jss)
       Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
         let dataName = qualifiedToStr mn mkUnique' name ++ getAppSpecType mn e 0 in
-        return $ JSApp (JSVar . mkData $ dataName) (dataFields dataName args')
+        return $ JSApp (JSVar . mkData $ dataName) (dataFields dataName jss)
       Var (_, _, _, Just (IsConstructor _ fields)) name | not (null args) ->
         return $ foldl (\fn a -> JSApp fn [a]) (JSVar . mkDataFn $ qualifiedToStr mn mkUnique' name
-                                                                ++ getAppSpecType mn e (length fields - length args + 1)) args'
-      Var (_, _, ty, Just IsTypeClassConstructor) name'@(Qualified mn (Ident name)) -> do
-        convArgs <- mapM valueToJs (instFn name' args)
-        let convArgs' = map toVarDecl (depSort $ zip (names ty) convArgs)
+                                                                ++ getAppSpecType mn e (length fields - length args + 1)) jss
+      Var (_, _, Just ty, Just IsTypeClassConstructor) name'@(Qualified mn (Ident name)) -> do
+        convArgs <- mapM valueToJs (instFn name' args')
+        let templArgs = (map snd . sortBy (compare `on` fst) . normalizeTempl) <$> (zip (types ty) args')
+        when (length (names ty) /= length (args')) $ error "count mismatch" -- TODO: remove after testing
+        let convArgs' = map toVarDecl (depSort $ zip3 (names ty) convArgs templArgs)
         return $ JSSequence ("instance " ++ (rmType name) ++ ' ' : (intercalate " " $ typeclassTypeNames e name')) convArgs'
+        where
+          normalizeTempl (fty, expr)
+            | Just m <- mn,
+              Just classTy <- mktype m fty,
+              Just instTy <- mktype m $ tyFromExpr expr
+            = templateArgs classTy instTy
+            | otherwise = []
+
       _ -> if null args then flip JSApp [] <$> fn'
-           else flip (foldl (\fn a -> JSApp fn [a])) args' <$> fn'
+           else flip (foldl (\fn a -> JSApp fn [a])) jss <$> fn'
         where
           fn' | isQualified f || typeinst (head args) = specialized' f (head args)
               | otherwise = valueToJs f
@@ -277,21 +298,35 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     unApp (App _ val arg) args = unApp val (arg : args)
     unApp other args = (other, args)
 
-    names ty = map fst (fst . T.rowToList $ fromMaybe T.REmpty ty)
-    toVarDecl :: (String, JS) -> JS
-    toVarDecl (nm, js) | JSFunction _ _ _ <- js, C.__superclass_ `isPrefixOf` nm = JSNoOp
-    toVarDecl (nm, js) =
+    names ty = map fst (fst . T.rowToList $ ty)
+    types ty = map snd (fst . T.rowToList $ ty)
+
+    toVarDecl :: (String, JS, [String]) -> JS
+    toVarDecl (nm, js, ts) =
       JSVariableIntroduction (identToJs $ Ident nm)
                              (Just $ case js of
                                        JSFunction orig ags sts -> JSFunction (toTempl orig) ags sts
                                        _ -> js)
       where
-        toTempl fn | fn' <- fromMaybe "" fn = if '|' `elem` fn' then fn else Just ('|' : fn')
+        toTempl (Just fn)
+          | ('|':fn') <- dropWhile (/='|') fn
+            = Just $ templDecl NoSort (concatMap (' ':) $ ps ++ ps') ++ fn'
+          | otherwise = Just $ '|' : fn
+        toTempl Nothing = Just "|"
+        ps = (\s -> if derived s then "#_" ++ normalize s ++ "_" else s) <$> ts
+        ps' = filter derived ts
+        derived p@('#':_) = False
+        derived p
+          | hasTemplates p = True
+          | otherwise = False
+        normalize :: String -> String
+        normalize = takeWhile isAlphaNum . dropWhile isDigit . drop 1 . dropWhile (/='#')
 
     typeinst :: Expr Ann -> Bool
     typeinst (Var (_, _, Nothing, Nothing) _) = True -- TODO: make sure this doesn't remove the wrong (untyped) args
     typeinst (Accessor (_, _, Nothing, Nothing) _ v) = typeinst v
     typeinst (App (_, _, Nothing, Nothing) _ v) = typeinst v
+    typeinst (Abs _ _ v) = typeinst v
     typeinst _ = False
 
     instFn :: Qualified Ident -> [Expr Ann] -> [Expr Ann]

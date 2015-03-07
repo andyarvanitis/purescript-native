@@ -197,20 +197,25 @@ qualDataTypeName m (T.TypeConstructor typ) = intercalate "::" . words $ brk tnam
     brk = map (\c -> if c=='.' then ' ' else c)
 qualDataTypeName _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
-templTypes :: String -> String
-templTypes s
-  | ('#' `elem` s) = intercalate ", " (paramstr <$> templParms s) ++ "|"
+data Sort = Sort | NoSort deriving (Eq)
+-----------------------------------------------------------------------------------------------------------------------
+templDecl :: Sort -> String -> String
+templDecl toSort s
+  | ('#' `elem` s) = intercalate ", " (paramstr <$> templParms sort' s) ++ "|"
   where
     paramstr name@(c:_) | isDigit c = (subtype $ takeWhile isDigit name) ++ "class " ++ dropWhile isDigit name
     paramstr p = "typename " ++ dropWhile isDigit p
     subtype p = "template <" ++ intercalate "," ((++) "typename " <$> mkTs p) ++ "> "
     mkTs p = (('T' :) . show) <$> [1 .. read p]
-templTypes _ = []
+    sort' = case toSort of
+              Sort -> sortBy (compare `on` dropWhile isDigit)
+              NoSort -> id
+templDecl _ _ = []
 -----------------------------------------------------------------------------------------------------------------------
-templTypes' :: ModuleName -> Maybe T.Type -> String
-templTypes' m (Just t)
-  | s <- typestr m t = templTypes s
-templTypes' _ _ = ""
+templDecl' :: ModuleName -> Maybe T.Type -> String
+templDecl' m (Just t)
+  | s <- typestr m t = templDecl Sort s
+templDecl' _ _ = ""
 -----------------------------------------------------------------------------------------------------------------------
 hasTemplates :: String -> Bool
 hasTemplates s = '#' `elem` s
@@ -246,6 +251,14 @@ sections jss  = foldl (flip section) ([],[],[],[]) jss
 
     section (JSVariableIntroduction var (Just js@JSSequence{})) (decls, impls, extTempls, templs) =
       section js (decls, impls, extTempls, templs)
+
+    -- | Typeclasses
+    section js@(JSVariableIntroduction _ (Just (JSFunction (Just name) _ JSNoOp))) (decls, impls, extTempls, templs)
+      | '|' `elem` name
+      = (decls ++ [js],
+         impls,
+         extTempls,
+         templs)
 
     section js@(JSVariableIntroduction var (Just (JSFunction (Just name) args _))) (decls, impls, extTempls, templs)
       | ('|':_) <- filter (not . isSpace) name
@@ -414,9 +427,8 @@ argName :: String -> String
 argName s | ws@(_:_) <- words $ rmType s = last ws
 argName s = s
 -----------------------------------------------------------------------------------------------------------------------
-templParms :: String -> [String]
-templParms s = nub' . sortBy (compare `on` dropWhile isDigit) $
-                 (takeWhile (\c -> isAlphaNum c || c=='_') . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
+templParms :: ([String] -> [String]) -> String -> [String]
+templParms f s = nub' . f $ (takeWhile (\c -> isAlphaNum c || c=='_') . flip drop s) <$> (map (+1) . elemIndices '#' $ s)
   where
     nub' :: [String] -> [String]
     nub' (s1@(h1:_):s2:ss)
@@ -471,8 +483,18 @@ fromParamTemplate (ParamTemplate _ [a]) (List a') =
 fromParamTemplate (ParamTemplate _ [a]) (Data a') =
   [ (show a, show a')
   ]
+fromParamTemplate (ParamTemplate _ [b]) (Function a' b') =
+  [ (show a', show a') -- TODO: make sure this makes sense
+  , (show b, show b')
+  ]
 fromParamTemplate ts t = error $ show "Can't map types! " ++ show ts ++ " ; " ++ show t
-
+-----------------------------------------------------------------------------------------------------------------------
+tyFromExpr :: Expr Ann -> T.Type
+tyFromExpr (Abs (_, _, Just t, _) _ _) = t
+tyFromExpr (App (_, _, Just t, _) _ _) = t
+tyFromExpr (Var (_, _, Just t, _) _) = t
+tyFromExpr (Literal (_, _, Just t, _) _) = t
+tyFromExpr z = error $ show z -- T.REmpty
 -----------------------------------------------------------------------------------------------------------------------
 exprFnTy :: ModuleName -> Expr Ann -> Maybe Type
 exprFnTy m (App (_, _, Just ty, _) val a)
@@ -536,7 +558,7 @@ isMain :: ModuleName -> Bool
 isMain (ModuleName [ProperName "Main"]) = True
 isMain _ = False
 -----------------------------------------------------------------------------------------------------------------------
-depSort :: [(String, JS)] -> [(String, JS)]
+depSort :: [(String, JS, a)] -> [(String, JS, a)]
 depSort = sortBy vardep
   where
     getVars js = AST.everythingOnJS (++) getVar js
@@ -545,9 +567,9 @@ depSort = sortBy vardep
     getVar (JSVar name) = [takeWhile (/='<') $ rmType name]
     getVar _ = []
 
-    vardep :: (String, JS) -> (String,JS) -> Ordering
-    vardep (n1,j1) (n2,j2) | (identToJs $ Ident n1) `elem` (getVars j2) = LT
-    vardep (n1,j1) (n2,j2) | (identToJs $ Ident n2) `elem` (getVars j1) = GT
+    vardep :: (String, JS, a) -> (String, JS, a) -> Ordering
+    vardep (n1,j1,_) (n2,j2,_) | (identToJs $ Ident n1) `elem` (getVars j2) = LT
+    vardep (n1,j1,_) (n2,j2,_) | (identToJs $ Ident n2) `elem` (getVars j1) = GT
     vardep _ _ = EQ
 
 -----------------------------------------------------------------------------------------------------------------------

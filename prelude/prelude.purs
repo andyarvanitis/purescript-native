@@ -210,10 +210,9 @@ module Prelude
     inline auto showArrayImpl(fn<T,string> f) -> fn<list<T>,string> {
       return [=](list<T> xs) -> string {
         string s("[");
-        const auto sz = xs.size();
-        for (auto i = 0; i < sz; i++) {
-          s.append(f(xs[i]));
-          if (i != sz - 1) s.append(",");
+        for (auto it = xs.begin(); it != xs.end(); ++it) {
+          s.append(f(*it));
+          s.append(",");
         }
         return s + "]";
       };
@@ -943,6 +942,17 @@ module Prelude
     shr = binary_shr_operator
     zshr = binary_shr_operator
     complement = unary_comp_operator
+
+  foreign import showCharImpl
+    """
+    template <typename T>
+    inline auto showCharImpl(T c) -> string {
+      return std::string(&c,1);
+    }
+    """ :: Char -> String
+
+  instance showChar :: Show Char where
+    show = showCharImpl
 
 {-
 module Data.Function where
