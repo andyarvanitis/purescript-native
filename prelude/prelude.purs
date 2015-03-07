@@ -26,6 +26,7 @@ module Prelude
   , BoolLike, (&&), (||)
   , not
   , Semigroup, (<>), (++)
+  , Float(..), Double(..)
   , Unit(..), unit
   ) where
 
@@ -858,6 +859,9 @@ module Prelude
   -- | `(++)` is an alias for `(<>)`.
   (++) :: forall s. (Semigroup s) => s -> s -> s
   (++) = (<>)
+
+  type Float = Number
+  type Double = Number
 
   instance semiringInt :: Semiring Int where
     (+) = binary_add_operator
