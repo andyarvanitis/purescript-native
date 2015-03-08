@@ -27,6 +27,7 @@ module Prelude
   , not
   , Semigroup, (<>), (++)
   , Float(..), Double(..)
+  , toString
   , Unit(..), unit
   ) where
 
@@ -211,11 +212,15 @@ module Prelude
     inline auto showArrayImpl(fn<T,string> f) -> fn<list<T>,string> {
       return [=](list<T> xs) -> string {
         string s("[");
+        auto count = xs.size();
         for (auto it = xs.begin(); it != xs.end(); ++it) {
           s.append(f(*it));
-          s.append(",");
+          if (--count > 0) {
+            s.push_back(',');
+          }
         }
-        return s + "]";
+        s.push_back(']');
+        return s;
       };
     }
     """ :: forall a. (a -> String) -> [a] -> String
@@ -951,12 +956,23 @@ module Prelude
     """
     template <typename T>
     inline auto showCharImpl(T c) -> string {
-      return std::string(&c,1);
+      string s("'");
+      s.push_back(c);
+      s.push_back('\'');
+      return s;
     }
     """ :: Char -> String
 
   instance showChar :: Show Char where
     show = showCharImpl
+
+  foreign import toString
+   """
+   template <typename T>
+   inline auto toString(T arg) -> string {
+     return string(arg);
+   }
+   """ :: forall a. a -> String
 
 {-
 module Data.Function where
