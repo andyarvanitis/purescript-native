@@ -1474,8 +1474,8 @@ module Control.Monad.Eff
     inline auto foreachE(list<A> as) -> fn<fn<A,eff_fn<Prelude::Unit>>,eff_fn<data<Prelude::Unit>>> {
       return [=](fn<A,eff_fn<Prelude::Unit>> f) {
         return [=]() {
-          for (auto i = 0; i < as.size(); i++) {
-            f(as[i])();
+          for (auto it = as.begin(); it != as.end(); ++it) {
+            f(*it)();
           }
           return Prelude::unit;
         };
