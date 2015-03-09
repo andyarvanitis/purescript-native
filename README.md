@@ -1,4 +1,4 @@
-**Pure11** is an experimental C++11 compiler/backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane" and performant C++11 code (instead of JavaScript).
+**Pure11** is an experimental C++11 compiler/backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane" and performant C++11 code (instead of JavaScript), in the spirit of PureScript.
 
 #### Status:
 
@@ -17,6 +17,7 @@
 * Built in `Int` (C++ `int`), `Integer` (C++ `long long`), Char (C++ `char`) primitive types
 * Compiler is `pcc` instead of `psc` or `psc-make`, and only supports `make` mode
   - Generates a simple CMake file for easy experimentation
+* No Pure11-specific REPL right now
 
 #### Other notes:
 
@@ -46,3 +47,8 @@
 * Stricter exports in C++ code
 * Use C++ operator overloading where supported
 
+### Requirements
+
+* Everything you need to build [PureScript](https://github.com/purescript/purescript)
+* A C++11-capable toolchain, e.g. recent versions of clang, gcc
+* Installed CMake is helpful (for the provided quickstart CMake file generated), though not required. You should be able to use your favorite C++ build system, tools, debuggers, etc., for the generated code.
