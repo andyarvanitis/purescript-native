@@ -41,9 +41,11 @@
 
 #### Future ideas:
 
+* Nice facilities (modules) for concurrency/parallelism, using `std::thread`, etc. under the hood
 * Instance names aren't used in generated C++11 code - possibly make them optional
 * Compiler options for memory management
 * `BigInt` via GNU GMP, possibly replacing current implementation of `Integer`
+* Nicer generated local variable names if possible (push upstream to PureScript if successful)
 * Stricter exports in C++ code
 * Use C++ operator overloading where supported
 
