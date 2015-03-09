@@ -29,14 +29,14 @@
 
 #### TO-DO:
 
-* Optimized `newtype` (some work already done, but disabled for now)
+* Proper break-out of pure11 generation — just a hacked fork right now
+* Get automated builds/tests up and running (equivalents of PureScript)
 * Support for `type` in generator (e.g. generate C++11 `using`)
 * Introduce `Char` literals (make similar to Haskell's), possibly try to push upstream to PureScript
+* Optimized `newtype` (some work already done, but disabled for now)
 * ST monad (in Prelude)
 * "Magic do" (similar work already done in inliner and TCO code)
 * Unicode (UTF-8) support for `String` (Borrow code from my Idris backend)
-* Proper break-out of pure11 generation — just a hacked fork right now
-* Get equivalent PureScript automated builds/tests up and running
 * Lots of testing and code cleanup!
 
 #### Future ideas:
