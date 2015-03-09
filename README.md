@@ -113,7 +113,7 @@ module Main where
   fib n = fib (n - 2) + fib (n - 1)
 
   main = do
-    trace (show $ fib 10)
+    trace (show (fib 10))
 ```
 
   * `Main.cc`
@@ -134,7 +134,7 @@ namespace Main {
         return fib(_34 - 2) + fib(_34 - 1);
     } 
     auto main() -> data<Prelude::Unit> {
-        return Debug_Trace::trace(Prelude::_dollar<int,string>(show<int>)(fib(10)))();
+        return Debug_Trace::trace(show<int>(fib(10)))();
     } 
 }
 
