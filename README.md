@@ -7,7 +7,7 @@
 #### Performance
 
 * No runtime system (beyond the standard C++11 runtime library)
-* Uses template metaprogramming extensively to transpose the original source type system — minimal performance cost when running
+* Uses template metaprogramming extensively to translate the original source type information — minimal performance cost when running
 * Uses native C++11 reference counting (`std::shared_ptr`) for relatively lightweight automatic memory management
 * Uses PureScript's normal tail call optimizations for generated C++11 code
 
@@ -36,7 +36,7 @@
 * Optimized `newtype` (some work already done, but disabled for now)
 * ST monad (in Prelude)
 * "Magic do" (similar work already done in inliner and TCO code)
-* Unicode (UTF-8) support for `String` (Borrow code from my Idris backend)
+* Unicode (UTF-8) support for `String` (use code from my Idris backend)
 * Lots of testing and code cleanup!
 
 #### Future ideas:
