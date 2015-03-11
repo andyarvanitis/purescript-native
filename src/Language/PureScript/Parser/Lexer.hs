@@ -62,6 +62,7 @@ module Language.PureScript.Parser.Lexer
   , symbol'
   , identifier
   , stringLiteral
+-- , charLiteral
   , number
   , natural
   , reservedPsNames
@@ -73,6 +74,7 @@ module Language.PureScript.Parser.Lexer
 import Prelude hiding (lex)
 
 import Data.Char (isSpace)
+import Data.Char (ord)
 
 import Control.Monad (void, guard)
 import Data.Functor.Identity
@@ -112,6 +114,7 @@ data Token
   | Qualifier String
   | Symbol String
   | StringLiteral String
+-- | CharLiteral Char
   | Number (Either Integer Double)
   deriving (Show, Eq, Ord)
 
@@ -142,6 +145,7 @@ prettyPrintToken (UName s)         = show s
 prettyPrintToken (Qualifier _)     = "qualifier"
 prettyPrintToken (Symbol s)        = s
 prettyPrintToken (StringLiteral s) = show s
+-- prettyPrintToken (CharLiteral c)   = show c
 prettyPrintToken (Number n)        = either show show n
 
 data PositionedToken = PositionedToken
@@ -205,6 +209,8 @@ parseToken = P.choice
        (guard (validModuleName uName) >> Qualifier uName <$ P.char '.') <|> pure (UName uName)
   , Symbol        <$> parseSymbol
   , StringLiteral <$> parseStringLiteral
+  , Number . Left . toInteger . ord <$> parseCharLiteral
+-- , CharLiteral   <$> parseCharLiteral
   , Number        <$> parseNumber
   ] <* whitespace
 
@@ -235,6 +241,12 @@ parseToken = P.choice
     where
     delimeter   = P.try (P.string "\"\"\"")
     blockString = delimeter >> P.manyTill P.anyChar delimeter
+
+  parseCharLiteral :: P.Parsec String u Char
+  parseCharLiteral = blockString <|> PT.charLiteral tokenParser
+    where
+    delimeter   = P.try (P.char '\'')
+    blockString = delimeter >> P.anyChar >> delimeter
 
   parseNumber :: P.Parsec String u (Either Integer Double)
   parseNumber = (Right <$> P.try (PT.float tokenParser) <|>
@@ -438,6 +450,12 @@ stringLiteral = token go P.<?> "string literal"
   where
   go (StringLiteral s) = Just s
   go _ = Nothing
+
+-- charLiteral :: TokenParser Char
+-- charLiteral = token go P.<?> "char literal"
+--   where
+--   go (CharLiteral c) = Just c
+--   go _ = Nothing
 
 number :: TokenParser (Either Integer Double)
 number = token go P.<?> "number"
