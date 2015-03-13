@@ -243,10 +243,19 @@ parseToken = P.choice
     blockString = delimeter >> P.manyTill P.anyChar delimeter
 
   parseCharLiteral :: P.Parsec String u Char
-  parseCharLiteral = blockString <|> PT.charLiteral tokenParser
+  parseCharLiteral = quotedChar <|> PT.charLiteral tokenParser
     where
-    delimeter   = P.try (P.char '\'')
-    blockString = delimeter >> P.anyChar >> delimeter
+    delimeter  = P.try (P.char '\'')
+    quotedChar = do
+      delimeter
+      c <- P.anyChar
+      c <- case c of
+        '\\' -> do
+          escc <- P.anyChar
+          return $ read ('\'':c:escc:'\'':"")
+        regc -> return regc
+      delimeter
+      return c
 
   parseNumber :: P.Parsec String u (Either Integer Double)
   parseNumber = (Right <$> P.try (PT.float tokenParser) <|>
