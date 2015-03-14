@@ -415,7 +415,7 @@ rmType = takeWhile (/='@') . rmTempl
 cleanName :: String -> String
 cleanName s | ns@(_:_) <- elemIndices ':' s = takeWhile (/='<') $ drop (last ns + 1) (rmType s)
 cleanName s | ws@(_:_) <- words (rmType s), head ws == "static" = last ws -- TODO: need better check
-cleanName s = last . words $ takeWhile (/='<') (rmType s)
+cleanName s = takeWhile (/='<') (last . words $ rmType s)
 -----------------------------------------------------------------------------------------------------------------------
 argType :: String -> String
 argType s | ws@(_:_:_) <- (words $ rmType s) = intercalate " " $ init ws
