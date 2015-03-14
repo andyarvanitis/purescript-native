@@ -126,14 +126,14 @@ module Main where
 #include "Main/Main.hh"
 //
 namespace Main {
-    auto fib(int _34) -> int {
-        if (_34 == 0) {
+    auto fib(int n) -> int {
+        if (n == 0) {
             return 0;
         }
-        if (_34 == 1) {
+        if (n == 1) {
             return 1;
         }
-        return fib(_34 - 2) + fib(_34 - 1);
+        return fib(n - 2) + fib(n - 1);
     } 
     auto main() -> data<Prelude::Unit> {
         return Debug_Trace::trace(show<int>(fib(10)))();
