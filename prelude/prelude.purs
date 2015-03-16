@@ -1343,7 +1343,7 @@ module Prelude.Unsafe where
         return xs[n]; // consider using at() instead, which does bounds checking
       };
     }
-    """ :: forall a. [a] -> Number -> a
+    """ :: forall a. [a] -> Integer -> a
 
 module Control.Monad.Eff 
   ( Eff()

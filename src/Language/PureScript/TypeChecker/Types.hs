@@ -466,7 +466,7 @@ check' val u@(TUnknown _) = do
   (val'', ty') <- instantiatePolyTypeWithUnknowns val' ty
   ty' =?= u
   return $ TypedValue True val'' ty'
-check' v@(NumericLiteral (Left _)) t | t == tyInt || t == tyInteger || t == tyChar || t == tyNumber =
+check' v@(NumericLiteral (Left _)) t | t == tyIntegral || t == tyInt || t == tyInteger || t == tyChar || t == tyNumber =
   return $ TypedValue True v t
 check' v@(NumericLiteral _) t | t == tyNumber =
   return $ TypedValue True v t

@@ -85,11 +85,11 @@ unifyTypes t1 t2 = rethrow (onErrorMessages (ErrorUnifyingTypes t1 t2)) $
   unifyTypes' ty f@ForAll{} = f `unifyTypes` ty
   unifyTypes' (TypeVar v1) (TypeVar v2) | v1 == v2 = return ()
   unifyTypes' ty1@(TypeConstructor c1) ty2@(TypeConstructor c2)
-    | c1 == primName "Integral" =
+    | ty1 == tyIntegral =
     guardWith (errorMessage (TypesDoNotUnify ty1 ty2))
               (c1 == c2 || ty2 == tyInt || ty2 == tyInteger || ty2 == tyChar || ty2 == tyNumber)
   unifyTypes' ty1@(TypeConstructor c1) ty2@(TypeConstructor c2)
-    | c2 == primName "Integral" =
+    | ty2 == tyIntegral =
     guardWith (errorMessage (TypesDoNotUnify ty1 ty2))
               (c1 == c2 || ty1 == tyInt || ty1 == tyInteger || ty1 == tyChar || ty1 == tyNumber)
   unifyTypes' ty1@(TypeConstructor c1) ty2@(TypeConstructor c2) =
