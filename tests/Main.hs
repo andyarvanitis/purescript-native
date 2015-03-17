@@ -17,6 +17,7 @@
 module Main (main) where
 
 import qualified Language.PureScript as P
+import qualified Language.PureScript.Constants as C
 
 import Data.List (isSuffixOf)
 import Data.Traversable (for, traverse)
@@ -65,7 +66,7 @@ readInput inputFiles = forM inputFiles $ \inputFile -> do
 
 compile :: P.Options P.Make -> [FilePath] -> IO (Either String (FilePath, P.Environment))
 compile opts inputFiles = do
-  modules <- P.parseModulesFromFiles id . ((P.prelude, P.prelude) :) <$> readInput inputFiles
+  modules <- P.parseModulesFromFiles id . ((C.prelude, P.prelude) :) <$> readInput inputFiles
   let outputDir = "test-output"
   case modules of
     Left parseError ->
