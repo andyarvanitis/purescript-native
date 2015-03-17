@@ -64,28 +64,28 @@ readInput inputFiles = forM inputFiles $ \inputFile -> do
   text <- readFile inputFile
   return (inputFile, text)
 
-compile :: P.Options P.Make -> [FilePath] -> IO (Either String (FilePath, P.Environment))
-compile opts inputFiles = do
-  modules <- P.parseModulesFromFiles id . ((C.prelude, P.prelude) :) <$> readInput inputFiles
+compile :: P.Options P.Make -> String -> [FilePath] -> IO (Either String (FilePath, P.Environment))
+compile opts preludeSource inputFiles = do
+  modules <- P.parseModulesFromFiles id . ((C.prelude, preludeSource) :) <$> readInput inputFiles
   let outputDir = "test-output"
   case modules of
     Left parseError ->
       return (Left $ show parseError)
     Right ms -> fmap (fmap (outputDir, )) $ runMake opts $ P.make outputDir (map (first Right) ms) []
 
-assert :: P.Options P.Make -> FilePath -> (Either String (FilePath, P.Environment) -> IO (Maybe String)) -> IO ()
-assert opts inputFile f = do
-  e <- compile opts [inputFile]
+assert :: P.Options P.Make -> String -> FilePath -> (Either String (FilePath, P.Environment) -> IO (Maybe String)) -> IO ()
+assert opts preludeSource inputFile f = do
+  e <- compile opts preludeSource [inputFile]
   maybeErr <- f e
   case maybeErr of
     Just err -> putStrLn err >> exitFailure
     Nothing -> return ()
 
-assertCompiles :: FilePath -> IO ()
-assertCompiles inputFile = do
+assertCompiles :: String -> FilePath -> IO ()
+assertCompiles preludeSource inputFile = do
   putStrLn $ "Assert " ++ inputFile ++ " compiles successfully"
   let options = P.defaultMakeOptions
-  assert options inputFile $ either (return . Just) $ \(outputDir, _) -> do
+  assert options preludeSource inputFile $ either (return . Just) $ \(outputDir, _) -> do
     mexes <- runMaybeT $ (,) <$> findOneExecutableIn ["cmake"] <*> findOneExecutableIn ["make"]
 
     let buildDir = outputDir </> "build"
@@ -110,10 +110,10 @@ assertCompiles inputFile = do
       Just merr -> return merr
       Nothing -> return $ Just "Couldn't find node.js executable"
 
-assertDoesNotCompile :: FilePath -> IO ()
-assertDoesNotCompile inputFile = do
+assertDoesNotCompile :: String -> FilePath -> IO ()
+assertDoesNotCompile preludeSource inputFile = do
   putStrLn $ "Assert " ++ inputFile ++ " does not compile"
-  assert P.defaultMakeOptions inputFile $ \e ->
+  assert P.defaultMakeOptions preludeSource inputFile $ \e ->
     case e of
       Left err -> putStrLn err >> return Nothing
       Right _ -> return $ Just "Should not have compiled"
@@ -123,15 +123,16 @@ findOneExecutableIn = msum . map (MaybeT . findExecutable)
 
 main :: IO ()
 main = do
+  preludeSource <- readFile "prelude/prelude.purs"
   cd <- getCurrentDirectory
   let examples = cd ++ pathSeparator : "examples"
   let passing = examples ++ pathSeparator : "passing"
   passingTestCases <- getDirectoryContents passing
   forM_ passingTestCases $ \inputFile -> when (".purs" `isSuffixOf` inputFile) $
-    assertCompiles (passing ++ pathSeparator : inputFile)
+    assertCompiles preludeSource (passing ++ pathSeparator : inputFile)
   let failing = examples ++ pathSeparator : "failing"
   failingTestCases <- getDirectoryContents failing
   forM_ failingTestCases $ \inputFile -> when (".purs" `isSuffixOf` inputFile) $
-    assertDoesNotCompile (failing ++ pathSeparator : inputFile)
+    assertDoesNotCompile preludeSource (failing ++ pathSeparator : inputFile)
   exitSuccess
 
