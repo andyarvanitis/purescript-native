@@ -1,5 +1,5 @@
 name: purescript
-version: 0.6.9.2
+version: 0.6.9.3
 cabal-version: >=1.8
 build-type: Simple
 license: MIT
@@ -152,8 +152,9 @@ executable psc-docs
     main-is: Main.hs
     buildable: True
     hs-source-dirs: psc-docs
-    other-modules: CTags
-                   ETags
+    other-modules: Ctags
+                   Etags
+                   Tags
     ghc-options: -Wall -O2
 
 executable psc-hierarchy
