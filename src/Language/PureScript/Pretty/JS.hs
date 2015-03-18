@@ -419,29 +419,28 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                         ++ "(" ++ intercalate ", " (map (\a -> if length (words a) < 2 then ("auto" ++ a) else a) args') ++ ")"
                         ++ maybe "" returnType name
                         ++ " "
-                        ++ ret
-                    ]
-                  , [ AssocR cast $ \typ val -> "cast<" ++ typ ++ ">" ++ parens val ]
-                  , [ binary    LessThan             "<" ]
-                  , [ binary    LessThanOrEqualTo    "<=" ]
-                  , [ binary    GreaterThan          ">" ]
-                  , [ binary    GreaterThanOrEqualTo ">=" ]
+                        ++ ret ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
-                  , [ AssocR instanceOf $ \v1 v2 -> "instanceof<" ++ v2 ++ ">" ++ parens v1 ]
-                  , [ unary     Not                  "!" ]
-                  , [ unary     BitwiseNot           "~" ]
-                  , [ negateOperator ]
-                  , [ unary     Positive             "+" ]
+                  , [ unary     Not                  "!"
+                    , unary     BitwiseNot           "~"
+                    , unary     Positive             "+"
+                    , negateOperator ]
                   , [ binary    Multiply             "*"
                     , binary    Divide               "/"
                     , binary    Modulus              "%" ]
                   , [ binary    Add                  "+"
                     , binary    Subtract             "-" ]
-                  , [ binary    ShiftLeft            "<<" ]
-                  , [ binary    ShiftRight           ">>" ]
-                  , [ binary    ZeroFillShiftRight   ">>>" ]
-                  , [ binary    EqualTo              "==" ]
-                  , [ binary    NotEqualTo           "!=" ]
+                  , [ binary    ShiftLeft            "<<"
+                    , binary    ShiftRight           ">>"
+                    , binary    ZeroFillShiftRight   ">>>" ]
+                  , [ binary    LessThan             "<"
+                    , binary    LessThanOrEqualTo    "<="
+                    , binary    GreaterThan          ">"
+                    , binary    GreaterThanOrEqualTo ">="
+                    , AssocR cast $ \typ val -> "cast<" ++ typ ++ ">" ++ parens val
+                    , AssocR instanceOf $ \v1 v2 -> "instanceof<" ++ v2 ++ ">" ++ parens v1 ]
+                  , [ binary    EqualTo              "=="
+                    , binary    NotEqualTo           "!=" ]
                   , [ binary    BitwiseAnd           "&" ]
                   , [ binary    BitwiseXor           "^" ]
                   , [ binary    BitwiseOr            "|" ]
