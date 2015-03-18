@@ -1,5 +1,5 @@
 name: purescript
-version: 0.6.9
+version: 0.6.9.1
 cabal-version: >=1.8
 build-type: Simple
 license: MIT
@@ -143,6 +143,7 @@ executable psci
     hs-source-dirs: psci
     other-modules: Commands
                    Parser
+                   Directive
     ghc-options: -Wall -O2
 
 executable psc-docs
