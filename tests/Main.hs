@@ -128,11 +128,11 @@ main = do
   let examples = cd ++ pathSeparator : "examples"
   let passing = examples ++ pathSeparator : "passing"
   passingTestCases <- getDirectoryContents passing
-  forM_ passingTestCases $ \inputFile -> when (".purs" `isSuffixOf` inputFile) $
+  forM_ passingTestCases $ \inputFile -> when (".purs" `isSuffixOf` inputFile || ".p11" `isSuffixOf` inputFile) $
     assertCompiles preludeSource (passing ++ pathSeparator : inputFile)
   let failing = examples ++ pathSeparator : "failing"
   failingTestCases <- getDirectoryContents failing
-  forM_ failingTestCases $ \inputFile -> when (".purs" `isSuffixOf` inputFile) $
+  forM_ failingTestCases $ \inputFile -> when (".purs" `isSuffixOf` inputFile || ".p11" `isSuffixOf` inputFile) $
     assertDoesNotCompile preludeSource (failing ++ pathSeparator : inputFile)
   exitSuccess
 

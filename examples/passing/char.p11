@@ -1,0 +1,17 @@
+module Main where
+
+import Debug.Trace
+
+hello :: [Char]
+hello = ['\t', 66, 67, 'D']
+
+cchar :: Char
+cchar = 'A'
+
+translateChar :: Char -> Char
+translateChar 'A' = '_'
+translateChar c = c
+
+main = do
+  trace (show $ toString hello)
+

@@ -1,0 +1,25 @@
+module Main where
+  
+  import Debug.Trace
+  
+  data Shape = Circle Number Number Number
+
+  data State a = MState a
+  
+  type Color = { red :: Number, blue :: Number, green :: Number }
+
+  data DColor = DColor { red :: Number, blue :: Number, green :: Number }
+
+  data AColor = AColor { red :: Number, blue :: Number, green :: Number } { alpha :: Number }
+  
+  getRed :: forall r. { red :: Number | r } -> Number
+  getRed c = c.red
+  
+  procColor :: DColor -> Number
+  procColor (DColor obj) = getRed obj
+  
+  main = do
+    trace "Hello, "
+    trace (show (getRed {red : 10.0, yellow : 0 }))
+    trace (show (procColor (DColor {red : 77.0, blue : 0.0, green : 0.0 })))
+

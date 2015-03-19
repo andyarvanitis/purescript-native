@@ -1,0 +1,51 @@
+module Main where
+
+import Debug.Trace
+
+class (Semigroup m) <= Monoid m where
+  mempty :: m
+
+instance monoidArr :: (Monoid b) => Monoid (a -> b) where
+  mempty = const mempty
+
+class Foldable f where
+  foldr :: forall a b. (a -> b -> b) -> b -> f a -> b
+
+instance foldableArray :: Foldable [] where
+  foldr f z xs = foldrArray f z xs
+
+zeroInteger :: Integer
+zeroInteger = 0
+
+-- perform a very large foldr to test tail recursion
+addAll :: forall t. (Foldable t) => t Integer -> Integer
+addAll = foldr (+) zeroInteger
+
+n :: Integer
+n = 1500000
+
+numbersList :: Boolean -> [Integer]
+numbersList _ = numbersList' n []
+  where
+    numbersList' :: Integer -> [Integer] -> [Integer]
+    numbersList' 0 xs = xs
+    numbersList' k xs = numbersList' (k - 1) (k : xs)
+
+main = do
+  trace (show (addAll (numbersList false)))
+
+foreign import foldrArray """
+  template <typename A, typename B>
+  auto foldrArray(fn<A,fn<B,B>> f) -> fn<B,fn<list<A>,B>> {
+    return [=](B z) {
+      return [=](list<A> xs) {
+        auto acc = z;
+        for (typename list<A>::const_iterator xit = xs.begin(); xit != xs.end() ;++xit) {
+          acc = f(*xit)(acc);
+          // std::cout << acc << std::endl;
+        }
+        return acc;
+      };
+    };
+  }
+  """ :: forall a b. (a -> b -> b) -> b -> [a] -> b

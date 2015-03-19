@@ -1,0 +1,13 @@
+module Main where
+
+  import Debug.Trace
+
+  fib :: Int -> Int
+  fib 0 = 0
+  fib 1 = 1
+  fib n = fib (n - 2) + fib (n - 1)
+
+  main = do
+    trace (show (fib 10))
+
+
