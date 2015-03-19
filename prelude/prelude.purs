@@ -20,6 +20,7 @@ module Prelude
   , negate
   , DivisionRing
   , Num
+  , fromInteger
   , Eq, (==), (/=)
   , Ord, Ordering(..), compare, (<), (>), (<=), (>=)
   , Bits, (.&.), (.|.), (.^.), shl, shr, zshr, complement
@@ -460,6 +461,15 @@ module Prelude
   -- | A commutative field
   class (DivisionRing a) <= Num a
 
+  foreign import fromInteger
+    """
+    template <typename A>
+    inline constexpr auto fromInteger(long long n) -> A {
+        return static_cast<A>(n);
+    }
+    """
+    :: forall a. (Num a) => Integer -> a
+
   foreign import binary_add_operator
     """
     template <typename T>
@@ -521,16 +531,16 @@ module Prelude
 
   instance semiringNumber :: Semiring Number where
     (+) = binary_add_operator
-    zero = 0
+    zero = 0.0
     (*) = binary_mul_operator
-    one = 1
+    one = 1.0
 
   instance ringNumber :: Ring Number where
     (-) = binary_sub_operator
 
   instance moduloSemiringNumber :: ModuloSemiring Number where
     (/) = binary_div_operator
-    mod _ _ = 0
+    mod _ _ = 0.0
 
   instance divisionRingNumber :: DivisionRing Number
 

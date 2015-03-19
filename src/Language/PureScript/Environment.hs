@@ -191,12 +191,6 @@ tyNumber :: Type
 tyNumber = primTy "Number"
 
 -- |
--- Type constructor for any integer-like type
---
-tyIntegral :: Type
-tyIntegral = primTy "Integral"
-
--- |
 -- Type constructor for machine-native integer
 --
 tyInt :: Type
@@ -247,7 +241,6 @@ primTypes = M.fromList [ (primName "Function" , (FunKind Star (FunKind Star Star
                        , (primName "Object"   , (FunKind (Row Star) Star, ExternData))
                        , (primName "String"   , (Star, ExternData))
                        , (primName "Number"   , (Star, ExternData))
-                       , (primName "Integral" , (Star, ExternData))
                        , (primName "Int"      , (Star, ExternData))
                        , (primName "Integer"  , (Star, ExternData))
                        , (primName "Char"     , (Star, ExternData))

@@ -211,7 +211,7 @@ infer val = rethrow (onErrorMessages (ErrorInferringType val)) $ infer' val
 -- Infer a type for a value
 --
 infer' :: Expr -> UnifyT Type Check Expr
-infer' v@(NumericLiteral (Left _)) = return $ TypedValue True v tyIntegral
+infer' v@(NumericLiteral (Left _)) = return $ TypedValue True v tyInteger
 infer' v@(NumericLiteral _) = return $ TypedValue True v tyNumber
 infer' v@(StringLiteral _) = return $ TypedValue True v tyString
 infer' v@(BooleanLiteral _) = return $ TypedValue True v tyBoolean
@@ -466,7 +466,7 @@ check' val u@(TUnknown _) = do
   (val'', ty') <- instantiatePolyTypeWithUnknowns val' ty
   ty' =?= u
   return $ TypedValue True val'' ty'
-check' v@(NumericLiteral (Left _)) t | t == tyIntegral || t == tyInt || t == tyInteger || t == tyChar || t == tyNumber =
+check' v@(NumericLiteral (Left _)) t | t == tyInteger || t == tyInt || t == tyChar =
   return $ TypedValue True v t
 check' v@(NumericLiteral _) t | t == tyNumber =
   return $ TypedValue True v t
