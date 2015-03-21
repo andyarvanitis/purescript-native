@@ -138,7 +138,7 @@ module Prelude
   -- | is equivalent to
   -- |
   -- | ```purescript
-  -- | length (groupBy productCategory (filter isInStock (products)))
+  -- | length (filter isInStock (groupBy productCategory (products)))
   -- | ```
   -- |
   -- | `(#)` is different from [`($)`](#-1) because it is left-infix instead of right, so
