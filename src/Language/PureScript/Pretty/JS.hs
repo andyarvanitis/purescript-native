@@ -241,9 +241,9 @@ literals = mkPattern' match
     , return ";"
     ]
   match (JSThrow value) = fmap concat $ sequence
-    [ return "throw "
+    [ return "throw std::runtime_error("
     , prettyPrintJS' value
-    , return ";"
+    , return ");"
     ]
   match (JSBreak lbl) = return []
   match (JSContinue lbl) = return []

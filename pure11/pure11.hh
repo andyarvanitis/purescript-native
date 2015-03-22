@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <stdexcept>
 #include "shared_list.hh"
 
 // Type support
