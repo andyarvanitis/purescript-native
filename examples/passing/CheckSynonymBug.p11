@@ -1,0 +1,17 @@
+module Main where
+
+  import Prelude
+
+  type Foo a = [a]
+
+  foreign import length
+    """
+    template <typename A>
+    inline auto length(list<A> a) -> list_index_type {
+      return a.size();
+    }
+    """ :: forall a. [a] -> Integer
+
+  foo _ = length ([] :: Foo Integer)
+
+  main = Debug.Trace.trace "Done"

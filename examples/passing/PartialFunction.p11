@@ -1,0 +1,20 @@
+module Main where
+
+foreign import testError
+  """
+  inline auto testError(fn<data<Prelude::Unit>,double> f) -> string {
+    try {
+      return std::to_string(f(Prelude::unit));
+    } catch (std::runtime_error& e) {
+      return "success";
+    } catch (std::exception& e) {
+      throw std::runtime_error("Pattern match failure is not Error");
+    }
+  }
+  """ :: (Unit -> Number) -> String
+
+fn :: Number -> Number
+fn 0 = 0
+fn 1 = 2
+
+main = Debug.Trace.trace (show $ testError $ \_ -> fn 2)

@@ -1,0 +1,20 @@
+module Main where
+
+  import Prelude
+
+  mkValue :: Number -> Number
+  mkValue id = id
+
+  foreign import error
+    """
+    template <typename A>
+    inline auto error(string msg) -> A {
+      throw std::runtime_error(msg);
+    }
+    """ :: forall a. String -> a
+
+  main = do
+    let value = mkValue 1
+    if value == 1
+      then Debug.Trace.trace "Done"
+      else error "Not done"
