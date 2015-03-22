@@ -558,9 +558,11 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
       return (JSVariableIntroduction headVar (Just (JSIndexer (JSNumericLiteral (Left index)) (JSVar varName))) : jss)) done (zip headBinders [0..])
     tailVar <- freshName
     js2 <- binderToJs tailVar js1 tailBinder
-    return $ JSVariableIntroduction tailVar
-               (Just $ JSApp (JSAccessor "drop" (JSVar varName))
-                 [JSNumericLiteral (Left numberOfHeadBinders)]) : js2
+    return [JSIfElse (JSBinary GreaterThanOrEqualTo (JSApp (JSAccessor "size" (JSVar varName)) []) (JSNumericLiteral (Left numberOfHeadBinders))) (JSBlock
+      ( JSVariableIntroduction tailVar (Just (JSApp (JSAccessor "drop" (JSVar varName)) [JSNumericLiteral (Left numberOfHeadBinders)])) :
+        js2
+      )) Nothing]
+
     where
     uncons :: [Binder Ann] -> Binder Ann -> ([Binder Ann], Binder Ann)
     uncons acc (ConstructorBinder _ _ ctor' [h, t]) | isCons ctor' = uncons (h : acc) t
