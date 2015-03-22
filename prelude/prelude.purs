@@ -723,6 +723,15 @@ module Prelude
   instance ordNumber :: Ord Number where
     compare = unsafeCompare
 
+  instance ordInteger :: Ord Integer where
+    compare = unsafeCompare
+
+  instance ordInt :: Ord Int where
+    compare = unsafeCompare
+
+  instance ordChar :: Ord Char where
+    compare = unsafeCompare
+
   instance ordString :: Ord String where
     compare = unsafeCompare
 
