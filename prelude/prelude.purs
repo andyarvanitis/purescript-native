@@ -605,6 +605,18 @@ module Prelude
     (==) = binary_eq_operator
     (/=) = binary_neq_operator
 
+  instance eqInteger :: Eq Integer where
+    (==) = binary_eq_operator
+    (/=) = binary_neq_operator
+
+  instance eqInt :: Eq Int where
+    (==) = binary_eq_operator
+    (/=) = binary_neq_operator
+
+  instance eqChar :: Eq Char where
+    (==) = binary_eq_operator
+    (/=) = binary_neq_operator
+
   instance eqBoolean :: Eq Boolean where
     (==) = binary_eq_operator
     (/=) = binary_neq_operator
