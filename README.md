@@ -34,9 +34,8 @@ A small strongly typed programming language with expressive types that compiles 
 #### TO-DO:
 
 * Proper break-out of pure11 generation — just a hacked fork right now
-* Get automated builds/tests up and running (equivalents of PureScript)
+* Get automated builds/tests up and running ([underway](https://github.com/andyarvanitis/pure11/tree/pure11/examples/passing))
 * Support for `type` in generator (e.g. generate C++11 `using`)
-* Introduce `Char` literals (make similar to Haskell's), possibly try to push upstream to PureScript
 * Optimized `newtype` (some work already done, but disabled for now)
 * ST monad (in Prelude)
 * "Magic do" (similar work already done in inliner and TCO code)
