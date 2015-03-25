@@ -29,6 +29,22 @@ module Prelude
   , Unit(..), unit
   ) where
 
+  foreign import data TypeClass :: *
+  foreign import _TypeClass_
+    """
+    class TypeClass
+     def initialize
+        @operators = {}
+     end
+      def [](key)
+        @operators[key]
+      end
+      def []=(key, val)
+        @operators[key] = val
+      end
+    end
+    """ :: TypeClass
+
   -- | An alias for `true`, which can be useful in guard clauses:
   -- |
   -- | ```purescript

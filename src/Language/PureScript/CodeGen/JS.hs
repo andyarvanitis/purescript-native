@@ -57,17 +57,18 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
   optimized <- T.traverse (T.traverse optimize) jsDecls
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
-  let strict = JSStringLiteral "use strict"
+  let strict = JSRaw "#"
   let header = if comments && not (null coms) then JSComment coms strict else strict
-  let moduleBody = header : jsImports ++ foreigns' ++ concat optimized
-  let exps' = JSObjectLiteral $ map (runIdent &&& JSVar . identToJs) exps
+  let moduleBody jss = header : jsImports ++ JSRaw ("module " ++ runModuleName mn) : [JSBlock (foreigns' ++ concat optimized ++ jss)]
+  let expsvars = map ((\v -> JSAssignment (JSVar ('@':v)) (JSVar v)) . identToJs) exps
+  let exps' = map (JSRaw . (++) "attr_reader :" . identToJs) exps
   return $ case additional of
-    MakeOptions -> moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
+    MakeOptions -> moduleBody $ expsvars ++ JSRaw "class << self" : JSBlock exps' : []
     CompileOptions ns _ _ | not isModuleEmpty ->
       [ JSVariableIntroduction ns
                                (Just (JSBinary Or (JSVar ns) (JSObjectLiteral [])) )
       , JSAssignment (JSAccessor (moduleNameToJs mn) (JSVar ns))
-                     (JSApp (JSFunction Nothing [] (JSBlock (moduleBody ++ [JSReturn exps']))) [])
+                     (JSApp (JSFunction Nothing [] (JSBlock (moduleBody exps'))) [])
       ]
     _ -> []
 
@@ -80,9 +81,9 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
   importToJs mn' = do
     additional <- asks optionsAdditional
     let moduleBody = case additional of
-          MakeOptions -> JSApp (JSVar "require") [JSStringLiteral (runModuleName mn')]
+          MakeOptions -> JSRaw $ "require \'" ++ runModuleName mn' ++ "\'"
           CompileOptions ns _ _ -> JSAccessor (moduleNameToJs mn') (JSVar ns)
-    return $ JSVariableIntroduction (moduleNameToJs mn') (Just moduleBody)
+    return moduleBody
 
   -- |
   -- Generate code in the simplified Javascript intermediate representation for a declaration
@@ -134,7 +135,7 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
   valueToJs (Literal _ l) =
     literalToValueJS l
   valueToJs (Var (_, _, _, Just (IsConstructor _ [])) name) =
-    return $ JSAccessor "value" $ qualifiedToJS id name
+    return $ JSAccessor "new" $ qualifiedToJS id name
   valueToJs (Var (_, _, _, Just (IsConstructor _ _)) name) =
     return $ JSAccessor "create" $ qualifiedToJS id name
   valueToJs (Accessor _ prop val) =
@@ -256,7 +257,7 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
     jss <- forM binders $ \(CaseAlternative bs result) -> do
       ret <- guardsToJs result
       go valNames ret bs
-    return $ JSApp (JSFunction Nothing [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSUnary JSNew $ JSApp (JSVar "Error") [JSStringLiteral "Failed pattern match"]])))
+    return $ JSApp (JSFunction Nothing [] (JSBlock (assignments ++ concat jss ++ [JSThrow $ JSStringLiteral "Failed pattern match"])))
                    []
     where
       go :: [String] -> [JS] -> [Binder Ann] -> m [JS]

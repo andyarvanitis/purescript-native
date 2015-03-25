@@ -31,7 +31,7 @@ newtype PrinterState = PrinterState { indent :: Int } deriving (Show, Eq, Ord)
 -- Number of characters per identation level
 --
 blockIndent :: Int
-blockIndent = 4
+blockIndent = 2
 
 -- |
 -- Pretty print with a new indentation level

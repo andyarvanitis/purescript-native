@@ -112,7 +112,7 @@ compile' env ms prefix = do
   js <- concat <$> (evalSupplyT nextVar $ T.traverse moduleToJs modulesToCodeGen)
   let exts = intercalate "\n" . map (`moduleToPs` env') $ regrouped
   js' <- generateMain env' js
-  let pjs = unlines $ map ("// " ++) prefix ++ [prettyPrintJS js']
+  let pjs = unlines $ map ("# " ++) prefix ++ [prettyPrintJS js']
   return (pjs, exts, env')
 
 generateMain :: (MonadError String m, MonadReader (Options Compile) m) => Environment -> [JS] -> m [JS]
@@ -181,7 +181,7 @@ make outputDir ms prefix = do
   toRebuild <- foldM (\s (Module _ moduleName' _ _) -> do
     let filePath = runModuleName moduleName'
 
-        jsFile = outputDir </> filePath </> "index.js"
+        jsFile = outputDir </> filePath </> "index.rb"
         externsFile = outputDir </> filePath </> "externs.purs"
         inputFile = fromMaybe (error "Module has no filename in 'make'") $ M.lookup moduleName' filePathMap
 
@@ -209,7 +209,7 @@ make outputDir ms prefix = do
     go env' ms'
   go env ((True, m@(Module coms moduleName' _ exps)) : ms') = do
     let filePath = runModuleName moduleName'
-        jsFile = outputDir </> filePath </> "index.js"
+        jsFile = outputDir </> filePath </> "index.rb"
         externsFile = outputDir </> filePath </> "externs.purs"
 
     lift . progress $ "Compiling " ++ runModuleName moduleName'
@@ -223,7 +223,7 @@ make outputDir ms prefix = do
     let [renamed] = renameInModules [corefn]
 
     pjs <- prettyPrintJS <$> moduleToJs renamed
-    let js = unlines $ map ("// " ++) prefix ++ [pjs]
+    let js = unlines $ map ("# " ++) prefix ++ [pjs]
     let exts = unlines $ map ("-- " ++) prefix ++ [moduleToPs mod' env']
 
     lift $ writeTextFile jsFile js
