@@ -177,11 +177,11 @@ module Prelude
   -- | Note, the running time of this function is `O(n)`.
   foreign import cons
     """
-    function cons(e) {
-      return function(l) {
-        return [e].concat(l);
-      };
-    }
+    cons = lambda do |e|
+      return lambda do |l|
+        return [e].concat(l)
+      end
+    end
     """ :: forall a. a -> [a] -> [a]
 
   -- | The `Show` type class represents those types which can be converted into a human-readable `String` representation.
@@ -193,9 +193,9 @@ module Prelude
 
   foreign import showStringImpl
     """
-    function showStringImpl(s) {
-      return JSON.stringify(s);
-    }
+    showStringImpl = lambda do |s|
+      return s.to_s
+    end
     """ :: String -> String
 
   instance showUnit :: Show Unit where
@@ -210,9 +210,9 @@ module Prelude
 
   foreign import showNumberImpl
     """
-    function showNumberImpl(n) {
-      return n.toString();
-    }
+    showNumberImpl = lambda do |n|
+      return n.to_s
+    end
     """ :: Number -> String
 
   instance showNumber :: Show Number where
@@ -220,15 +220,15 @@ module Prelude
 
   foreign import showArrayImpl
     """
-    function showArrayImpl(f) {
-      return function(xs) {
-        var ss = [];
-        for (var i = 0, l = xs.length; i < l; i++) {
-          ss[i] = f(xs[i]);
-        }
-        return '[' + ss.join(',') + ']';
-      };
-    }
+    showArrayImpl = lambda do |f|
+      return lambda do |xs|
+        var ss = []
+        for i = 0 .. xs.length
+          ss[i] = f(xs[i])
+        end
+        return '[' + ss.join(',') + ']'
+      end
+    end
     """ :: forall a. (a -> String) -> [a] -> String
 
   instance showArray :: (Show a) => Show [a] where
@@ -468,47 +468,47 @@ module Prelude
 
   foreign import numAdd
     """
-    function numAdd(n1) {
-      return function(n2) {
-        return n1 + n2;
-      };
-    }
+    numAdd = lambda do |n1|
+      return lambda do |n2|
+        return n1 + n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numSub
     """
-    function numSub(n1) {
-      return function(n2) {
-        return n1 - n2;
-      };
-    }
+    numSub = lambda do |n1|
+      return lambda do |n2|
+        return n1 - n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numMul
     """
-    function numMul(n1) {
-      return function(n2) {
-        return n1 * n2;
-      };
-    }
+    numMul = lambda do |n1|
+      return lambda do |n2|
+        return n1 * n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numDiv
     """
-    function numDiv(n1) {
-      return function(n2) {
-        return n1 / n2;
-      };
-    }
+    numDiv = lambda do |n1|
+      return lambda do |n2|
+        return n1 / n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numMod
     """
-    function numMod(n1) {
-      return function(n2) {
-        return n1 % n2;
-      };
-    }
+    numMod = lambda do |n1|
+      return lambda do |n2|
+        return n1 % n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   (%) = numMod
@@ -559,20 +559,20 @@ module Prelude
 
   foreign import refEq
     """
-    function refEq(r1) {
-      return function(r2) {
-        return r1 === r2;
-      };
-    }
+    refEq = lambda do |r1|
+      return lambda do |r2|
+        return r1 == r2
+      end
+    end
     """ :: forall a. a -> a -> Boolean
 
   foreign import refIneq
     """
-    function refIneq(r1) {
-      return function(r2) {
-        return r1 !== r2;
-      };
-    }
+    refIneq = lambda do |r1|
+      return lambda do |r2|
+        return r1 != r2
+      end
+    end
     """ :: forall a. a -> a -> Boolean
 
   instance eqUnit :: Eq Unit where
@@ -593,17 +593,21 @@ module Prelude
 
   foreign import eqArrayImpl
     """
-    function eqArrayImpl(f) {
-      return function(xs) {
-        return function(ys) {
-          if (xs.length !== ys.length) return false;
-          for (var i = 0; i < xs.length; i++) {
-            if (!f(xs[i])(ys[i])) return false;
-          }
-          return true;
-        };
-      };
-    }
+    eqArrayImpl = lambda do |f|
+      return lambda do |xs|
+        return lambda do |ys|
+          if xs.length != ys.length
+            return false
+          end
+          for i = 0 .. xs.length
+            if !f(xs[i])(ys[i])
+              return false
+            end
+          end
+          return true
+        end
+      end
+    end
     """ :: forall a. (a -> a -> Boolean) -> [a] -> [a] -> Boolean
 
   instance eqArray :: (Eq a) => Eq [a] where
@@ -679,17 +683,17 @@ module Prelude
 
   foreign import unsafeCompareImpl
     """
-    function unsafeCompareImpl(lt) {
-      return function(eq) {
-        return function(gt) {
-          return function(x) {
-            return function(y) {
-              return x < y ? lt : x > y ? gt : eq;
-            };
-          };
-        };
-      };
-    }
+    unsafeCompareImpl = lambda do |lt|
+      return lambda do |eq|
+        return lambda do |gt|
+          return lambda do |x|
+            return lambda do |y|
+              return x < y ? lt : x > y ? gt : eq
+            end
+          end
+        end
+      end
+    end
     """ :: forall a. Ordering -> Ordering -> Ordering -> a -> a -> Ordering
 
   unsafeCompare :: forall a. a -> a -> Ordering
@@ -725,7 +729,7 @@ module Prelude
   -- | The `Bits` type class identifies types which support bitwise operations.
   class Bits b where
     (.&.) :: b -> b -> b
-    (.|.) :: b -> b -> b
+     = lambda do |.|.) :: b -> b -> b
     (.^.) :: b -> b -> b
     shl :: b -> Number -> b
     shr :: b -> Number -> b
@@ -734,68 +738,68 @@ module Prelude
 
   foreign import numShl
     """
-    function numShl(n1) {
-      return function(n2) {
-        return n1 << n2;
-      };
-    }
+    numShl = lambda do |n1|
+      return lambda do |n2|
+        return n1 << n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numShr
     """
-    function numShr(n1) {
-      return function(n2) {
-        return n1 >> n2;
-      };
-    }
+    numShr = lambda do |n1|
+      return lambda do |n2|
+        return n1 >> n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numZshr
     """
-    function numZshr(n1) {
-      return function(n2) {
-        return n1 >>> n2;
-      };
-    }
+    numZshr = lambda do |n1|
+      return lambda do |n2|
+        return n1 >>> n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numAnd
     """
-    function numAnd(n1) {
-      return function(n2) {
-        return n1 & n2;
-      };
-    }
+    numAnd = lambda do |n1|
+      return lambda do |n2|
+        return n1 & n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numOr
     """
-    function numOr(n1) {
-      return function(n2) {
-        return n1 | n2;
-      };
-    }
+    numOr = lambda do |n1|
+      return lambda do |n2|
+        return n1 | n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numXor
     """
-    function numXor(n1) {
-      return function(n2) {
-        return n1 ^ n2;
-      };
-    }
+    numXor = lambda do |n1|
+      return lambda do |n2|
+        return n1 ^ n2
+      end
+    end
     """ :: Number -> Number -> Number
 
   foreign import numComplement
     """
-    function numComplement(n) {
-      return ~n;
-    }
+    numComplement = lambda do |n|
+      return ~n
+    end
     """ :: Number -> Number
 
   instance bitsNumber :: Bits Number where
     (.&.) = numAnd
-    (.|.) = numOr
+     = lambda do |.|.) = numOr
     (.^.) = numXor
     shl = numShl
     shr = numShr
@@ -811,37 +815,37 @@ module Prelude
   -- |
   class BoolLike b where
     (&&) :: b -> b -> b
-    (||) :: b -> b -> b
+     = lambda do |||) :: b -> b -> b
     not :: b -> b
 
   foreign import boolAnd
     """
-    function boolAnd(b1) {
-      return function(b2) {
-        return b1 && b2;
-      };
-    }
+    boolAnd = lambda do |b1|
+      return lambda do |b2|
+        return b1 && b2
+      end
+    end
     """  :: Boolean -> Boolean -> Boolean
 
   foreign import boolOr
     """
-    function boolOr(b1) {
-      return function(b2) {
-        return b1 || b2;
-      };
-    }
+    boolOr = lambda do |b1|
+      return lambda do |b2|
+        return b1 || b2
+      end
+    end
     """ :: Boolean -> Boolean -> Boolean
 
   foreign import boolNot
     """
-    function boolNot(b) {
-      return !b;
-    }
+    boolNot = lambda do |b|
+      return !b
+    end
     """ :: Boolean -> Boolean
 
   instance boolLikeBoolean :: BoolLike Boolean where
     (&&) = boolAnd
-    (||) = boolOr
+     = lambda do |||) = boolOr
     not = boolNot
 
   infixr 5 <>
@@ -858,11 +862,11 @@ module Prelude
 
   foreign import concatString
     """
-    function concatString(s1) {
-      return function(s2) {
-        return s1 + s2;
-      };
-    }
+    concatString = lambda do |s1|
+      return lambda do |s2|
+        return s1 + s2
+      end
+    end
     """ :: String -> String -> String
 
   instance semigroupUnit :: Semigroup Unit where
@@ -929,309 +933,309 @@ module Data.Function where
   -- | Create a function of no arguments
   foreign import mkFn0
     """
-    function mkFn0(fn) {
-      return function() {
-        return fn({});
-      };
-    }
+    mkFn0 = lambda do |fn|
+      return lambda do
+        return fn({})
+      end
+    end
     """ :: forall a. (Unit -> a) -> Fn0 a
 
   -- | Create a function of one argument
   foreign import mkFn1
     """
-    function mkFn1(fn) {
-      return function(a) {
-        return fn(a);
-      };
-    }
+    mkFn1 = lambda do |fn|
+      return lambda do |a|
+        return fn(a)
+      end
+    end
     """ :: forall a b. (a -> b) -> Fn1 a b
 
   -- | Create a function of two arguments from a curried function
   foreign import mkFn2
     """
-    function mkFn2(fn) {
-      return function(a, b) {
-        return fn(a)(b);
-      };
-    }
+    mkFn2 = lambda do |fn|
+      return lambda do |a, b|
+        return fn(a)(b)
+      end
+    end
     """ :: forall a b c. (a -> b -> c) -> Fn2 a b c
 
   -- | Create a function of three arguments from a curried function
   foreign import mkFn3
     """
-    function mkFn3(fn) {
-      return function(a, b, c) {
-        return fn(a)(b)(c);
-      };
-    }
+    mkFn3 = lambda do |fn|
+      return lambda do |a, b, c|
+        return fn(a)(b)(c)
+      end
+    end
     """ :: forall a b c d. (a -> b -> c -> d) -> Fn3 a b c d
 
   -- | Create a function of four arguments from a curried function
   foreign import mkFn4
     """
-    function mkFn4(fn) {
-      return function(a, b, c, d) {
-        return fn(a)(b)(c)(d);
-      };
-    }
+    mkFn4 = lambda do |fn|
+      return lambda do |a, b, c, d|
+        return fn(a)(b)(c)(d)
+      end
+    end
     """ :: forall a b c d e. (a -> b -> c -> d -> e) -> Fn4 a b c d e
 
   -- | Create a function of five arguments from a curried function
   foreign import mkFn5
     """
-    function mkFn5(fn) {
-      return function(a, b, c, d, e) {
-        return fn(a)(b)(c)(d)(e);
-      };
-    }
+    mkFn5 = lambda do |fn|
+      return lambda do |a, b, c, d, e|
+        return fn(a)(b)(c)(d)(e)
+      end
+    end
     """ :: forall a b c d e f. (a -> b -> c -> d -> e -> f) -> Fn5 a b c d e f
 
   -- | Create a function of six arguments from a curried function
   foreign import mkFn6
     """
-    function mkFn6(fn) {
-      return function(a, b, c, d, e, f) {
-        return fn(a)(b)(c)(d)(e)(f);
-      };
-    }
+    mkFn6 = lambda do |fn|
+      return lambda do |a, b, c, d, e, f|
+        return fn(a)(b)(c)(d)(e)(f)
+      end
+    end
     """ :: forall a b c d e f g. (a -> b -> c -> d -> e -> f -> g) -> Fn6 a b c d e f g
 
   -- | Create a function of seven arguments from a curried function
   foreign import mkFn7
     """
-    function mkFn7(fn) {
-      return function(a, b, c, d, e, f, g) {
-        return fn(a)(b)(c)(d)(e)(f)(g);
-      };
-    }
+    mkFn7 = lambda do |fn|
+      return lambda do |a, b, c, d, e, f, g|
+        return fn(a)(b)(c)(d)(e)(f)(g)
+      end
+    end
     """ :: forall a b c d e f g h. (a -> b -> c -> d -> e -> f -> g -> h) -> Fn7 a b c d e f g h
 
   -- | Create a function of eight arguments from a curried function
   foreign import mkFn8
     """
-    function mkFn8(fn) {
-      return function(a, b, c, d, e, f, g, h) {
-        return fn(a)(b)(c)(d)(e)(f)(g)(h);
-      };
-    }
+    mkFn8 = lambda do |fn|
+      return lambda do |a, b, c, d, e, f, g, h|
+        return fn(a)(b)(c)(d)(e)(f)(g)(h)
+      end
+    end
     """ :: forall a b c d e f g h i. (a -> b -> c -> d -> e -> f -> g -> h -> i) -> Fn8 a b c d e f g h i
 
   -- | Create a function of nine arguments from a curried function
   foreign import mkFn9
     """
-    function mkFn9(fn) {
-      return function(a, b, c, d, e, f, g, h, i) {
-        return fn(a)(b)(c)(d)(e)(f)(g)(h)(i);
-      };
-    }
+    mkFn9 = lambda do |fn|
+      return lambda do |a, b, c, d, e, f, g, h, i|
+        return fn(a)(b)(c)(d)(e)(f)(g)(h)(i)
+      end
+    end
     """ :: forall a b c d e f g h i j. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j) -> Fn9 a b c d e f g h i j
 
   -- | Create a function of ten arguments from a curried function
   foreign import mkFn10
     """
-    function mkFn10(fn) {
-      return function(a, b, c, d, e, f, g, h, i, j) {
-        return fn(a)(b)(c)(d)(e)(f)(g)(h)(i)(j);
-      };
-    }
+    mkFn10 = lambda do |fn|
+      return lambda do |a, b, c, d, e, f, g, h, i, j|
+        return fn(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)
+      end
+    end
     """ :: forall a b c d e f g h i j k. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> k) -> Fn10 a b c d e f g h i j k
 
   -- | Apply a function of no arguments
   foreign import runFn0
     """
-    function runFn0(fn) {
-      return fn();
-    }
+    runFn0 = lambda do |fn|
+      return fn()
+    end
     """ :: forall a. Fn0 a -> a
 
   -- | Apply a function of one argument
   foreign import runFn1
     """
-    function runFn1(fn) {
-      return function(a) {
-        return fn(a);
-      };
-    }
+    runFn1 = lambda do |fn|
+      return lambda do |a|
+        return fn(a)
+      end
+    end
     """ :: forall a b. Fn1 a b -> a -> b
 
   -- | Apply a function of two arguments
   foreign import runFn2
     """
-    function runFn2(fn) {
-      return function(a) {
-        return function(b) {
-          return fn(a, b);
-        };
-      };
-    }
+    runFn2 = lambda do |fn|
+      return lambda do |a|
+        return lambda do |b|
+          return fn(a, b)
+        end
+      end
+    end
     """ :: forall a b c. Fn2 a b c -> a -> b -> c
 
   -- | Apply a function of three arguments
   foreign import runFn3
     """
-    function runFn3(fn) {
-      return function(a) {
-        return function(b) {
-          return function(c) {
-            return fn(a, b, c);
-          };
-        };
-      };
-    }
+    runFn3 = lambda do |fn|
+      return lambda do |a|
+        return lambda do |b|
+          return lambda do |c|
+            return fn(a, b, c)
+          end
+        end
+      end
+    end
     """ :: forall a b c d. Fn3 a b c d -> a -> b -> c -> d
 
   -- | Apply a function of four arguments
   foreign import runFn4
     """
-    function runFn4(fn) {
-      return function(a) {
-        return function(b) {
-          return function(c) {
-            return function(d) {
-              return fn(a, b, c, d);
-            };
-          };
-        };
-      };
-    }
+    runFn4 = lambda do |fn|
+      return lambda do |a|
+        return lambda do |b|
+          return lambda do |c|
+            return lambda do |d|
+              return fn(a, b, c, d)
+            end
+          end
+        end
+      end
+    end
     """ :: forall a b c d e. Fn4 a b c d e -> a -> b -> c -> d -> e
 
   -- | Apply a function of five arguments
   foreign import runFn5
     """
-    function runFn5(fn) {
-      return function(a) {
-        return function(b) {
-          return function(c) {
-            return function(d) {
-              return function(e) {
-                return fn(a, b, c, d, e);
-              };
-            };
-          };
-        };
-      };
-    }
+    runFn5 = lambda do |fn|
+      return lambda do |a|
+        return lambda do |b|
+          return lambda do |c|
+            return lambda do |d|
+              return lambda do |e|
+                return fn(a, b, c, d, e)
+              end
+            end
+          end
+        end
+      end
+    end
     """ :: forall a b c d e f. Fn5 a b c d e f -> a -> b -> c -> d -> e -> f
 
   -- | Apply a function of six arguments
   foreign import runFn6
     """
-    function runFn6(fn) {
-      return function(a) {
-        return function(b) {
-          return function(c) {
-            return function(d) {
-              return function(e) {
-                return function(f) {
-                  return fn(a, b, c, d, e, f);
-                };
-              };
-            };
-          };
-        };
-      };
-    }
+    runFn6 = lambda do |fn|
+      return lambda do |a|
+        return lambda do |b|
+          return lambda do |c|
+            return lambda do |d|
+              return lambda do |e|
+                return lambda do |f|
+                  return fn(a, b, c, d, e, f)
+                end
+              end
+            end
+          end
+        end
+      end
+    end
     """ :: forall a b c d e f g. Fn6 a b c d e f g -> a -> b -> c -> d -> e -> f -> g
 
   -- | Apply a function of seven arguments
   foreign import runFn7
     """
-    function runFn7(fn) {
-      return function(a) {
-        return function(b) {
-          return function(c) {
-            return function(d) {
-              return function(e) {
-                return function(f) {
-                  return function(g) {
-                    return fn(a, b, c, d, e, f, g);
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    }
+    runFn7 = lambda do |fn|
+      return lambda do |a|
+        return lambda do |b|
+          return lambda do |c|
+            return lambda do |d|
+              return lambda do |e|
+                return lambda do |f|
+                  return lambda do |g|
+                    return fn(a, b, c, d, e, f, g)
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
     """ :: forall a b c d e f g h. Fn7 a b c d e f g h -> a -> b -> c -> d -> e -> f -> g -> h
 
   -- | Apply a function of eight arguments
   foreign import runFn8
     """
-    function runFn8(fn) {
-      return function(a) {
-        return function(b) {
-          return function(c) {
-            return function(d) {
-              return function(e) {
-                return function(f) {
-                  return function(g) {
-                    return function(h) {
-                      return fn(a, b, c, d, e, f, g, h);
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    }
+    runFn8 = lambda do |fn|
+      return lambda do |a|
+        return lambda do |b|
+          return lambda do |c|
+            return lambda do |d|
+              return lambda do |e|
+                return lambda do |f|
+                  return lambda do |g|
+                    return lambda do |h|
+                      return fn(a, b, c, d, e, f, g, h)
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
     """ :: forall a b c d e f g h i. Fn8 a b c d e f g h i -> a -> b -> c -> d -> e -> f -> g -> h -> i
 
   -- | Apply a function of nine arguments
   foreign import runFn9
     """
-    function runFn9(fn) {
-      return function(a) {
-        return function(b) {
-          return function(c) {
-            return function(d) {
-              return function(e) {
-                return function(f) {
-                  return function(g) {
-                    return function(h) {
-                      return function(i) {
-                        return fn(a, b, c, d, e, f, g, h, i);
-                      };
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    }
+    runFn9 = lambda do |fn|
+      return lambda do |a|
+        return lambda do |b|
+          return lambda do |c|
+            return lambda do |d|
+              return lambda do |e|
+                return lambda do |f|
+                  return lambda do |g|
+                    return lambda do |h|
+                      return lambda do |i|
+                        return fn(a, b, c, d, e, f, g, h, i)
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
     """ :: forall a b c d e f g h i j. Fn9 a b c d e f g h i j -> a -> b -> c -> d -> e -> f -> g -> h -> i -> j
 
   -- | Apply a function of ten arguments
   foreign import runFn10
     """
-    function runFn10(fn) {
-      return function(a) {
-        return function(b) {
-          return function(c) {
-            return function(d) {
-              return function(e) {
-                return function(f) {
-                  return function(g) {
-                    return function(h) {
-                      return function(i) {
-                        return function(j) {
-                          return fn(a, b, c, d, e, f, g, h, i, j);
-                        };
-                      };
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    }
+    runFn10 = lambda do |fn|
+      return lambda do |a|
+        return lambda do |b|
+          return lambda do |c|
+            return lambda do |d|
+              return lambda do |e|
+                return lambda do |f|
+                  return lambda do |g|
+                    return lambda do |h|
+                      return lambda do |i|
+                        return lambda do |j|
+                          return fn(a, b, c, d, e, f, g, h, i, j)
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
     """ :: forall a b c d e f g h i j k. Fn10 a b c d e f g h i j k -> a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> k
 
 module Prelude.Unsafe where
@@ -1241,11 +1245,11 @@ module Prelude.Unsafe where
   -- | Note: this function can cause unpredictable failure at runtime if the index is out-of-bounds.
   foreign import unsafeIndex
     """
-    function unsafeIndex(xs) {
-      return function(n) {
-        return xs[n];
-      };
-    }
+    unsafeIndex = lambda do |xs|
+      return lambda do |n|
+        return xs[n]
+      end
+    end
     """ :: forall a. [a] -> Number -> a
 
 module Control.Monad.Eff
@@ -1264,22 +1268,22 @@ module Control.Monad.Eff
 
   foreign import returnE
     """
-    function returnE(a) {
-      return function() {
-        return a;
-      };
-    }
+    returnE = lambda do |a|
+      return lambda do
+        return a
+      end
+    end
     """ :: forall e a. a -> Eff e a
 
   foreign import bindE
     """
-    function bindE(a) {
-      return function(f) {
-        return function() {
-          return f(a())();
-        };
-      };
-    }
+    bindE = lambda do |a|
+      return lambda do |f|
+        return lambda do
+          return f(a())()
+        end
+      end
+    end
     """ :: forall e a b. Eff e a -> (a -> Eff e b) -> Eff e b
 
   -- | The `Pure` type synonym represents _pure_ computations, i.e. ones in which all effects have been handled.
@@ -1293,9 +1297,9 @@ module Control.Monad.Eff
   -- | is to use parentheses instead.
   foreign import runPure
     """
-    function runPure(f) {
-      return f();
-    }
+    runPure = lambda do |f|
+      return f()
+    end
     """ :: forall a. Pure a -> a
 
   instance functorEff :: Functor (Eff e) where
@@ -1318,12 +1322,13 @@ module Control.Monad.Eff
   -- | until its return value is `true`.
   foreign import untilE
     """
-    function untilE(f) {
-      return function() {
-        while (!f());
-        return {};
-      };
-    }
+    untilE = lambda do |f|
+      return lambda do
+        while !f()
+        end
+        return {}
+      end
+    end
     """ :: forall e. Eff e Boolean -> Eff e Unit
 
   -- | Loop while a condition is `true`.
@@ -1332,16 +1337,16 @@ module Control.Monad.Eff
   -- | `true`, it runs the effectful computation `m` and loops. If not, the computation ends.
   foreign import whileE
     """
-    function whileE(f) {
-      return function(a) {
-        return function() {
-          while (f()) {
-            a();
-          }
-          return {};
-        };
-      };
-    }
+    whileE = lambda do |f|
+      return lambda do |a|
+        return lambda do
+          while f()
+            a()
+          end
+          return {}
+        end
+      end
+    end
     """ :: forall e a. Eff e Boolean -> Eff e a -> Eff e Unit
 
   -- | Loop over a consecutive collection of numbers.
@@ -1350,17 +1355,17 @@ module Control.Monad.Eff
   -- | between `lo` (inclusive) and `hi` (exclusive).
   foreign import forE
     """
-    function forE(lo) {
-      return function(hi) {
-        return function(f) {
-          return function() {
-            for (var i = lo; i < hi; i++) {
-              f(i)();
-            }
-          };
-        };
-      };
-    }
+    forE = lambda do |lo|
+      return lambda do |hi|
+        return lambda do |f|
+          return lambda do
+            for i = lo .. hi
+              f(i)()
+            end
+          end
+        end
+      end
+    end
     """ :: forall e. Number -> Number -> (Number -> Eff e Unit) -> Eff e Unit
 
   -- | Loop over an array of values.
@@ -1368,15 +1373,15 @@ module Control.Monad.Eff
   -- | `foreach xs f` runs the computation returned by the function `f` for each of the inputs `xs`.
   foreign import foreachE
     """
-    function foreachE(as) {
-      return function(f) {
-        return function() {
-          for (var i = 0; i < as.length; i++) {
-            f(as[i])();
-          }
-        };
-      };
-    }
+    foreachE = lambda do |as|
+      return lambda do |f|
+        return lambda do
+          for i = 0 .. as.length
+            f(as[i])()
+          end
+        end
+      end
+    end
     """ :: forall e a. [a] -> (a -> Eff e Unit) -> Eff e Unit
 
 module Control.Monad.Eff.Unsafe where
@@ -1388,9 +1393,9 @@ module Control.Monad.Eff.Unsafe where
   -- | Note: use of this function can result in arbitrary side-effects.
   foreign import unsafeInterleaveEff
     """
-    function unsafeInterleaveEff(f) {
-      return f;
-    }
+    unsafeInterleaveEff = lambda do |f|
+      return f
+    end
     """ :: forall eff1 eff2 a. Eff eff1 a -> Eff eff2 a
 
 module Debug.Trace where
@@ -1403,16 +1408,16 @@ module Debug.Trace where
   -- | Write a `String` to the console.
   foreign import trace
     """
-    function trace(s) {
-      return function() {
-        console.log(s);
-        return {};
-      };
-    }
-    """ :: forall r. String -> Eff (trace :: Trace | r) Unit
+    trace = lambda do |s|
+      return lambda do
+        puts s
+        return {}
+      end
+    end
+    """ :: forall r. String -> Eff  = lambda do |trace :: Trace | r) Unit
 
   -- | Write a value to the console, using its `Show` instance to produce a `String`.
-  print :: forall a r. (Show a) => a -> Eff (trace :: Trace | r) Unit
+  print :: forall a r.  = lambda do |Show a) => a -> Eff (trace :: Trace | r) Unit
   print o = trace (show o)
 
 module Control.Monad.ST where
@@ -1432,46 +1437,46 @@ module Control.Monad.ST where
   -- | Create a new mutable reference.
   foreign import newSTRef
     """
-    function newSTRef(val) {
-      return function() {
-        return { value: val };
-      };
-    }
-    """ :: forall a h r. a -> Eff (st :: ST h | r) (STRef h a)
+    newSTRef = lambda do |val|
+      return lambda do
+        return { value: val }
+      end
+    end
+    """ :: forall a h r. a -> Eff  = lambda do |st :: ST h | r) (STRef h a)
 
   -- | Read the current value of a mutable reference.
   foreign import readSTRef
     """
-    function readSTRef(ref) {
-      return function() {
-        return ref.value;
-      };
-    }
-    """ :: forall a h r. STRef h a -> Eff (st :: ST h | r) a
+    readSTRef = lambda do |ref|
+      return lambda do
+        return ref.value
+      end
+    end
+    """ :: forall a h r. STRef h a -> Eff  = lambda do |st :: ST h | r) a
 
   -- | Modify the value of a mutable reference by applying a function to the current value.
   foreign import modifySTRef
     """
-    function modifySTRef(ref) {
-      return function(f) {
-        return function() {
-          return ref.value = f(ref.value);
-        };
-      };
-    }
-    """ :: forall a h r. STRef h a -> (a -> a) -> Eff (st :: ST h | r) a
+    modifySTRef = lambda do |ref|
+      return lambda do |f|
+        return lambda do
+          return ref.value = f(ref.value)
+        end
+      end
+    end
+    """ :: forall a h r. STRef h a ->  = lambda do |a -> a) -> Eff (st :: ST h | r) a
 
   -- | Set the value of a mutable reference.
   foreign import writeSTRef
     """
-    function writeSTRef(ref) {
-      return function(a) {
-        return function() {
-          return ref.value = a;
-        };
-      };
-    }
-    """ :: forall a h r. STRef h a -> a -> Eff (st :: ST h | r) a
+    writeSTRef = lambda do |ref|
+      return lambda do |a|
+        return lambda do
+          return ref.value = a
+        end
+      end
+    end
+    """ :: forall a h r. STRef h a -> a -> Eff  = lambda do |st :: ST h | r) a
 
   -- | Run an `ST` computation.
   -- |
@@ -1481,14 +1486,14 @@ module Control.Monad.ST where
   -- | It may cause problems to apply this function using the `$` operator. The recommended approach is to use parentheses instead.
   foreign import runST
     """
-    function runST(f) {
-      return f;
-    }
-    """ :: forall a r. (forall h. Eff (st :: ST h | r) a) -> Eff r a
+    runST = lambda do |f|
+      return f
+    end
+    """ :: forall a r.  = lambda do |forall h. Eff (st :: ST h | r) a) -> Eff r a
 
   -- | A convenience function which combines `runST` with `runPure`, which can be used when the only required effect is `ST`.
   -- |
   -- | Note: since this function has a rank-2 type, it may cause problems to apply this function using the `$` operator. The recommended approach
   -- | is to use parentheses instead.
-  pureST :: forall a. (forall h r. Eff (st :: ST h | r) a) -> a
+  pureST :: forall a.  = lambda do |forall h r. Eff (st :: ST h | r) a) -> a
   pureST st = runPure (runST st)
