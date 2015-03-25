@@ -113,6 +113,7 @@ nameIsJsReserved name =
               , "long"
               , "native"
               , "new"
+              , "not"
               , "null"
               , "package"
               , "private"

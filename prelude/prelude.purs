@@ -223,8 +223,8 @@ module Prelude
     showArrayImpl = lambda do |f|
       return lambda do |xs|
         var ss = []
-        for i = 0 .. xs.length
-          ss[i] = f(xs[i])
+        for i in 0 .. xs.length
+          ss[i] = f[xs[i]]
         end
         return '[' + ss.join(',') + ']'
       end
@@ -599,8 +599,8 @@ module Prelude
           if xs.length != ys.length
             return false
           end
-          for i = 0 .. xs.length
-            if !f(xs[i])(ys[i])
+          for i in 0 .. xs.length
+            if !f[xs[i]][ys[i]]
               return false
             end
           end
@@ -729,7 +729,7 @@ module Prelude
   -- | The `Bits` type class identifies types which support bitwise operations.
   class Bits b where
     (.&.) :: b -> b -> b
-     = lambda do |.|.) :: b -> b -> b
+    (.|.) :: b -> b -> b
     (.^.) :: b -> b -> b
     shl :: b -> Number -> b
     shr :: b -> Number -> b
@@ -758,7 +758,7 @@ module Prelude
     """
     numZshr = lambda do |n1|
       return lambda do |n2|
-        return n1 >>> n2
+        return n1 >> n2
       end
     end
     """ :: Number -> Number -> Number
@@ -799,7 +799,7 @@ module Prelude
 
   instance bitsNumber :: Bits Number where
     (.&.) = numAnd
-     = lambda do |.|.) = numOr
+    (.|.) = numOr
     (.^.) = numXor
     shl = numShl
     shr = numShr
@@ -815,7 +815,7 @@ module Prelude
   -- |
   class BoolLike b where
     (&&) :: b -> b -> b
-     = lambda do |||) :: b -> b -> b
+    (||) :: b -> b -> b
     not :: b -> b
 
   foreign import boolAnd
@@ -845,7 +845,7 @@ module Prelude
 
   instance boolLikeBoolean :: BoolLike Boolean where
     (&&) = boolAnd
-     = lambda do |||) = boolOr
+    (||) = boolOr
     not = boolNot
 
   infixr 5 <>
@@ -935,7 +935,7 @@ module Data.Function where
     """
     mkFn0 = lambda do |fn|
       return lambda do
-        return fn({})
+        return fn[{}]
       end
     end
     """ :: forall a. (Unit -> a) -> Fn0 a
@@ -945,7 +945,7 @@ module Data.Function where
     """
     mkFn1 = lambda do |fn|
       return lambda do |a|
-        return fn(a)
+        return fn[a]
       end
     end
     """ :: forall a b. (a -> b) -> Fn1 a b
@@ -955,7 +955,7 @@ module Data.Function where
     """
     mkFn2 = lambda do |fn|
       return lambda do |a, b|
-        return fn(a)(b)
+        return fn[a][b]
       end
     end
     """ :: forall a b c. (a -> b -> c) -> Fn2 a b c
@@ -965,7 +965,7 @@ module Data.Function where
     """
     mkFn3 = lambda do |fn|
       return lambda do |a, b, c|
-        return fn(a)(b)(c)
+        return fn[a][b][c]
       end
     end
     """ :: forall a b c d. (a -> b -> c -> d) -> Fn3 a b c d
@@ -975,7 +975,7 @@ module Data.Function where
     """
     mkFn4 = lambda do |fn|
       return lambda do |a, b, c, d|
-        return fn(a)(b)(c)(d)
+        return fn[a][b][c][d]
       end
     end
     """ :: forall a b c d e. (a -> b -> c -> d -> e) -> Fn4 a b c d e
@@ -985,7 +985,7 @@ module Data.Function where
     """
     mkFn5 = lambda do |fn|
       return lambda do |a, b, c, d, e|
-        return fn(a)(b)(c)(d)(e)
+        return fn[a][b][c][d][e]
       end
     end
     """ :: forall a b c d e f. (a -> b -> c -> d -> e -> f) -> Fn5 a b c d e f
@@ -995,7 +995,7 @@ module Data.Function where
     """
     mkFn6 = lambda do |fn|
       return lambda do |a, b, c, d, e, f|
-        return fn(a)(b)(c)(d)(e)(f)
+        return fn[a][b][c][d][e][f]
       end
     end
     """ :: forall a b c d e f g. (a -> b -> c -> d -> e -> f -> g) -> Fn6 a b c d e f g
@@ -1005,7 +1005,7 @@ module Data.Function where
     """
     mkFn7 = lambda do |fn|
       return lambda do |a, b, c, d, e, f, g|
-        return fn(a)(b)(c)(d)(e)(f)(g)
+        return fn[a][b][c][d][e][f][g]
       end
     end
     """ :: forall a b c d e f g h. (a -> b -> c -> d -> e -> f -> g -> h) -> Fn7 a b c d e f g h
@@ -1015,7 +1015,7 @@ module Data.Function where
     """
     mkFn8 = lambda do |fn|
       return lambda do |a, b, c, d, e, f, g, h|
-        return fn(a)(b)(c)(d)(e)(f)(g)(h)
+        return fn[a][b][c][d][e][f][g][h]
       end
     end
     """ :: forall a b c d e f g h i. (a -> b -> c -> d -> e -> f -> g -> h -> i) -> Fn8 a b c d e f g h i
@@ -1025,7 +1025,7 @@ module Data.Function where
     """
     mkFn9 = lambda do |fn|
       return lambda do |a, b, c, d, e, f, g, h, i|
-        return fn(a)(b)(c)(d)(e)(f)(g)(h)(i)
+        return fn[a][b][c][d][e][f][g][h][i]
       end
     end
     """ :: forall a b c d e f g h i j. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j) -> Fn9 a b c d e f g h i j
@@ -1035,7 +1035,7 @@ module Data.Function where
     """
     mkFn10 = lambda do |fn|
       return lambda do |a, b, c, d, e, f, g, h, i, j|
-        return fn(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)
+        return fn[a][b][c][d][e][f][g][h][i][j]
       end
     end
     """ :: forall a b c d e f g h i j k. (a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> k) -> Fn10 a b c d e f g h i j k
@@ -1280,7 +1280,7 @@ module Control.Monad.Eff
     bindE = lambda do |a|
       return lambda do |f|
         return lambda do
-          return f(a())()
+          return f[a[]][]
         end
       end
     end
@@ -1298,7 +1298,7 @@ module Control.Monad.Eff
   foreign import runPure
     """
     runPure = lambda do |f|
-      return f()
+      return f[]
     end
     """ :: forall a. Pure a -> a
 
@@ -1324,7 +1324,7 @@ module Control.Monad.Eff
     """
     untilE = lambda do |f|
       return lambda do
-        while !f()
+        while !f[]
         end
         return {}
       end
@@ -1340,8 +1340,8 @@ module Control.Monad.Eff
     whileE = lambda do |f|
       return lambda do |a|
         return lambda do
-          while f()
-            a()
+          while f[]
+            a[]
           end
           return {}
         end
@@ -1359,8 +1359,8 @@ module Control.Monad.Eff
       return lambda do |hi|
         return lambda do |f|
           return lambda do
-            for i = lo .. hi
-              f(i)()
+            for i in lo .. hi
+              f[i][]
             end
           end
         end
@@ -1376,8 +1376,8 @@ module Control.Monad.Eff
     foreachE = lambda do |as|
       return lambda do |f|
         return lambda do
-          for i = 0 .. as.length
-            f(as[i])()
+          for i in 0 .. as.length
+            f[as[i]][]
           end
         end
       end
@@ -1414,10 +1414,10 @@ module Debug.Trace where
         return {}
       end
     end
-    """ :: forall r. String -> Eff  = lambda do |trace :: Trace | r) Unit
+    """ :: forall r. String -> Eff (trace :: Trace | r) Unit
 
   -- | Write a value to the console, using its `Show` instance to produce a `String`.
-  print :: forall a r.  = lambda do |Show a) => a -> Eff (trace :: Trace | r) Unit
+  print :: forall a r. (Show a) => a -> Eff (trace :: Trace | r) Unit
   print o = trace (show o)
 
 module Control.Monad.ST where
@@ -1442,7 +1442,7 @@ module Control.Monad.ST where
         return { value: val }
       end
     end
-    """ :: forall a h r. a -> Eff  = lambda do |st :: ST h | r) (STRef h a)
+    """ :: forall a h r. a -> Eff (st :: ST h | r) (STRef h a)
 
   -- | Read the current value of a mutable reference.
   foreign import readSTRef
@@ -1452,7 +1452,7 @@ module Control.Monad.ST where
         return ref.value
       end
     end
-    """ :: forall a h r. STRef h a -> Eff  = lambda do |st :: ST h | r) a
+    """ :: forall a h r. STRef h a -> Eff (st :: ST h | r) a
 
   -- | Modify the value of a mutable reference by applying a function to the current value.
   foreign import modifySTRef
@@ -1464,7 +1464,7 @@ module Control.Monad.ST where
         end
       end
     end
-    """ :: forall a h r. STRef h a ->  = lambda do |a -> a) -> Eff (st :: ST h | r) a
+    """ :: forall a h r. STRef h a -> (a -> a) -> Eff (st :: ST h | r) a
 
   -- | Set the value of a mutable reference.
   foreign import writeSTRef
@@ -1476,7 +1476,7 @@ module Control.Monad.ST where
         end
       end
     end
-    """ :: forall a h r. STRef h a -> a -> Eff  = lambda do |st :: ST h | r) a
+    """ :: forall a h r. STRef h a -> a -> Eff (st :: ST h | r) a
 
   -- | Run an `ST` computation.
   -- |
@@ -1489,11 +1489,11 @@ module Control.Monad.ST where
     runST = lambda do |f|
       return f
     end
-    """ :: forall a r.  = lambda do |forall h. Eff (st :: ST h | r) a) -> Eff r a
+    """ :: forall a r. (forall h. Eff (st :: ST h | r) a) -> Eff r a
 
   -- | A convenience function which combines `runST` with `runPure`, which can be used when the only required effect is `ST`.
   -- |
   -- | Note: since this function has a rank-2 type, it may cause problems to apply this function using the `$` operator. The recommended approach
   -- | is to use parentheses instead.
-  pureST :: forall a.  = lambda do |forall h r. Eff (st :: ST h | r) a) -> a
+  pureST :: forall a. (forall h r. Eff (st :: ST h | r) a) -> a
   pureST st = runPure (runST st)

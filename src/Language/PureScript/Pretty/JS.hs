@@ -86,6 +86,7 @@ literals = mkPattern' match
                    ++ sts'
                    ++ "\n"
                    ++ indentString ++ "end\n"
+                   ++ concatMap (\v -> indentString ++ "attr_reader :" ++ v ++ "\n") args
     , currentIndent
     , return "end"
     ]
@@ -387,7 +388,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                   , [ binary    BitwiseAnd           "&" ]
                   , [ binary    BitwiseXor           "^" ]
                   , [ binary    BitwiseOr            "|" ]
-                  , [ binary    And                  "&&" ]
-                  , [ binary    Or                   "||" ]
+                  , [ binary    And                  "and" ]
+                  , [ binary    Or                   "or" ]
                   , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintJS1 th ++ " : " ++ prettyPrintJS1 el ]
                     ]

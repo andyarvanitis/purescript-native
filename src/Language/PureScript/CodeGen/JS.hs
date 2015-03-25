@@ -59,11 +59,17 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
   comments <- not <$> asks optionsNoComments
   let strict = JSRaw "#"
   let header = if comments && not (null coms) then JSComment coms strict else strict
-  let moduleBody jss = header : jsImports ++ JSRaw ("module " ++ runModuleName mn) : [JSBlock (foreigns' ++ concat optimized ++ jss)]
+  let moduleBody jss = header : jsImports ++ JSRaw ("module " ++ moduleNameToJs mn) : [JSBlock (foreigns' ++ concat optimized ++ jss)]
   let expsvars = map ((\v -> JSAssignment (JSVar ('@':v)) (JSVar v)) . identToJs) exps
   let exps' = map (JSRaw . (++) "attr_reader :" . identToJs) exps
   return $ case additional of
-    MakeOptions -> moduleBody $ expsvars ++ JSRaw "class << self" : JSBlock exps' : []
+    MakeOptions -> moduleBody (expsvars ++ JSRaw "class << self" : JSBlock exps' : [])
+                ++ if moduleNameToJs mn == "Main" then
+                     [ JSRaw []
+                     , JSApp (JSAccessor "main" (JSVar (moduleNameToJs mn))) []
+                     ]
+                   else
+                     []
     CompileOptions ns _ _ | not isModuleEmpty ->
       [ JSVariableIntroduction ns
                                (Just (JSBinary Or (JSVar ns) (JSObjectLiteral [])) )
