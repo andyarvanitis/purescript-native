@@ -31,6 +31,7 @@ import Language.PureScript.CodeGen.JS.AST
 import Language.PureScript.CodeGen.JS.Common
 import Language.PureScript.Pretty.Common
 import Language.PureScript.Comments
+import qualified Language.PureScript.Names as Names
 
 import Numeric
 
@@ -259,11 +260,15 @@ accessor :: Pattern PrinterState JS (String, JS)
 accessor = mkPattern match
   where
   match (JSAccessor prop val) = Just (prop, val)
+  match (JSIndexer (JSStringLiteral s) val@(JSVar name))
+    | (c:_) <- last (split' '.' name), isUpper c = Just (identToJs (Names.Ident s), val)
   match _ = Nothing
 
 indexer :: Pattern PrinterState JS (String, JS)
 indexer = mkPattern' match
   where
+  match (JSIndexer (JSStringLiteral{}) (JSVar name))
+    | (c:_) <- last (split' '.' name), isUpper c = mzero
   match (JSIndexer index val) = (,) <$> prettyPrintJS' index <*> pure val'
     where
     val' | (JSVar "this") <- val = JSVar "self"
@@ -332,6 +337,9 @@ isSimpleExpr JSIndexer{} = True
 isSimpleExpr JSAccessor{} = True
 isSimpleExpr (JSBlock []) = True
 isSimpleExpr _ = False
+
+split' :: Char -> String -> [String]
+split' sep = takeWhile (not . null) . unfoldr (Just . span (/= sep) . dropWhile (== sep))
 
 prettyStatements :: [JS] -> StateT PrinterState Maybe String
 prettyStatements sts = do
