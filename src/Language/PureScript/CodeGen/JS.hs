@@ -87,7 +87,7 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
   importToJs mn' = do
     additional <- asks optionsAdditional
     let moduleBody = case additional of
-          MakeOptions -> JSRaw $ "require \'" ++ runModuleName mn' ++ "\'"
+          MakeOptions -> JSRaw $ "require \"" ++ runModuleName mn' ++ "/module\""
           CompileOptions ns _ _ -> JSAccessor (moduleNameToJs mn') (JSVar ns)
     return moduleBody
 

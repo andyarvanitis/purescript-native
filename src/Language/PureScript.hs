@@ -181,7 +181,7 @@ make outputDir ms prefix = do
   toRebuild <- foldM (\s (Module _ moduleName' _ _) -> do
     let filePath = runModuleName moduleName'
 
-        jsFile = outputDir </> filePath </> "index.rb"
+        jsFile = outputDir </> filePath </> "module.rb"
         externsFile = outputDir </> filePath </> "externs.purs"
         inputFile = fromMaybe (error "Module has no filename in 'make'") $ M.lookup moduleName' filePathMap
 
@@ -209,7 +209,7 @@ make outputDir ms prefix = do
     go env' ms'
   go env ((True, m@(Module coms moduleName' _ exps)) : ms') = do
     let filePath = runModuleName moduleName'
-        jsFile = outputDir </> filePath </> "index.rb"
+        jsFile = outputDir </> filePath </> "module.rb"
         externsFile = outputDir </> filePath </> "externs.purs"
 
     lift . progress $ "Compiling " ++ runModuleName moduleName'
