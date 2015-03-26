@@ -52,7 +52,9 @@ literals = mkPattern' match
   match (JSObjectLiteral ps) = fmap concat $ sequence
     [ return "{\n"
     , withIndent $ do
-        jss <- forM ps $ \(key, value) -> fmap ((objectPropertyToString key ++ " => ") ++) . prettyPrintJS' $ value
+        let keyStr key = let key' = objectPropertyToString key in
+                         if head key' == '"' then key' else ':' : key'
+        jss <- forM ps $ \(key, value) -> fmap ((keyStr key ++ " => ") ++) . prettyPrintJS' $ value
         indentString <- currentIndent
         return $ intercalate ", \n" $ map (indentString ++) jss
     , return "\n"

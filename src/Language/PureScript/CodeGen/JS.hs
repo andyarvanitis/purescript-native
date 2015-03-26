@@ -231,7 +231,7 @@ moduleToJs (Module coms mn imps exps foreigns decls) = do
       copy = JSForIn key obj $ JSBlock [JSIfElse cond assign Nothing]
       cond = JSApp (JSAccessor "hasOwnProperty" obj) [jsKey]
       assign = JSBlock [JSAssignment (JSIndexer jsKey jsNewObj) (JSIndexer jsKey obj)]
-      stToAssign (s, js) = JSAssignment (JSAccessor s jsNewObj) js
+      stToAssign (s, js) = JSAssignment (JSIndexer (JSVar (':':s)) jsNewObj) js
       extend = map stToAssign sts
     return $ JSApp (JSFunction Nothing [] block) []
 
