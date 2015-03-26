@@ -107,6 +107,7 @@ literals = mkPattern' match
                      ++ concatMap (\v -> '\n' : indentString' ++ '@' : v ++ " = " ++ v) fields
                      ++ "\n"
                      ++ indentString ++ "end\n"
+                     ++ concatMap (\v -> indentString ++ "attr_reader :" ++ v ++ "\n") fields
     , currentIndent
     , return "end"
     ]
@@ -194,12 +195,11 @@ literals = mkPattern' match
     [ return "raise "
     , prettyPrintJS' value
     ]
-  match (JSBreak lbl) = return $ "throw :" ++ lbl
-  match (JSContinue _) = return $ "redo " -- ++ lbl
+  match (JSBreak _) = return "break"
+  match (JSContinue lbl) = return "redo"
   match (JSLabel lbl js) = fmap concat $ sequence
-    [ return $ "catch :" ++ lbl ++ " do"
+    [ return ""
     , prettyPrintJS' js
-    , return "end"
     ]
   match (JSComment com js) = fmap concat $ sequence $
     [ return "\n"
@@ -390,7 +390,7 @@ prettyPrintJS' = A.runKleisli $ runPattern matchValue
                     , binary    LessThanOrEqualTo    "<="
                     , binary    GreaterThan          ">"
                     , binary    GreaterThanOrEqualTo ">="
-                    , AssocR instanceOf $ \v1 v2 -> v1 ++ ".instance_of " ++ v2 ]
+                    , AssocR instanceOf $ \v1 v2 -> v1 ++ ".instance_of? " ++ v2 ]
                   , [ binary    EqualTo              "=="
                     , binary    NotEqualTo           "!=" ]
                   , [ binary    BitwiseAnd           "&" ]
