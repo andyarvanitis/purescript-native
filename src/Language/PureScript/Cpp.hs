@@ -107,7 +107,7 @@ compile' env ms prefix = do
   (desugared, nextVar) <- runSupplyT 0 $ desugar sorted
   (elaborated, env') <- runCheck' env $ forM desugared $ typeCheckModule mainModuleIdent
   regrouped <- createBindingGroupsModule . collapseBindingGroupsModule $ elaborated
-  let corefn = map (flip ($) CppRaw . CF.moduleToCoreFn env') regrouped
+  let corefn = map (CF.moduleToCoreFn env') regrouped
   let entryPoints = moduleNameFromString `map` entryPointModules additional
   let elim = if null entryPoints then corefn else eliminateDeadCode entryPoints corefn
   let renamed = renameInModules elim
@@ -231,7 +231,7 @@ make outputDir ms prefix = do
     regrouped <- createBindingGroups moduleName' . collapseBindingGroups $ elaborated
 
     let mod' = Module coms moduleName' regrouped exps
-    let corefn = CF.moduleToCoreFn env' mod' CppRaw
+    let corefn = CF.moduleToCoreFn env' mod'
     let [renamed] = renameInModules [corefn]
 
     cpps <- (CI.moduleToCoreImp >=> moduleToCpp) renamed

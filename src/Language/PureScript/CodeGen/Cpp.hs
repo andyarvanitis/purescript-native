@@ -32,6 +32,7 @@ import Control.Arrow ((&&&))
 import Control.Monad.Reader (MonadReader, asks)
 import Control.Monad.Supply.Class
 
+import Language.PureScript.AST.Declarations (ForeignCode(..))
 import Language.PureScript.CodeGen.Cpp.AST as AST
 import Language.PureScript.CodeGen.Cpp.Common as Common
 import Language.PureScript.CodeGen.Cpp.Optimizer
@@ -48,11 +49,11 @@ import qualified Language.PureScript.CoreImp.AST as CI
 -- module.
 --
 moduleToCpp :: forall m mode. (Applicative m, Monad m, MonadReader (Options mode) m, MonadSupply m)
-           => Module (CI.Decl Ann) Cpp -> m [Cpp]
+           => Module (CI.Decl Ann) ForeignCode -> m [Cpp]
 moduleToCpp (Module coms mn imps exps foreigns decls) = do
   additional <- asks optionsAdditional
   cppImports <- T.traverse importToCpp . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
-  let foreigns' = mapMaybe (\(_, cpp, _) -> cpp) foreigns
+  let foreigns' = mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
   cppDecls <- mapM declToCpp decls
   optimized <- T.traverse optimize cppDecls
   let isModuleEmpty = null exps
