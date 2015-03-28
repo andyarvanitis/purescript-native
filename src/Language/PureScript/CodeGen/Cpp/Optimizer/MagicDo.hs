@@ -59,17 +59,17 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   -- Desugar pure
   convert (CppApp (CppApp pure' [val]) []) | isPure pure' = val
   -- Desugar >>
-  convert (CppApp (CppApp bind [m]) [CppFunction Nothing [] (CppBlock cpp)]) | isBind bind =
-    CppFunction (Just fnName) [] $ CppBlock (CppApp m [] : map applyReturns cpp )
+  convert (CppApp (CppApp bind [m]) [CppLambda [] (CppBlock cpp)]) | isBind bind =
+    CppFunction fnName [] $ CppBlock (CppApp m [] : map applyReturns cpp )
   -- Desugar >>=
-  convert (CppApp (CppApp bind [m]) [CppFunction Nothing [arg] (CppBlock cpp)]) | isBind bind =
-    CppFunction (Just fnName) [] $ CppBlock (CppVariableIntroduction arg (Just (CppApp m [])) : map applyReturns cpp)
+  convert (CppApp (CppApp bind [m]) [CppLambda [arg] (CppBlock cpp)]) | isBind bind =
+    CppFunction fnName [] $ CppBlock (CppVariableIntroduction arg (Just (CppApp m [])) : map applyReturns cpp)
   -- Desugar untilE
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =
-    CppApp (CppFunction Nothing [] (CppBlock [ CppWhile (CppUnary CppNot (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
+    CppApp (CppLambda [] (CppBlock [ CppWhile (CppUnary CppNot (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
   -- Desugar whileE
   convert (CppApp (CppApp (CppApp f [arg1]) [arg2]) []) | isEffFunc C.whileE f =
-    CppApp (CppFunction Nothing [] (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
+    CppApp (CppLambda [] (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
   convert other = other
   -- Check if an expression represents a monomorphic call to >>= for the Eff monad
   isBind (CppApp bindPoly [effDict]) | isBindPoly bindPoly && isEffDict C.bindEffDictionary effDict = True
@@ -82,26 +82,31 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   isPure _ = False
   -- Check if an expression represents the polymorphic >>= function
   isBindPoly (CppAccessor prop (CppVar prelude)) = prelude == C.prelude && prop == identToCpp (Op (C.>>=))
+  isBindPoly (CppAccessor prop (CppScope prelude)) = prelude == C.prelude && prop == identToCpp (Op (C.>>=))
   isBindPoly (CppIndexer (CppStringLiteral bind) (CppVar prelude)) = prelude == C.prelude && bind == (C.>>=)
   isBindPoly _ = False
   -- Check if an expression represents the polymorphic return function
   isRetPoly (CppAccessor returnEscaped (CppVar prelude)) = prelude == C.prelude && returnEscaped == C.returnEscaped
+  isRetPoly (CppAccessor returnEscaped (CppScope prelude)) = prelude == C.prelude && returnEscaped == C.returnEscaped
   isRetPoly (CppIndexer (CppStringLiteral return') (CppVar prelude)) = prelude == C.prelude && return' == C.return
   isRetPoly _ = False
   -- Check if an expression represents the polymorphic pure function
   isPurePoly (CppAccessor pure' (CppVar prelude)) = prelude == C.prelude && pure' == C.pure'
+  isPurePoly (CppAccessor pure' (CppScope prelude)) = prelude == C.prelude && pure' == C.pure'
   isPurePoly (CppIndexer (CppStringLiteral pure') (CppVar prelude)) = prelude == C.prelude && pure' == C.pure'
   isPurePoly _ = False
   -- Check if an expression represents a function in the Ef module
   isEffFunc name (CppAccessor name' (CppVar eff)) = eff == C.eff && name == name'
+  isEffFunc name (CppAccessor name' (CppScope eff)) = eff == C.eff && name == name'
   isEffFunc _ _ = False
   -- Check if an expression represents the Monad Eff dictionary
   isEffDict name (CppVar ident) | ident == name = True
   isEffDict name (CppAccessor prop (CppVar eff)) = eff == C.eff && prop == name
+  isEffDict name (CppAccessor prop (CppScope eff)) = eff == C.eff && prop == name
   isEffDict _ _ = False
   -- Remove __do function applications which remain after desugaring
   undo :: Cpp -> Cpp
-  undo (CppReturn (CppApp (CppFunction (Just ident) [] body) [])) | ident == fnName = body
+  undo (CppReturn (CppApp (CppFunction ident [] body) [])) | ident == fnName = body
   undo other = other
 
   applyReturns :: Cpp -> Cpp
@@ -133,7 +138,7 @@ inlineST = everywhereOnCpp convertBlock
   -- or in a more aggressive way, turning wrappers into local variables depending on the
   -- agg(ressive) parameter.
   convert agg (CppApp f [arg]) | isSTFunc C.newSTRef f =
-   CppFunction Nothing [] (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral [(C.stRefValue, arg)]])
+   CppLambda [] (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral [(C.stRefValue, arg)]])
   convert agg (CppApp (CppApp f [ref]) []) | isSTFunc C.readSTRef f =
     if agg then ref else CppAccessor C.stRefValue ref
   convert agg (CppApp (CppApp (CppApp f [ref]) [arg]) []) | isSTFunc C.writeSTRef f =
@@ -143,6 +148,7 @@ inlineST = everywhereOnCpp convertBlock
   convert _ other = other
   -- Check if an expression represents a function in the ST module
   isSTFunc name (CppAccessor name' (CppVar st)) = st == C.st && name == name'
+  isSTFunc name (CppAccessor name' (CppScope st)) = st == C.st && name == name'
   isSTFunc _ _ = False
   -- Find all ST Refs initialized in this block
   findSTRefsIn = everythingOnCpp (++) isSTRef

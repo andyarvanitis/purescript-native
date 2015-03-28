@@ -34,6 +34,7 @@ import qualified Language.PureScript.Constants as C
 
 shouldInline :: Cpp -> Bool
 shouldInline (CppVar _) = True
+shouldInline (CppScope _) = True
 shouldInline (CppNumericLiteral _) = True
 shouldInline (CppStringLiteral _) = True
 shouldInline (CppBooleanLiteral _) = True
@@ -45,12 +46,12 @@ etaConvert :: Cpp -> Cpp
 etaConvert = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
-  convert (CppBlock [CppReturn (CppApp (CppFunction Nothing idents block@(CppBlock body)) args)])
+  convert (CppBlock [CppReturn (CppApp (CppLambda idents block@(CppBlock body)) args)])
     | all shouldInline args &&
       not (any (`isRebound` block) (map CppVar idents)) &&
       not (any (`isRebound` block) args)
       = CppBlock (map (replaceIdents (zip idents args)) body)
-  convert (CppFunction Nothing [] (CppBlock [CppReturn (CppApp fn [])])) = fn
+  convert (CppLambda [] (CppBlock [CppReturn (CppApp fn [])])) = fn
   convert cpp = cpp
 
 unThunk :: Cpp -> Cpp
@@ -60,7 +61,7 @@ unThunk = everywhereOnCpp convert
   convert (CppBlock []) = CppBlock []
   convert (CppBlock cpps) =
     case last cpps of
-      CppReturn (CppApp (CppFunction Nothing [] (CppBlock body)) []) -> CppBlock $ init cpps ++ body
+      CppReturn (CppApp (CppLambda [] (CppBlock body)) []) -> CppBlock $ init cpps ++ body
       _ -> CppBlock cpps
   convert cpp = cpp
 
@@ -68,7 +69,7 @@ evaluateIifes :: Cpp -> Cpp
 evaluateIifes = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
-  convert (CppApp (CppFunction Nothing [] (CppBlock [CppReturn ret])) []) = ret
+  convert (CppApp (CppLambda [] (CppBlock [CppReturn ret])) []) = ret
   convert cpp = cpp
 
 inlineVariables :: Cpp -> Cpp
@@ -96,8 +97,8 @@ inlineOperator (m, op) f = everywhereOnCpp convert
   convert :: Cpp -> Cpp
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
-  isOp (CppAccessor longForm (CppVar m')) = m == m' && longForm == identToCpp (Op op)
-  isOp (CppIndexer (CppStringLiteral op') (CppVar m')) = m == m' && op == op'
+  isOp (CppAccessor longForm (CppScope m')) = m == m' && longForm == identToCpp (Op op)
+  isOp (CppIndexer (CppStringLiteral op') (CppScope m')) = m == m' && op == op'
   isOp _ = False
 
 inlineCommonOperators :: Cpp -> Cpp
@@ -159,25 +160,27 @@ inlineCommonOperators = applyAll $
   mkFn 0 = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp mkFnN [CppFunction Nothing [_] (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
-      CppFunction Nothing [] (CppBlock cpp)
+    convert (CppApp mkFnN [CppLambda [_] (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
+      CppLambda [] (CppBlock cpp)
     convert other = other
   mkFn n = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
     convert orig@(CppApp mkFnN [fn]) | isNFn C.mkFn n mkFnN =
       case collectArgs n [] fn of
-        Just (args, cpp) -> CppFunction Nothing args (CppBlock cpp)
+        Just (args, cpp) -> CppLambda args (CppBlock cpp)
         Nothing -> orig
     convert other = other
     collectArgs :: Int -> [String] -> Cpp -> Maybe ([String], [Cpp])
-    collectArgs 1 acc (CppFunction Nothing [oneArg] (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
-    collectArgs m acc (CppFunction Nothing [oneArg] (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
+    collectArgs 1 acc (CppLambda [oneArg] (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
+    collectArgs m acc (CppLambda [oneArg] (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
     collectArgs _ _   _ = Nothing
 
   isNFn :: String -> Int -> Cpp -> Bool
   isNFn prefix n (CppVar name) = name == (prefix ++ show n)
+  isNFn prefix n (CppScope name) = name == (prefix ++ show n)
   isNFn prefix n (CppAccessor name (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
+  isNFn prefix n (CppAccessor name (CppScope dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
   isNFn _ _ _ = False
 
   runFn :: Int -> Cpp -> Cpp
@@ -192,11 +195,12 @@ inlineCommonOperators = applyAll $
     go _ _   _ = Nothing
 
 isPreludeDict :: String -> Cpp -> Bool
-isPreludeDict dictName (CppAccessor prop (CppVar prelude)) = prelude == C.prelude && prop == dictName
+isPreludeDict dictName (CppAccessor prop (CppScope prelude)) = prelude == C.prelude && prop == dictName
 isPreludeDict _ _ = False
 
 isPreludeFn :: String -> Cpp -> Bool
-isPreludeFn fnName (CppAccessor fnName' (CppVar prelude)) = prelude == C.prelude && fnName' == fnName
-isPreludeFn fnName (CppIndexer (CppStringLiteral fnName') (CppVar prelude)) = prelude == C.prelude && fnName' == fnName
+isPreludeFn fnName (CppAccessor fnName' (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
+isPreludeFn fnName (CppIndexer (CppStringLiteral fnName') (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (CppAccessor longForm (CppAccessor prelude (CppVar _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
+isPreludeFn fnName (CppAccessor longForm (CppAccessor prelude (CppScope _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
 isPreludeFn _ _ = False

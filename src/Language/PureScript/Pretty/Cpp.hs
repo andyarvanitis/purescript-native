@@ -70,6 +70,7 @@ literals = mkPattern' match
     , return "}"
     ]
   match (CppVar ident) = return ident
+  match (CppScope ident) = return ident
   match (CppVariableIntroduction ident value) = fmap concat $ sequence
     [ return "var "
     , return ident
@@ -175,7 +176,13 @@ conditional = mkPattern match
 accessor :: Pattern PrinterState Cpp (String, Cpp)
 accessor = mkPattern match
   where
-  match (CppAccessor prop val) = Just (prop, val)
+  match (CppAccessor prop val@CppVar{}) = Just (prop, val)
+  match _ = Nothing
+
+scope :: Pattern PrinterState Cpp (String, Cpp)
+scope = mkPattern match
+  where
+  match (CppAccessor prop val@CppScope{}) = Just (prop, val)
   match _ = Nothing
 
 indexer :: Pattern PrinterState Cpp (String, Cpp)
@@ -184,10 +191,16 @@ indexer = mkPattern' match
   match (CppIndexer index val) = (,) <$> prettyPrintCpp' index <*> pure val
   match _ = mzero
 
-lam :: Pattern PrinterState Cpp ((Maybe String, [String]), Cpp)
-lam = mkPattern match
+fun :: Pattern PrinterState Cpp ((String, [String]), Cpp)
+fun = mkPattern match
   where
   match (CppFunction name args ret) = Just ((name, args), ret)
+  match _ = Nothing
+
+lam :: Pattern PrinterState Cpp ([String], Cpp)
+lam = mkPattern match
+  where
+  match (CppLambda args ret) = Just (args, ret)
   match _ = Nothing
 
 app :: Pattern PrinterState Cpp (String, Cpp)
@@ -266,11 +279,16 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   operators :: OperatorTable PrinterState Cpp String
   operators =
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "." ++ prop ]
+                  , [ Wrap scope $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
                   , [ unary CppNew "new " ]
-                  , [ Wrap lam $ \(name, args) ret -> "function "
-                        ++ fromMaybe "" name
+                  , [ Wrap fun $ \(name, args) ret -> "auto "
+                        ++ name
+                        ++ "(" ++ intercalate ", " args ++ ")"
+                        ++ " -> void "
+                        ++ ret ]
+                  , [ Wrap lam $ \args ret -> "[=] "
                         ++ "(" ++ intercalate ", " args ++ ") "
                         ++ ret ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
@@ -291,8 +309,8 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                     , binary    GreaterThan          ">"
                     , binary    GreaterThanOrEqual   ">="
                     , AssocR instanceOf $ \v1 v2 -> v1 ++ " instanceof " ++ v2 ]
-                  , [ binary    Equal                "==="
-                    , binary    NotEqual             "!==" ]
+                  , [ binary    Equal                "=="
+                    , binary    NotEqual             "!=" ]
                   , [ binary    BitwiseAnd           "&" ]
                   , [ binary    BitwiseXor           "^" ]
                   , [ binary    BitwiseOr            "|" ]

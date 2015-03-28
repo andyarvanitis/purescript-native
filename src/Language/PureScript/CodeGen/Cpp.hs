@@ -68,7 +68,7 @@ moduleToCpp (Module coms mn imps exps foreigns decls) = do
       [ CppVariableIntroduction ns
                                (Just (CppBinary Or (CppVar ns) (CppObjectLiteral [])) )
       , CppAssignment (CppAccessor (moduleNameToCpp mn) (CppVar ns))
-                     (CppApp (CppFunction Nothing [] (CppBlock (moduleBody ++ [CppReturn exps']))) [])
+                     (CppApp (CppLambda [] (CppBlock (moduleBody ++ [CppReturn exps']))) [])
       ]
     _ -> []
 
@@ -110,26 +110,26 @@ moduleToCpp (Module coms mn imps exps foreigns decls) = do
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
   declToCpp (CI.Function _ ident args body) =
-    CppFunction (Just $ identToCpp ident)
+    CppFunction (identToCpp ident)
                (identToCpp `map` args) .
                CppBlock <$> mapM statmentToCpp body
   declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
     return $ CppVariableIntroduction (identToCpp ctor) (Just $
                 CppObjectLiteral [("create",
-                  CppFunction Nothing ["value"]
+                  CppLambda ["value"]
                     (CppBlock [CppReturn $ CppVar "value"]))])
   declToCpp (CI.Constructor _ _ ctor []) =
     let ctor' = identToCpp ctor
-    in return $ iifeDecl ctor' [ CppFunction (Just ctor') [] (CppBlock [])
+    in return $ iifeDecl ctor' [ CppFunction ctor' [] (CppBlock [])
                                , CppAssignment (CppAccessor "value" (var ctor))
                                               (CppUnary CppNew $ CppApp (var ctor) []) ]
   declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) =
     let constructor =
           let body = [ CppAssignment (accessor f (CppVar "this")) (var f) | f <- fields ]
-          in CppFunction (Just $ identToCpp ctor) (identToCpp `map` fields) (CppBlock body)
+          in CppFunction (identToCpp ctor) (identToCpp `map` fields) (CppBlock body)
         createFn =
           let body = CppUnary CppNew $ CppApp (var ctor) (var `map` fields)
-          in foldr (\f inner -> CppFunction Nothing [identToCpp f] (CppBlock [CppReturn inner])) body fields
+          in foldr (\f inner -> CppLambda [identToCpp f] (CppBlock [CppReturn inner])) body fields
     in return $
       if meta == Just IsTypeClassConstructor
       then constructor
@@ -174,7 +174,7 @@ moduleToCpp (Module coms mn imps exps foreigns decls) = do
     CppIndexer <$> exprToCpp index <*> exprToCpp expr
   exprToCpp (CI.AnonFunction _ args stmnts') = do
     body <- CppBlock <$> mapM statmentToCpp stmnts'
-    return $ CppFunction Nothing (identToCpp `map` args) body
+    return $ CppLambda (identToCpp `map` args) body
   exprToCpp (CI.App _ f []) = flip CppApp [] <$> exprToCpp f
   exprToCpp e@CI.App{} = do
     let (f, args) = unApp e []
@@ -213,7 +213,7 @@ moduleToCpp (Module coms mn imps exps foreigns decls) = do
   unaryToCpp BitwiseNot = CppBitwiseNot
 
   iife :: String -> [Cpp] -> Cpp
-  iife v exprs = CppApp (CppFunction Nothing [] (CppBlock $ exprs ++ [CppReturn $ CppVar v])) []
+  iife v exprs = CppApp (CppLambda [] (CppBlock $ exprs ++ [CppReturn $ CppVar v])) []
 
   iifeDecl :: String -> [Cpp] -> Cpp
   iifeDecl v exprs = CppVariableIntroduction v (Just $ iife v exprs)
@@ -242,7 +242,7 @@ moduleToCpp (Module coms mn imps exps foreigns decls) = do
       assign = CppBlock [CppAssignment (CppIndexer cppKey cppNewObj) (CppIndexer cppKey obj)]
       stToAssign (s, cpp) = CppAssignment (CppAccessor s cppNewObj) cpp
       extend = map stToAssign sts
-    return $ CppApp (CppFunction Nothing [] block) []
+    return $ CppApp (CppLambda [] block) []
 
   -- |
   -- Generate code in the simplified C++11 intermediate representation for a reference to a
@@ -258,5 +258,5 @@ moduleToCpp (Module coms mn imps exps foreigns decls) = do
   --
   qualifiedToCpp :: (a -> Ident) -> Qualified a -> Cpp
   qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = CppVar . runIdent $ f a
-  qualifiedToCpp f (Qualified (Just mn') a) | mn /= mn' = accessor (f a) (CppVar (moduleNameToCpp mn'))
+  qualifiedToCpp f (Qualified (Just mn') a) | mn /= mn' = accessor (f a) (CppScope (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
