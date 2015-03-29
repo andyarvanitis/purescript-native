@@ -60,15 +60,16 @@ moduleToCpp :: forall m mode. (Applicative m, Monad m, MonadReader (Options mode
 moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   additional <- asks optionsAdditional
   cppImports <- T.traverse (pure . runModuleName) . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
+  let cppImports' = "PureScript" : cppImports
   let foreigns' = mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
   cppDecls <- mapM declToCpp decls
   optimized <- T.traverse optimize cppDecls
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
   let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
-  let moduleBody = header : (CppInclude <$> cppImports)
+  let moduleBody = header : (CppInclude <$> cppImports')
                    ++ [CppNamespace (runModuleName mn) $
-                        (CppUseNamespace <$> cppImports) ++ foreigns' ++ optimized]
+                        (CppUseNamespace <$> cppImports') ++ foreigns' ++ optimized]
   return $ case additional of
     MakeOptions -> moduleBody
     CompileOptions ns _ _ | not isModuleEmpty -> moduleBody
