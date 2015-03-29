@@ -120,6 +120,14 @@ data Cpp
   --
   | CppBlock [Cpp]
   -- |
+  -- A C++ namespace
+  --
+  | CppNamespace String [Cpp]
+  -- |
+  -- A C++ #include
+  --
+  | CppInclude String
+  -- |
   -- A variable introduction and optional initialization
   --
   | CppVariableIntroduction String (Maybe Cpp)
@@ -207,6 +215,7 @@ everywhereOnCpp f = go
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
+  go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
   go (CppVariableIntroduction name j) = f (CppVariableIntroduction name (fmap go j))
   go (CppAssignment j1 j2) = f (CppAssignment (go j1) (go j2))
   go (CppWhile j1 j2) = f (CppWhile (go j1) (go j2))
@@ -236,6 +245,7 @@ everywhereOnCppTopDown f = go . f
   go (CppApp j cpp) = CppApp (go (f j)) (map (go . f) cpp)
   go (CppConditional j1 j2 j3) = CppConditional (go (f j1)) (go (f j2)) (go (f j3))
   go (CppBlock cpp) = CppBlock (map (go . f) cpp)
+  go (CppNamespace name cpp) = CppNamespace name (map (go . f) cpp)
   go (CppVariableIntroduction name j) = CppVariableIntroduction name (fmap (go . f) j)
   go (CppAssignment j1 j2) = CppAssignment (go (f j1)) (go (f j2))
   go (CppWhile j1 j2) = CppWhile (go (f j1)) (go (f j2))
@@ -264,6 +274,7 @@ everythingOnCpp (<>) f = go
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
+  go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppVariableIntroduction _ (Just j1)) = f j <> go j1
   go j@(CppAssignment j1 j2) = f j <> go j1 <> go j2
   go j@(CppWhile j1 j2) = f j <> go j1 <> go j2

@@ -65,18 +65,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   optimized <- T.traverse optimize cppDecls
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
-  let strict = CppStringLiteral "use strict"
-  let header = if comments && not (null coms) then CppComment coms strict else strict
-  let moduleBody = header : cppImports ++ foreigns' ++ optimized
-  let exps' = CppObjectLiteral $ map (runIdent &&& CppVar . identToCpp) exps
+  let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
+  let moduleBody = header : cppImports ++ [CppNamespace (runModuleName mn) $ foreigns' ++ optimized]
   return $ case additional of
-    MakeOptions -> moduleBody ++ [CppAssignment (CppAccessor "exports" (CppVar "module")) exps']
-    CompileOptions ns _ _ | not isModuleEmpty ->
-      [ CppVariableIntroduction ns
-                               (Just (CppBinary Or (CppVar ns) (CppObjectLiteral [])) )
-      , CppAssignment (CppAccessor (moduleNameToCpp mn) (CppVar ns))
-                     (CppApp (CppLambda [] (CppBlock (moduleBody ++ [CppReturn exps']))) [])
-      ]
+    MakeOptions -> moduleBody
+    CompileOptions ns _ _ | not isModuleEmpty -> moduleBody
     _ -> []
 
   where
@@ -87,10 +80,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   importToCpp :: ModuleName -> m Cpp
   importToCpp mn' = do
     additional <- asks optionsAdditional
-    let moduleBody = case additional of
-          MakeOptions -> CppApp (CppVar "require") [CppStringLiteral (runModuleName mn')]
-          CompileOptions ns _ _ -> CppAccessor (moduleNameToCpp mn') (CppVar ns)
-    return $ CppVariableIntroduction (moduleNameToCpp mn') (Just moduleBody)
+    return $ CppInclude (runModuleName mn')
 
   -- |
   -- Generates C++11 code for a variable reference based on a PureScript

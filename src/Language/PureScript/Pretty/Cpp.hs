@@ -70,6 +70,20 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
+  match (CppNamespace name sts) = fmap concat $ sequence
+    [ return "\n"
+    , currentIndent
+    , return $ "namespace " ++ name ++ " {\n"
+    , withIndent $ prettyStatements sts
+    , return "\n"
+    , currentIndent
+    , return "}"
+    ]
+  match (CppInclude name) =
+    let fullpath = (dotsTo '/' name) ++ '/' : (last . words . dotsTo ' ' $ name) in
+    fmap concat $ sequence
+    [ return $ "#include \"" ++ fullpath ++ ".hh\""
+    ]
   match (CppVar ident) = return ident
   match (CppInstance [] cls _ tys) = return $ cls ++ '<' : intercalate "," tys ++ ">"
   match (CppInstance mn cls _ tys) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," tys ++ ">"
@@ -211,7 +225,7 @@ lam = mkPattern match
 app :: Pattern PrinterState Cpp (String, Cpp)
 app = mkPattern' match
   where
-  match (CppApp val [arg@CppInstance{}]) = mzero
+  match (CppApp _ [CppInstance{}]) = mzero
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
     return (intercalate ", " cpps, val)
@@ -324,3 +338,6 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ binary    Or                   "||" ]
                   , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintCpp1 th ++ " : " ++ prettyPrintCpp1 el ]
                     ]
+
+dotsTo :: Char -> String -> String
+dotsTo chr = map (\c -> if c == '.' then chr else c)
