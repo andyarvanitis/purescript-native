@@ -84,6 +84,9 @@ literals = mkPattern' match
     fmap concat $ sequence
     [ return $ "#include \"" ++ fullpath ++ ".hh\""
     ]
+  match (CppUseNamespace name) = fmap concat $ sequence
+    [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
+    ]
   match (CppVar ident) = return ident
   match (CppInstance [] cls _ tys) = return $ cls ++ '<' : intercalate "," tys ++ ">"
   match (CppInstance mn cls _ tys) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," tys ++ ">"

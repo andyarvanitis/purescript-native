@@ -128,6 +128,10 @@ data Cpp
   --
   | CppInclude String
   -- |
+  -- A C++ using namespace declaration
+  --
+  | CppUseNamespace String
+  -- |
   -- A variable introduction and optional initialization
   --
   | CppVariableIntroduction String (Maybe Cpp)

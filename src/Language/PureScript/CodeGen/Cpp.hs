@@ -59,29 +59,22 @@ moduleToCpp :: forall m mode. (Applicative m, Monad m, MonadReader (Options mode
            => Environment -> Module (CI.Decl Ann) ForeignCode -> m [Cpp]
 moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   additional <- asks optionsAdditional
-  cppImports <- T.traverse importToCpp . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
+  cppImports <- T.traverse (pure . runModuleName) . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
   let foreigns' = mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
   cppDecls <- mapM declToCpp decls
   optimized <- T.traverse optimize cppDecls
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
   let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
-  let moduleBody = header : cppImports ++ [CppNamespace (runModuleName mn) $ foreigns' ++ optimized]
+  let moduleBody = header : (CppInclude <$> cppImports)
+                   ++ [CppNamespace (runModuleName mn) $
+                        (CppUseNamespace <$> cppImports) ++ foreigns' ++ optimized]
   return $ case additional of
     MakeOptions -> moduleBody
     CompileOptions ns _ _ | not isModuleEmpty -> moduleBody
     _ -> []
 
   where
-
-  -- |
-  -- Generates C++11 code for a module import.
-  --
-  importToCpp :: ModuleName -> m Cpp
-  importToCpp mn' = do
-    additional <- asks optionsAdditional
-    return $ CppInclude (runModuleName mn')
-
   -- |
   -- Generates C++11 code for a variable reference based on a PureScript
   -- identifier. The ident will be mangled if necessary to produce a valid Cpp
