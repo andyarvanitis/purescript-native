@@ -92,11 +92,13 @@ literals = mkPattern' match
     [ return "var "
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
+    , return ";"
     ]
   match (CppAssignment target value) = fmap concat $ sequence
     [ prettyPrintCpp' target
     , return " = "
     , prettyPrintCpp' value
+    , return ";"
     ]
   match (CppWhile cond sts) = fmap concat $ sequence
     [ return "while ("
@@ -128,13 +130,15 @@ literals = mkPattern' match
   match (CppReturn value) = fmap concat $ sequence
     [ return "return "
     , prettyPrintCpp' value
+    , return ";"
     ]
   match (CppThrow value) = fmap concat $ sequence
     [ return "throw "
     , prettyPrintCpp' value
+    , return ";"
     ]
-  match (CppBreak lbl) = return $ "break " ++ lbl
-  match (CppContinue lbl) = return $ "continue " ++ lbl
+  match (CppBreak lbl) = return $ "goto " ++ lbl ++ ";"
+  match (CppContinue _) = return $ "continue;"
   match (CppLabel lbl cpp) = fmap concat $ sequence
     [ return $ lbl ++ ": "
     , prettyPrintCpp' cpp
@@ -274,7 +278,7 @@ prettyStatements :: [Cpp] -> StateT PrinterState Maybe String
 prettyStatements sts = do
   cpps <- forM sts prettyPrintCpp'
   indentString <- currentIndent
-  return $ intercalate "\n" $ map ((++ ";") . (indentString ++)) cpps
+  return $ intercalate "\n" $ map (indentString ++) cpps
 
 -- |
 -- Generate a pretty-printed string representing a C++11 expression
