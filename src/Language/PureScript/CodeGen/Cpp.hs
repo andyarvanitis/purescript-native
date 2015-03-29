@@ -37,6 +37,7 @@ import Language.PureScript.AST.Declarations (ForeignCode(..))
 import Language.PureScript.CodeGen.Cpp.AST as AST
 import Language.PureScript.CodeGen.Cpp.Common as Common
 import Language.PureScript.CodeGen.Cpp.Optimizer
+import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Core
 import Language.PureScript.CoreImp.Operators
 import Language.PureScript.Names
@@ -46,7 +47,6 @@ import Language.PureScript.Environment
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.CoreImp.AST as CI
 import qualified Language.PureScript.Types as T
-import qualified Language.PureScript.Pretty.Types as T
 import qualified Language.PureScript.TypeClassDictionaries as TCD
 
 import Debug.Trace
@@ -278,9 +278,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- Find a type class instance in scope by name, retrieving its class name and construction types.
   --
   findInstance :: Qualified Ident -> Maybe (Qualified ProperName, [String])
-  findInstance ident
+  findInstance ident@(Qualified (Just mn') _)
     | Just dict <- M.lookup (ident, Just mn) (typeClassDictionaries env),
       classname <- TCD.tcdClassName dict,
-      tys <- T.prettyPrintType <$> TCD.tcdInstanceTypes dict
+      tys <- typestr mn' <$> TCD.tcdInstanceTypes dict
       = Just (classname, tys)
   findInstance _ = Nothing
