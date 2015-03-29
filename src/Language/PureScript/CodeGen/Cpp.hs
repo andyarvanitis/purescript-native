@@ -99,10 +99,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp :: CI.Decl Ann -> m Cpp
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
-  declToCpp (CI.Function _ ident args body) =
-    CppFunction (identToCpp ident)
-               (identToCpp `map` args) .
-               CppBlock <$> mapM statmentToCpp body
+
+  declToCpp (CI.Function _ ident arg body) = do
+    let (args', body') = expand body
+    block <- CppBlock <$> mapM statmentToCpp body'
+    return $ CppFunction (identToCpp ident) (identToCpp <$> arg ++ args') block
+    where
+    expand ((CI.Return _ (CI.AnonFunction _ ags sts)) : bs) = (ags ++ (fst $ expand sts), (snd $ expand sts) ++ bs)
+    expand d = ([], d)
+
   declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
     return $ CppVariableIntroduction (identToCpp ctor) (Just $
                 CppObjectLiteral [("create",
@@ -188,8 +193,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     | Just (Qualified (Just mn') (ProperName classname), types) <- findInstance ident
     = return $ CppInstance (modname mn') classname instname types
       where
-        modname m | m == mn = []
-        modname m = runModuleName m
+      modname m | m == mn = []
+      modname m = runModuleName m
   exprToCpp (CI.Var _ ident) =
     return $ varToCpp ident
   exprToCpp (CI.ObjectUpdate _ obj ps) = do
