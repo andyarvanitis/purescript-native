@@ -26,6 +26,7 @@ module Language.PureScript.CodeGen.Cpp (
 import Data.List ((\\), delete)
 import Data.Maybe (mapMaybe, fromMaybe)
 import qualified Data.Traversable as T (traverse)
+import qualified Data.Map as M
 
 import Control.Applicative
 import Control.Arrow ((&&&))
@@ -41,16 +42,22 @@ import Language.PureScript.CoreImp.Operators
 import Language.PureScript.Names
 import Language.PureScript.Options
 import Language.PureScript.Traversals (sndM)
+import Language.PureScript.Environment
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.CoreImp.AST as CI
+import qualified Language.PureScript.Types as T
+import qualified Language.PureScript.Pretty.Types as T
+import qualified Language.PureScript.TypeClassDictionaries as TCD
+
+import Debug.Trace
 
 -- |
 -- Generate code in the simplified C++11 intermediate representation for all declarations in a
 -- module.
 --
 moduleToCpp :: forall m mode. (Applicative m, Monad m, MonadReader (Options mode) m, MonadSupply m)
-           => Module (CI.Decl Ann) ForeignCode -> m [Cpp]
-moduleToCpp (Module coms mn imps exps foreigns decls) = do
+           => Environment -> Module (CI.Decl Ann) ForeignCode -> m [Cpp]
+moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   additional <- asks optionsAdditional
   cppImports <- T.traverse importToCpp . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
   let foreigns' = mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
@@ -194,6 +201,12 @@ moduleToCpp (Module coms mn imps exps foreigns decls) = do
     return $ CppAccessor "value" $ qualifiedToCpp id ident
   exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ _)) ident) =
     return $ CppAccessor "create" $ qualifiedToCpp id ident
+  exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))
+    | Just (Qualified (Just mn') (ProperName classname), types) <- findInstance ident
+    = return $ CppInstance (modname mn') classname instname types
+      where
+        modname m | m == mn = []
+        modname m = runModuleName m
   exprToCpp (CI.Var _ ident) =
     return $ varToCpp ident
   exprToCpp (CI.ObjectUpdate _ obj ps) = do
@@ -260,3 +273,14 @@ moduleToCpp (Module coms mn imps exps foreigns decls) = do
   qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = CppVar . runIdent $ f a
   qualifiedToCpp f (Qualified (Just mn') a) | mn /= mn' = accessor (f a) (CppScope (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
+
+  -- |
+  -- Find a type class instance in scope by name, retrieving its class name and construction types.
+  --
+  findInstance :: Qualified Ident -> Maybe (Qualified ProperName, [String])
+  findInstance ident
+    | Just dict <- M.lookup (ident, Just mn) (typeClassDictionaries env),
+      classname <- TCD.tcdClassName dict,
+      tys <- T.prettyPrintType <$> TCD.tcdInstanceTypes dict
+      = Just (classname, tys)
+  findInstance _ = Nothing

@@ -113,7 +113,7 @@ compile' env ms prefix = do
   let renamed = renameInModules elim
   let codeGenModuleNames = moduleNameFromString `map` codeGenModules additional
   let modulesToCodeGen = if null codeGenModuleNames then renamed else filter (\(CR.Module _ mn _ _ _ _) -> mn `elem` codeGenModuleNames) renamed
-  cpp <- concat <$> evalSupplyT nextVar (T.traverse (CI.moduleToCoreImp >=> moduleToCpp) modulesToCodeGen)
+  cpp <- concat <$> evalSupplyT nextVar (T.traverse (CI.moduleToCoreImp >=> moduleToCpp env') modulesToCodeGen)
   let exts = intercalate "\n" . map (`moduleToPs` env') $ regrouped
   cpp' <- generateMain env' cpp
   let pcpp = unlines $ map ("// " ++) prefix ++ [prettyPrintCpp cpp']
@@ -234,7 +234,7 @@ make outputDir ms prefix = do
     let corefn = CF.moduleToCoreFn env' mod'
     let [renamed] = renameInModules [corefn]
 
-    cpps <- (CI.moduleToCoreImp >=> moduleToCpp) renamed
+    cpps <- (CI.moduleToCoreImp >=> moduleToCpp env') renamed
     let (hdrs,srcs) = span (/= CppEndOfHeader) cpps
 
     psrcs <- prettyPrintCpp <$> pure srcs

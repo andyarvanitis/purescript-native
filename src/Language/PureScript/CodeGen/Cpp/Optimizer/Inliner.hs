@@ -195,10 +195,12 @@ inlineCommonOperators = applyAll $
     go _ _   _ = Nothing
 
 isPreludeDict :: String -> Cpp -> Bool
+isPreludeDict dictName (CppInstance prelude _ prop _) = prelude == C.prelude && prop == dictName
 isPreludeDict dictName (CppAccessor prop (CppScope prelude)) = prelude == C.prelude && prop == dictName
 isPreludeDict _ _ = False
 
 isPreludeFn :: String -> Cpp -> Bool
+isPreludeFn fnName (CppInstance prelude _ fnName' _) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (CppAccessor fnName' (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (CppIndexer (CppStringLiteral fnName') (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (CppAccessor longForm (CppAccessor prelude (CppVar _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)

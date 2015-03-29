@@ -38,6 +38,7 @@ literals :: Pattern PrinterState Cpp String
 literals = mkPattern' match
   where
   match :: Cpp -> StateT PrinterState Maybe String
+  match CppNoOp = return []
   match (CppNumericLiteral n) = return $ either show show n
   match (CppStringLiteral s) = return $ string s
   match (CppBooleanLiteral True) = return "true"
@@ -70,6 +71,8 @@ literals = mkPattern' match
     , return "}"
     ]
   match (CppVar ident) = return ident
+  match (CppInstance [] cls _ tys) = return $ cls ++ '<' : intercalate "," tys ++ ">"
+  match (CppInstance mn cls _ tys) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," tys ++ ">"
   match (CppScope ident) = return ident
   match (CppVariableIntroduction ident value) = fmap concat $ sequence
     [ return "var "
@@ -183,6 +186,8 @@ scope :: Pattern PrinterState Cpp (String, Cpp)
 scope = mkPattern match
   where
   match (CppAccessor prop val@CppScope{}) = Just (prop, val)
+  match (CppApp (CppAccessor val _) [arg@CppInstance{}]) = Just (val, CppScope $ prettyPrintCpp1 arg)
+  match (CppApp val [arg@CppInstance{}]) = Just (prettyPrintCpp1 val, CppScope $ prettyPrintCpp1 arg)
   match _ = Nothing
 
 indexer :: Pattern PrinterState Cpp (String, Cpp)
@@ -206,6 +211,7 @@ lam = mkPattern match
 app :: Pattern PrinterState Cpp (String, Cpp)
 app = mkPattern' match
   where
+  match (CppApp val [arg@CppInstance{}]) = mzero
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
     return (intercalate ", " cpps, val)
