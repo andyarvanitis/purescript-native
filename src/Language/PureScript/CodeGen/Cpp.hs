@@ -137,7 +137,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   statmentToCpp (CI.Return _ expr) =
     CppReturn <$> exprToCpp expr
   statmentToCpp (CI.Throw _ msg) =
-    return . CppThrow . CppUnary CppNew $ CppApp (CppVar "Error") [CppStringLiteral msg]
+    return . CppThrow $ CppApp (CppVar "runtime_error") [CppStringLiteral msg]
   statmentToCpp (CI.Label _ lbl stmnt) =
     CppLabel lbl <$> statmentToCpp stmnt
   statmentToCpp (CI.Comment _ coms') =
