@@ -171,8 +171,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       _ -> do
         f' <- exprToCpp f
         let arity' = arity $ getType f
-        return $ if maybe False (numNonDict args <) arity' then
-                   CppPartialApp f' args'
+        let remaining = maybe 0 (flip (-) . length $ filter notDict args) arity'
+        return $ if remaining > 0 then
+                   CppPartialApp f' args' remaining
                  else
                    CppApp f' args'
     where
@@ -182,11 +183,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     getType ::  CI.Expr Ann -> Maybe Type
     getType (CI.Var (_, _, Just ty', _) _) = mktype mn ty'
     getType _ = Nothing
-    numNonDict :: [CI.Expr Ann] -> Int
-    numNonDict = length . filter (not . isDict)
-    isDict :: CI.Expr Ann -> Bool
-    isDict (CI.Var (_, _, Nothing, Nothing) _) = True
-    isDict _ = False
+    notDict :: CI.Expr Ann -> Bool
+    notDict (CI.Var (_, _, Nothing, Nothing) _) = False
+    notDict _ = True
   exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ [])) ident) =
     return $ CppAccessor "value" $ qualifiedToCpp id ident
   exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ _)) ident) =

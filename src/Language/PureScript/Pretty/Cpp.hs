@@ -94,7 +94,7 @@ literals = mkPattern' match
   match (CppInstance mn cls _ tys) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," tys ++ ">"
   match (CppScope ident) = return ident
   match (CppVariableIntroduction ident value) = fmap concat $ sequence
-    [ return "var "
+    [ return "auto "
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
     , return ";"
@@ -246,21 +246,21 @@ app = mkPattern' match
     return (intercalate ", " cpps, val)
   match _ = mzero
 
-partapp :: Pattern PrinterState Cpp (String, Cpp)
+partapp :: Pattern PrinterState Cpp ((String, Int), Cpp)
 partapp = mkPattern' match
   where
-  match (CppPartialApp (CppAccessor val' _) (inst@CppInstance{} : args)) = do
+  match (CppPartialApp (CppAccessor val' _) (inst@CppInstance{} : args) n) = do
     inst' <- prettyPrintCpp' inst
     cpps <- mapM prettyPrintCpp' (CppAccessor val' (CppScope inst') : args)
-    return (intercalate ", " cpps, CppNoOp)
-  match (CppPartialApp val (inst@CppInstance{} : args)) = do
+    return ((intercalate ", " cpps, n), CppNoOp)
+  match (CppPartialApp val (inst@CppInstance{} : args) n) = do
     val' <- prettyPrintCpp' val
     inst' <- prettyPrintCpp' inst
     cpps <- mapM prettyPrintCpp' (CppAccessor val' (CppScope inst') : args)
-    return (intercalate ", " cpps, CppNoOp)
-  match (CppPartialApp val args) = do
+    return ((intercalate ", " cpps, n), CppNoOp)
+  match (CppPartialApp val args n) = do
     cpps <- mapM prettyPrintCpp' (val : args)
-    return (intercalate ", " cpps, CppNoOp)
+    return ((intercalate ", " cpps, n), CppNoOp)
   match _ = mzero
 
 typeOf :: Pattern PrinterState Cpp ((), Cpp)
@@ -334,7 +334,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap scope $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
-                  , [ Wrap partapp $ \args _ -> "bind(" ++ args ++ ")" ]
+                  , [ Wrap partapp $ \(args, n) _ -> "bind" ++ show n ++ '(' : args ++ ")" ]
                   , [ unary CppNew "new " ]
                   , [ Wrap fun $ \(name, args) ret -> "auto "
                         ++ name
