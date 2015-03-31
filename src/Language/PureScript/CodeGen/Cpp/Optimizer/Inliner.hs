@@ -39,7 +39,6 @@ shouldInline (CppNumericLiteral _) = True
 shouldInline (CppStringLiteral _) = True
 shouldInline (CppBooleanLiteral _) = True
 shouldInline (CppAccessor _ val) = shouldInline val
-shouldInline (CppIndexer index val) = shouldInline index && shouldInline val
 shouldInline _ = False
 
 etaConvert :: Cpp -> Cpp
@@ -88,17 +87,16 @@ inlineValues = everywhereOnCpp convert
   convert :: Cpp -> Cpp
   convert (CppApp fn [dict]) | isPreludeDict C.semiringNumber dict && isPreludeFn C.zero fn = CppNumericLiteral (Left 0)
   convert (CppApp fn [dict]) | isPreludeDict C.semiringNumber dict && isPreludeFn C.one fn = CppNumericLiteral (Left 1)
-  convert (CppApp (CppApp fn [x]) [y]) | isPreludeFn (C.%) fn = CppBinary Modulus x y
+  convert (CppApp fn [x, y]) | isPreludeFn (C.%) fn = CppBinary Modulus x y
   convert other = other
 
 inlineOperator :: (String, String) -> (Cpp -> Cpp -> Cpp) -> Cpp -> Cpp
 inlineOperator (m, op) f = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
-  convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
+  convert (CppApp op' [x, y]) | isOp op' = f x y
   convert other = other
   isOp (CppAccessor longForm (CppScope m')) = m == m' && longForm == identToCpp (Op op)
-  isOp (CppIndexer (CppStringLiteral op') (CppScope m')) = m == m' && op == op'
   isOp _ = False
 
 inlineCommonOperators :: Cpp -> Cpp
@@ -142,19 +140,19 @@ inlineCommonOperators = applyAll $
   binary dictName opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y]) | isPreludeDict dictName dict && isPreludeFn opString fn = CppBinary op x y
+    convert (CppApp fn [dict, x, y]) | isPreludeDict dictName dict && isPreludeFn (identToCpp . Ident $ opString) fn = CppBinary op x y
     convert other = other
   binaryFunction :: String -> String -> BinaryOp -> Cpp -> Cpp
   binaryFunction dictName fnName op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y]) | isPreludeFn fnName fn && isPreludeDict dictName dict = CppBinary op x y
+    convert (CppApp fn [dict, x, y]) | isPreludeFn fnName fn && isPreludeDict dictName dict = CppBinary op x y
     convert other = other
   unary :: String -> String -> CppUnaryOp -> Cpp -> Cpp
   unary dictName fnName op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp (CppApp fn [dict]) [x]) | isPreludeFn fnName fn && isPreludeDict dictName dict = CppUnary op x
+    convert (CppApp fn [dict, x]) | isPreludeFn fnName fn && isPreludeDict dictName dict = CppUnary op x
     convert other = other
   mkFn :: Int -> Cpp -> Cpp
   mkFn 0 = everywhereOnCpp convert
@@ -202,7 +200,6 @@ isPreludeDict _ _ = False
 isPreludeFn :: String -> Cpp -> Bool
 isPreludeFn fnName (CppInstance prelude _ fnName' _) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (CppAccessor fnName' (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
-isPreludeFn fnName (CppIndexer (CppStringLiteral fnName') (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
 isPreludeFn fnName (CppAccessor longForm (CppAccessor prelude (CppVar _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
 isPreludeFn fnName (CppAccessor longForm (CppAccessor prelude (CppScope _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
 isPreludeFn _ _ = False

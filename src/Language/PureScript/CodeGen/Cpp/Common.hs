@@ -25,12 +25,12 @@ import Language.PureScript.Names
 --
 --  * Alphanumeric characters are kept unmodified.
 --
---  * Reserved C++11 identifiers are prefixed with '$$'.
+--  * Reserved C++11 identifiers are wrapped with '_'
 --
---  * Symbols are prefixed with '$' followed by a symbol name or their ordinal value.
+--  * Symbols are wrapped with '_' between a symbol name or their ordinal value.
 --
 identToCpp :: Ident -> String
-identToCpp (Ident name) | nameIsCppReserved name = "$$" ++ name
+identToCpp (Ident name) | nameIsCppReserved name = '_' : name ++ "_"
 identToCpp (Ident name) = concatMap identCharToString name
 identToCpp (Op op) = concatMap identCharToString op
 
@@ -47,28 +47,28 @@ identNeedsEscaping s = s /= identToCpp (Ident s)
 identCharToString :: Char -> String
 identCharToString c | isAlphaNum c = [c]
 identCharToString '_' = "_"
-identCharToString '.' = "$dot"
-identCharToString '$' = "$dollar"
-identCharToString '~' = "$tilde"
-identCharToString '=' = "$eq"
-identCharToString '<' = "$less"
-identCharToString '>' = "$greater"
-identCharToString '!' = "$bang"
-identCharToString '#' = "$hash"
-identCharToString '%' = "$percent"
-identCharToString '^' = "$up"
-identCharToString '&' = "$amp"
-identCharToString '|' = "$bar"
-identCharToString '*' = "$times"
-identCharToString '/' = "$div"
-identCharToString '+' = "$plus"
-identCharToString '-' = "$minus"
-identCharToString ':' = "$colon"
-identCharToString '\\' = "$bslash"
-identCharToString '?' = "$qmark"
-identCharToString '@' = "$at"
-identCharToString '\'' = "$prime"
-identCharToString c = '$' : show (ord c)
+identCharToString '.' = "_dot_"
+identCharToString '$' = "_dollar_"
+identCharToString '~' = "_tilde_"
+identCharToString '=' = "_eq_"
+identCharToString '<' = "_less_"
+identCharToString '>' = "_greater_"
+identCharToString '!' = "_bang_"
+identCharToString '#' = "_hash_"
+identCharToString '%' = "_percent_"
+identCharToString '^' = "_up_"
+identCharToString '&' = "_amp_"
+identCharToString '|' = "_bar_"
+identCharToString '*' = "_times_"
+identCharToString '/' = "_div_"
+identCharToString '+' = "_plus_"
+identCharToString '-' = "_minus_"
+identCharToString ':' = "_colon_"
+identCharToString '\\' = "_bslash_"
+identCharToString '?' = "_qmark_"
+identCharToString '@' = "_at_"
+identCharToString '\'' = "_prime_"
+identCharToString c = '_' : show (ord c) ++ "_"
 
 -- |
 -- Checks whether an identifier name is reserved in C++11.
@@ -140,7 +140,7 @@ nameIsCppReserved name =
 moduleNameToCpp :: ModuleName -> String
 moduleNameToCpp (ModuleName pns) =
   let name = intercalate "_" (runProperName `map` pns)
-  in if properNameIsCppReserved name then "$$" ++ name else name
+  in if properNameIsCppReserved name then '_' : name ++ "_" else name
 
 -- |
 -- Checks whether a proper name is reserved in C++11.

@@ -84,19 +84,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   var :: Ident -> Cpp
   var = CppVar . identToCpp
 
-  -- |
-  -- Generate C++11 for an accessor based on a PureScript identifier. If
-  -- the name is not valid in C++11 (symbol based, reserved name) an
-  -- indexer is returned.
-  --
-  accessor :: Ident -> Cpp -> Cpp
-  accessor (Ident prop) = accessorString prop
-  accessor (Op op) = CppIndexer (CppStringLiteral op)
-
-  accessorString :: String -> Cpp -> Cpp
-  accessorString prop | identNeedsEscaping prop = CppIndexer (CppStringLiteral prop)
-                      | otherwise = CppAccessor prop
-
   declToCpp :: CI.Decl Ann -> m Cpp
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
@@ -121,7 +108,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                               (CppUnary CppNew $ CppApp (var ctor) []) ]
   declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) =
     let constructor =
-          let body = [ CppAssignment (accessor f (CppVar "this")) (var f) | f <- fields ]
+          let body = [ CppAssignment (CppAccessor (identToCpp f) (CppVar "this")) (var f) | f <- fields ]
           in CppFunction (identToCpp ctor) (identToCpp `map` fields) (CppBlock body)
         createFn =
           let body = CppUnary CppNew $ CppApp (var ctor) (var `map` fields)
@@ -274,7 +261,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   --
   qualifiedToCpp :: (a -> Ident) -> Qualified a -> Cpp
   qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = CppVar . runIdent $ f a
-  qualifiedToCpp f (Qualified (Just mn') a) | mn /= mn' = accessor (f a) (CppScope (moduleNameToCpp mn'))
+  qualifiedToCpp f (Qualified (Just mn') a) | mn /= mn' = CppAccessor (identToCpp $ f a) (CppScope (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
 
   -- |
