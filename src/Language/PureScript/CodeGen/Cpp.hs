@@ -181,11 +181,25 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) args'
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
         return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) args'
-      _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
+      _ -> do
+        f' <- exprToCpp f
+        let arity' = arity $ getType f
+        return $ if maybe False (numNonDict args <) arity' then
+                   CppPartialApp f' args'
+                 else
+                   CppApp f' args'
     where
     unApp :: CI.Expr Ann -> [CI.Expr Ann] -> (CI.Expr Ann, [CI.Expr Ann])
     unApp (CI.App _ val args1) args2 = unApp val (args1 ++ args2)
     unApp other args = (other, args)
+    getType ::  CI.Expr Ann -> Maybe Type
+    getType (CI.Var (_, _, Just ty', _) _) = mktype mn ty'
+    getType _ = Nothing
+    numNonDict :: [CI.Expr Ann] -> Int
+    numNonDict = length . filter (not . isDict)
+    isDict :: CI.Expr Ann -> Bool
+    isDict (CI.Var (_, _, Nothing, Nothing) _) = True
+    isDict _ = False
   exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ [])) ident) =
     return $ CppAccessor "value" $ qualifiedToCpp id ident
   exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ _)) ident) =

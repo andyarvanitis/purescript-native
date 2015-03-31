@@ -100,6 +100,10 @@ data Cpp
   --
   | CppApp Cpp [Cpp]
   -- |
+  -- Partial function application
+  --
+  | CppPartialApp Cpp [Cpp]
+  -- |
   -- Variable
   --
   | CppVar String
@@ -217,6 +221,7 @@ everywhereOnCpp f = go
   go (CppFunction name args j) = f (CppFunction name args (go j))
   go (CppLambda args j) = f (CppLambda args (go j))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
+  go (CppPartialApp j cpp) = f (CppPartialApp (go j) (map go cpp))
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
@@ -247,6 +252,7 @@ everywhereOnCppTopDown f = go . f
   go (CppFunction name args j) = CppFunction name args (go (f j))
   go (CppLambda args j) = CppLambda args (go (f j))
   go (CppApp j cpp) = CppApp (go (f j)) (map (go . f) cpp)
+  go (CppPartialApp j cpp) = CppPartialApp (go (f j)) (map (go . f) cpp)
   go (CppConditional j1 j2 j3) = CppConditional (go (f j1)) (go (f j2)) (go (f j3))
   go (CppBlock cpp) = CppBlock (map (go . f) cpp)
   go (CppNamespace name cpp) = CppNamespace name (map (go . f) cpp)
@@ -276,6 +282,7 @@ everythingOnCpp (<>) f = go
   go j@(CppFunction _ _ j1) = f j <> go j1
   go j@(CppLambda _ j1) = f j <> go j1
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
+  go j@(CppPartialApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)

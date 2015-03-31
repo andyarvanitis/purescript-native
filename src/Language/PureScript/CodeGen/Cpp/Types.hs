@@ -17,6 +17,7 @@ module Language.PureScript.CodeGen.Cpp.Types where
 
 import Data.List
 import Data.Char (isAlphaNum, isDigit, isSpace, toUpper)
+import Data.Maybe
 import Language.PureScript.Core
 import Language.PureScript.Names
 import Language.PureScript.CodeGen.Cpp.Common
@@ -132,6 +133,10 @@ mktype _ b = error $ "Unknown type: " ++ show b
 typestr :: ModuleName -> T.Type -> String
 typestr m t | Just t' <- mktype m t = runType t'
             | otherwise = []
+
+arity :: Maybe Type -> Maybe Int
+arity (Just (Function _ b)) = Just (1 + fromMaybe 0 (arity (Just b)))
+arity _ = Nothing
 
 dataCon :: ModuleName -> T.Type -> [Type]
 dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)

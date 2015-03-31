@@ -34,6 +34,8 @@ import Language.PureScript.Pretty.Common
 
 import Numeric
 
+import Debug.Trace
+
 literals :: Pattern PrinterState Cpp String
 literals = mkPattern' match
   where
@@ -207,8 +209,6 @@ scope :: Pattern PrinterState Cpp (String, Cpp)
 scope = mkPattern match
   where
   match (CppAccessor prop val@CppScope{}) = Just (prop, val)
-  match (CppApp (CppAccessor val _) [arg@CppInstance{}]) = Just (val, CppScope $ prettyPrintCpp1 arg)
-  match (CppApp val [arg@CppInstance{}]) = Just (prettyPrintCpp1 val, CppScope $ prettyPrintCpp1 arg)
   match _ = Nothing
 
 indexer :: Pattern PrinterState Cpp (String, Cpp)
@@ -232,10 +232,35 @@ lam = mkPattern match
 app :: Pattern PrinterState Cpp (String, Cpp)
 app = mkPattern' match
   where
-  match (CppApp _ [CppInstance{}]) = mzero
+  match (CppApp (CppAccessor val' _) (inst@CppInstance{} : args)) = do
+    cpps <- mapM prettyPrintCpp' args
+    inst' <- prettyPrintCpp' inst
+    return (intercalate ", " cpps, CppAccessor val' (CppScope inst'))
+  match (CppApp val (inst@CppInstance{} : args)) = do
+    cpps <- mapM prettyPrintCpp' args
+    val' <- prettyPrintCpp' val
+    inst' <- prettyPrintCpp' inst
+    return (intercalate ", " cpps, CppAccessor val' (CppScope inst'))
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
     return (intercalate ", " cpps, val)
+  match _ = mzero
+
+partapp :: Pattern PrinterState Cpp (String, Cpp)
+partapp = mkPattern' match
+  where
+  match (CppPartialApp (CppAccessor val' _) (inst@CppInstance{} : args)) = do
+    inst' <- prettyPrintCpp' inst
+    cpps <- mapM prettyPrintCpp' (CppAccessor val' (CppScope inst') : args)
+    return (intercalate ", " cpps, CppNoOp)
+  match (CppPartialApp val (inst@CppInstance{} : args)) = do
+    val' <- prettyPrintCpp' val
+    inst' <- prettyPrintCpp' inst
+    cpps <- mapM prettyPrintCpp' (CppAccessor val' (CppScope inst') : args)
+    return (intercalate ", " cpps, CppNoOp)
+  match (CppPartialApp val args) = do
+    cpps <- mapM prettyPrintCpp' (val : args)
+    return (intercalate ", " cpps, CppNoOp)
   match _ = mzero
 
 typeOf :: Pattern PrinterState Cpp ((), Cpp)
@@ -309,6 +334,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap scope $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
+                  , [ Wrap partapp $ \args _ -> "bind(" ++ args ++ ")" ]
                   , [ unary CppNew "new " ]
                   , [ Wrap fun $ \(name, args) ret -> "auto "
                         ++ name
