@@ -304,7 +304,7 @@ binary op str = AssocL match (\v1 v2 -> v1 ++ " " ++ str ++ " " ++ v2)
 
 prettyStatements :: [Cpp] -> StateT PrinterState Maybe String
 prettyStatements sts = do
-  cpps <- forM sts prettyPrintCpp'
+  cpps <- forM (filter (/=CppNoOp) sts) prettyPrintCpp'
   indentString <- currentIndent
   return $ intercalate "\n" $ map (indentString ++) cpps
 

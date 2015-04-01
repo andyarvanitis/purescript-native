@@ -85,9 +85,16 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   var = CppVar . identToCpp
 
   declToCpp :: CI.Decl Ann -> m Cpp
+  declToCpp (CI.VarDecl _ ident expr)
+    | Just (classname, _) <- findInstance (Qualified (Just mn) ident),
+      Just fns <- findClass classname =
+    return CppNoOp
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
 
+  declToCpp (CI.Function _ ident [Ident "dict"]
+    [CI.Return _ (CI.Accessor _ _ (CI.Var _ (Qualified Nothing (Ident "dict"))))]) =
+    return CppNoOp
   declToCpp (CI.Function _ ident arg body) = do
     let (args', body') = expand body
     block <- CppBlock <$> mapM statmentToCpp body'
@@ -96,29 +103,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     expand ((CI.Return _ (CI.AnonFunction _ ags sts)) : bs) = (ags ++ (fst $ expand sts), (snd $ expand sts) ++ bs)
     expand d = ([], d)
 
-  declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
-    return $ CppVariableIntroduction (identToCpp ctor) (Just $
-                CppObjectLiteral [("create",
-                  CppLambda ["value"]
-                    (CppBlock [CppReturn $ CppVar "value"]))])
-  declToCpp (CI.Constructor _ _ ctor []) =
-    let ctor' = identToCpp ctor
-    in return $ iifeDecl ctor' [ CppFunction ctor' [] (CppBlock [])
-                               , CppAssignment (CppAccessor "value" (var ctor))
-                                              (CppUnary CppNew $ CppApp (var ctor) []) ]
-  declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) =
-    let constructor =
-          let body = [ CppAssignment (CppAccessor (identToCpp f) (CppVar "this")) (var f) | f <- fields ]
-          in CppFunction (identToCpp ctor) (identToCpp `map` fields) (CppBlock body)
-        createFn =
-          let body = CppUnary CppNew $ CppApp (var ctor) (var `map` fields)
-          in foldr (\f inner -> CppLambda [identToCpp f] (CppBlock [CppReturn inner])) body fields
-    in return $
-      if meta == Just IsTypeClassConstructor
-      then constructor
-      else iifeDecl (identToCpp ctor) [ constructor
-                                     , CppAssignment (CppAccessor "create" (var ctor)) createFn
-                                     ]
+  declToCpp z@(CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
+    return $ traceShow z CppNoOp
+  declToCpp z@(CI.Constructor _ _ ctor []) =
+    return $ traceShow z CppNoOp
+  declToCpp z@(CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ ctor fields) =
+    return $ traceShow z CppNoOp
+  declToCpp z@(CI.Constructor (_, _, _, meta) _ ctor fields) =
+    return $ traceShow z CppNoOp
 
   statmentToCpp :: CI.Statement Ann -> m Cpp
   statmentToCpp (CI.Expr e) = exprToCpp e
@@ -167,7 +159,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       CI.Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
         return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) args'
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
-        return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) args'
+        return CppNoOp
       _ -> do
         f' <- exprToCpp f
         let arity' = arity $ getType f
@@ -213,12 +205,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   unaryToCpp Negate = CppNegate
   unaryToCpp Not = CppNot
   unaryToCpp BitwiseNot = CppBitwiseNot
-
-  iife :: String -> [Cpp] -> Cpp
-  iife v exprs = CppApp (CppLambda [] (CppBlock $ exprs ++ [CppReturn $ CppVar v])) []
-
-  iifeDecl :: String -> [Cpp] -> Cpp
-  iifeDecl v exprs = CppVariableIntroduction v (Just $ iife v exprs)
 
   literalToValueCpp :: Literal (CI.Expr Ann) -> m Cpp
   literalToValueCpp (NumericLiteral n) = return $ CppNumericLiteral n
@@ -273,3 +259,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       tys <- typestr mn' <$> TCD.tcdInstanceTypes dict
       = Just (classname, tys)
   findInstance _ = Nothing
+
+  -- |
+  -- Find a class in scope by name, retrieving its list of function names and types.
+  --
+  findClass :: Qualified ProperName -> Maybe [(Ident, T.Type)]
+  findClass name
+    | Just (_, info, _) <- M.lookup name (typeClasses env)
+      = Just info
+  findClass _ = Nothing
