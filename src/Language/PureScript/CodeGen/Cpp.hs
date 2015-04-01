@@ -87,7 +87,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp :: CI.Decl Ann -> m Cpp
   declToCpp (CI.VarDecl _ ident expr)
     | Just (classname, _) <- findInstance (Qualified (Just mn) ident),
-      Just fns <- findClass classname =
+      Just classinfo <- findClass classname =
     return CppNoOp
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
@@ -103,14 +103,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     expand ((CI.Return _ (CI.AnonFunction _ ags sts)) : bs) = (ags ++ (fst $ expand sts), (snd $ expand sts) ++ bs)
     expand d = ([], d)
 
-  declToCpp z@(CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
-    return $ traceShow z CppNoOp
-  declToCpp z@(CI.Constructor _ _ ctor []) =
-    return $ traceShow z CppNoOp
-  declToCpp z@(CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ ctor fields) =
-    return $ traceShow z CppNoOp
-  declToCpp z@(CI.Constructor (_, _, _, meta) _ ctor fields) =
-    return $ traceShow z CppNoOp
+  declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
+    return CppNoOp
+  declToCpp (CI.Constructor _ _ ctor []) =
+    return CppNoOp
+  declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields) =
+    let info = findClass (Qualified (Just mn) (ProperName ctor)) in
+    return $ traceShow info CppNoOp
+  declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) =
+    return CppNoOp
 
   statmentToCpp :: CI.Statement Ann -> m Cpp
   statmentToCpp (CI.Expr e) = exprToCpp e
@@ -261,10 +262,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   findInstance _ = Nothing
 
   -- |
-  -- Find a class in scope by name, retrieving its list of function names and types.
+  -- Find a class in scope by name, retrieving its list of constraints, function names and types.
   --
-  findClass :: Qualified ProperName -> Maybe [(Ident, T.Type)]
+  findClass :: Qualified ProperName -> Maybe ([T.Constraint], [(Ident, T.Type)])
   findClass name
-    | Just (_, info, _) <- M.lookup name (typeClasses env)
-      = Just info
+    | Just (_, fns, constraints) <- M.lookup name (typeClasses env)
+      = Just (constraints, fns)
   findClass _ = Nothing
