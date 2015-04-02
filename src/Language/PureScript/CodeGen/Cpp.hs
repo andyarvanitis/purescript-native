@@ -85,10 +85,22 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   var = CppVar . identToCpp
 
   declToCpp :: CI.Decl Ann -> m Cpp
+  -- |
+  -- Typeclass instance definition
+  --
   declToCpp (CI.VarDecl _ ident expr)
     | Just (classname, _) <- findInstance (Qualified (Just mn) ident),
-      Just classinfo <- findClass classname =
-    return CppNoOp
+      Just (_, fns) <- findClass classname = do
+    let (_, fs) = unApp expr []
+    cpps <- mapM toFn (zip fns fs)
+    return $ CppBlock cpps
+    where
+    toFn :: ((Ident, T.Type), CI.Expr Ann) -> m Cpp
+    toFn ((name, _), CI.AnonFunction ty ags sts) = do
+      fn' <- declToCpp $ CI.Function ty name ags sts
+      return fn'
+    toFn ((Op s, ty), e) = toFn ((Ident $ identToCpp (Ident s), ty), e)
+    toFn i = return $ traceShow (snd i) CppNoOp
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
 
@@ -107,6 +119,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     return CppNoOp
   declToCpp (CI.Constructor _ _ ctor []) =
     return CppNoOp
+  -- |
+  -- Typeclass declaration
+  --
   declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
     | Just (constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
     return $ CppStruct ctor (qualifiedToStr mn (Ident . runProperName) . fst <$> constraints)
@@ -115,6 +130,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     toFn :: (Ident, T.Type) -> Cpp
     toFn (Ident name, ty) = CppFunction name [] [CppStatic] CppNoOp
+    toFn (Op s, ty) = toFn (Ident $ identToCpp (Ident s), ty)
+    toFn f = error $ show f
+
   declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) =
     return CppNoOp
 
@@ -164,8 +182,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       CI.Var (_, _, _, Just IsNewtype) _ -> return (head args')
       CI.Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
         return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) args'
+      --
+      -- TODO: remove after confirming no longer needed
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
-        return CppNoOp
+        return $ traceShow f CppNoOp
       _ -> do
         f' <- exprToCpp f
         let arity' = arity $ getType f
@@ -175,9 +195,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                  else
                    CppApp f' args'
     where
-    unApp :: CI.Expr Ann -> [CI.Expr Ann] -> (CI.Expr Ann, [CI.Expr Ann])
-    unApp (CI.App _ val args1) args2 = unApp val (args1 ++ args2)
-    unApp other args = (other, args)
     getType ::  CI.Expr Ann -> Maybe Type
     getType (CI.Var (_, _, Just ty', _) _) = mktype mn ty'
     getType _ = Nothing
@@ -237,6 +254,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       stToAssign (s, cpp) = CppAssignment (CppAccessor s cppNewObj) cpp
       extend = map stToAssign sts
     return $ CppApp (CppLambda [] block) []
+
+  -- |
+  --
+  unApp :: CI.Expr Ann -> [CI.Expr Ann] -> (CI.Expr Ann, [CI.Expr Ann])
+  unApp (CI.App _ val args1) args2 = unApp val (args1 ++ args2)
+  unApp other args = (other, args)
 
   -- |
   -- Generate code in the simplified C++11 intermediate representation for a reference to a
