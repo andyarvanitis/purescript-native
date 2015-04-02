@@ -28,6 +28,7 @@ import qualified Control.Arrow as A
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Common
+import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Comments
 import Language.PureScript.CoreImp.Operators
 import Language.PureScript.Pretty.Common
@@ -88,6 +89,15 @@ literals = mkPattern' match
     ]
   match (CppUseNamespace name) = fmap concat $ sequence
     [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
+    ]
+  match (CppStruct name supers cms _) = fmap concat $ sequence
+    [ return $ "struct " ++ name
+    , return $ if null supers then [] else " : public " ++ intercalate ", public " supers
+    , return " {\n"
+    , withIndent $ prettyStatements cms
+    , return "\n"
+    , currentIndent
+    , return "};"
     ]
   match (CppVar ident) = return ident
   match (CppInstance [] cls _ tys) = return $ cls ++ '<' : intercalate "," tys ++ ">"
@@ -217,10 +227,10 @@ indexer = mkPattern' match
   match (CppIndexer index val) = (,) <$> prettyPrintCpp' index <*> pure val
   match _ = mzero
 
-fun :: Pattern PrinterState Cpp ((String, [String]), Cpp)
+fun :: Pattern PrinterState Cpp ((String, [String], [String]), Cpp)
 fun = mkPattern match
   where
-  match (CppFunction name args ret) = Just ((name, args), ret)
+  match (CppFunction name args qs ret) = Just ((name, args, runQualifier <$> qs), ret)
   match _ = Nothing
 
 lam :: Pattern PrinterState Cpp ([String], Cpp)
@@ -336,11 +346,13 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
                   , [ Wrap partapp $ \(args, n) _ -> "bind" ++ show n ++ '(' : args ++ ")" ]
                   , [ unary CppNew "new " ]
-                  , [ Wrap fun $ \(name, args) ret -> "auto "
+                  , [ Wrap fun $ \(name, args, quals) ret ->
+                        concatMap (++ " ") quals
+                        ++ "auto "
                         ++ name
                         ++ "(" ++ intercalate ", " args ++ ")"
-                        ++ " -> void "
-                        ++ ret ]
+                        ++ " -> void"
+                        ++ if null ret then ";" else ' ' : ret ]
                   , [ Wrap lam $ \args ret -> "[=] "
                         ++ "(" ++ intercalate ", " args ++ ") "
                         ++ ret ]

@@ -21,6 +21,7 @@ import Data.Maybe
 import Language.PureScript.Core
 import Language.PureScript.Names
 import Language.PureScript.CodeGen.Cpp.Common
+import Language.PureScript.CodeGen.Cpp.AST
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.Types as T
 
@@ -163,3 +164,8 @@ qualDataTypeName _ _ = []
 capitalize :: String -> String
 capitalize (c:cs) = toUpper c : cs
 capitalize s = s
+
+runQualifier :: CppQualifier -> String
+runQualifier CppStatic = "static"
+runQualifier CppInline = "inline"
+runQualifier q = error $ show q

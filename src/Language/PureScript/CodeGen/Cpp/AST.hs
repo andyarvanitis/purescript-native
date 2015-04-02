@@ -88,13 +88,17 @@ data Cpp
   --
   | CppAccessor String Cpp
   -- |
-  -- A function introduction (name, arguments, body)
+  -- A function introduction (name, arguments, qualifiers, body)
   --
-  | CppFunction String [String] Cpp
+  | CppFunction String [String] [CppQualifier] Cpp
   -- |
   -- A lambda introduction (arguments, body)
   --
   | CppLambda [String] Cpp
+  -- |
+  -- A C++ struct declaration (name, superclasses, class methods, instance methods)
+  --
+  | CppStruct String [String] [Cpp] [Cpp]
   -- |
   -- Function application
   --
@@ -204,6 +208,19 @@ data Cpp
   --
   | CppComment [Comment] Cpp deriving (Show, Eq, Data, Typeable)
 
+-- |
+-- Value C++11 qualifiers
+--
+data CppQualifier
+  -- |
+  -- Struct, class, file, etc. static
+  --
+  = CppStatic
+  -- |
+  -- Inline function
+  --
+  | CppInline deriving (Show, Eq, Data, Typeable)
+
 --
 -- Traversals
 --
@@ -218,8 +235,9 @@ everywhereOnCpp f = go
   go (CppIndexer j1 j2) = f (CppIndexer (go j1) (go j2))
   go (CppObjectLiteral cpp) = f (CppObjectLiteral (map (fmap go) cpp))
   go (CppAccessor prop j) = f (CppAccessor prop (go j))
-  go (CppFunction name args j) = f (CppFunction name args (go j))
+  go (CppFunction name args qs j) = f (CppFunction name args qs (go j))
   go (CppLambda args j) = f (CppLambda args (go j))
+  go (CppStruct name supers cms ims) = f (CppStruct name supers (map go cms) (map go ims))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
   go (CppPartialApp j cpp n) = f (CppPartialApp (go j) (map go cpp) n)
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
@@ -249,8 +267,9 @@ everywhereOnCppTopDown f = go . f
   go (CppIndexer j1 j2) = CppIndexer (go (f j1)) (go (f j2))
   go (CppObjectLiteral cpp) = CppObjectLiteral (map (fmap (go . f)) cpp)
   go (CppAccessor prop j) = CppAccessor prop (go (f j))
-  go (CppFunction name args j) = CppFunction name args (go (f j))
+  go (CppFunction name args qs j) = CppFunction name args qs (go (f j))
   go (CppLambda args j) = CppLambda args (go (f j))
+  go (CppStruct name supers cms ims) = CppStruct name supers (map (go . f) cms) (map (go . f) ims)
   go (CppApp j cpp) = CppApp (go (f j)) (map (go . f) cpp)
   go (CppPartialApp j cpp n) = CppPartialApp (go (f j)) (map (go . f) cpp) n
   go (CppConditional j1 j2 j3) = CppConditional (go (f j1)) (go (f j2)) (go (f j3))
@@ -279,10 +298,11 @@ everythingOnCpp (<>) f = go
   go j@(CppIndexer j1 j2) = f j <> go j1 <> go j2
   go j@(CppObjectLiteral cpp) = foldl (<>) (f j) (map (go . snd) cpp)
   go j@(CppAccessor _ j1) = f j <> go j1
-  go j@(CppFunction _ _ j1) = f j <> go j1
+  go j@(CppFunction _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ j1) = f j <> go j1
+  go j@(CppStruct _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
-  go j@(CppPartialApp j1 cpp n) = foldl (<>) (f j <> go j1) (map go cpp)
+  go j@(CppPartialApp j1 cpp _) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)

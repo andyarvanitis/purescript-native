@@ -47,14 +47,14 @@ tco' = everywhereOnCpp convert
         | otherwise -> cpp
   convert cpp = cpp
   collectAllFunctionArgs :: [[String]] -> (Cpp -> Cpp) -> Cpp -> ([[String]], Cpp, Cpp -> Cpp)
-  collectAllFunctionArgs allArgs f (CppFunction ident args (CppBlock (body@(CppReturn _):_))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident (map copyVar args) (CppBlock [b]))) body
-  collectAllFunctionArgs allArgs f (CppFunction ident args body@(CppBlock _)) =
-    (args : allArgs, body, f . CppFunction ident (map copyVar args))
-  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident args (CppBlock [body]))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (CppReturn (CppFunction ident (map copyVar args) (CppBlock [b])))) body
-  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident args body@(CppBlock _))) =
-    (args : allArgs, body, f . CppReturn . CppFunction ident (map copyVar args))
+  collectAllFunctionArgs allArgs f (CppFunction ident args _ (CppBlock (body@(CppReturn _):_))) =
+    collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident (map copyVar args) [] (CppBlock [b]))) body
+  collectAllFunctionArgs allArgs f (CppFunction ident args _ body@(CppBlock _)) =
+    (args : allArgs, body, f . CppFunction ident (map copyVar args) [])
+  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident args _ (CppBlock [body]))) =
+    collectAllFunctionArgs (args : allArgs) (\b -> f (CppReturn (CppFunction ident (map copyVar args) [] (CppBlock [b])))) body
+  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident args _ body@(CppBlock _))) =
+    (args : allArgs, body, f . CppReturn . CppFunction ident (map copyVar args) [])
   collectAllFunctionArgs allArgs f body = (allArgs, body, f)
   isTailCall :: String -> Cpp -> Bool
   isTailCall ident cpp =
@@ -73,7 +73,7 @@ tco' = everywhereOnCpp convert
     countSelfCallsInTailPosition :: Cpp -> Int
     countSelfCallsInTailPosition (CppReturn ret) | isSelfCall ident ret = 1
     countSelfCallsInTailPosition _ = 0
-    countSelfCallsUnderFunctions (CppFunction _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
+    countSelfCallsUnderFunctions (CppFunction _ _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
     countSelfCallsUnderFunctions _ = 0
   toLoop :: String -> [String] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
@@ -99,5 +99,5 @@ tco' = everywhereOnCpp convert
   isSelfCall ident (CppApp fn args) | not (any isFunction args) = isSelfCall ident fn
   isSelfCall _ _ = False
   isFunction :: Cpp -> Bool
-  isFunction (CppFunction _ _ _) = True
+  isFunction (CppFunction _ _ _ _) = True
   isFunction _ = False

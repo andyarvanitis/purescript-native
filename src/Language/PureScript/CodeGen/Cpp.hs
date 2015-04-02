@@ -16,6 +16,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PatternGuards #-}
 
 module Language.PureScript.CodeGen.Cpp (
     module AST,
@@ -29,7 +30,6 @@ import qualified Data.Traversable as T (traverse)
 import qualified Data.Map as M
 
 import Control.Applicative
-import Control.Arrow ((&&&))
 import Control.Monad.Reader (MonadReader, asks)
 import Control.Monad.Supply.Class
 
@@ -72,7 +72,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                         (CppUseNamespace <$> cppImports') ++ foreigns' ++ optimized]
   return $ case additional of
     MakeOptions -> moduleBody
-    CompileOptions ns _ _ | not isModuleEmpty -> moduleBody
+    CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
     _ -> []
 
   where
@@ -98,7 +98,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp (CI.Function _ ident arg body) = do
     let (args', body') = expand body
     block <- CppBlock <$> mapM statmentToCpp body'
-    return $ CppFunction (identToCpp ident) (identToCpp <$> arg ++ args') block
+    return $ CppFunction (identToCpp ident) (identToCpp <$> arg ++ args') [] block
     where
     expand ((CI.Return _ (CI.AnonFunction _ ags sts)) : bs) = (ags ++ (fst $ expand sts), (snd $ expand sts) ++ bs)
     expand d = ([], d)
@@ -107,9 +107,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     return CppNoOp
   declToCpp (CI.Constructor _ _ ctor []) =
     return CppNoOp
-  declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields) =
-    let info = findClass (Qualified (Just mn) (ProperName ctor)) in
-    return $ traceShow info CppNoOp
+  declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
+    | Just (constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
+    return $ CppStruct ctor (qualifiedToStr mn (Ident . runProperName) . fst <$> constraints)
+              (toFn <$> fns)
+              []
+    where
+    toFn :: (Ident, T.Type) -> Cpp
+    toFn (Ident name, ty) = CppFunction name [] [CppStatic] CppNoOp
   declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) =
     return CppNoOp
 
