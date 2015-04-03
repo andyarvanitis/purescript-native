@@ -49,6 +49,7 @@ import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.CoreImp.AST as CI
 import qualified Language.PureScript.Types as T
 import qualified Language.PureScript.TypeClassDictionaries as TCD
+import qualified Language.PureScript.Pretty.Cpp as P
 
 import Debug.Trace
 
@@ -90,11 +91,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- Typeclass instance definition
   --
   declToCpp (CI.VarDecl _ ident expr)
-    | Just (classname, _) <- findInstance (Qualified (Just mn) ident),
+    | Just (classname, typs) <- findInstance (Qualified (Just mn) ident),
       Just (_, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
+    let inst = CppInstance [] (qualifiedToStr mn (Ident . runProperName) classname) [] typs
     cpps <- mapM toFn (zip fns fs)
-    return $ CppSequence cpps
+    return $ CppSequence ((addScope $ P.prettyPrintCpp [inst]) <$> cpps)
     where
     toFn :: ((Ident, T.Type), CI.Expr Ann) -> m Cpp
     toFn ((name, _), CI.AnonFunction ty ags sts) = do
@@ -102,6 +104,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       return fn'
     toFn ((Op s, ty), e) = toFn ((Ident $ identToCpp (Ident s), ty), e)
     toFn i = return $ traceShow (snd i) CppNoOp
+    addScope :: String -> Cpp -> Cpp
+    addScope pfx (CppFunction name args qual cpp) = CppFunction (pfx ++ "::" ++ name) args qual cpp
+    addScope _ cpp = cpp
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
 
