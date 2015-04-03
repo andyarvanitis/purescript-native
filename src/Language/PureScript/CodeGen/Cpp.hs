@@ -24,7 +24,8 @@ module Language.PureScript.CodeGen.Cpp (
     moduleToCpp
 ) where
 
-import Data.List ((\\), delete)
+import Data.List ((\\), delete, sortBy)
+import Data.Function (on)
 import Data.Maybe (mapMaybe, fromMaybe)
 import qualified Data.Traversable as T (traverse)
 import qualified Data.Map as M
@@ -63,7 +64,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let cppImports' = "PureScript" : cppImports
   let foreigns' = mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
   cppDecls <- mapM declToCpp decls
-  optimized <- T.traverse optimize cppDecls
+  optimized <- T.traverse optimize (concatMap expandSeq cppDecls)
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
   let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
@@ -93,7 +94,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       Just (_, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
     cpps <- mapM toFn (zip fns fs)
-    return $ CppBlock cpps
+    return $ CppSequence cpps
     where
     toFn :: ((Ident, T.Type), CI.Expr Ann) -> m Cpp
     toFn ((name, _), CI.AnonFunction ty ags sts) = do
@@ -295,5 +296,5 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   findClass :: Qualified ProperName -> Maybe ([T.Constraint], [(Ident, T.Type)])
   findClass name
     | Just (_, fns, constraints) <- M.lookup name (typeClasses env)
-      = Just (constraints, fns)
+      = Just (constraints, (sortBy (compare `on` fst) fns))
   findClass _ = Nothing

@@ -192,6 +192,10 @@ data Cpp
   --
   | CppContinue String
   -- |
+  -- A sequence of declarations or expressions
+  --
+  | CppSequence [Cpp]
+  -- |
   -- Empty statement/expression
   --
   | CppNoOp
@@ -220,6 +224,13 @@ data CppQualifier
   -- Inline function
   --
   | CppInline deriving (Show, Eq, Data, Typeable)
+
+--
+-- Expand a Cpp sequence (non-recursively)
+--
+expandSeq :: Cpp -> [Cpp]
+expandSeq (CppSequence cpps) = cpps
+expandSeq cpp = [cpp]
 
 --
 -- Traversals
@@ -254,6 +265,7 @@ everywhereOnCpp f = go
   go (CppTypeOf cpp) = f (CppTypeOf (go cpp))
   go (CppLabel name cpp) = f (CppLabel name (go cpp))
   go (CppInstanceOf j1 j2) = f (CppInstanceOf (go j1) (go j2))
+  go (CppSequence cpp) = f (CppSequence (map go cpp))
   go (CppComment com j) = f (CppComment com (go j))
   go other = f other
 
@@ -286,6 +298,7 @@ everywhereOnCppTopDown f = go . f
   go (CppTypeOf j) = CppTypeOf (go (f j))
   go (CppLabel name j) = CppLabel name (go (f j))
   go (CppInstanceOf j1 j2) = CppInstanceOf (go (f j1)) (go (f j2))
+  go (CppSequence cpp) = CppSequence (map (go . f) cpp)
   go (CppComment com j) = CppComment com (go (f j))
   go other = f other
 
@@ -318,5 +331,6 @@ everythingOnCpp (<>) f = go
   go j@(CppTypeOf j1) = f j <> go j1
   go j@(CppLabel _ j1) = f j <> go j1
   go j@(CppInstanceOf j1 j2) = f j <> go j1 <> go j2
+  go j@(CppSequence cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppComment _ j1) = f j <> go j1
   go other = f other
