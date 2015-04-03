@@ -7,6 +7,7 @@ A small strongly typed programming language with expressive types that compiles 
 #### Status:
 
 * Alpha (0.1) — very early, contributions welcome!
+* There's also a rewrite underway based on upcoming changes to PureScript internals (from their `core-imp` branch): the [pure11-core-imp](https://github.com/andyarvanitis/pure11-core-imp) repository
 
 #### Performance
 
