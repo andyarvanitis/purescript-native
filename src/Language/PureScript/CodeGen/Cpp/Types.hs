@@ -13,6 +13,8 @@
 --
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE PatternGuards #-}
+
 module Language.PureScript.CodeGen.Cpp.Types where
 
 import Data.List
@@ -46,14 +48,14 @@ runType tt@(Template name) =  typeName tt ++ capitalize name
 runType (Template []) = error "Bad template parameter"
 runType (ParamTemplate name ts) = pname name ++ '<' : (intercalate "," $ map runType ts) ++ ">"
   where
-  pname s = '#' : show (length ts) ++ capitalize s
+  pname s = show (length ts) ++ capitalize s
 
 typeName :: Type -> String
 typeName Function{} = "fn"
 typeName EffectFunction{} = "eff_fn"
 typeName Data{} = "data"
 typeName List{} = "list"
-typeName Template{} = "#"
+typeName Template{} = ""
 typeName _ = ""
 
 mktype :: ModuleName -> T.Type -> Maybe Type

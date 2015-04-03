@@ -92,7 +92,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   --
   declToCpp (CI.VarDecl _ ident expr)
     | Just (classname, typs) <- findInstance (Qualified (Just mn) ident),
-      Just (_, fns) <- findClass classname = do
+      Just (_, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
     let inst = CppInstance [] (qualifiedToStr mn (Ident . runProperName) classname) [] typs
     cpps <- mapM toFn (zip fns fs)
@@ -129,8 +129,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- Typeclass declaration
   --
   declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
-    | Just (constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
-    return $ CppStruct ctor (qualifiedToStr mn (Ident . runProperName) . fst <$> constraints)
+    | Just (parms, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
+    return $ CppStruct (ctor, parms) (toStrings <$> constraints)
               (toFn <$> fns)
               []
     where
@@ -138,6 +138,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     toFn (Ident name, ty) = CppFunction name [] [CppStatic] CppNoOp
     toFn (Op s, ty) = toFn (Ident $ identToCpp (Ident s), ty)
     toFn f = error $ show f
+    toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
+    toStrings (name, tys) = (qualifiedToStr mn (Ident . runProperName) name, typestr mn <$> tys)
 
   declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) =
     return CppNoOp
@@ -298,8 +300,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- |
   -- Find a class in scope by name, retrieving its list of constraints, function names and types.
   --
-  findClass :: Qualified ProperName -> Maybe ([T.Constraint], [(Ident, T.Type)])
+  findClass :: Qualified ProperName -> Maybe ([String], [T.Constraint], [(Ident, T.Type)])
   findClass name
-    | Just (_, fns, constraints) <- M.lookup name (typeClasses env)
-      = Just (constraints, (sortBy (compare `on` fst) fns))
+    | Just (parms, fns, constraints) <- M.lookup name (typeClasses env)
+      = Just (fst <$> parms, constraints, (sortBy (compare `on` fst) fns))
   findClass _ = Nothing

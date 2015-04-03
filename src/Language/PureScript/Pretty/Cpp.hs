@@ -13,6 +13,8 @@
 --
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE PatternGuards #-}
+
 module Language.PureScript.Pretty.Cpp (
     prettyPrintCpp
 ) where
@@ -90,9 +92,19 @@ literals = mkPattern' match
   match (CppUseNamespace name) = fmap concat $ sequence
     [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
     ]
-  match (CppStruct name supers cms _) = fmap concat $ sequence
-    [ return $ "struct " ++ name
-    , return $ if null supers then [] else " : public " ++ intercalate ", public " supers
+  match (CppStruct (name, parms) supers cms _) = fmap concat $ sequence
+    [ return "\n"
+    , currentIndent
+    , return $ if (not . null) parms then
+                 "template <typename " ++ intercalate ", typename " (capitalize <$> parms) ++ ">\n"
+               else
+                 "\n"
+    , currentIndent
+    , return $ "struct " ++ name
+    , return $ if null supers then
+                 []
+               else
+                 " : public " ++ intercalate ", public " (classstr <$> supers)
     , return " {\n"
     , withIndent $ prettyStatements cms
     , return "\n"
@@ -386,3 +398,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
 
 dotsTo :: Char -> String -> String
 dotsTo chr = map (\c -> if c == '.' then chr else c)
+
+classstr :: (String, [String]) -> String
+classstr (name, []) = name
+classstr (name, parms) = name ++ '<' : intercalate ", " parms ++ ">"
