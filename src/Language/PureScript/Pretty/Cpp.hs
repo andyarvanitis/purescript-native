@@ -134,7 +134,7 @@ literals = mkPattern' match
     , prettyPrintCpp' sts
     ]
   match (CppFor ident start end sts) = fmap concat $ sequence
-    [ return $ "for (var " ++ ident ++ " = "
+    [ return $ "for (auto " ++ ident ++ " = "
     , prettyPrintCpp' start
     , return $ "; " ++ ident ++ " < "
     , prettyPrintCpp' end
@@ -142,7 +142,7 @@ literals = mkPattern' match
     , prettyPrintCpp' sts
     ]
   match (CppForIn ident obj sts) = fmap concat $ sequence
-    [ return $ "for (var " ++ ident ++ " in "
+    [ return $ "for (auto " ++ ident ++ " : "
     , prettyPrintCpp' obj
     , return ") "
     , prettyPrintCpp' sts
@@ -239,11 +239,14 @@ indexer = mkPattern' match
   match (CppIndexer index val) = (,) <$> prettyPrintCpp' index <*> pure val
   match _ = mzero
 
-fun :: Pattern PrinterState Cpp ((String, [String], [String]), Cpp)
-fun = mkPattern match
+fun :: Pattern PrinterState Cpp ((String, String, [String], [String]), Cpp)
+fun = mkPattern' match
   where
-  match (CppFunction name args qs ret) = Just ((name, args, runQualifier <$> qs), ret)
-  match _ = Nothing
+  match (CppFunction name args qs ret) = do
+    indentString <- currentIndent
+    let templ = (if '<' `elem` name then "template <>\n" ++ indentString else [])
+    return ((templ, name, args, runQualifier <$> qs), ret)
+  match _ = mzero
 
 lam :: Pattern PrinterState Cpp ([String], Cpp)
 lam = mkPattern match
@@ -358,8 +361,9 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
                   , [ Wrap partapp $ \(args, n) _ -> "bind" ++ show n ++ '(' : args ++ ")" ]
                   , [ unary CppNew "new " ]
-                  , [ Wrap fun $ \(name, args, quals) ret ->
-                        concatMap (++ " ") quals
+                  , [ Wrap fun $ \(templ, name, args, quals) ret -> []
+                        ++ templ
+                        ++ concatMap (++ " ") quals
                         ++ "auto "
                         ++ name
                         ++ "(" ++ intercalate ", " args ++ ")"
