@@ -59,17 +59,17 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   -- Desugar pure
   convert (CppApp (CppApp pure' [val]) []) | isPure pure' = val
   -- Desugar >>
-  convert (CppApp (CppApp bind [m]) [CppLambda [] (CppBlock cpp)]) | isBind bind =
-    CppFunction fnName [] [] $ CppBlock (CppApp m [] : map applyReturns cpp )
+  convert (CppApp (CppApp bind [m]) [CppLambda [] rty (CppBlock cpp)]) | isBind bind =
+    CppFunction fnName [] rty [] $ CppBlock (CppApp m [] : map applyReturns cpp )
   -- Desugar >>=
-  convert (CppApp (CppApp bind [m]) [CppLambda [arg] (CppBlock cpp)]) | isBind bind =
-    CppFunction fnName [] [] $ CppBlock (CppVariableIntroduction arg (Just (CppApp m [])) : map applyReturns cpp)
+  convert (CppApp (CppApp bind [m]) [CppLambda [arg] rty (CppBlock cpp)]) | isBind bind =
+    CppFunction fnName [] rty [] $ CppBlock (CppVariableIntroduction (fst arg) (Just (CppApp m [])) : map applyReturns cpp)
   -- Desugar untilE
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =
-    CppApp (CppLambda [] (CppBlock [ CppWhile (CppUnary CppNot (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
+    CppApp (CppLambda [] [] (CppBlock [ CppWhile (CppUnary CppNot (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
   -- Desugar whileE
   convert (CppApp (CppApp (CppApp f [arg1]) [arg2]) []) | isEffFunc C.whileE f =
-    CppApp (CppLambda [] (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
+    CppApp (CppLambda [] [] (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
   convert other = other
   -- Check if an expression represents a monomorphic call to >>= for the Eff monad
   isBind (CppApp bindPoly [effDict]) | isBindPoly bindPoly && isEffDict C.bindEffDictionary effDict = True
@@ -106,7 +106,7 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   isEffDict _ _ = False
   -- Remove __do function applications which remain after desugaring
   undo :: Cpp -> Cpp
-  undo (CppReturn (CppApp (CppFunction ident [] _ body) [])) | ident == fnName = body
+  undo (CppReturn (CppApp (CppFunction ident [] _ _ body) [])) | ident == fnName = body
   undo other = other
 
   applyReturns :: Cpp -> Cpp
@@ -138,7 +138,7 @@ inlineST = everywhereOnCpp convertBlock
   -- or in a more aggressive way, turning wrappers into local variables depending on the
   -- agg(ressive) parameter.
   convert agg (CppApp f [arg]) | isSTFunc C.newSTRef f =
-   CppLambda [] (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral [(C.stRefValue, arg)]])
+   CppLambda [] [] (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral [(C.stRefValue, arg)]])
   convert agg (CppApp (CppApp f [ref]) []) | isSTFunc C.readSTRef f =
     if agg then ref else CppAccessor C.stRefValue ref
   convert agg (CppApp (CppApp (CppApp f [ref]) [arg]) []) | isSTFunc C.writeSTRef f =

@@ -239,19 +239,19 @@ indexer = mkPattern' match
   match (CppIndexer index val) = (,) <$> prettyPrintCpp' index <*> pure val
   match _ = mzero
 
-fun :: Pattern PrinterState Cpp ((String, String, [String], [String]), Cpp)
+fun :: Pattern PrinterState Cpp ((String, String, [(String, String)], String, [String]), Cpp)
 fun = mkPattern' match
   where
-  match (CppFunction name args qs ret) = do
+  match (CppFunction name args rty qs ret) = do
     indentString <- currentIndent
     let templ = (if '<' `elem` name then "template <>\n" ++ indentString else [])
-    return ((templ, name, args, runQualifier <$> qs), ret)
+    return ((templ, name, args, rty, runQualifier <$> qs), ret)
   match _ = mzero
 
-lam :: Pattern PrinterState Cpp ([String], Cpp)
+lam :: Pattern PrinterState Cpp (([(String, String)], String), Cpp)
 lam = mkPattern match
   where
-  match (CppLambda args ret) = Just (args, ret)
+  match (CppLambda args rty ret) = Just ((args, rty), ret)
   match _ = Nothing
 
 app :: Pattern PrinterState Cpp (String, Cpp)
@@ -361,16 +361,19 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
                   , [ Wrap partapp $ \(args, n) _ -> "bind" ++ show n ++ '(' : args ++ ")" ]
                   , [ unary CppNew "new " ]
-                  , [ Wrap fun $ \(templ, name, args, quals) ret -> []
+                  , [ Wrap fun $ \(templ, name, args, rty, quals) ret -> []
                         ++ templ
                         ++ concatMap (++ " ") quals
                         ++ "auto "
                         ++ name
-                        ++ "(" ++ intercalate ", " args ++ ")"
-                        ++ " -> void"
+                        ++ let args' = (\(n,t) -> t ++ ' ' : n) <$> args in
+                           "(" ++ intercalate ", " args' ++ ")"
+                        ++ " -> "
+                        ++ rty
                         ++ if null ret then ";" else ' ' : ret ]
-                  , [ Wrap lam $ \args ret -> "[=] "
-                        ++ "(" ++ intercalate ", " args ++ ") "
+                  , [ Wrap lam $ \(args, _) ret -> "[=] "
+                        ++ let args' = (\(n,t) -> t ++ ' ' : n) <$> args in
+                           "(" ++ intercalate ", " args' ++ ")"
                         ++ ret ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
                   , [ unary     CppNot                "!"

@@ -45,12 +45,12 @@ etaConvert :: Cpp -> Cpp
 etaConvert = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
-  convert (CppBlock [CppReturn (CppApp (CppLambda idents block@(CppBlock body)) args)])
+  convert (CppBlock [CppReturn (CppApp (CppLambda idents _ block@(CppBlock body)) args)])
     | all shouldInline args &&
-      not (any (`isRebound` block) (map CppVar idents)) &&
+      not (any (`isRebound` block) (map (CppVar . fst) idents)) &&
       not (any (`isRebound` block) args)
-      = CppBlock (map (replaceIdents (zip idents args)) body)
-  convert (CppLambda [] (CppBlock [CppReturn (CppApp fn [])])) = fn
+      = CppBlock (map (replaceIdents (zip (map fst idents) args)) body)
+  convert (CppLambda [] _ (CppBlock [CppReturn (CppApp fn [])])) = fn
   convert cpp = cpp
 
 unThunk :: Cpp -> Cpp
@@ -60,7 +60,7 @@ unThunk = everywhereOnCpp convert
   convert (CppBlock []) = CppBlock []
   convert (CppBlock cpps) =
     case last cpps of
-      CppReturn (CppApp (CppLambda [] (CppBlock body)) []) -> CppBlock $ init cpps ++ body
+      CppReturn (CppApp (CppLambda [] _ (CppBlock body)) []) -> CppBlock $ init cpps ++ body
       _ -> CppBlock cpps
   convert cpp = cpp
 
@@ -68,7 +68,7 @@ evaluateIifes :: Cpp -> Cpp
 evaluateIifes = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
-  convert (CppApp (CppLambda [] (CppBlock [CppReturn ret])) []) = ret
+  convert (CppApp (CppLambda [] _ (CppBlock [CppReturn ret])) []) = ret
   convert cpp = cpp
 
 inlineVariables :: Cpp -> Cpp
@@ -158,20 +158,20 @@ inlineCommonOperators = applyAll $
   mkFn 0 = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp mkFnN [CppLambda [_] (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
-      CppLambda [] (CppBlock cpp)
+    convert (CppApp mkFnN [CppLambda [_] _ (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
+      CppLambda [] [] (CppBlock cpp)
     convert other = other
   mkFn n = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
     convert orig@(CppApp mkFnN [fn]) | isNFn C.mkFn n mkFnN =
       case collectArgs n [] fn of
-        Just (args, cpp) -> CppLambda args (CppBlock cpp)
+        Just (args, cpp) -> CppLambda args [] (CppBlock cpp)
         Nothing -> orig
     convert other = other
-    collectArgs :: Int -> [String] -> Cpp -> Maybe ([String], [Cpp])
-    collectArgs 1 acc (CppLambda [oneArg] (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
-    collectArgs m acc (CppLambda [oneArg] (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
+    collectArgs :: Int -> [(String, String)] -> Cpp -> Maybe ([(String, String)], [Cpp])
+    collectArgs 1 acc (CppLambda [oneArg] [] (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
+    collectArgs m acc (CppLambda [oneArg] [] (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
     collectArgs _ _   _ = Nothing
 
   isNFn :: String -> Int -> Cpp -> Bool

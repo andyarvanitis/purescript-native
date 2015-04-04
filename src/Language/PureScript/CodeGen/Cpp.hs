@@ -103,9 +103,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       fn' <- declToCpp $ CI.Function ty name ags sts
       return fn'
     toFn ((Op s, ty), e) = toFn ((Ident $ identToCpp (Ident s), ty), e)
-    toFn i = return $ traceShow (snd i) CppNoOp
+    toFn i = return CppNoOp
     addScope :: String -> Cpp -> Cpp
-    addScope pfx (CppFunction name args qual cpp) = CppFunction (pfx ++ "::" ++ name) args qual cpp
+    addScope pfx (CppFunction name args rty qual cpp) = CppFunction (pfx ++ "::" ++ name) args rty qual cpp
     addScope _ cpp = cpp
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
@@ -113,10 +113,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp (CI.Function _ ident [Ident "dict"]
     [CI.Return _ (CI.Accessor _ _ (CI.Var _ (Qualified Nothing (Ident "dict"))))]) =
     return CppNoOp
-  declToCpp (CI.Function _ ident arg body) = do
+  declToCpp (CI.Function (_, _, Just ty, _) ident arg body) = do
     let (args', body') = expand body
     block <- CppBlock <$> mapM statmentToCpp body'
-    return $ CppFunction (identToCpp ident) (identToCpp <$> arg ++ args') [] block
+    return $ CppFunction (identToCpp ident) (map (flip (,) "void") $ identToCpp <$> arg ++ args') "void" [] block
     where
     expand ((CI.Return _ (CI.AnonFunction _ ags sts)) : bs) = (ags ++ (fst $ expand sts), (snd $ expand sts) ++ bs)
     expand d = ([], d)
@@ -135,7 +135,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
               []
     where
     toFn :: (Ident, T.Type) -> Cpp
-    toFn (Ident name, ty) = CppFunction name [] [CppStatic] CppNoOp
+    toFn (Ident name, ty) = CppFunction name [] "void" [CppStatic] CppNoOp
     toFn (Op s, ty) = toFn (Ident $ identToCpp (Ident s), ty)
     toFn f = error $ show f
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
@@ -181,7 +181,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     CppIndexer <$> exprToCpp index <*> exprToCpp expr
   exprToCpp (CI.AnonFunction _ args stmnts') = do
     body <- CppBlock <$> mapM statmentToCpp stmnts'
-    return $ CppLambda (identToCpp `map` args) body
+    return $ CppLambda (map (flip (,) "void") $ identToCpp `map` args) "void" body
   exprToCpp (CI.App _ f []) = flip CppApp [] <$> exprToCpp f
   exprToCpp e@CI.App{} = do
     let (f, args) = unApp e []
@@ -193,7 +193,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       --
       -- TODO: remove after confirming no longer needed
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
-        return $ traceShow f CppNoOp
+        return CppNoOp
       _ -> do
         f' <- exprToCpp f
         let arity' = arity $ getType f
@@ -261,7 +261,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       assign = CppBlock [CppAssignment (CppIndexer cppKey cppNewObj) (CppIndexer cppKey obj)]
       stToAssign (s, cpp) = CppAssignment (CppAccessor s cppNewObj) cpp
       extend = map stToAssign sts
-    return $ CppApp (CppLambda [] block) []
+    return $ CppApp (CppLambda [] [] block) []
 
   -- |
   --

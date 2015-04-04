@@ -18,9 +18,8 @@
 module Language.PureScript.CodeGen.Cpp.Types where
 
 import Data.List
-import Data.Char (isAlphaNum, isDigit, isSpace, toUpper)
+import Data.Char
 import Data.Maybe
-import Language.PureScript.Core
 import Language.PureScript.Names
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.AST
@@ -37,6 +36,7 @@ data Type = Native String
           | EffectFunction Type
           deriving (Eq, Show)
 
+runType :: Type -> String
 runType (Native name) = name
 runType tt@(Function a b) = typeName tt ++ '<' : runType a ++ "," ++ runType b ++ ">"
 runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
@@ -44,8 +44,8 @@ runType tt@(Data t) = typeName tt ++ '<' : runType t ++ ">"
 runType (Specialized t []) = runType t
 runType (Specialized t ts) = runType t ++ '<' : (intercalate "," $ map runType ts) ++ ">"
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
-runType tt@(Template name) =  typeName tt ++ capitalize name
 runType (Template []) = error "Bad template parameter"
+runType tt@(Template name) =  typeName tt ++ capitalize name
 runType (ParamTemplate name ts) = pname name ++ '<' : (intercalate "," $ map runType ts) ++ ">"
   where
   pname s = show (length ts) ++ capitalize s
@@ -95,7 +95,7 @@ mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
              t@(T.RCons _ _ _)) = mktype m t
 
-mktype m app@(T.TypeApp a b)
+mktype m app@T.TypeApp{}
   | (name, tys@(_:_)) <- tyapp app [] = Just $ ParamTemplate (identToCpp $ Ident name) tys
   where
     tyapp :: T.Type -> [Type] -> (String, [Type])
@@ -104,8 +104,8 @@ mktype m app@(T.TypeApp a b)
     tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t':ts)
     tyapp _ _ = ([],[])
 
-mktype m app@(T.TypeApp a b)
-  | (name, tys@(_:_)) <- tyapp app [] = Just $ EffectFunction (last tys)
+mktype m app@T.TypeApp{}
+  | (_, tys@(_:_)) <- tyapp app [] = Just $ EffectFunction (last tys)
   where
     tyapp :: T.Type -> [Type] -> (String, [Type])
     -- tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (identToCpp $ Ident name, b':ts)
@@ -129,7 +129,7 @@ mktype _ (T.TypeVar name) = Just $ Template (identToCpp $ Ident name)
 mktype _ (T.TUnknown n) = Just $ Template ('T' : show n)
 mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a)
 mktype m (T.ConstrainedType _ ty) = mktype m ty
-mktype m (T.RCons _ _ _) = Just $ Template "rowType"
+mktype _ (T.RCons _ _ _) = Just $ Template "rowType"
 mktype _ T.REmpty = Nothing
 mktype _ b = error $ "Unknown type: " ++ show b
 
@@ -170,4 +170,3 @@ capitalize s = s
 runQualifier :: CppQualifier -> String
 runQualifier CppStatic = "static"
 runQualifier CppInline = "inline"
-runQualifier q = error $ show q

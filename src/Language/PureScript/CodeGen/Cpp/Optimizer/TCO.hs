@@ -32,8 +32,8 @@ tco' = everywhereOnCpp convert
   tcoLabel = "tco"
   tcoVar :: String -> String
   tcoVar arg = "__tco_" ++ arg
-  copyVar :: String -> String
-  copyVar arg = "__copy_" ++ arg
+  copyVar :: (String, String) -> (String, String)
+  copyVar (nm, ty) = ("__copy_" ++ nm, ty)
   convert :: Cpp -> Cpp
   convert cpp@(CppVariableIntroduction name (Just fn@CppFunction {})) =
     let
@@ -46,15 +46,15 @@ tco' = everywhereOnCpp convert
               CppVariableIntroduction name (Just (replace (toLoop name allArgs body')))
         | otherwise -> cpp
   convert cpp = cpp
-  collectAllFunctionArgs :: [[String]] -> (Cpp -> Cpp) -> Cpp -> ([[String]], Cpp, Cpp -> Cpp)
-  collectAllFunctionArgs allArgs f (CppFunction ident args _ (CppBlock (body@(CppReturn _):_))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident (map copyVar args) [] (CppBlock [b]))) body
-  collectAllFunctionArgs allArgs f (CppFunction ident args _ body@(CppBlock _)) =
-    (args : allArgs, body, f . CppFunction ident (map copyVar args) [])
-  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident args _ (CppBlock [body]))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (CppReturn (CppFunction ident (map copyVar args) [] (CppBlock [b])))) body
-  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident args _ body@(CppBlock _))) =
-    (args : allArgs, body, f . CppReturn . CppFunction ident (map copyVar args) [])
+  collectAllFunctionArgs :: [[(String, String)]] -> (Cpp -> Cpp) -> Cpp -> ([[(String, String)]], Cpp, Cpp -> Cpp)
+  collectAllFunctionArgs allArgs f (CppFunction ident args rty qs (CppBlock (body@(CppReturn _):_))) =
+    collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident (map copyVar args) rty qs (CppBlock [b]))) body
+  collectAllFunctionArgs allArgs f (CppFunction ident args rty qs body@(CppBlock _)) =
+    (args : allArgs, body, f . CppFunction ident (map copyVar args) rty qs)
+  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident args rty qs (CppBlock [body]))) =
+    collectAllFunctionArgs (args : allArgs) (\b -> f (CppReturn (CppFunction ident (map copyVar args) rty qs (CppBlock [b])))) body
+  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident args rty qs body@(CppBlock _))) =
+    (args : allArgs, body, f . CppReturn . CppFunction ident (map copyVar args) rty qs)
   collectAllFunctionArgs allArgs f body = (allArgs, body, f)
   isTailCall :: String -> Cpp -> Bool
   isTailCall ident cpp =
@@ -73,11 +73,11 @@ tco' = everywhereOnCpp convert
     countSelfCallsInTailPosition :: Cpp -> Int
     countSelfCallsInTailPosition (CppReturn ret) | isSelfCall ident ret = 1
     countSelfCallsInTailPosition _ = 0
-    countSelfCallsUnderFunctions (CppFunction _ _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
+    countSelfCallsUnderFunctions (CppFunction _ _ _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
     countSelfCallsUnderFunctions _ = 0
-  toLoop :: String -> [String] -> Cpp -> Cpp
+  toLoop :: String -> [(String, String)] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
-        map (\arg -> CppVariableIntroduction arg (Just (CppVar (copyVar arg)))) allArgs ++
+        map (\arg -> CppVariableIntroduction (fst arg) (Just (CppVar (fst $ copyVar arg)))) allArgs ++
         [ CppLabel tcoLabel $ CppWhile (CppBooleanLiteral True) (CppBlock [ everywhereOnCpp loopify cpp ]) ]
     where
     loopify :: Cpp -> Cpp
@@ -86,9 +86,9 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppBlock $ zipWith (\val arg ->
-                    CppVariableIntroduction (tcoVar arg) (Just val)) allArgumentValues allArgs
+                    CppVariableIntroduction (tcoVar arg) (Just val)) allArgumentValues (map fst allArgs)
                   ++ map (\arg ->
-                    CppAssignment (CppVar arg) (CppVar (tcoVar arg))) allArgs
+                    CppAssignment (CppVar arg) (CppVar (tcoVar arg))) (map fst allArgs)
                   ++ [ CppContinue tcoLabel ]
     loopify other = other
     collectSelfCallArgs :: [[Cpp]] -> Cpp -> [[Cpp]]
@@ -99,5 +99,5 @@ tco' = everywhereOnCpp convert
   isSelfCall ident (CppApp fn args) | not (any isFunction args) = isSelfCall ident fn
   isSelfCall _ _ = False
   isFunction :: Cpp -> Bool
-  isFunction (CppFunction _ _ _ _) = True
+  isFunction (CppFunction _ _ _ _ _) = True
   isFunction _ = False
