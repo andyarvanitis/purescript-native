@@ -71,7 +71,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
   let moduleBody = header : (CppInclude <$> cppImports')
                    ++ [CppNamespace (runModuleName mn) $
-                        (CppUseNamespace <$> cppImports') ++ foreigns' ++ optimized]
+                        (CppUseNamespace "PureScript") : foreigns' ++ optimized]
   return $ case additional of
     MakeOptions -> moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
@@ -102,17 +102,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     toFn :: ((Ident, T.Type), CI.Expr Ann) -> m Cpp
     toFn ((name, _), CI.AnonFunction ty ags sts) = do
       fn' <- declToCpp $ CI.Function ty name ags sts
-      return fn'
+      return (addQual CppStatic fn')
     toFn ((Op s, ty), e) = toFn ((Ident $ identToCpp (Ident s), ty), e)
     toFn i = return CppNoOp
-    addScope :: String -> Cpp -> Cpp
-    addScope pfx (CppFunction name tmps args rty qual cpp) = CppFunction (pfx ++ "::" ++ name)
-                                                                         tmps
-                                                                         args
-                                                                         rty
-                                                                         qual
-                                                                         cpp
-    addScope _ cpp = cpp
+    addQual :: CppQualifier -> Cpp -> Cpp
+    addQual q (CppFunction name tmps args rty qs cpp) = CppFunction name tmps args rty (q : qs) cpp
+    addQual _ cpp = cpp
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
 
