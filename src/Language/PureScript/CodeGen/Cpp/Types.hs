@@ -158,6 +158,18 @@ rettype _ = Nothing
 rettype' :: ModuleName -> T.Type -> String
 rettype' m = maybe [] runType . rettype . mktype m
 
+templparams :: Type -> [String]
+templparams t@(Template a) = [runType t]
+templparams (ParamTemplate p ts) = concatMap templparams ts ++ [p]
+templparams (Function a b) = templparams a ++ templparams b
+templparams (EffectFunction b) = templparams b
+templparams (List a) = templparams a
+templparams (Data a) = templparams a
+templparams _ = []
+
+templparams' :: Maybe Type -> [String]
+templparams' = sort . nub . maybe [] templparams
+
 dataCon :: ModuleName -> T.Type -> [Type]
 dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)
 dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _))

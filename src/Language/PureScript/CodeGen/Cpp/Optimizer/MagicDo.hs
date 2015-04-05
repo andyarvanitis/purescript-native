@@ -60,10 +60,10 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   convert (CppApp (CppApp pure' [val]) []) | isPure pure' = val
   -- Desugar >>
   convert (CppApp (CppApp bind [m]) [CppLambda [] rty (CppBlock cpp)]) | isBind bind =
-    CppFunction fnName [] rty [] $ CppBlock (CppApp m [] : map applyReturns cpp )
+    CppFunction fnName [] [] rty [] $ CppBlock (CppApp m [] : map applyReturns cpp )
   -- Desugar >>=
   convert (CppApp (CppApp bind [m]) [CppLambda [arg] rty (CppBlock cpp)]) | isBind bind =
-    CppFunction fnName [] rty [] $ CppBlock (CppVariableIntroduction (fst arg) (Just (CppApp m [])) : map applyReturns cpp)
+    CppFunction fnName [] [] rty [] $ CppBlock (CppVariableIntroduction (fst arg) (Just (CppApp m [])) : map applyReturns cpp)
   -- Desugar untilE
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =
     CppApp (CppLambda [] [] (CppBlock [ CppWhile (CppUnary CppNot (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
@@ -106,7 +106,7 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   isEffDict _ _ = False
   -- Remove __do function applications which remain after desugaring
   undo :: Cpp -> Cpp
-  undo (CppReturn (CppApp (CppFunction ident [] _ _ body) [])) | ident == fnName = body
+  undo (CppReturn (CppApp (CppFunction ident _ [] _ _ body) [])) | ident == fnName = body
   undo other = other
 
   applyReturns :: Cpp -> Cpp

@@ -40,7 +40,7 @@ isReassigned :: String -> Cpp -> Bool
 isReassigned var1 = everythingOnCpp (||) check
   where
   check :: Cpp -> Bool
-  check (CppFunction _ args _ _ _) | var1 `elem` (map fst args) = True
+  check (CppFunction _ _ args _ _ _) | var1 `elem` (map fst args) = True
   check (CppVariableIntroduction arg _) | var1 == arg = True
   check (CppAssignment (CppVar arg) _) | var1 == arg = True
   check (CppFor arg _ _ _) | var1 == arg = True

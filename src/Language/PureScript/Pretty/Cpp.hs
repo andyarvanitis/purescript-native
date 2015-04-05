@@ -92,13 +92,13 @@ literals = mkPattern' match
   match (CppUseNamespace name) = fmap concat $ sequence
     [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
     ]
-  match (CppStruct (name, parms) supers cms _) = fmap concat $ sequence
+  match (CppStruct (name, params) supers cms _) = fmap concat $ sequence
     [ return "\n"
     , currentIndent
-    , return (templDecl parms)
+    , return (templDecl params)
     , return "\n"
     , currentIndent
-    , return $ "struct " ++ classstr (name, either (const []) id parms)
+    , return $ "struct " ++ classstr (name, either (const []) id params)
     , return $ if null supers then
                  []
                else
@@ -242,9 +242,9 @@ indexer = mkPattern' match
 fun :: Pattern PrinterState Cpp ((String, String, [(String, String)], String, [String]), Cpp)
 fun = mkPattern' match
   where
-  match (CppFunction name args rty qs ret) = do
+  match (CppFunction name tmps args rty qs ret) = do
     indentString <- currentIndent
-    let templ = (if '<' `elem` name then "template <>\n" ++ indentString else [])
+    let templ = if null tmps then [] else templDecl (Left tmps) ++ "\n" ++ indentString
     return ((templ, name, args, rty, runQualifier <$> qs), ret)
   match _ = mzero
 
@@ -257,7 +257,7 @@ lam = mkPattern match
 app :: Pattern PrinterState Cpp (String, Cpp)
 app = mkPattern' match
   where
-  match (CppApp val [inst@CppInstance{}]) = mzero
+  match (CppApp _ [CppInstance{}]) = mzero
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
     return (intercalate ", " cpps, val)
@@ -402,7 +402,7 @@ dotsTo chr = map (\c -> if c == '.' then chr else c)
 
 classstr :: (String, [String]) -> String
 classstr (name, []) = name
-classstr (name, parms) = name ++ '<' : intercalate ", " parms ++ ">"
+classstr (name, params) = name ++ '<' : intercalate ", " params ++ ">"
 
 argstr :: (String, String) -> String
 argstr ([], typ) = typ
@@ -411,6 +411,6 @@ argstr (name, typ) = typ ++ ' ' : name
 
 templDecl :: Either [String] [String] -> String
 templDecl (Left []) = []
-templDecl (Left parms) = "template <typename " ++ intercalate ", typename " (runType . Template <$> parms) ++ ">"
+templDecl (Left params) = "template <typename " ++ intercalate ", typename " (runType . Template <$> params) ++ ">"
 templDecl (Right []) = []
-templDecl (Right parms) = "template <>"
+templDecl (Right _) = "template <>"

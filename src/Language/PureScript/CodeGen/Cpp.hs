@@ -106,7 +106,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     toFn ((Op s, ty), e) = toFn ((Ident $ identToCpp (Ident s), ty), e)
     toFn i = return CppNoOp
     addScope :: String -> Cpp -> Cpp
-    addScope pfx (CppFunction name args rty qual cpp) = CppFunction (pfx ++ "::" ++ name) args rty qual cpp
+    addScope pfx (CppFunction name tmps args rty qual cpp) = CppFunction (pfx ++ "::" ++ name)
+                                                                         tmps
+                                                                         args
+                                                                         rty
+                                                                         qual
+                                                                         cpp
     addScope _ cpp = cpp
   declToCpp (CI.VarDecl _ ident expr) =
     CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
@@ -118,6 +123,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp (CI.Function (_, _, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
     return $ CppFunction (identToCpp ident)
+                         (templparams' $ mktype mn ty)
                          [(identToCpp arg, argtype' mn ty)]
                          (rettype' mn ty)
                          []
@@ -132,16 +138,22 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- Typeclass declaration
   --
   declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
-    | Just (parms, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
-    return $ CppStruct (ctor, Left parms)
+    | Just (params, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
+    let tmps = runType . Template <$> params in
+    return $ CppStruct (ctor, Left params)
                        (toStrings <$> constraints)
-                       (toFn <$> fns)
+                       (toFn tmps <$> fns)
                        []
     where
-    toFn :: (Ident, T.Type) -> Cpp
-    toFn (Ident name, ty) = CppFunction name [([], argtype' mn ty)] (rettype' mn ty) [CppStatic] CppNoOp
-    toFn (Op s, ty) = toFn (Ident $ identToCpp (Ident s), ty)
-    toFn f = error $ show f
+    toFn :: [String] -> (Ident, T.Type) -> Cpp
+    toFn tmps (Ident name, ty) = CppFunction name
+                                             (templparams' (mktype mn ty) \\ tmps)
+                                             [([], argtype' mn ty)]
+                                             (rettype' mn ty)
+                                             [CppStatic]
+                                             CppNoOp
+    toFn tmps (Op s, ty) = toFn tmps (Ident $ identToCpp (Ident s), ty)
+    toFn _ f = error $ show f
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
     toStrings (name, tys) = (qualifiedToStr mn (Ident . runProperName) name, typestr mn <$> tys)
 
@@ -298,6 +310,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   --
   findClass :: Qualified ProperName -> Maybe ([String], [T.Constraint], [(Ident, T.Type)])
   findClass name
-    | Just (parms, fns, constraints) <- M.lookup name (typeClasses env)
-      = Just (fst <$> parms, constraints, (sortBy (compare `on` fst) fns))
+    | Just (params, fns, constraints) <- M.lookup name (typeClasses env)
+      = Just (fst <$> params, constraints, (sortBy (compare `on` fst) fns))
   findClass _ = Nothing
