@@ -114,9 +114,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp (CI.Function _ ident [Ident "dict"]
     [CI.Return _ (CI.Accessor _ _ (CI.Var _ (Qualified Nothing (Ident "dict"))))]) =
     return CppNoOp
-  declToCpp (CI.Function _ ident args body) = do
+
+  declToCpp (CI.Function (_, _, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
-    return $ CppFunction (identToCpp ident) (flip (,) "void" . identToCpp <$> args) "void" [] block
+    return $ CppFunction (identToCpp ident)
+                         [(identToCpp arg, argtype' mn ty)]
+                         (rettype' mn ty)
+                         []
+                         block
+  declToCpp (CI.Function (_, _, Just ty, _) ident args body) = return CppNoOp -- TODO: non-curried functions
 
   declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
     return CppNoOp
@@ -127,12 +133,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   --
   declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
     | Just (parms, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
-    return $ CppStruct (ctor, Left parms) (toStrings <$> constraints)
-              (toFn <$> fns)
-              []
+    return $ CppStruct (ctor, Left parms)
+                       (toStrings <$> constraints)
+                       (toFn <$> fns)
+                       []
     where
     toFn :: (Ident, T.Type) -> Cpp
-    toFn (Ident name, ty) = CppFunction name [] "void" [CppStatic] CppNoOp
+    toFn (Ident name, ty) = CppFunction name [([], argtype' mn ty)] (rettype' mn ty) [CppStatic] CppNoOp
     toFn (Op s, ty) = toFn (Ident $ identToCpp (Ident s), ty)
     toFn f = error $ show f
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
@@ -140,6 +147,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
   declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) =
     return CppNoOp
+
+  declToCpp d = return CppNoOp -- TODO: includes Function IsNewtype
 
   statmentToCpp :: CI.Statement Ann -> m Cpp
   statmentToCpp (CI.Expr e) = exprToCpp e
@@ -176,9 +185,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     CppIndexer <$> exprToCpp prop <*> exprToCpp expr
   exprToCpp (CI.Indexer _ index expr) =
     CppIndexer <$> exprToCpp index <*> exprToCpp expr
-  exprToCpp (CI.AnonFunction _ args stmnts') = do
+  exprToCpp (CI.AnonFunction (_, _, Just ty, _) [arg] stmnts') = do
     body <- CppBlock <$> mapM statmentToCpp stmnts'
-    return $ CppLambda (map (flip (,) "void") $ identToCpp `map` args) "void" body
+    return $ CppLambda [(identToCpp arg, argtype' mn ty)] (rettype' mn ty) body
+  exprToCpp (CI.AnonFunction _ args stmnts') = return CppNoOp -- TODO: non-curried lambdas
+
   exprToCpp (CI.App _ f []) = flip CppApp [] <$> exprToCpp f
   exprToCpp e@CI.App{} = do
     let (f, args) = unApp e []

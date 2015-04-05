@@ -46,9 +46,11 @@ runType (Specialized t ts) = runType t ++ '<' : (intercalate "," $ map runType t
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
 runType (Template []) = error "Bad template parameter"
 runType tt@(Template name) =  typeName tt ++ capitalize name
-runType (ParamTemplate name ts) = pname name ++ '<' : (intercalate "," $ map runType ts) ++ ">"
   where
-  pname s = show (length ts) ++ capitalize s
+  capitalize :: String -> String
+  capitalize (c:cs) = toUpper c : cs
+  capitalize s = s
+runType (ParamTemplate name ts) = runType (Template name) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
 
 typeName :: Type -> String
 typeName Function{} = "fn"
@@ -141,6 +143,21 @@ arity :: Maybe Type -> Maybe Int
 arity (Just (Function _ b)) = Just (1 + fromMaybe 0 (arity (Just b)))
 arity _ = Nothing
 
+argtype :: Maybe Type -> Maybe Type
+argtype (Just (Function a _)) = Just a
+argtype _ = Nothing
+
+argtype' :: ModuleName -> T.Type -> String
+argtype' m = maybe [] runType . argtype . mktype m
+
+rettype :: Maybe Type -> Maybe Type
+rettype (Just (Function _ b)) = Just b
+rettype (Just (EffectFunction b)) = Just b
+rettype _ = Nothing
+
+rettype' :: ModuleName -> T.Type -> String
+rettype' m = maybe [] runType . rettype . mktype m
+
 dataCon :: ModuleName -> T.Type -> [Type]
 dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)
 dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _))
@@ -162,10 +179,6 @@ qualDataTypeName m (T.TypeConstructor typ) = intercalate "::" . words $ brk tnam
     tname = qualifiedToStr m (Ident . runProperName) typ
     brk = map (\c -> if c=='.' then ' ' else c)
 qualDataTypeName _ _ = []
-
-capitalize :: String -> String
-capitalize (c:cs) = toUpper c : cs
-capitalize s = s
 
 runQualifier :: CppQualifier -> String
 runQualifier CppStatic = "static"

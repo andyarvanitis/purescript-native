@@ -358,13 +358,13 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                         ++ concatMap (++ " ") quals
                         ++ "auto "
                         ++ name
-                        ++ let args' = (\(n,t) -> t ++ ' ' : n) <$> args in
+                        ++ let args' = argstr <$> args in
                            "(" ++ intercalate ", " args' ++ ")"
                         ++ " -> "
                         ++ rty
                         ++ if null ret then ";" else ' ' : ret ]
                   , [ Wrap lam $ \(args, rty) ret -> "[=] "
-                        ++ let args' = (\(n,t) -> t ++ ' ' : n) <$> args in
+                        ++ let args' = argstr <$> args in
                            "(" ++ intercalate ", " args' ++ ")"
                         ++ (if null rty then [] else " -> " ++ rty)
                         ++ " "
@@ -404,8 +404,13 @@ classstr :: (String, [String]) -> String
 classstr (name, []) = name
 classstr (name, parms) = name ++ '<' : intercalate ", " parms ++ ">"
 
+argstr :: (String, String) -> String
+argstr ([], typ) = typ
+argstr (name, []) = "auto " ++ name
+argstr (name, typ) = typ ++ ' ' : name
+
 templDecl :: Either [String] [String] -> String
 templDecl (Left []) = []
-templDecl (Left parms) = "template <typename " ++ intercalate ", typename " (capitalize <$> parms) ++ ">"
+templDecl (Left parms) = "template <typename " ++ intercalate ", typename " (runType . Template <$> parms) ++ ">"
 templDecl (Right []) = []
 templDecl (Right parms) = "template <>"
