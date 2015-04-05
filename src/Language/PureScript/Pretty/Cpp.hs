@@ -95,12 +95,10 @@ literals = mkPattern' match
   match (CppStruct (name, parms) supers cms _) = fmap concat $ sequence
     [ return "\n"
     , currentIndent
-    , return $ if (not . null) parms then
-                 "template <typename " ++ intercalate ", typename " (capitalize <$> parms) ++ ">\n"
-               else
-                 "\n"
+    , return (templDecl parms)
+    , return "\n"
     , currentIndent
-    , return $ "struct " ++ name
+    , return $ "struct " ++ classstr (name, either (const []) id parms)
     , return $ if null supers then
                  []
                else
@@ -405,3 +403,9 @@ dotsTo chr = map (\c -> if c == '.' then chr else c)
 classstr :: (String, [String]) -> String
 classstr (name, []) = name
 classstr (name, parms) = name ++ '<' : intercalate ", " parms ++ ">"
+
+templDecl :: Either [String] [String] -> String
+templDecl (Left []) = []
+templDecl (Left parms) = "template <typename " ++ intercalate ", typename " (capitalize <$> parms) ++ ">"
+templDecl (Right []) = []
+templDecl (Right parms) = "template <>"

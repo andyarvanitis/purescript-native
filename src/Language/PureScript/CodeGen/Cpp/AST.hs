@@ -98,7 +98,7 @@ data Cpp
   -- |
   -- A C++ struct declaration (name with any template types, superclasses, class methods, instance methods)
   --
-  | CppStruct (String, [String]) [(String, [String])] [Cpp] [Cpp]
+  | CppStruct (String, Either [String] [String]) [(String, [String])] [Cpp] [Cpp]
   -- |
   -- Function application
   --

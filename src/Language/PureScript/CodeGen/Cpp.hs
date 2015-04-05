@@ -94,9 +94,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     | Just (classname, typs) <- findInstance (Qualified (Just mn) ident),
       Just (_, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
-    let inst = CppInstance [] (qualifiedToStr mn (Ident . runProperName) classname) [] typs
+    let classname' = qualifiedToStr mn (Ident . runProperName) classname
+    let inst = CppInstance [] classname' [] typs
     cpps <- mapM toFn (zip fns fs)
-    return $ CppSequence ((addScope $ P.prettyPrintCpp [inst]) <$> cpps)
+    return $ CppStruct (classname', Right typs) [] cpps []
     where
     toFn :: ((Ident, T.Type), CI.Expr Ann) -> m Cpp
     toFn ((name, _), CI.AnonFunction ty ags sts) = do
@@ -126,7 +127,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   --
   declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
     | Just (parms, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
-    return $ CppStruct (ctor, parms) (toStrings <$> constraints)
+    return $ CppStruct (ctor, Left parms) (toStrings <$> constraints)
               (toFn <$> fns)
               []
     where
