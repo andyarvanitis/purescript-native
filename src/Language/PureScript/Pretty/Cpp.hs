@@ -231,6 +231,8 @@ scope :: Pattern PrinterState Cpp (String, Cpp)
 scope = mkPattern match
   where
   match (CppAccessor prop val@CppScope{}) = Just (prop, val)
+  match (CppApp val [inst@CppInstance{}]) =
+    Just (prettyPrintCpp1 val, (CppScope $ prettyPrintCpp1 inst))
   match _ = Nothing
 
 indexer :: Pattern PrinterState Cpp (String, Cpp)
@@ -257,15 +259,7 @@ lam = mkPattern match
 app :: Pattern PrinterState Cpp (String, Cpp)
 app = mkPattern' match
   where
-  match (CppApp (CppAccessor val' _) (inst@CppInstance{} : args)) = do
-    cpps <- mapM prettyPrintCpp' args
-    inst' <- prettyPrintCpp' inst
-    return (intercalate ", " cpps, CppAccessor val' (CppScope inst'))
-  match (CppApp val (inst@CppInstance{} : args)) = do
-    cpps <- mapM prettyPrintCpp' args
-    val' <- prettyPrintCpp' val
-    inst' <- prettyPrintCpp' inst
-    return (intercalate ", " cpps, CppAccessor val' (CppScope inst'))
+  match (CppApp val [inst@CppInstance{}]) = mzero
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
     return (intercalate ", " cpps, val)
@@ -371,9 +365,11 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                         ++ " -> "
                         ++ rty
                         ++ if null ret then ";" else ' ' : ret ]
-                  , [ Wrap lam $ \(args, _) ret -> "[=] "
+                  , [ Wrap lam $ \(args, rty) ret -> "[=] "
                         ++ let args' = (\(n,t) -> t ++ ' ' : n) <$> args in
                            "(" ++ intercalate ", " args' ++ ")"
+                        ++ (if null rty then [] else " -> " ++ rty)
+                        ++ " "
                         ++ ret ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
                   , [ unary     CppNot                "!"

@@ -113,13 +113,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp (CI.Function _ ident [Ident "dict"]
     [CI.Return _ (CI.Accessor _ _ (CI.Var _ (Qualified Nothing (Ident "dict"))))]) =
     return CppNoOp
-  declToCpp (CI.Function (_, _, Just ty, _) ident arg body) = do
-    let (args', body') = expand body
-    block <- CppBlock <$> mapM statmentToCpp body'
-    return $ CppFunction (identToCpp ident) (map (flip (,) "void") $ identToCpp <$> arg ++ args') "void" [] block
-    where
-    expand ((CI.Return _ (CI.AnonFunction _ ags sts)) : bs) = (ags ++ (fst $ expand sts), (snd $ expand sts) ++ bs)
-    expand d = ([], d)
+  declToCpp (CI.Function _ ident args body) = do
+    block <- CppBlock <$> mapM statmentToCpp body
+    return $ CppFunction (identToCpp ident) (flip (,) "void" . identToCpp <$> args) "void" [] block
 
   declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
     return CppNoOp
@@ -190,25 +186,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       CI.Var (_, _, _, Just IsNewtype) _ -> return (head args')
       CI.Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
         return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) args'
-      --
+
       -- TODO: remove after confirming no longer needed
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
         return CppNoOp
-      _ -> do
-        f' <- exprToCpp f
-        let arity' = arity $ getType f
-        let remaining = maybe 0 (flip (-) . length $ filter notDict args) arity'
-        return $ if remaining > 0 then
-                   CppPartialApp f' args' remaining
-                 else
-                   CppApp f' args'
-    where
-    getType ::  CI.Expr Ann -> Maybe Type
-    getType (CI.Var (_, _, Just ty', _) _) = mktype mn ty'
-    getType _ = Nothing
-    notDict :: CI.Expr Ann -> Bool
-    notDict (CI.Var (_, _, Nothing, Nothing) _) = False
-    notDict _ = True
+
+      _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
+
   exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ [])) ident) =
     return $ CppAccessor "value" $ qualifiedToCpp id ident
   exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ _)) ident) =
