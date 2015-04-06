@@ -110,8 +110,8 @@ literals = mkPattern' match
     , return "};"
     ]
   match (CppVar ident) = return ident
-  match (CppInstance [] cls _ tys) = return $ cls ++ '<' : intercalate "," tys ++ ">"
-  match (CppInstance mn cls _ tys) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," tys ++ ">"
+  match (CppInstance [] cls _ params) = return $ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
+  match (CppInstance mn cls _ params) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
   match (CppScope ident) = return ident
   match (CppVariableIntroduction ident value) = fmap concat $ sequence
     [ return "auto "

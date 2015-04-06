@@ -24,7 +24,7 @@ module Language.PureScript.CodeGen.Cpp (
     moduleToCpp
 ) where
 
-import Data.List ((\\), delete, sortBy)
+import Data.List
 import Data.Function (on)
 import Data.Maybe (mapMaybe, fromMaybe)
 import qualified Data.Traversable as T (traverse)
@@ -78,24 +78,16 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     _ -> []
 
   where
-  -- |
-  -- Generates C++11 code for a variable reference based on a PureScript
-  -- identifier. The ident will be mangled if necessary to produce a valid Cpp
-  -- identifier.
-  --
-  var :: Ident -> Cpp
-  var = CppVar . identToCpp
-
   declToCpp :: CI.Decl Ann -> m Cpp
   -- |
   -- Typeclass instance definition
   --
   declToCpp (CI.VarDecl _ ident expr)
     | Just (classname, typs) <- findInstance (Qualified (Just mn) ident),
-      Just (_, _, fns) <- findClass classname = do
+      Just (params, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
     let classname' = qualifiedToStr mn (Ident . runProperName) classname
-    let inst = CppInstance [] classname' [] typs
+    let inst = CppInstance [] classname' [] (zip params typs)
     cpps <- mapM toFn (zip fns fs)
     return $ CppStruct (classname', Right typs) [] cpps []
     where
@@ -198,18 +190,49 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.AnonFunction _ args stmnts') = return CppNoOp -- TODO: non-curried lambdas
 
   exprToCpp (CI.App _ f []) = flip CppApp [] <$> exprToCpp f
+
   exprToCpp e@CI.App{} = do
     let (f, args) = unApp e []
-    args' <- mapM exprToCpp args
+    (arg' : args') <- mapM exprToCpp args
     case f of
-      CI.Var (_, _, _, Just IsNewtype) _ -> return (head args')
+      CI.Var (_, _, _, Just IsNewtype) _ -> return arg'
       CI.Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
-        return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) args'
+        return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) (arg' : args')
 
       -- TODO: remove after confirming no longer needed
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
         return CppNoOp
 
+      CI.Var (_, _, Just ty, _) name -> do
+        f' <- exprToCpp f
+        let fn = case arg' of
+                   CppInstance _ _ _ params ->
+                     let params' = fst <$> params
+                         fnTyList = maybe [] (fnTypesN (length args')) (mktype mn ty)
+                         exprTyList = (tyFromExpr <$> tail args) ++ [tyFromExpr e]
+                         tysMapping = zip (templateName <$> fnTyList) exprTyList
+                         templTys = nubBy ((==) `on` fst) $ filter (not . null . fst) tysMapping
+                         templTys' = sortBy (compare `on` fst) $ filter (not . flip elem params' . fst) templTys
+                         tyStrs = snd <$> templTys' in
+                     varAsTemplate f' tyStrs
+                   _ -> f'
+        return $ flip (foldl (\fn' a -> CppApp fn' [a])) (arg' : args') fn
+        where
+        tyFromExpr :: CI.Expr Ann -> String
+        tyFromExpr expr = typestr mn (fromExpr expr)
+          where
+          fromExpr (CI.AnonFunction (_, _, Just t, _) _ _) = t
+          fromExpr (CI.App (_, _, Just t, _) _ _) = t
+          fromExpr (CI.Var (_, _, Just t, _) _) = t
+          fromExpr (CI.Literal (_, _, Just t, _) _) = t
+          fromExpr (CI.Accessor (_, _, Just t, _) _ _) = t
+          fromExpr _ = error $ show expr
+        varAsTemplate :: Cpp -> [String] -> Cpp
+        varAsTemplate cpp [] = cpp
+        varAsTemplate (CppVar name) ps = CppVar (name ++ '<' : intercalate "," ps ++ ">")
+        varAsTemplate cpp _ = cpp
+
+      -- TODO: verify this
       _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
 
   exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ [])) ident) =
@@ -217,13 +240,18 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ _)) ident) =
     return $ CppAccessor "create" $ qualifiedToCpp id ident
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))
-    | Just (Qualified (Just mn') (ProperName classname), types) <- findInstance ident
-    = return $ CppInstance (modname mn') classname instname types
+    | Just (qname@(Qualified (Just mn') (ProperName classname)), types) <- findInstance ident,
+      Just (params, _, _) <- findClass qname
+    = return $ CppInstance (modname mn') classname instname (zip params types)
       where
       modname m | m == mn = []
       modname m = runModuleName m
   exprToCpp (CI.Var _ ident) =
     return $ varToCpp ident
+    where
+    varToCpp :: Qualified Ident -> Cpp
+    varToCpp (Qualified Nothing ident) = CppVar (identToCpp ident)
+    varToCpp qual = qualifiedToCpp id qual
   exprToCpp (CI.ObjectUpdate _ obj ps) = do
     obj' <- exprToCpp obj
     ps' <- mapM (sndM exprToCpp) ps
@@ -271,14 +299,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   unApp :: CI.Expr Ann -> [CI.Expr Ann] -> (CI.Expr Ann, [CI.Expr Ann])
   unApp (CI.App _ val args1) args2 = unApp val (args1 ++ args2)
   unApp other args = (other, args)
-
-  -- |
-  -- Generate code in the simplified C++11 intermediate representation for a reference to a
-  -- variable.
-  --
-  varToCpp :: Qualified Ident -> Cpp
-  varToCpp (Qualified Nothing ident) = var ident
-  varToCpp qual = qualifiedToCpp id qual
 
   -- |
   -- Generate code in the simplified C++11 intermediate representation for a reference to a

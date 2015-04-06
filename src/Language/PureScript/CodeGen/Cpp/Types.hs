@@ -158,6 +158,16 @@ rettype _ = Nothing
 rettype' :: ModuleName -> T.Type -> String
 rettype' m = maybe [] runType . rettype . mktype m
 
+fnTypesN :: Int -> Type -> [Type]
+fnTypesN 0 t = [t]
+fnTypesN n (Function a b) = a : types (n - 1) b
+  where
+  types :: Int -> Type -> [Type]
+  types 0 t = [t]
+  types n' (Function a' b') = a' : types (n' - 1) b'
+  types _ _ = []
+fnTypesN _ _ = []
+
 templparams :: Type -> [String]
 templparams t@(Template a) = [runType t]
 templparams (ParamTemplate p ts) = concatMap templparams ts ++ [p]
@@ -170,6 +180,10 @@ templparams _ = []
 templparams' :: Maybe Type -> [String]
 templparams' = sort . nub . maybe [] templparams
 
+templateName :: Type -> String
+templateName (Template name) = name
+templateName _ = []
+
 dataCon :: ModuleName -> T.Type -> [Type]
 dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)
 dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _))
@@ -180,6 +194,8 @@ dataCon m a
   | Just a' <- mktype m a = [a']
   | otherwise = []
 
+-- TODO: this should be moved out of this module
+--
 qualifiedToStr :: ModuleName -> (a -> Ident) -> Qualified a -> String
 qualifiedToStr _ f (Qualified (Just (ModuleName [ProperName mn])) a) | mn == C.prim = runIdent $ f a
 qualifiedToStr m f (Qualified (Just m') a) | m /= m' = moduleNameToCpp m' ++ "::" ++ identToCpp (f a)
