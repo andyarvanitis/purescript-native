@@ -26,7 +26,7 @@ module Language.PureScript.CodeGen.Cpp (
 
 import Data.List
 import Data.Function (on)
-import Data.Maybe (mapMaybe, fromMaybe)
+import Data.Maybe
 import qualified Data.Traversable as T (traverse)
 import qualified Data.Map as M
 
@@ -207,26 +207,27 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         f' <- exprToCpp f
         let fn = case arg' of
                    CppInstance _ _ _ params ->
-                     let params' = fst <$> params
+                     let params' = (runType . Template . fst) <$> params
                          fnTyList = maybe [] (fnTypesN (length args')) (mktype mn ty)
                          exprTyList = (tyFromExpr <$> tail args) ++ [tyFromExpr e]
-                         tysMapping = zip (templateName <$> fnTyList) exprTyList
-                         templTys = nubBy ((==) `on` fst) $ filter (not . null . fst) tysMapping
-                         templTys' = sortBy (compare `on` fst) $ filter (not . flip elem params' . fst) templTys
-                         tyStrs = snd <$> templTys' in
-                     varAsTemplate f' tyStrs
+                         tysMapping = zip fnTyList exprTyList
+                         tysMapping' = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) tysMapping
+                         templArgs = concat $ templateArgs <$> tysMapping'
+                         templArgs' = filter (not . (`elem` params') . fst) templArgs
+                     in
+                     varAsTemplate f' (snd <$> templArgs')
                    _ -> f'
         return $ flip (foldl (\fn' a -> CppApp fn' [a])) (arg' : args') fn
         where
-        tyFromExpr :: CI.Expr Ann -> String
-        tyFromExpr expr = typestr mn (fromExpr expr)
+        tyFromExpr :: CI.Expr Ann -> Maybe Type
+        tyFromExpr expr = fromExpr expr >>= mktype mn
           where
-          fromExpr (CI.AnonFunction (_, _, Just t, _) _ _) = t
-          fromExpr (CI.App (_, _, Just t, _) _ _) = t
-          fromExpr (CI.Var (_, _, Just t, _) _) = t
-          fromExpr (CI.Literal (_, _, Just t, _) _) = t
-          fromExpr (CI.Accessor (_, _, Just t, _) _ _) = t
-          fromExpr _ = error $ show expr
+          fromExpr (CI.AnonFunction (_, _, t, _) _ _) = t
+          fromExpr (CI.App (_, _, t, _) _ _) = t
+          fromExpr (CI.Var (_, _, t, _) _) = t
+          fromExpr (CI.Literal (_, _, t, _) _) = t
+          fromExpr (CI.Accessor (_, _, t, _) _ _) = t
+          fromExpr _ = Nothing
         varAsTemplate :: Cpp -> [String] -> Cpp
         varAsTemplate cpp [] = cpp
         varAsTemplate (CppVar name) ps = CppVar (name ++ '<' : intercalate "," ps ++ ">")

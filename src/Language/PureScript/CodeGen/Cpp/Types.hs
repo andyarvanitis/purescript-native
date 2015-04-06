@@ -20,6 +20,8 @@ module Language.PureScript.CodeGen.Cpp.Types where
 import Data.List
 import Data.Char
 import Data.Maybe
+import Data.Function (on)
+import Control.Applicative
 import Language.PureScript.Names
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.AST
@@ -211,3 +213,46 @@ qualDataTypeName _ _ = []
 runQualifier :: CppQualifier -> String
 runQualifier CppStatic = "static"
 runQualifier CppInline = "inline"
+
+templateArgs :: (Type, Type) -> [(String,String)]
+templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
+  where
+    go :: [(String,String)] -> (Type, Type) -> [(String,String)]
+    go args (Native t, Native t') | t == t' = args
+    go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
+    go args (EffectFunction b, EffectFunction b') = args ++ (go [] (b, b'))
+    go args (Data t, Data t') = go args (t, t')
+    go args (Specialized t [], Specialized t' []) = go args (t, t')
+    go args (Specialized t ts, Specialized t' ts') = args ++ (go [] (t, t')) ++ (concatMap (go []) $ zip ts ts')
+    go args (List t, List t') = go args (t, t')
+    go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(runType a, [])]
+    go args (a@(Template _), a'@(Template _)) = args ++ [(runType a, runType a')]
+    go args (a@(Template _), a') = args ++ [(runType a, runType a')]
+    go args (ParamTemplate _ ts, ParamTemplate _ ts') = args ++ zip (runType <$> ts) (runType <$> ts')
+    go args (a@(ParamTemplate _ _), a') = args ++ fromParamTemplate a a'
+    go _ (t1', t2') = error $ "Mismatched type structure! " ++ runType t1' ++ " ; " ++ runType t2'
+
+    fromParamTemplate :: Type -> Type -> [(String,String)]
+    fromParamTemplate (ParamTemplate name ts) t
+      | not (any isTemplate ts) = [(name, typeName t)]
+      where
+        isTemplate Template{} = True
+        isTemplate _ = False
+    fromParamTemplate (ParamTemplate _ [a, b]) (Function a' b') =
+      [ (runType a, runType a')
+      , (runType b, runType b')
+      ]
+    fromParamTemplate (ParamTemplate _ [b]) (EffectFunction b') =
+      [ (runType b, runType b')
+      ]
+    fromParamTemplate (ParamTemplate _ [a]) (List a') =
+      [ (runType a, runType a')
+      ]
+    fromParamTemplate (ParamTemplate _ [a]) (Data a') =
+      [ (runType a, runType a')
+      ]
+    fromParamTemplate (ParamTemplate _ [b]) (Function a' b') =
+      [ (runType a', runType a') -- TODO: make sure this makes sense
+      , (runType b, runType b')
+      ]
+    fromParamTemplate ts t = error $ show "Can't map types! " ++ show ts ++ " ; " ++ show t
