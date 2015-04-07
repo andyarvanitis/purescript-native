@@ -90,7 +90,7 @@ data Cpp
   -- |
   -- A function introduction (name, template types, arguments, return type, qualifiers, body)
   --
-  | CppFunction String [String] [(String, String)] String [CppQualifier] Cpp
+  | CppFunction String [(String, Int)] [(String, String)] String [CppQualifier] Cpp
   -- |
   -- A lambda introduction (arguments, return type, body)
   --
@@ -98,7 +98,7 @@ data Cpp
   -- |
   -- A C++ struct declaration (name with any template types, superclasses, class methods, instance methods)
   --
-  | CppStruct (String, Either [String] [String]) [(String, [String])] [Cpp] [Cpp]
+  | CppStruct (String, Either [(String, Int)] [String]) [(String, [String])] [Cpp] [Cpp]
   -- |
   -- Function application
   --

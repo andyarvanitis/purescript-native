@@ -63,7 +63,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   additional <- asks optionsAdditional
   cppImports <- T.traverse (pure . runModuleName) . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
   let cppImports' = "PureScript" : cppImports
-  let foreigns' = mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
+  let foreigns' = [] -- mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
   cppDecls <- mapM declToCpp decls
   optimized <- T.traverse optimize (concatMap expandSeq cppDecls)
   let isModuleEmpty = null exps
@@ -126,15 +126,18 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   --
   declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
     | Just (params, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
-    let tmps = runType . Template <$> params in
-    return $ CppStruct (ctor, Left params)
+    let tmps = runType . Template <$> params
+        fnTemplPs = concatMap (templparams' . mktype mn . snd) fns
+        classTemplParams = zip tmps $ fromMaybe 0 . flip lookup fnTemplPs <$> tmps
+    in
+    return $ CppStruct (ctor, Left classTemplParams)
                        (toStrings <$> constraints)
                        (toFn tmps <$> fns)
                        []
     where
     toFn :: [String] -> (Ident, T.Type) -> Cpp
     toFn tmps (Ident name, ty) = CppFunction name
-                                             (templparams' (mktype mn ty) \\ tmps)
+                                             (filter (not . (`elem` tmps) . fst) $ templparams' (mktype mn ty))
                                              [([], argtype' mn ty)]
                                              (rettype' mn ty)
                                              [CppStatic]
@@ -189,8 +192,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     return $ CppLambda [(identToCpp arg, argtype' mn ty)] (rettype' mn ty) body
   exprToCpp (CI.AnonFunction _ args stmnts') = return CppNoOp -- TODO: non-curried lambdas
 
+  -- |
+  -- Function application
+  --
   exprToCpp (CI.App _ f []) = flip CppApp [] <$> exprToCpp f
-
   exprToCpp e@CI.App{} = do
     let (f, args) = unApp e []
     (arg' : args') <- mapM exprToCpp args
@@ -198,11 +203,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       CI.Var (_, _, _, Just IsNewtype) _ -> return arg'
       CI.Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
         return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) (arg' : args')
-
-      -- TODO: remove after confirming no longer needed
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
         return CppNoOp
-
+      -------------------------------------------------------------------------
       CI.Var (_, _, Just ty, _) name -> do
         f' <- exprToCpp f
         let fn = case arg' of

@@ -170,21 +170,17 @@ fnTypesN n (Function a b) = a : types (n - 1) b
   types _ _ = []
 fnTypesN _ _ = []
 
-templparams :: Type -> [String]
-templparams t@(Template a) = [runType t]
-templparams (ParamTemplate p ts) = concatMap templparams ts ++ [p]
+templparams :: Type -> [(String, Int)]
+templparams t@(Template a) = [(runType t, 0)]
+templparams (ParamTemplate p ts) = concatMap templparams ts ++ [(runType (Template p), length ts)]
 templparams (Function a b) = templparams a ++ templparams b
 templparams (EffectFunction b) = templparams b
 templparams (List a) = templparams a
 templparams (Data a) = templparams a
 templparams _ = []
 
-templparams' :: Maybe Type -> [String]
-templparams' = sort . nub . maybe [] templparams
-
-templateName :: Type -> String
-templateName (Template name) = name
-templateName _ = []
+templparams' :: Maybe Type -> [(String, Int)]
+templparams' = sortBy (compare `on` fst) . nub . maybe [] templparams
 
 dataCon :: ModuleName -> T.Type -> [Type]
 dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)

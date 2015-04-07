@@ -95,7 +95,7 @@ literals = mkPattern' match
   match (CppStruct (name, params) supers cms _) = fmap concat $ sequence
     [ return "\n"
     , currentIndent
-    , return (templDecl params)
+    , return (templDecl' params)
     , return "\n"
     , currentIndent
     , return $ "struct " ++ classstr (name, either (const []) id params)
@@ -244,7 +244,7 @@ fun = mkPattern' match
   where
   match (CppFunction name tmps args rty qs ret) = do
     indentString <- currentIndent
-    let templ = if null tmps then [] else templDecl (Left tmps) ++ "\n" ++ indentString
+    let templ = if null tmps then [] else templDecl' (Left tmps) ++ "\n" ++ indentString
     return ((templ, name, args, rty, runQualifier <$> qs), ret)
   match _ = mzero
 
@@ -409,8 +409,15 @@ argstr ([], typ) = typ
 argstr (name, []) = "auto " ++ name
 argstr (name, typ) = typ ++ ' ' : name
 
-templDecl :: Either [String] [String] -> String
-templDecl (Left []) = []
-templDecl (Left params) = "template <typename " ++ intercalate ", typename " (runType . Template <$> params) ++ ">"
-templDecl (Right []) = []
-templDecl (Right _) = "template <>"
+templDecl :: [(String, Int)] -> String
+templDecl ps = "template <" ++ intercalate ", " (go <$> ps) ++ ">"
+  where
+  go :: (String, Int) -> String
+  go (name, 0) = "typename " ++ (runType $ Template name)
+  go (name, n) = templDecl (flip (,) 0 . ("_T" ++) . show <$> [1..n]) ++ " class " ++ (runType $ Template name)
+
+templDecl' :: Either [(String, Int)] [String] -> String
+templDecl' (Left []) = []
+templDecl' (Left params) = templDecl params
+templDecl' (Right []) = []
+templDecl' (Right _) = templDecl []
