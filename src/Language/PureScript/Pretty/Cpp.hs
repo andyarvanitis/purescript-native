@@ -414,7 +414,8 @@ templDecl ps = "template <" ++ intercalate ", " (go <$> ps) ++ ">"
   where
   go :: (String, Int) -> String
   go (name, 0) = "typename " ++ (runType $ Template name)
-  go (name, n) = templDecl (flip (,) 0 . ("_T" ++) . show <$> [1..n]) ++ " class " ++ (runType $ Template name)
+  go (name, n) = let name' = runType (Template name) in
+                 templDecl (flip (,) 0 . (('_' : name') ++) . show <$> [1..n]) ++ " class " ++ name'
 
 templDecl' :: Either [(String, Int)] [String] -> String
 templDecl' (Left []) = []

@@ -86,8 +86,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     | Just (classname, typs) <- findInstance (Qualified (Just mn) ident),
       Just (params, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
-    let classname' = qualifiedToStr mn (Ident . runProperName) classname
-    let inst = CppInstance [] classname' [] (zip params typs)
+        classname' = qualifiedToStr mn (Ident . runProperName) classname
+        inst = CppInstance [] classname' [] (zip params typs)
     cpps <- mapM toFn (zip fns fs)
     return $ CppStruct (classname', Right typs) [] cpps []
     where
