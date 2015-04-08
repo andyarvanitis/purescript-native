@@ -206,7 +206,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.App _ f []) = flip CppApp [] <$> exprToCpp f
   exprToCpp e@CI.App{} = do
     let (f, args) = unApp e []
---     let nonDictArgs = filter (not . isDict) args
+    let nonDictArgs = filter (not . isDict) args
     args' <- mapM exprToCpp args
     case f of
       CI.Var (_, _, _, Just IsNewtype) _ -> return (head args')
@@ -217,32 +217,32 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       CI.Var (_, _, Just ty, _) (Qualified _ name) -> do
         f' <- exprToCpp f
         let
---           extracted = extractTempl name ty <$> args'
-          argsToApp = args' -- catMaybes $ fst <$> extracted
---           templ = nub . sort $ concatMap snd extracted
-          fnToApp = f' -- varAsTemplate f' (snd <$> templ)
+          extracted = extractTempl name ty <$> args'
+          argsToApp = catMaybes $ fst <$> extracted
+          templ = nub . sort $ concatMap snd extracted
+          fnToApp = varAsTemplate f' (snd <$> templ)
         return $ flip (foldl (\fn' a -> CppApp fn' [a])) argsToApp fnToApp
         where
---         extractTempl :: Ident -> T.Type -> Cpp -> (Maybe Cpp, [(String, String)])
---         extractTempl name ty arg
---           | CppInstance _ (_, fns) _ params <- arg
---           = let
---               params' = (runType . Template . fst) <$> params
---               fnTyList = maybe [] (fnTypesN (length nonDictArgs)) (mktype mn ty)
---               exprTyList = (tyFromExpr <$> nonDictArgs) ++ [tyFromExpr e]
---               tysMapping = zip fnTyList exprTyList
---               tysMapping' = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) tysMapping
---               templArgs = nub . sort . concat $ templateArgs <$> tysMapping'
---             in
---             if identToCpp name `elem` fns then
---               (Just arg, filter (not . (`elem` params') . fst) templArgs)
---             else
---               (Nothing, templArgs)
---           | otherwise = (Just arg, [])
---         varAsTemplate :: Cpp -> [String] -> Cpp
---         varAsTemplate cpp [] = cpp
---         varAsTemplate (CppVar name) ps = CppVar ("template " ++ name ++ '<' : intercalate "," ps ++ ">")
---         varAsTemplate cpp _ = cpp
+        extractTempl :: Ident -> T.Type -> Cpp -> (Maybe Cpp, [(String, String)])
+        extractTempl name ty arg
+          | CppInstance _ (_, fns) _ params <- arg
+          = let
+              params' = (runType . Template . fst) <$> params
+              fnTyList = maybe [] (fnTypesN (length nonDictArgs)) (mktype mn ty)
+              exprTyList = (tyFromExpr <$> nonDictArgs) ++ [tyFromExpr e]
+              tysMapping = zip fnTyList exprTyList
+              tysMapping' = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) tysMapping
+              templArgs = nub . sort . concat $ templateArgs <$> tysMapping'
+            in
+            if identToCpp name `elem` fns then
+              (Just arg, filter (not . (`elem` params') . fst) templArgs)
+            else
+              (Nothing, templArgs)
+          | otherwise = (Just arg, [])
+        varAsTemplate :: Cpp -> [String] -> Cpp
+        varAsTemplate cpp [] = cpp
+        varAsTemplate (CppVar name) ps = CppVar (name ++ '<' : intercalate "," ps ++ ">")
+        varAsTemplate cpp _ = cpp
 
       -- TODO: verify this
       _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
@@ -260,8 +260,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       where
       modname m | m == mn = []
       modname m = runModuleName m
-  -- | Constraint dictionary
-  exprToCpp (CI.Var (_, _, Nothing, Nothing) (Qualified Nothing _)) = return CppNoOp
   exprToCpp (CI.Var _ ident) =
     return $ varToCpp ident
     where
@@ -325,6 +323,22 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   qualifiedToCpp f (Qualified (Just mn') a) | mn /= mn' = CppAccessor (identToCpp $ f a) (CppScope (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
 
+  -- TODO: These checks (esp the string one) are bad -- find a better way or propose a change to PS
+  isDict :: CI.Expr Ann -> Bool
+  isDict (CI.Var (_, _, Nothing, Nothing) (Qualified (Just _) _)) = True
+  isDict (CI.Var (_, _, Nothing, Nothing) (Qualified Nothing (Ident name))) | "__dict_" `isPrefixOf` name = True
+  isDict _ = False
+
+  tyFromExpr :: CI.Expr Ann -> Maybe Type
+  tyFromExpr expr = go expr >>= mktype mn
+    where
+    go (CI.AnonFunction (_, _, t, _) _ _) = t
+    go (CI.App (_, _, t, _) _ _) = t
+    go (CI.Var (_, _, t, _) _) = t
+    go (CI.Literal (_, _, t, _) _) = t
+    go (CI.Accessor (_, _, t, _) _ _) = t
+    go _ = Nothing
+
   -- |
   -- Find a type class instance in scope by name, retrieving its class name and construction types.
   --
@@ -344,18 +358,3 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     | Just (params, fns, constraints) <- M.lookup name (typeClasses env)
       = Just (fst <$> params, constraints, (sortBy (compare `on` fst) fns))
   findClass _ = Nothing
-
-  -- TODO: move
-  isDict :: CI.Expr Ann -> Bool
-  isDict (CI.Var (_, _, Nothing, Nothing) _) = True
-  isDict _ = False
-  -- TODO: move
-  tyFromExpr :: CI.Expr Ann -> Maybe Type
-  tyFromExpr expr = go expr >>= mktype mn
-    where
-    go (CI.AnonFunction (_, _, t, _) _ _) = t
-    go (CI.App (_, _, t, _) _ _) = t
-    go (CI.Var (_, _, t, _) _) = t
-    go (CI.Literal (_, _, t, _) _) = t
-    go (CI.Accessor (_, _, t, _) _ _) = t
-    go _ = Nothing

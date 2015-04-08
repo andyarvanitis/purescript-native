@@ -113,6 +113,7 @@ literals = mkPattern' match
   match (CppInstance [] (cls, _) _ params) = return $ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
   match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
   match (CppScope ident) = return ident
+  match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction ident value) = fmap concat $ sequence
     [ return "auto "
@@ -231,7 +232,11 @@ scope = mkPattern match
   where
   match (CppAccessor prop val@CppScope{}) = Just (prop, val)
   match (CppApp val [inst@CppInstance{}]) =
-    Just (prettyPrintCpp1 val, (CppScope $ prettyPrintCpp1 inst))
+    let val' = case val of
+                 (CppAccessor v (CppScope _)) -> v
+                 _ -> prettyPrintCpp1 val
+        inst' = CppScope (prettyPrintCpp1 inst)
+    in Just (if '<' `elem` val' then "template " ++ val' else val', inst')
   match _ = Nothing
 
 indexer :: Pattern PrinterState Cpp (String, Cpp)
@@ -259,6 +264,7 @@ app :: Pattern PrinterState Cpp (String, Cpp)
 app = mkPattern' match
   where
   match (CppApp _ [CppInstance{}]) = mzero
+  match (CppApp _ [CppVar name]) | "__dict_" `isPrefixOf` name = mzero -- TODO: ugly
   match (CppApp _ [CppNoOp]) = mzero
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
