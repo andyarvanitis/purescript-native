@@ -131,6 +131,8 @@ mktype m (T.ForAll _ ty _) = mktype m ty
 mktype _ (T.Skolem name _ _) = Just $ Template (identToCpp $ Ident name)
 mktype _ (T.TypeVar name) = Just $ Template (identToCpp $ Ident name)
 mktype _ (T.TUnknown n) = Just $ Template ('T' : show n)
+mktype m (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) =
+  Just $ Native (typeName (Function (Template []) (Template [])))
 mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a)
 mktype m (T.ConstrainedType _ ty) = mktype m ty
 mktype _ (T.RCons _ _ _) = Just $ Template "rowType"
@@ -224,7 +226,9 @@ templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
     go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(runType a, [])]
     go args (a@(Template _), a'@(Template _)) = args ++ [(runType a, runType a')]
     go args (a@(Template _), a') = args ++ [(runType a, runType a')]
-    go args (ParamTemplate _ ts, ParamTemplate _ ts') = args ++ zip (runType <$> ts) (runType <$> ts')
+    go args (ParamTemplate p ts, ParamTemplate p' ts') = args ++ (p, p') : zip (runType <$> ts) (runType <$> ts')
+    go args (ParamTemplate t [a, b], Function a' b') =
+      args ++ (runType (Template t), typeName (Function a' b')) : (go [] (a, a')) ++ (go [] (b, b'))
     go args (a@(ParamTemplate _ _), a') = args ++ fromParamTemplate a a'
     go _ (t1', t2') = error $ "Mismatched type structure! " ++ runType t1' ++ " ; " ++ runType t2'
 

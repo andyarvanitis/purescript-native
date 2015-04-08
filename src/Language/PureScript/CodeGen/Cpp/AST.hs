@@ -112,9 +112,9 @@ data Cpp
   --
   | CppVar String
   -- |
-  -- Typeclass instance (module, classname, instance name, parameters [names, types])
+  -- Typeclass instance (module, classname and fns, instance name, parameters [names, types])
   --
-  | CppInstance String String String [(String, String)]
+  | CppInstance String (String, [String]) String [(String, String)]
   -- |
   -- Scope (e.g., namespace, class static member, etc.)
   --

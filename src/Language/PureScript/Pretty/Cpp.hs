@@ -110,9 +110,10 @@ literals = mkPattern' match
     , return "};"
     ]
   match (CppVar ident) = return ident
-  match (CppInstance [] cls _ params) = return $ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
-  match (CppInstance mn cls _ params) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
+  match (CppInstance [] (cls, _) _ params) = return $ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
+  match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
   match (CppScope ident) = return ident
+  match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction ident value) = fmap concat $ sequence
     [ return "auto "
     , return ident
@@ -258,6 +259,7 @@ app :: Pattern PrinterState Cpp (String, Cpp)
 app = mkPattern' match
   where
   match (CppApp _ [CppInstance{}]) = mzero
+  match (CppApp _ [CppNoOp]) = mzero
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
     return (intercalate ", " cpps, val)
