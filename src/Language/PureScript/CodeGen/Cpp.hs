@@ -226,25 +226,26 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         return $ flip (foldl (\fn' a -> CppApp fn' [a])) argsToApp fnToApp
         where
         extractTempl :: Cpp -> (Maybe Cpp, [(String, String)])
-        extractTempl arg
-          | CppInstance modname cls@(cn, fns) inst params <- arg
-          = let
-              fnTyList = maybe [] (fnTypesN (length nonDictArgs)) (mktype mn ty)
-              exprTyList = (tyFromExpr <$> nonDictArgs) ++ [tyFromExpr e]
-              tysMapping = zip fnTyList exprTyList
-              tysMapping' = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) tysMapping
-              templArgs = nub . sort . concat $ templateArgs <$> tysMapping'
-            in
-            if (runModuleName mn' == modname) && (identToCpp ident `elem` fns) then
-              let
-                params' = if any (null . snd) params then
-                            zip (fst <$> params) $ fromMaybe "?" . flip lookup templArgs . fst <$> params
-                          else params
-                arg' = CppInstance modname cls inst params'
-              in (Just arg', filter (not . (`elem` (fst <$> params)) . fst) templArgs)
-            else
-              (Nothing, templArgs)
-          | otherwise = (Just arg, [])
+        extractTempl (CppInstance modname (cn, fns) inst params) =
+          let
+            fnTyList = maybe [] (fnTypesN (length nonDictArgs)) (mktype mn ty)
+            exprTyList = (tyFromExpr <$> nonDictArgs) ++ [tyFromExpr e]
+            tysMapping = zip fnTyList exprTyList
+            tysMapping' = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) tysMapping
+            templArgs = nub . sort . concat $ templateArgs <$> tysMapping'
+          in
+          if (runModuleName mn' == modname) && (identToCpp ident `elem` fns) then
+            let
+              params' = if any (null . snd) params then
+                          zip (fst <$> params) $ fromMaybe "?" . flip lookup templArgs . fst <$> params
+                        else params
+              arg' = CppInstance modname (cn, fns) inst params'
+            in (Just arg', filter (not . (`elem` (fst <$> params)) . fst) templArgs)
+          else
+            (Nothing, templArgs)
+        extractTempl arg@(CppApp (CppIndexer _ inst@CppInstance{}) [CppVar "undefined"]) =
+          traceShow arg $ (Nothing, [])
+        extractTempl arg = (Just arg, [])
 
       -- TODO: verify this
       _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f

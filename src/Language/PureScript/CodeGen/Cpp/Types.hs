@@ -238,4 +238,4 @@ templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
       args ++ (runType (Template t), typeName (List a')) : (go [] (a, a'))
     go args (ParamTemplate t [a], Data a') =
       args ++ (runType (Template t), typeName (Data a')) : (go [] (a, a'))
-    go _ (t1', t2') = error $ "Mismatched type structure! " ++ runType t1' ++ " ; " ++ runType t2'
+    go _ (t1', t2') = error $ "Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2'
