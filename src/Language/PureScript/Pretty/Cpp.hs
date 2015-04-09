@@ -113,7 +113,7 @@ literals = mkPattern' match
   match (CppInstance [] (cls, _) _ params) = return $ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
   match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
   match (CppScope ident) = return ident
-  match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
+--   match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction ident value) = fmap concat $ sequence
     [ return "auto "
@@ -264,7 +264,7 @@ app :: Pattern PrinterState Cpp (String, Cpp)
 app = mkPattern' match
   where
   match (CppApp _ [CppInstance{}]) = mzero
-  match (CppApp _ [CppVar name]) | "__dict_" `isPrefixOf` name = mzero -- TODO: ugly
+--   match (CppApp _ [CppVar name]) | "__dict_" `isPrefixOf` name = mzero -- TODO: ugly
   match (CppApp _ [CppNoOp]) = mzero
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
@@ -421,9 +421,8 @@ templDecl :: [(String, Int)] -> String
 templDecl ps = "template <" ++ intercalate ", " (go <$> ps) ++ ">"
   where
   go :: (String, Int) -> String
-  go (name, 0) = "typename " ++ (runType $ Template name)
-  go (name, n) = let name' = runType (Template name) in
-                 templDecl (flip (,) 0 . (('_' : name') ++) . show <$> [1..n]) ++ " class " ++ name'
+  go (name, 0) = "typename " ++ name
+  go (name, n) = templDecl (flip (,) 0 . (('_' : name) ++) . show <$> [1..n]) ++ " class " ++ name
 
 templDecl' :: Either [(String, Int)] [String] -> String
 templDecl' (Left []) = []

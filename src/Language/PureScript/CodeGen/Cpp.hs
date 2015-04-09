@@ -25,6 +25,7 @@ module Language.PureScript.CodeGen.Cpp (
 ) where
 
 import Data.List
+import Data.Char
 import Data.Function (on)
 import Data.Maybe
 import qualified Data.Traversable as T (traverse)
@@ -87,7 +88,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       Just (params, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
         classname' = qualifiedToStr mn (Ident . runProperName) classname
-        inst = CppInstance [] (classname', (identToCpp . fst) <$> fns) [] (zip params typs)
+        params' = runType . Template <$> params
+        inst = CppInstance [] (classname', identToCpp . fst <$> fns) [] (zip params' typs)
     cpps <- mapM toFn (zip fns fs)
     return $ CppStruct (classname', Right typs) [] cpps []
     where
@@ -214,35 +216,35 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) args'
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
         return CppNoOp
-      CI.Var (_, _, Just ty, _) (Qualified _ name) -> do
+      CI.Var (_, _, Just ty, _) (Qualified (Just mn') ident) -> do
         f' <- exprToCpp f
         let
-          extracted = extractTempl name ty <$> args'
+          extracted = extractTempl <$> args'
           argsToApp = catMaybes $ fst <$> extracted
           templ = nub . sort $ concatMap snd extracted
           fnToApp = varAsTemplate f' (snd <$> templ)
         return $ flip (foldl (\fn' a -> CppApp fn' [a])) argsToApp fnToApp
         where
-        extractTempl :: Ident -> T.Type -> Cpp -> (Maybe Cpp, [(String, String)])
-        extractTempl name ty arg
-          | CppInstance _ (_, fns) _ params <- arg
+        extractTempl :: Cpp -> (Maybe Cpp, [(String, String)])
+        extractTempl arg
+          | CppInstance modname cls@(cn, fns) inst params <- arg
           = let
-              params' = (runType . Template . fst) <$> params
               fnTyList = maybe [] (fnTypesN (length nonDictArgs)) (mktype mn ty)
               exprTyList = (tyFromExpr <$> nonDictArgs) ++ [tyFromExpr e]
               tysMapping = zip fnTyList exprTyList
               tysMapping' = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) tysMapping
               templArgs = nub . sort . concat $ templateArgs <$> tysMapping'
             in
-            if identToCpp name `elem` fns then
-              (Just arg, filter (not . (`elem` params') . fst) templArgs)
+            if (runModuleName mn' == modname) && (identToCpp ident `elem` fns) then
+              let
+                params' = if any (null . snd) params then
+                            zip (fst <$> params) $ fromMaybe "?" . flip lookup templArgs . fst <$> params
+                          else params
+                arg' = CppInstance modname cls inst params'
+              in (Just arg', filter (not . (`elem` (fst <$> params)) . fst) templArgs)
             else
               (Nothing, templArgs)
           | otherwise = (Just arg, [])
-        varAsTemplate :: Cpp -> [String] -> Cpp
-        varAsTemplate cpp [] = cpp
-        varAsTemplate (CppVar name) ps = CppVar (name ++ '<' : intercalate "," ps ++ ">")
-        varAsTemplate cpp _ = cpp
 
       -- TODO: verify this
       _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
@@ -255,11 +257,19 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))
     | Just (qname@(Qualified (Just mn') (ProperName classname)), types) <- findInstance ident,
       Just (params, _, fns) <- findClass qname
-    = let fs' = (identToCpp . fst) <$> fns in
-      return $ CppInstance (modname mn') (classname, fs') instname (zip params types)
-      where
-      modname m | m == mn = []
-      modname m = runModuleName m
+    = let fs' = identToCpp . fst <$> fns
+          params' = runType . Template <$> params
+      in return $ CppInstance (runModuleName mn') (classname, fs') instname (zip params' types)
+ -- TODO: Make sure this pattern will not change in PS
+  exprToCpp (CI.Var (_, _, Nothing, Nothing) (Qualified Nothing (Ident name)))
+    | Just prefixStripped <- stripPrefix "__dict_"  name,
+      '_' : reversedName <- dropWhile isNumber (reverse prefixStripped),
+      classname <- reverse $ takeWhile (not . isPunctuation) reversedName,
+      modname <- reverse . drop 1 $ dropWhile (not . isPunctuation) reversedName,
+      Just (params, _, fns) <- findClass (Qualified (Just (ModuleName [ProperName modname])) (ProperName classname))
+    = let fs' = identToCpp . fst <$> fns
+          params' = runType . Template <$> params
+      in return $ CppInstance modname (classname, fs') [] (zip params' (repeat []))
   exprToCpp (CI.Var _ ident) =
     return $ varToCpp ident
     where
@@ -338,6 +348,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go (CI.Literal (_, _, t, _) _) = t
     go (CI.Accessor (_, _, t, _) _ _) = t
     go _ = Nothing
+
+  varAsTemplate :: Cpp -> [String] -> Cpp
+  varAsTemplate cpp [] = cpp
+  varAsTemplate (CppVar name) ps = CppVar (name ++ '<' : intercalate "," ps ++ ">")
+  varAsTemplate (CppAccessor name _) ps = varAsTemplate (CppVar name) ps
+  varAsTemplate cpp _ = cpp
 
   -- |
   -- Find a type class instance in scope by name, retrieving its class name and construction types.

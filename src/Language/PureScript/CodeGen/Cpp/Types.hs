@@ -226,33 +226,16 @@ templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
     go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(runType a, [])]
     go args (a@(Template _), a'@(Template _)) = args ++ [(runType a, runType a')]
     go args (a@(Template _), a') = args ++ [(runType a, runType a')]
-    go args (ParamTemplate p ts, ParamTemplate p' ts') = args ++ (p, p') : zip (runType <$> ts) (runType <$> ts')
+    go args (ParamTemplate p ts, ParamTemplate p' ts') =
+      args ++ (runType (Template p), runType (Template p')) : zip (runType <$> ts) (runType <$> ts')
     go args (ParamTemplate t [a, b], Function a' b') =
       args ++ (runType (Template t), typeName (Function a' b')) : (go [] (a, a')) ++ (go [] (b, b'))
-    go args (a@(ParamTemplate _ _), a') = args ++ fromParamTemplate a a'
+    go args (ParamTemplate t [b], Function a' b') = -- TODO: check the validity of this
+      args ++ (runType (Template t), typeName (Function a' b')) : (go [] (a', a')) ++ (go [] (b, b'))
+    go args (ParamTemplate t [b], EffectFunction b') =
+      args ++ (runType (Template t), typeName (EffectFunction b')) : (go [] (b, b'))
+    go args (ParamTemplate t [a], List a') =
+      args ++ (runType (Template t), typeName (List a')) : (go [] (a, a'))
+    go args (ParamTemplate t [a], Data a') =
+      args ++ (runType (Template t), typeName (Data a')) : (go [] (a, a'))
     go _ (t1', t2') = error $ "Mismatched type structure! " ++ runType t1' ++ " ; " ++ runType t2'
-
-    fromParamTemplate :: Type -> Type -> [(String,String)]
-    fromParamTemplate (ParamTemplate name ts) t
-      | not (any isTemplate ts) = [(name, typeName t)]
-      where
-        isTemplate Template{} = True
-        isTemplate _ = False
-    fromParamTemplate (ParamTemplate _ [a, b]) (Function a' b') =
-      [ (runType a, runType a')
-      , (runType b, runType b')
-      ]
-    fromParamTemplate (ParamTemplate _ [b]) (EffectFunction b') =
-      [ (runType b, runType b')
-      ]
-    fromParamTemplate (ParamTemplate _ [a]) (List a') =
-      [ (runType a, runType a')
-      ]
-    fromParamTemplate (ParamTemplate _ [a]) (Data a') =
-      [ (runType a, runType a')
-      ]
-    fromParamTemplate (ParamTemplate _ [b]) (Function a' b') =
-      [ (runType a', runType a') -- TODO: make sure this makes sense
-      , (runType b, runType b')
-      ]
-    fromParamTemplate ts t = error $ show "Can't map types! " ++ show ts ++ " ; " ++ show t
