@@ -91,7 +91,7 @@ mktype m (T.TypeApp
 -- This covers ((->) r)
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-             _) = Just $ Native (typeName (Function (Template []) (Template [])))
+             T.TypeVar{}) = Just $ Native (typeName (Function (Template []) (Template [])))
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
@@ -106,23 +106,32 @@ mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
              t@(T.RCons _ _ _)) = mktype m t
 
+mktype m (T.TypeApp
+            (T.TypeApp
+              (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
+                                                                ProperName "Monad",
+                                                                ProperName "Eff"]))) (ProperName "Eff")))
+               _) e) | Just t <- mktype m e = Just $ EffectFunction t
+
+mktype m (T.TypeApp _
+           (T.TypeApp
+             (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
+                                                               ProperName "Monad",
+                                                               ProperName "Eff"]))) (ProperName "Eff")))
+             e)) | Just t <- mktype m e = Just $ EffectFunction t
+
+mktype m (T.TypeApp
+            (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
+                                                              ProperName "Monad",
+                                                              ProperName "Eff"]))) (ProperName "Eff")))
+            _) = Just $ Native (typeName (EffectFunction (Template [])))
+
 mktype m app@T.TypeApp{}
   | (name, tys@(_:_)) <- tyapp app [] = Just $ ParamTemplate (identToCpp $ Ident name) tys
   where
     tyapp :: T.Type -> [Type] -> (String, [Type])
     tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (identToCpp $ Ident name, b':ts)
     tyapp (T.TypeApp (T.Skolem name _ _) b) ts | Just b' <- mktype m b = (identToCpp $ Ident name, b':ts)
-    tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t':ts)
-    tyapp _ _ = ([],[])
-
-mktype m app@T.TypeApp{}
-  | (_, tys@(_:_)) <- tyapp app [] = Just $ EffectFunction (last tys)
-  where
-    tyapp :: T.Type -> [Type] -> (String, [Type])
-    -- tyapp (T.TypeApp (T.TypeVar name) b) ts | Just b' <- mktype m b = (identToCpp $ Ident name, b':ts)
-    tyapp (T.TypeApp (T.Skolem name _ _) b) ts | Just b' <- mktype m b = (identToCpp $ Ident name, b':ts)
-    tyapp (T.TypeApp (T.TypeConstructor name@(Qualified (Just _) (ProperName _))) b) ts
-      | Just b' <- mktype m b = (qualifiedToStr m (Ident . runProperName) name, b':ts)
     tyapp (T.TypeApp inner@(T.TypeApp _ _) t) ts | Just t' <- mktype m t = tyapp inner (t':ts)
     tyapp _ _ = ([],[])
 
@@ -142,6 +151,10 @@ mktype m (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (
   Just $ Native (typeName (Function (Template []) (Template [])))
 mktype m (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) =
   Just $ Native (typeName (List (Template [])))
+mktype m (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
+                                                           ProperName "Monad",
+                                                           ProperName "Eff"]))) (ProperName "Eff"))) =
+  Just $ Native (typeName (EffectFunction (Template [])))
 mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a)
 mktype m (T.ConstrainedType _ ty) = mktype m ty
 mktype _ (T.RCons _ _ _) = Just $ Template "rowType"
@@ -245,7 +258,7 @@ templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
     go args (List t, List t') = args ++ go [] (t, t')
     go args (Native t, Native t')
       | t == t' = args
-      | otherwise = trace ("Type conflict! " ++ t ++ " ; " ++ t') args
+      | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
     go _ (t1', t2') = error ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2')
 
     anytype :: Type
