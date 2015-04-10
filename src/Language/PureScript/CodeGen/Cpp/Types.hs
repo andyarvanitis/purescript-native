@@ -28,6 +28,8 @@ import Language.PureScript.CodeGen.Cpp.AST
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.Types as T
 
+import Debug.Trace
+
 data Type = Native String
           | Function Type Type
           | Data Type
@@ -86,6 +88,11 @@ mktype m (T.TypeApp
                a) b) | Just a' <- mktype m a, Just b' <- mktype m b = Just $ Function a' b'
                      | otherwise = Nothing
 
+-- This covers ((->) r)
+mktype m (T.TypeApp
+            (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+             _) = Just $ Native (typeName (Function (Template []) (Template [])))
+
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
              a) | Just t <- mktype m a = Just $ List t
@@ -133,6 +140,8 @@ mktype _ (T.TypeVar name) = Just $ Template (identToCpp $ Ident name)
 mktype _ (T.TUnknown n) = Just $ Template ('T' : show n)
 mktype m (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) =
   Just $ Native (typeName (Function (Template []) (Template [])))
+mktype m (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) =
+  Just $ Native (typeName (List (Template [])))
 mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a)
 mktype m (T.ConstrainedType _ ty) = mktype m ty
 mktype _ (T.RCons _ _ _) = Just $ Template "rowType"
@@ -216,26 +225,28 @@ templateArgs :: (Type, Type) -> [(String,String)]
 templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
   where
     go :: [(String,String)] -> (Type, Type) -> [(String,String)]
-    go args (Native t, Native t') | t == t' = args
+    go args (a@Template{}, a') = args ++ [(runType a, runType a')]
+    go args (ParamTemplate p ts, ParamTemplate p' ts') =
+      args ++ (runType (Template p), runType (Template p')) : concatMap (go []) (zip ts ts')
+    go args (ParamTemplate t [a, b], Function a' b') =
+      args ++ (runType (Template t), typeName (Function anytype anytype)) : (go [] (a, a')) ++ (go [] (b, b'))
+    go args (ParamTemplate t [b], EffectFunction b') =
+      args ++ (runType (Template t), typeName (EffectFunction anytype)) : (go [] (b, b'))
+    go args (ParamTemplate t [a], List a') =
+      args ++ (runType (Template t), typeName (List anytype)) : (go [] (a, a'))
+--  go args (ParamTemplate t [a], Data a') =
+--    args ++ (runType (Template t), typeName (Data a')) : (go [] (a, a'))
+--  go args (Specialized t [], Specialized t' []) = go args (t, t')
+--  go args (Specialized t ts, Specialized t' ts') = args ++ (go [] (t, t')) ++ (concatMap (go []) $ zip ts ts')
+--  go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(runType a, [])]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (EffectFunction b, EffectFunction b') = args ++ (go [] (b, b'))
     go args (Data t, Data t') = go args (t, t')
-    go args (Specialized t [], Specialized t' []) = go args (t, t')
-    go args (Specialized t ts, Specialized t' ts') = args ++ (go [] (t, t')) ++ (concatMap (go []) $ zip ts ts')
-    go args (List t, List t') = go args (t, t')
-    go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(runType a, [])]
-    go args (a@(Template _), a'@(Template _)) = args ++ [(runType a, runType a')]
-    go args (a@(Template _), a') = args ++ [(runType a, runType a')]
-    go args (ParamTemplate p ts, ParamTemplate p' ts') =
-      args ++ (runType (Template p), runType (Template p')) : zip (runType <$> ts) (runType <$> ts')
-    go args (ParamTemplate t [a, b], Function a' b') =
-      args ++ (runType (Template t), typeName (Function a' b')) : (go [] (a, a')) ++ (go [] (b, b'))
-    go args (ParamTemplate t [b], Function a' b') = -- TODO: check the validity of this
-      args ++ (runType (Template t), typeName (Function a' b')) : (go [] (a', a')) ++ (go [] (b, b'))
-    go args (ParamTemplate t [b], EffectFunction b') =
-      args ++ (runType (Template t), typeName (EffectFunction b')) : (go [] (b, b'))
-    go args (ParamTemplate t [a], List a') =
-      args ++ (runType (Template t), typeName (List a')) : (go [] (a, a'))
-    go args (ParamTemplate t [a], Data a') =
-      args ++ (runType (Template t), typeName (Data a')) : (go [] (a, a'))
-    go _ (t1', t2') = error $ "Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2'
+    go args (List t, List t') = args ++ go [] (t, t')
+    go args (Native t, Native t')
+      | t == t' = args
+      | otherwise = trace ("Type conflict! " ++ t ++ " ; " ++ t') args
+    go _ (t1', t2') = error ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2')
+
+    anytype :: Type
+    anytype = Template []
