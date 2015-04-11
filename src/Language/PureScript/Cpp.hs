@@ -289,7 +289,7 @@ importPrelude :: Module -> Module
 importPrelude = addDefaultImport (ModuleName [ProperName C.prelude])
 
 prelude :: String
-prelude = BU.toString $(embedFile "prelude/prelude.p11")
+prelude = BU.toString $(embedFile "prelude/prelude.purs")
 
 version :: Version
 version = Paths.version
