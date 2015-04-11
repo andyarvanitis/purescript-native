@@ -208,7 +208,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.App _ f []) = flip CppApp [] <$> exprToCpp f
   exprToCpp e@CI.App{} = do
     let (f, args) = unApp e []
-    let normalArgs = filter (not . isDict) args
     args' <- mapM exprToCpp args
     case f of
       CI.Var (_, _, _, Just IsNewtype) _ -> return (head args')
@@ -218,30 +217,30 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         return CppNoOp
       CI.Var (_, _, Just ty, _) (Qualified (Just mn') ident) -> do
         f' <- exprToCpp f
-        let
-          extracted = extractTempl <$> args'
-          argsToApp = catMaybes $ fst <$> extracted
-          templ = nub . sort $ concatMap snd extracted
-          fnToApp = varAsTemplate f' (snd <$> templ)
+        let extracted = extractTempl <$> args'
+            argsToApp = catMaybes $ fst <$> extracted
+            templ = nub . sort $ concatMap snd extracted
+            fnToApp = varAsTemplate f' (snd <$> templ)
         return $ flip (foldl (\fn' a -> CppApp fn' [a])) argsToApp fnToApp
         where
+        templArgs :: [(String, String)]
+        templArgs = nub . sort . concat $ templateArgs <$> tysMapping
+          where
+          normalArgs = filter (not . isDict) args
+          fnTyList = maybe [] (fnTypesN (length normalArgs)) (mktype mn ty)
+          exprTyList = (tyFromExpr <$> normalArgs) ++ [tyFromExpr e]
+          tysMapping = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) (zip fnTyList exprTyList)
         extractTempl :: Cpp -> (Maybe Cpp, [(String, String)])
-        extractTempl (CppInstance mname (cn, fns) inst params) =
-          let
-            fnTyList = maybe [] (fnTypesN (length normalArgs)) (mktype mn ty)
-            exprTyList = (tyFromExpr <$> normalArgs) ++ [tyFromExpr e]
-            tysMapping = zip fnTyList exprTyList
-            tysMapping' = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) tysMapping
-            templArgs = nub . sort . concat $ templateArgs <$> tysMapping'
-          in
-          if (runModuleName mn' == mname) && (identToCpp ident `elem` fns)
-          then let
-              params' = if any (null . snd) params then
-                          zip (fst <$> params) $ fromMaybe "?" . flip lookup templArgs . fst <$> params
-                        else params
-              arg' = CppInstance mname (cn, fns) inst params'
-            in (Just arg', filter (not . (`elem` (fst <$> params)) . fst) templArgs)
-          else (Nothing, templArgs)
+        extractTempl (CppInstance mname (cn, fns) inst params)
+          | runModuleName mn' == mname,
+            identToCpp ident `elem` fns
+            = let paramNames = fst <$> params
+                  fp = if any (null . snd) params
+                         then zip paramNames . map (fromMaybe "?" . flip lookup templArgs . fst)
+                         else id
+                  arg' = CppInstance mname (cn, fns) inst (fp params)
+              in (Just arg', filter (not . flip elem paramNames . fst) templArgs)
+          | otherwise = (Nothing, templArgs)
         extractTempl arg@(CppApp (CppIndexer _ inst@CppInstance{}) [CppVar "undefined"]) = extractTempl inst
         extractTempl arg = (Just arg, [])
       -- TODO: verify this
