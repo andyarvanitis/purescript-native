@@ -216,33 +216,45 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
         return CppNoOp
       CI.Var (_, _, Just ty, _) (Qualified (Just mn') ident) -> do
-        f' <- exprToCpp f
-        let extracted = extractTempl <$> args'
-            argsToApp = catMaybes $ fst <$> extracted
-            templ = nub . sort $ concatMap snd extracted
-            fnToApp = varAsTemplate f' (snd <$> templ)
-        return $ flip (foldl (\fn' a -> CppApp fn' [a])) argsToApp fnToApp
+        let (templArgs', argsToApply) = if length normalArgs == length args
+                                          then (templArgs, args')
+                                          else (templArgsFromDicts, filteredArgs)
+        fnToApply <- asTemplate templArgs' <$> exprToCpp f
+        return $ flip (foldl (\fn' a -> CppApp fn' [a])) argsToApply fnToApply
         where
+        normalArgs :: [CI.Expr Ann]
+        normalArgs = filter (not . isDict) args
+
+        filteredArgs :: [Cpp]
+        filteredArgs = catMaybes $ fst <$> templsFromDicts
+
+        templArgsFromDicts :: [(String, String)]
+        templArgsFromDicts = nub . sort $ concatMap snd templsFromDicts
+
         templArgs :: [(String, String)]
         templArgs = nub . sort . concat $ templateArgs <$> tysMapping
           where
-          normalArgs = filter (not . isDict) args
           fnTyList = maybe [] (fnTypesN (length normalArgs)) (mktype mn ty)
           exprTyList = (tyFromExpr <$> normalArgs) ++ [tyFromExpr e]
           tysMapping = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) (zip fnTyList exprTyList)
-        extractTempl :: Cpp -> (Maybe Cpp, [(String, String)])
-        extractTempl (CppInstance mname (cn, fns) inst params)
-          | runModuleName mn' == mname,
-            identToCpp ident `elem` fns
-            = let paramNames = fst <$> params
-                  fp = if any (null . snd) params
-                         then zip paramNames . map (fromMaybe "?" . flip lookup templArgs . fst)
-                         else id
-                  arg' = CppInstance mname (cn, fns) inst (fp params)
-              in (Just arg', filter (not . flip elem paramNames . fst) templArgs)
-          | otherwise = (Nothing, templArgs)
-        extractTempl arg@(CppApp (CppIndexer _ inst@CppInstance{}) [CppVar "undefined"]) = extractTempl inst
-        extractTempl arg = (Just arg, [])
+
+        templsFromDicts :: [(Maybe Cpp, [(String, String)])]
+        templsFromDicts = go <$> args'
+          where
+          go :: Cpp -> (Maybe Cpp, [(String, String)])
+          go (CppInstance mname (cn, fns) inst params)
+            | runModuleName mn' == mname,
+              identToCpp ident `elem` fns
+              = let paramNames = fst <$> params
+                    fp = if any (null . snd) params
+                           then zip paramNames . map (fromMaybe "?" . flip lookup templArgs . fst)
+                           else id
+                    arg' = CppInstance mname (cn, fns) inst (fp params)
+                in (Just arg', filter (not . flip elem paramNames . fst) templArgs)
+            | otherwise = (Nothing, templArgs)
+          go arg@(CppApp (CppIndexer _ inst@CppInstance{}) [CppVar "undefined"]) = go inst
+          go arg = (Just arg, [])
+
       -- TODO: verify this
       _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
 
@@ -360,11 +372,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go (CI.Accessor (_, _, t, _) _ _) = t
     go _ = Nothing
 
-  varAsTemplate :: Cpp -> [String] -> Cpp
-  varAsTemplate cpp [] = cpp
-  varAsTemplate (CppVar name) ps = CppVar (name ++ '<' : intercalate "," ps ++ ">")
-  varAsTemplate (CppAccessor name _) ps = varAsTemplate (CppVar name) ps
-  varAsTemplate cpp _ = cpp
+  asTemplate :: [(String, String)] -> Cpp -> Cpp
+  asTemplate [] cpp = cpp
+  asTemplate ps (CppVar name) = CppVar (name ++ '<' : intercalate "," (snd <$> ps) ++ ">")
+  asTemplate ps (CppAccessor name _) = asTemplate ps (CppVar name)
+  asTemplate _ cpp = cpp
 
   -- |
   -- Find a type class instance in scope by name, retrieving its class name and construction types.

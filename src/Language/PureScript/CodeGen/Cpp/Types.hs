@@ -254,6 +254,7 @@ templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
 --  go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(runType a, [])]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (EffectFunction b, EffectFunction b') = args ++ (go [] (b, b'))
+    go args (Data t, EffectFunction t') = trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args
     go args (Data t, Data t') = go args (t, t')
     go args (List t, List t') = args ++ go [] (t, t')
     go args (Native t, Native t')
