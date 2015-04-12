@@ -72,7 +72,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
   let moduleBody = header : (CppInclude <$> cppImports')
                    ++ [CppNamespace (runModuleName mn) $
-                        (CppUseNamespace "PureScript") : foreigns' ++ optimized]
+                        (CppUseNamespace <$> cppImports') ++ foreigns' ++ optimized]
   return $ case additional of
     MakeOptions -> moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
@@ -84,7 +84,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- Typeclass instance definition
   --
   declToCpp (CI.VarDecl _ ident expr)
-    | Just (classname, typs) <- findInstance (Qualified (Just mn) ident),
+    | Just (classname@(Qualified _ (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
       Just (params, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
         fs' = filter (isNormalFn) fs
@@ -92,7 +92,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         params' = runType . Template <$> params
         inst = CppInstance [] (classname', fst <$> fns) [] (zip params' typs)
     cpps <- mapM toCpp (zip fns fs')
-    return $ CppStruct (classname', Right typs) [] cpps []
+    return $ CppStruct (unqualClass, Right typs) [] cpps []
     where
     toCpp :: ((String, T.Type), CI.Expr Ann) -> m Cpp
     toCpp ((name, _), CI.AnonFunction ty ags sts) = do
