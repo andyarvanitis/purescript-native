@@ -35,7 +35,7 @@ tco' = everywhereOnCpp convert
   copyVar :: (String, String) -> (String, String)
   copyVar (nm, ty) = ("__copy_" ++ nm, ty)
   convert :: Cpp -> Cpp
-  convert cpp@(CppVariableIntroduction name (Just fn@CppFunction{})) =
+  convert cpp@(CppVariableIntroduction (name, typ) (Just fn@CppFunction{})) =
     let
       (argss, body', replace) = collectAllFunctionArgs [] id fn
     in case () of
@@ -43,7 +43,7 @@ tco' = everywhereOnCpp convert
             let
               allArgs = concat $ reverse argss
             in
-              CppVariableIntroduction name (Just (replace (toLoop name allArgs body')))
+              CppVariableIntroduction (name, typ) (Just (replace (toLoop name allArgs body')))
         | otherwise -> cpp
   convert cpp = cpp
   collectAllFunctionArgs :: [[(String, String)]] -> (Cpp -> Cpp) -> Cpp -> ([[(String, String)]], Cpp, Cpp -> Cpp)
@@ -77,7 +77,7 @@ tco' = everywhereOnCpp convert
     countSelfCallsUnderFunctions _ = 0
   toLoop :: String -> [(String, String)] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
-        map (\arg -> CppVariableIntroduction (fst arg) (Just (CppVar (fst $ copyVar arg)))) allArgs ++
+        map (\arg -> CppVariableIntroduction arg (Just (CppVar (fst $ copyVar arg)))) allArgs ++
         [ CppLabel tcoLabel $ CppWhile (CppBooleanLiteral True) (CppBlock [ everywhereOnCpp loopify cpp ]) ]
     where
     loopify :: Cpp -> Cpp
@@ -86,7 +86,7 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppBlock $ zipWith (\val arg ->
-                    CppVariableIntroduction (tcoVar arg) (Just val)) allArgumentValues (map fst allArgs)
+                    CppVariableIntroduction (tcoVar arg, []) (Just val)) allArgumentValues (map fst allArgs)
                   ++ map (\arg ->
                     CppAssignment (CppVar arg) (CppVar (tcoVar arg))) (map fst allArgs)
                   ++ [ CppContinue tcoLabel ]

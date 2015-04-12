@@ -21,7 +21,6 @@ import Data.List
 import Data.Char
 import Data.Maybe
 import Data.Function (on)
-import Control.Applicative
 import Language.PureScript.Names
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.AST
@@ -89,9 +88,14 @@ mktype m (T.TypeApp
                      | otherwise = Nothing
 
 -- This covers ((->) r)
-mktype m (T.TypeApp
+mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-             T.TypeVar{}) = Just $ Native (typeName (Function (Template []) (Template [])))
+            _) = Just $ Native (typeName (Function (Template []) (Template [])))
+
+mktype m z@(T.TypeApp a
+            (T.TypeApp
+              (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+               b)) | Just a' <- mktype m a, Just b' <- mktype m b = Just $ traceShow z $ Function a' b'
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
@@ -120,7 +124,7 @@ mktype m (T.TypeApp _
                                                                ProperName "Eff"]))) (ProperName "Eff")))
              e)) | Just t <- mktype m e = Just $ EffectFunction t
 
-mktype m (T.TypeApp
+mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
                                                               ProperName "Monad",
                                                               ProperName "Eff"]))) (ProperName "Eff")))
@@ -147,11 +151,11 @@ mktype m (T.ForAll _ ty _) = mktype m ty
 mktype _ (T.Skolem name _ _) = Just $ Template (identToCpp $ Ident name)
 mktype _ (T.TypeVar name) = Just $ Template (identToCpp $ Ident name)
 mktype _ (T.TUnknown n) = Just $ Template ('T' : show n)
-mktype m (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) =
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) =
   Just $ Native (typeName (Function (Template []) (Template [])))
-mktype m (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) =
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) =
   Just $ Native (typeName (List (Template [])))
-mktype m (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
                                                            ProperName "Monad",
                                                            ProperName "Eff"]))) (ProperName "Eff"))) =
   Just $ Native (typeName (EffectFunction (Template [])))
@@ -195,7 +199,7 @@ fnTypesN n (Function a b) = a : types (n - 1) b
 fnTypesN _ _ = []
 
 templparams :: Type -> [(String, Int)]
-templparams t@(Template a) = [(runType t, 0)]
+templparams t@(Template _) = [(runType t, 0)]
 templparams (ParamTemplate p ts) = concatMap templparams ts ++ [(runType (Template p), length ts)]
 templparams (Function a b) = templparams a ++ templparams b
 templparams (EffectFunction b) = templparams b

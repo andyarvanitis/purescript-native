@@ -87,23 +87,47 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     | Just (classname, typs) <- findInstance (Qualified (Just mn) ident),
       Just (params, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
+        fs' = filter (isNormalFn) fs
         classname' = qualifiedToStr mn (Ident . runProperName) classname
         params' = runType . Template <$> params
-        inst = CppInstance [] (classname', identToCpp . fst <$> fns) [] (zip params' typs)
-    cpps <- mapM toFn (zip fns fs)
+        inst = CppInstance [] (classname', fst <$> fns) [] (zip params' typs)
+    cpps <- mapM toCpp (zip fns fs')
     return $ CppStruct (classname', Right typs) [] cpps []
     where
-    toFn :: ((Ident, T.Type), CI.Expr Ann) -> m Cpp
-    toFn ((name, _), CI.AnonFunction ty ags sts) = do
-      fn' <- declToCpp $ CI.Function ty name ags sts
+    toCpp :: ((String, T.Type), CI.Expr Ann) -> m Cpp
+    toCpp ((name, _), CI.AnonFunction ty ags sts) = do
+      fn' <- declToCpp $ CI.Function ty (Ident name) ags sts
       return (addQual CppStatic fn')
-    toFn ((Op s, ty), e) = toFn ((Ident $ identToCpp (Ident s), ty), e)
-    toFn i = return CppNoOp
+    toCpp ((name, _), e@CI.Literal{})
+      | Just ty <- tyFromExpr e = declToCpp (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
+    toCpp ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
+      | Just ty <- tyFromExpr e = do
+        e' <- exprToCpp e
+        let tparams = templparams' $ mktype mn ty
+            tparams' = fst <$> tparams
+            block = CppBlock [CppReturn (CppApp (asTemplate tparams' e') [CppVar "arg"])]
+        return $ CppFunction name
+                             tparams
+                             [("arg", argtype' mn ty)]
+                             (rettype' mn ty)
+                             [CppInline, CppStatic]
+                             block
+    toCpp ((name, _), e)
+      | Just ty <- tyFromExpr e = declToCpp (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
+    toCpp ((name, _), e) = return $ trace (name ++ " :: " ++ show e ++ "\n") CppNoOp
+
     addQual :: CppQualifier -> Cpp -> Cpp
     addQual q (CppFunction name tmps args rty qs cpp) = CppFunction name tmps args rty (q : qs) cpp
     addQual _ cpp = cpp
-  declToCpp (CI.VarDecl _ ident expr) =
-    CppVariableIntroduction (identToCpp ident) . Just <$> exprToCpp expr
+
+    isNormalFn :: (CI.Expr Ann) -> Bool
+    isNormalFn (CI.AnonFunction _
+                 [Ident "__unused"]
+                 [CI.Return (_, _, Nothing, Nothing) (CI.Var (_, _, Nothing, Nothing) _)]) = False
+    isNormalFn _ = True
+
+  declToCpp (CI.VarDecl (_, _, ty, _) ident expr) =
+    CppVariableIntroduction (identToCpp ident, maybe [] (typestr mn) ty) . Just <$> exprToCpp expr
 
   declToCpp (CI.Function _ ident [Ident "dict"]
     [CI.Return _ (CI.Accessor _ _ (CI.Var _ (Qualified Nothing (Ident "dict"))))]) =
@@ -125,6 +149,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                          (rettype' mn ty)
                          []
                          block
+
   declToCpp (CI.Function (_, _, Just ty, _) ident args body) = return CppNoOp -- TODO: non-curried functions
 
   declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
@@ -142,18 +167,23 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     in
     return $ CppStruct (ctor, Left classTemplParams)
                        (toStrings <$> constraints)
-                       (toFn tmps <$> fns)
+                       (toCpp tmps <$> fns)
                        []
     where
-    toFn :: [String] -> (Ident, T.Type) -> Cpp
-    toFn tmps (Ident name, ty) = CppFunction name
-                                             (filter (not . (`elem` tmps) . fst) $ templparams' (mktype mn ty))
-                                             [([], argtype' mn ty)]
-                                             (rettype' mn ty)
-                                             [CppStatic]
-                                             CppNoOp
-    toFn tmps (Op s, ty) = toFn tmps (Ident $ identToCpp (Ident s), ty)
-    toFn _ f = error $ show f
+    toCpp :: [String] -> (String, T.Type) -> Cpp
+    toCpp tmps (name, ty)
+      | ty'@(Just _) <- mktype mn ty,
+        atyp@(_:_) <- argtype' mn ty,
+        rtyp@(_:_) <- rettype' mn ty
+      = CppFunction name
+                    (filter (not . (`elem` tmps) . fst) $ templparams' ty')
+                    [([], atyp)]
+                    rtyp
+                    [CppStatic]
+                    CppNoOp
+    toCpp _ (name, ty) =
+      CppVariableIntroduction (name, runQualifier CppStatic ++ ' ' : typestr mn ty) Nothing
+    toCpp _ f = error $ show f
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
     toStrings (name, tys) = (qualifiedToStr mn (Ident . runProperName) name, typestr mn <$> tys)
 
@@ -216,10 +246,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
         return CppNoOp
       CI.Var (_, _, Just ty, _) (Qualified (Just mn') ident) -> do
-        let (templArgs', argsToApply) = if length normalArgs == length args
-                                          then (templArgs, args')
-                                          else (templArgsFromDicts, filteredArgs)
-        fnToApply <- asTemplate templArgs' <$> exprToCpp f
+        let (targs, argsToApply) = if length normalArgs == length args
+                                     then (templArgs, args')
+                                     else (templArgsFromDicts, filteredArgs)
+            targs' = snd <$> targs
+        fnToApply <- asTemplate targs' <$> exprToCpp f
         return $ flip (foldl (\fn' a -> CppApp fn' [a])) argsToApply fnToApply
         where
         normalArgs :: [CI.Expr Ann]
@@ -235,7 +266,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         templArgs = nub . sort . concat $ templateArgs <$> tysMapping
           where
           fnTyList = maybe [] (fnTypesN (length normalArgs)) (mktype mn ty)
-          exprTyList = (tyFromExpr <$> normalArgs) ++ [tyFromExpr e]
+          exprTyList = (tyFromExpr' <$> normalArgs) ++ [tyFromExpr' e]
           tysMapping = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) (zip fnTyList exprTyList)
 
         templsFromDicts :: [(Maybe Cpp, [(String, String)])]
@@ -266,7 +297,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))
     | Just (qname@(Qualified (Just mn') (ProperName cname)), types) <- findInstance ident,
       Just (params, _, fns) <- findClass qname
-    = let fs' = identToCpp . fst <$> fns
+    = let fs' = fst <$> fns
           params' = runType . Template <$> params
       in return $ CppInstance (runModuleName mn') (cname, fs') instname (zip params' types)
  -- Constraint typeclass dictionary
@@ -278,14 +309,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       mname <- reverse . drop 1 $ dropWhile (not . isPunctuation) reversedName,
       Just (params, supers, fns) <- findClass (Qualified (Just (ModuleName [ProperName mname])) (ProperName cname))
     = let superFns = getFns supers
-          fs' = identToCpp . fst <$> fns ++ superFns
+          fs' = fst <$> fns ++ superFns
           params' = runType . Template <$> params
       in return $ CppInstance mname (cname, fs') [] (zip params' (repeat []))
     where
-    getFns :: [T.Constraint] -> [(Ident, T.Type)]
+    getFns :: [T.Constraint] -> [(String, T.Type)]
     getFns = concatMap go
       where
-      go :: T.Constraint -> [(Ident, T.Type)]
+      go :: T.Constraint -> [(String, T.Type)]
       go cls | Just (_, clss, fns) <- findClass (fst cls) = fns ++ getFns clss
 
   exprToCpp (CI.Var _ ident) =
@@ -328,7 +359,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       cppKey = CppVar key
       cppNewObj = CppVar newObj
       block = CppBlock (objAssign:copy:extend ++ [CppReturn cppNewObj])
-      objAssign = CppVariableIntroduction newObj (Just $ CppObjectLiteral [])
+      objAssign = CppVariableIntroduction (newObj, []) (Just $ CppObjectLiteral [])
       copy = CppForIn key obj $ CppBlock [CppIfElse cond assign Nothing]
       cond = CppApp (CppAccessor "hasOwnProperty" obj) [cppKey]
       assign = CppBlock [CppAssignment (CppIndexer cppKey cppNewObj) (CppIndexer cppKey obj)]
@@ -362,8 +393,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                  [CI.Var (_, _, Nothing, Nothing) _]) = True
   isDict v = False
 
-  tyFromExpr :: CI.Expr Ann -> Maybe Type
-  tyFromExpr expr = go expr >>= mktype mn
+  tyFromExpr :: CI.Expr Ann -> Maybe T.Type
+  tyFromExpr expr = go expr
     where
     go (CI.AnonFunction (_, _, t, _) _ _) = t
     go (CI.App (_, _, t, _) _ _) = t
@@ -372,10 +403,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go (CI.Accessor (_, _, t, _) _ _) = t
     go _ = Nothing
 
-  asTemplate :: [(String, String)] -> Cpp -> Cpp
+  tyFromExpr' :: CI.Expr Ann -> Maybe Type
+  tyFromExpr' expr = tyFromExpr expr >>= mktype mn
+
+  asTemplate :: [String] -> Cpp -> Cpp
   asTemplate [] cpp = cpp
-  asTemplate ps (CppVar name) = CppVar (name ++ '<' : intercalate "," (snd <$> ps) ++ ">")
-  asTemplate ps (CppAccessor name _) = asTemplate ps (CppVar name)
+  asTemplate ps (CppVar name) = CppVar (name ++ '<' : intercalate "," ps ++ ">")
+  asTemplate ps (CppAccessor prop cpp)
+    | prop' <- P.prettyPrintCpp [asTemplate ps (CppVar prop)] = CppAccessor prop' cpp
+  asTemplate ps (CppApp f args) = CppApp (asTemplate ps f) args
   asTemplate _ cpp = cpp
 
   -- |
@@ -392,8 +428,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- |
   -- Find a class in scope by name, retrieving its list of constraints, function names and types.
   --
-  findClass :: Qualified ProperName -> Maybe ([String], [T.Constraint], [(Ident, T.Type)])
+  findClass :: Qualified ProperName -> Maybe ([String], [T.Constraint], [(String, T.Type)])
   findClass name
-    | Just (params, fns, constraints) <- M.lookup name (typeClasses env)
-      = Just (fst <$> params, constraints, (sortBy (compare `on` fst) fns))
+    | Just (params, fns, constraints) <- M.lookup name (typeClasses env),
+      fns' <- (\(i,t) -> (identToCpp i, t)) <$> fns
+      = Just (fst <$> params, constraints, (sortBy (compare `on` fst) fns'))
   findClass _ = Nothing

@@ -115,8 +115,8 @@ literals = mkPattern' match
   match (CppScope ident) = return ident
 --   match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
-  match (CppVariableIntroduction ident value) = fmap concat $ sequence
-    [ return "auto "
+  match (CppVariableIntroduction (ident, typ) value) = fmap concat $ sequence
+    [ return ((if null typ then "auto" else typ) ++ " ")
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
     , return ";"

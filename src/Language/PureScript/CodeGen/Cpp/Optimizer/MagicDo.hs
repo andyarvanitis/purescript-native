@@ -63,7 +63,7 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
     CppFunction fnName [] [] rty [] $ CppBlock (CppApp m [] : map applyReturns cpp )
   -- Desugar >>=
   convert (CppApp (CppApp bind [m]) [CppLambda [arg] rty (CppBlock cpp)]) | isBind bind =
-    CppFunction fnName [] [] rty [] $ CppBlock (CppVariableIntroduction (fst arg) (Just (CppApp m [])) : map applyReturns cpp)
+    CppFunction fnName [] [] rty [] $ CppBlock (CppVariableIntroduction arg (Just (CppApp m [])) : map applyReturns cpp)
   -- Desugar untilE
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =
     CppApp (CppLambda [] [] (CppBlock [ CppWhile (CppUnary CppNot (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
@@ -153,7 +153,7 @@ inlineST = everywhereOnCpp convertBlock
   -- Find all ST Refs initialized in this block
   findSTRefsIn = everythingOnCpp (++) isSTRef
     where
-    isSTRef (CppVariableIntroduction ident (Just (CppApp (CppApp f [_]) []))) | isSTFunc C.newSTRef f = [ident]
+    isSTRef (CppVariableIntroduction (ident, []) (Just (CppApp (CppApp f [_]) []))) | isSTFunc C.newSTRef f = [ident]
     isSTRef _ = []
   -- Find all STRefs used as arguments to readSTRef, writeSTRef, modifySTRef
   findAllSTUsagesIn = everythingOnCpp (++) isSTUsage

@@ -142,7 +142,7 @@ data Cpp
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction String (Maybe Cpp)
+  | CppVariableIntroduction (String, String) (Maybe Cpp)
   -- |
   -- A variable assignment
   --
