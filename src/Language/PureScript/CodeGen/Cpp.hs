@@ -223,6 +223,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp :: CI.Expr Ann -> m Cpp
   exprToCpp (CI.Literal _ lit) =
     literalToValueCpp lit
+  -- data field values
+  exprToCpp (CI.Accessor _ prop@(CI.Literal _ (StringLiteral name)) expr@CI.Var{}) = do
+    expr' <- exprToCpp expr
+    prop' <- exprToCpp prop
+    return $ case expr' of
+      CppVar{} -> CppAccessor name expr'
+      _ -> CppIndexer prop' expr'
   exprToCpp (CI.Accessor _ prop expr) =
     CppIndexer <$> exprToCpp prop <*> exprToCpp expr
   exprToCpp (CI.Indexer _ index expr) =

@@ -359,7 +359,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   matchValue = buildPrettyPrinter operators (literals <+> fmap parens matchValue)
   operators :: OperatorTable PrinterState Cpp String
   operators =
-    OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "." ++ prop ]
+    OperatorTable [ [ Wrap accessor $ \prop val -> "(*" ++ val ++ ")." ++ prop ]
                   , [ Wrap scope $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
