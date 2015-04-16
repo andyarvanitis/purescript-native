@@ -31,8 +31,7 @@ import Debug.Trace
 
 data Type = Native String
           | Function Type Type
-          | Data Type
-          | Specialized Type [Type]
+          | Data Type [Type]
           | List Type
           | Template String
           | ParamTemplate String [Type]
@@ -43,9 +42,8 @@ runType :: Type -> String
 runType (Native name) = name
 runType tt@(Function a b) = typeName tt ++ '<' : runType a ++ "," ++ runType b ++ ">"
 runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
-runType tt@(Data t) = typeName tt ++ '<' : runType t ++ ">"
-runType (Specialized t []) = runType t
-runType (Specialized t ts) = runType t ++ '<' : (intercalate "," $ map runType ts) ++ ">"
+runType tt@(Data t []) = typeName tt ++ '<' : runType t ++ ">"
+runType tt@(Data t ts) = typeName tt ++ '<' : runType t ++ '<' : intercalate "," (map runType ts) ++ ">>"
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
 runType (Template []) = error "Bad template parameter"
 runType tt@(Template name) =  typeName tt ++ capitalize name
@@ -142,10 +140,10 @@ mktype m app@T.TypeApp{}
 mktype m (T.TypeApp T.Skolem{} b) = mktype m b
 
 mktype m app@(T.TypeApp a b)
-  | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Just $ Data t
-  | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Just $ Data (Specialized t ts)
-  | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Just $ Data t
-  | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Just $ Data (Specialized t ts)
+  | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Just $ Data t []
+  | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Just $ Data t ts
+  | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Just $ Data t []
+  | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Just $ Data t ts
 
 mktype m (T.ForAll _ ty _) = mktype m ty
 mktype _ (T.Skolem name _ _) = Just $ Template (identToCpp $ Ident name)
@@ -159,7 +157,7 @@ mktype _ (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
                                                            ProperName "Monad",
                                                            ProperName "Eff"]))) (ProperName "Eff"))) =
   Just $ Native (typeName (EffectFunction (Template [])))
-mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a)
+mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a) []
 mktype m (T.ConstrainedType _ ty) = mktype m ty
 mktype _ (T.RCons _ _ _) = Just $ Template "rowType"
 mktype _ T.REmpty = Nothing
@@ -204,7 +202,7 @@ templparams (ParamTemplate p ts) = concatMap templparams ts ++ [(runType (Templa
 templparams (Function a b) = templparams a ++ templparams b
 templparams (EffectFunction b) = templparams b
 templparams (List a) = templparams a
-templparams (Data a) = templparams a
+templparams (Data a ts) = templparams a ++ concatMap templparams ts
 templparams _ = []
 
 templparams' :: Maybe Type -> [(String, Int)]
@@ -253,13 +251,12 @@ templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
       args ++ (runType (Template t), typeName (List anytype)) : (go [] (a, a'))
 --  go args (ParamTemplate t [a], Data a') =
 --    args ++ (runType (Template t), typeName (Data a')) : (go [] (a, a'))
---  go args (Specialized t [], Specialized t' []) = go args (t, t')
---  go args (Specialized t ts, Specialized t' ts') = args ++ (go [] (t, t')) ++ (concatMap (go []) $ zip ts ts')
 --  go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(runType a, [])]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (EffectFunction b, EffectFunction b') = args ++ (go [] (b, b'))
-    go args (Data t, EffectFunction t') = trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args
-    go args (Data t, Data t') = go args (t, t')
+    go args (Data t _, EffectFunction t') = trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args
+    go args (Data t [], Data t' []) = args ++ go args (t, t')
+    go args (Data t ts, Data t' ts') = args ++ go [] (t, t') ++ concatMap (go []) (zip ts ts')
     go args (List t, List t') = args ++ go [] (t, t')
     go args (Native t, Native t')
       | t == t' = args

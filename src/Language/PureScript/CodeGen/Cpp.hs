@@ -241,8 +241,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     args' <- mapM exprToCpp args
     case f of
       CI.Var (_, _, _, Just IsNewtype) _ -> return (head args')
-      CI.Var (_, _, _, Just (IsConstructor _ fields)) name | length args == length fields ->
-        return $ CppUnary CppNew $ CppApp (qualifiedToCpp id name) args'
+
+      CI.Var (_, _, _, Just (IsConstructor _ fields)) name ->
+        let argsNotApp = length fields - length args
+            val = CppStructValue (qualifiedToStr mn id name) [] in
+        if argsNotApp > 0
+          then return $ CppPartialApp val args' argsNotApp
+          else return $ CppApp val args'
+
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
         return CppNoOp
       CI.Var (_, _, Just ty, _) (Qualified (Just mn') ident) -> do
@@ -289,10 +295,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       -- TODO: verify this
       _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
 
-  exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ [])) ident) =
-    return $ CppAccessor "value" $ qualifiedToCpp id ident
-  exprToCpp (CI.Var (_, _, _, Just (IsConstructor _ _)) ident) =
-    return $ CppAccessor "create" $ qualifiedToCpp id ident
+  exprToCpp (CI.Var (_, _, ty, Just (IsConstructor _ [])) ident) =
+    return $ CppApp (CppStructValue (qualifiedToStr mn id ident) []) []
+  exprToCpp (CI.Var (_, _, ty, Just (IsConstructor _ fields)) ident) =
+    return $ CppPartialApp (CppStructValue (qualifiedToStr mn id ident) []) [] (length fields)
+
   -- Typeclass instance dictionary
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))
     | Just (qname@(Qualified (Just mn') (ProperName cname)), types) <- findInstance ident,
