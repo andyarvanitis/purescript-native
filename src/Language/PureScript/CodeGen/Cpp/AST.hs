@@ -100,9 +100,13 @@ data Cpp
   --
   | CppStruct (String, Either [(String, Int)] [String]) [(String, [String])] [Cpp] [Cpp]
   -- |
-  -- A C++ struct instance (name, template types)
+  -- 'data' type (name, template types)
   --
-  | CppStructValue String [String]
+  | CppDataType String [String]
+  -- |
+  -- 'data' constructor (name, template types)
+  --
+  | CppDataConstructor String [String]
   -- |
   -- Function application
   --

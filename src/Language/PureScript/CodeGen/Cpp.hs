@@ -253,7 +253,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         let argsNotApp = length fields - length args
             qname = qualifiedToStr mn id name
             tmps = maybe [] getDataTypeArgs (mktype mn ty >>= getDataType qname)
-            val = CppStructValue qname tmps in
+            val = CppDataConstructor qname tmps in
         if argsNotApp > 0
           then return (CppPartialApp val args' argsNotApp)
           else return (CppApp val args')
@@ -308,8 +308,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     let qname = qualifiedToStr mn id ident
         tmps = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname) in
     return $ if null fields
-               then CppApp (CppStructValue (qualifiedToStr mn id ident) tmps) []
-               else CppPartialApp (CppStructValue (qualifiedToStr mn id ident) tmps) [] (length fields)
+               then CppApp (CppDataConstructor (qualifiedToStr mn id ident) tmps) []
+               else CppPartialApp (CppDataConstructor (qualifiedToStr mn id ident) tmps) [] (length fields)
 
   -- Typeclass instance dictionary
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))
@@ -351,8 +351,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     CppUnary (unaryToCpp op) <$> exprToCpp expr
   exprToCpp (CI.BinaryOp _ op lhs rhs) =
     CppBinary op <$> exprToCpp lhs <*> exprToCpp rhs
-  exprToCpp (CI.IsTagOf _ ctor expr) =
-    flip CppInstanceOf (qualifiedToCpp (Ident . runProperName) ctor) <$> exprToCpp expr
+  exprToCpp (CI.IsTagOf (_, _, ty, _) ctor expr) =
+    let qname = qualifiedToStr mn (Ident . runProperName) ctor
+        tmps = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
+        val = CppDataType qname tmps in
+    flip CppInstanceOf val <$> exprToCpp expr
 
   unaryToCpp :: UnaryOp -> CppUnaryOp
   unaryToCpp Negate = CppNegate

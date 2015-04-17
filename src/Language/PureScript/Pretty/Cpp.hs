@@ -109,10 +109,11 @@ literals = mkPattern' match
     , currentIndent
     , return "};"
     ]
-  match (CppStructValue name []) =
-    return ("construct" ++ "<_" ++ name ++ "_>")
-  match (CppStructValue name typs) =
-    return ("construct" ++ "<_" ++ name ++ "_<" ++ intercalate "," typs ++ ">>")
+  match (CppDataType name []) = return ('_' : name ++ "_")
+  match (CppDataType name typs) =
+    return (prettyPrintCpp1 (CppDataType name []) ++ '<' : intercalate "," typs ++ ">")
+  match (CppDataConstructor name typs) =
+    return ("construct" ++ '<' : prettyPrintCpp1 (CppDataType name typs) ++ ">")
   match (CppVar ident) = return ident
   match (CppInstance [] (cls, _) _ params) = return $ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
   match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
@@ -398,7 +399,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                     , binary    LessThanOrEqual      "<="
                     , binary    GreaterThan          ">"
                     , binary    GreaterThanOrEqual   ">="
-                    , AssocR instanceOf $ \v1 v2 -> v1 ++ " instanceof " ++ v2 ]
+                    , AssocR instanceOf $ \v1 v2 -> "instanceof<" ++ v2 ++ ">(" ++ v1 ++ ")" ]
                   , [ binary    Equal                "=="
                     , binary    NotEqual             "!=" ]
                   , [ binary    BitwiseAnd           "&" ]
