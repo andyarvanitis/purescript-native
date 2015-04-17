@@ -364,7 +364,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap scope $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
-                  , [ Wrap partapp $ \(args, n) _ -> "bind" ++ show n ++ '(' : args ++ ")" ]
+                  , [ Wrap partapp $ \(args, n) _ -> "bind<" ++ show n ++ ">(" ++ args ++ ")" ]
                   , [ unary CppNew "new " ]
                   , [ Wrap fun $ \(templ, name, args, rty, quals) ret -> []
                         ++ templ
