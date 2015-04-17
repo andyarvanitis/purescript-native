@@ -90,10 +90,10 @@ mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
             _) = Just $ Native (typeName (Function (Template []) (Template [])))
 
-mktype m z@(T.TypeApp a
+mktype m (T.TypeApp a
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-               b)) | Just a' <- mktype m a, Just b' <- mktype m b = Just $ traceShow z $ Function a' b'
+               b)) | Just a' <- mktype m a, Just b' <- mktype m b = Just $ Function a' b'
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
@@ -144,6 +144,7 @@ mktype m app@(T.TypeApp a b)
   | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Just $ Data t ts
   | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Just $ Data t []
   | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Just $ Data t ts
+  | (T.TypeApp _ _) <- a, (t:ts) <- dataCon m app = Just $ Data t ts
 
 mktype m (T.ForAll _ ty _) = mktype m ty
 mktype _ (T.Skolem name _ _) = Just $ Template (identToCpp $ Ident name)
@@ -217,6 +218,16 @@ dataCon m a@(T.TypeConstructor _) = [Native $ qualDataTypeName m a]
 dataCon m a
   | Just a' <- mktype m a = [a']
   | otherwise = []
+
+getDataType :: String -> Type -> Maybe Type
+getDataType name (Function _ b) = getDataType name b
+getDataType name t@(Data (Native name') _) | name' == name = Just t
+getDataType _ _ = Nothing
+
+getDataTypeArgs :: Type -> [String]
+getDataTypeArgs (Data _ []) = []
+getDataTypeArgs (Data _ ts) = fmap runType ts
+getDataTypeArgs _ = []
 
 -- TODO: this should be moved out of this module
 --

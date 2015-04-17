@@ -249,12 +249,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     case f of
       CI.Var (_, _, _, Just IsNewtype) _ -> return (head args')
 
-      CI.Var (_, _, _, Just (IsConstructor _ fields)) name ->
+      CI.Var (_, _, Just ty, Just (IsConstructor _ fields)) name ->
         let argsNotApp = length fields - length args
-            val = CppStructValue (qualifiedToStr mn id name) [] in
+            qname = qualifiedToStr mn id name
+            tmps = maybe [] getDataTypeArgs (mktype mn ty >>= getDataType qname)
+            val = CppStructValue qname tmps in
         if argsNotApp > 0
-          then return $ CppPartialApp val args' argsNotApp
-          else return $ CppApp val args'
+          then return (CppPartialApp val args' argsNotApp)
+          else return (CppApp val args')
 
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
         return CppNoOp
@@ -302,10 +304,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       -- TODO: verify this
       _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
 
-  exprToCpp (CI.Var (_, _, ty, Just (IsConstructor _ [])) ident) =
-    return $ CppApp (CppStructValue (qualifiedToStr mn id ident) []) []
   exprToCpp (CI.Var (_, _, ty, Just (IsConstructor _ fields)) ident) =
-    return $ CppPartialApp (CppStructValue (qualifiedToStr mn id ident) []) [] (length fields)
+    let qname = qualifiedToStr mn id ident
+        tmps = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname) in
+    return $ if null fields
+               then CppApp (CppStructValue (qualifiedToStr mn id ident) tmps) []
+               else CppPartialApp (CppStructValue (qualifiedToStr mn id ident) tmps) [] (length fields)
 
   -- Typeclass instance dictionary
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))

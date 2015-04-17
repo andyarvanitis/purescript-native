@@ -112,7 +112,7 @@ literals = mkPattern' match
   match (CppStructValue name []) =
     return ("make_data" ++ "<_" ++ name ++ "_>")
   match (CppStructValue name typs) =
-    return ("make_data" ++ "<_" ++ name ++ "_<" ++ intercalate "," typs ++ ">")
+    return ("make_data" ++ "<_" ++ name ++ "_<" ++ intercalate "," typs ++ ">>")
   match (CppVar ident) = return ident
   match (CppInstance [] (cls, _) _ params) = return $ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
   match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
