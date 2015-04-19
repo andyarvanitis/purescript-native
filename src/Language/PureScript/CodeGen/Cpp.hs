@@ -383,7 +383,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                         []
                                         (if null args
                                           then []
-                                          else [CppFunction name [] args [] [CppConstructor] (CppBlock [])])
+                                          else (flip CppVariableIntroduction Nothing <$> args) ++
+                                               [CppFunction name [] args [] [CppConstructor] (CppBlock [])])
                             ) cs
                 ) ds
     return (dtys ++ dcons)
