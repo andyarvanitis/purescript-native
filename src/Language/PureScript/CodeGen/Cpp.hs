@@ -369,7 +369,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                      let name = qualifiedToStr mn (Ident . runProperName) ty in
                      CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
                        [] []
-                       [CppFunction name [] [] [] [CppVirtual, CppDestructor] (CppBlock [])]
+                       [CppFunction name [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]
                ) ds
     let dcons = concatMap (\(ty, DataType ts cs) ->
                             let super = qualifiedToStr mn (Ident . runProperName) ty
@@ -383,7 +383,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                         (if null args
                                           then []
                                           else (flip CppVariableIntroduction Nothing <$> args) ++
-                                               [CppFunction name [] args [] [CppConstructor] (CppBlock [])])
+                                               [ CppFunction name [] args [] [CppConstructor] (CppBlock [])
+                                               , CppFunction name [] [] [] [CppConstructor, CppDelete] CppNoOp
+                                               ])
                             ) cs
                 ) ds
     return (dtys ++ dcons)

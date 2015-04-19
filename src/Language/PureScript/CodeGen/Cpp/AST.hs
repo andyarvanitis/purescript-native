@@ -241,6 +241,14 @@ data CppQualifier
   --
   | CppDestructor
   -- |
+  -- C++ class constructor/destructor, default implementation
+  --
+  | CppDefault
+  -- |
+  -- C++ class constructor/destructor, deleted
+  --
+  | CppDelete
+  -- |
   -- Inline function
   --
   | CppInline deriving (Show, Eq, Data, Typeable)

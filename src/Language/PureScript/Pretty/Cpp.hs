@@ -74,7 +74,7 @@ literals = mkPattern' match
         else do
           indentString <- currentIndent
           return (templDecl' (Left tmps) ++ "\n" ++ indentString)
-    , return $ concatMap (++ " ") $ runQualifier <$> filter (/= CppConstructor) qs
+    , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs
     , return $ if CppConstructor `elem` qs || CppDestructor `elem` qs
                  then []
                  else "auto "
@@ -89,6 +89,8 @@ literals = mkPattern' match
             else return (' ' : cpps)
         else return []
     , return $ if null rty then [] else " -> " ++ rty
+    , return $ if CppDefault `elem` qs then " = default" else []
+    , return $ if CppDelete `elem` qs then " = delete" else []
     , if ret == CppNoOp
         then return ";"
         else do

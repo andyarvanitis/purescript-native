@@ -247,8 +247,10 @@ runQualifier :: CppQualifier -> String
 runQualifier CppStatic = "static"
 runQualifier CppInline = "inline"
 runQualifier CppVirtual = "virtual"
-runQualifier CppConstructor = ":"
+runQualifier CppConstructor = ""
 runQualifier CppDestructor = "~"
+runQualifier CppDefault = ""
+runQualifier CppDelete = ""
 
 templateArgs :: (Type, Type) -> [(String,String)]
 templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
