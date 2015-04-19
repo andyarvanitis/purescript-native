@@ -246,6 +246,9 @@ qualDataTypeName _ _ = []
 runQualifier :: CppQualifier -> String
 runQualifier CppStatic = "static"
 runQualifier CppInline = "inline"
+runQualifier CppVirtual = "virtual"
+runQualifier CppConstructor = ":"
+runQualifier CppDestructor = "~"
 
 templateArgs :: (Type, Type) -> [(String,String)]
 templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []

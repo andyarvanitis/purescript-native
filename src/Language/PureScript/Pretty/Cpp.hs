@@ -71,7 +71,7 @@ literals = mkPattern' match
   match (CppBlock sts) = fmap concat $ sequence
     [ return "{\n"
     , withIndent $ prettyStatements sts
-    , return "\n"
+    , return $ if null sts then "" else "\n"
     , currentIndent
     , return "}"
     ]
@@ -92,20 +92,21 @@ literals = mkPattern' match
   match (CppUseNamespace name) = fmap concat $ sequence
     [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
     ]
-  match (CppStruct (name, params) supers cms _) = fmap concat $ sequence
-    [ return "\n"
-    , currentIndent
-    , return (templDecl' params)
-    , return "\n"
-    , currentIndent
-    , return $ "struct " ++ classstr (name, either (const []) id params)
+  match (CppStruct (name, params) supers cms ims) = let tmps = templDecl' params in
+    fmap concat $ sequence $
+    (if null tmps
+      then []
+      else [return tmps, return "\n", currentIndent]) ++
+    [ return $ "struct " ++ classstr (name, either (const []) id params)
     , return $ if null supers then
                  []
                else
                  " : public " ++ intercalate ", public " (classstr <$> supers)
     , return " {\n"
     , withIndent $ prettyStatements cms
-    , return "\n"
+    , return $ if null cms then [] else "\n"
+    , withIndent $ prettyStatements ims
+    , return $ if null ims then [] else "\n"
     , currentIndent
     , return "};"
     ]
@@ -363,22 +364,27 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
     OperatorTable [ [ Wrap accessor $ \prop val -> "(*" ++ val ++ ")." ++ prop ]
                   , [ Wrap scope $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
-                  , [ Wrap app $ \args val -> val ++ "(" ++ args ++ ")" ]
+                  , [ Wrap app $ \args val -> val ++ parens args ]
                   , [ Wrap partapp $ \(args, n) _ -> "bind<" ++ show n ++ ">(" ++ args ++ ")" ]
                   , [ unary CppNew "new " ]
                   , [ Wrap fun $ \(templ, name, args, rty, quals) ret -> []
                         ++ templ
-                        ++ concatMap (++ " ") quals
-                        ++ "auto "
+                        ++ concatMap (++ " ") (filter (/=":") quals)
+                        ++ (if "~" `elem` quals || ":" `elem` quals
+                              then ""
+                              else "auto ")
                         ++ name
                         ++ let args' = argstr <$> args in
-                           "(" ++ intercalate ", " args' ++ ")"
-                        ++ " -> "
+                           parens (intercalate ", " args')
+                        ++ (if ":" `elem` quals && (not . null) args
+                              then " : " ++ intercalate ", " ((\(a,_) -> a ++ parens a) <$> args)
+                              else [])
+                        ++ (if null rty then "" else " -> ")
                         ++ rty
                         ++ if null ret then ";" else ' ' : ret ]
                   , [ Wrap lam $ \(args, rty) ret -> "[=] "
                         ++ let args' = argstr <$> args in
-                           "(" ++ intercalate ", " args' ++ ")"
+                           parens (intercalate ", " args')
                         ++ (if null rty then [] else " -> " ++ rty)
                         ++ " "
                         ++ ret ]

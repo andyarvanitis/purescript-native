@@ -229,6 +229,18 @@ data CppQualifier
   --
   = CppStatic
   -- |
+  -- Virtual function
+  --
+  | CppVirtual
+  -- |
+  -- C++ class constructor function
+  --
+  | CppConstructor
+  -- |
+  -- C++ class destructor function
+  --
+  | CppDestructor
+  -- |
   -- Inline function
   --
   | CppInline deriving (Show, Eq, Data, Typeable)

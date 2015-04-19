@@ -70,9 +70,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
   let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
+  datas <- modDataToCpps
   let moduleBody = header : (CppInclude <$> cppImports')
                    ++ [CppNamespace (runModuleName mn) $
-                        (CppUseNamespace <$> cppImports') ++ foreigns' ++ optimized]
+                        (CppUseNamespace <$> cppImports') ++ datas ++ foreigns' ++ optimized]
   return $ case additional of
     MakeOptions -> moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
@@ -152,10 +153,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
   declToCpp (CI.Function (_, _, Just ty, _) ident args body) = return CppNoOp -- TODO: non-curried functions
 
-  declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) =
-    return CppNoOp
-  declToCpp (CI.Constructor _ _ ctor []) =
-    return CppNoOp
   -- |
   -- Typeclass declaration
   --
@@ -187,8 +184,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
     toStrings (name, tys) = (qualifiedToStr mn (Ident . runProperName) name, typestr mn <$> tys)
 
-  declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) =
-    return CppNoOp
+  -- |
+  -- data declarations (to omit)
+  --
+  declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) = return CppNoOp
+  declToCpp (CI.Constructor _ _ ctor []) = return CppNoOp
+  declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) = return CppNoOp
 
   declToCpp d = return CppNoOp -- TODO: includes Function IsNewtype
 
@@ -356,6 +357,40 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         tmps = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
         val = CppDataType qname tmps in
     flip CppInstanceOf val <$> exprToCpp expr
+
+
+  modDataToCpps :: m [Cpp]
+  modDataToCpps = do
+    let ds = M.toList
+               . M.mapWithKey (\k a -> snd a)
+               . M.filterWithKey (\(Qualified mn' _) _ -> mn' == Just mn)
+               . M.filter (isData . snd)
+               $ types env
+    let dtys = map (\(ty, DataType ts _) ->
+                     let name = qualifiedToStr mn (Ident . runProperName) ty in
+                     CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
+                       [] []
+                       [CppFunction name [] [] [] [CppVirtual, CppDestructor] (CppBlock [])]
+               ) ds
+    let dcons = concatMap (\(ty, DataType ts cs) ->
+                            let super = qualifiedToStr mn (Ident . runProperName) ty
+                                tmps = flip (,) 0 . runType . Template . fst <$> ts in
+                            map (\(ctor, fields) ->
+                              let name = '_' : runProperName ctor ++ "_"
+                                  args = zip (("value" ++) . show <$> [0..]) (typestr mn <$> fields) in
+                              CppStruct (name, Left tmps)
+                                        [(super, fst <$> tmps)]
+                                        []
+                                        (if null args
+                                          then []
+                                          else [CppFunction name [] args [] [CppConstructor] (CppBlock [])])
+                            ) cs
+                ) ds
+    return (dtys ++ dcons)
+    where
+      isData :: TypeKind -> Bool
+      isData DataType{} = True
+      isData _ = False
 
   unaryToCpp :: UnaryOp -> CppUnaryOp
   unaryToCpp Negate = CppNegate
