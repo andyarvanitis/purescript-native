@@ -89,7 +89,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       Just (params, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
         fs' = filter (isNormalFn) fs
-        classname' = qualifiedToStr mn (Ident . runProperName) classname
+        classname' = qualifiedToStr' (Ident . runProperName) classname
         params' = runType . Template <$> params
         inst = CppInstance [] (classname', fst <$> fns) [] (zip params' typs)
     cpps <- mapM toCpp (zip fns fs')
@@ -182,7 +182,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       CppVariableIntroduction (name, runQualifier CppStatic ++ ' ' : typestr mn ty) Nothing
     toCpp _ f = error $ show f
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
-    toStrings (name, tys) = (qualifiedToStr mn (Ident . runProperName) name, typestr mn <$> tys)
+    toStrings (name, tys) = (qualifiedToStr' (Ident . runProperName) name, typestr mn <$> tys)
 
   -- |
   -- data declarations (to omit)
@@ -252,7 +252,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
       CI.Var (_, _, Just ty, Just (IsConstructor _ fields)) name ->
         let argsNotApp = length fields - length args
-            qname = qualifiedToStr mn id name
+            qname = qualifiedToStr' id name
             tmps = maybe [] getDataTypeArgs (mktype mn ty >>= getDataType qname)
             val = CppDataConstructor qname tmps in
         if argsNotApp > 0
@@ -306,11 +306,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
 
   exprToCpp (CI.Var (_, _, ty, Just (IsConstructor _ fields)) ident) =
-    let qname = qualifiedToStr mn id ident
+    let qname = qualifiedToStr' id ident
         tmps = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname) in
     return $ if null fields
-               then CppApp (CppDataConstructor (qualifiedToStr mn id ident) tmps) []
-               else CppPartialApp (CppDataConstructor (qualifiedToStr mn id ident) tmps) [] (length fields)
+               then CppApp (CppDataConstructor (qualifiedToStr' id ident) tmps) []
+               else CppPartialApp (CppDataConstructor (qualifiedToStr' id ident) tmps) [] (length fields)
 
   -- Typeclass instance dictionary
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))
@@ -353,7 +353,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.BinaryOp _ op lhs rhs) =
     CppBinary op <$> exprToCpp lhs <*> exprToCpp rhs
   exprToCpp (CI.IsTagOf (_, _, ty, _) ctor expr) =
-    let qname = qualifiedToStr mn (Ident . runProperName) ctor
+    let qname = qualifiedToStr' (Ident . runProperName) ctor
         tmps = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
         val = CppDataType qname tmps in
     flip CppInstanceOf val <$> exprToCpp expr
@@ -366,13 +366,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                . M.filter (isData . snd)
                $ types env
     let dtys = map (\(ty, DataType ts _) ->
-                     let name = qualifiedToStr mn (Ident . runProperName) ty in
+                     let name = qualifiedToStr' (Ident . runProperName) ty in
                      CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
                        [] []
                        [CppFunction name [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]
                ) ds
     let dcons = concatMap (\(ty, DataType ts cs) ->
-                            let super = qualifiedToStr mn (Ident . runProperName) ty
+                            let super = qualifiedToStr' (Ident . runProperName) ty
                                 tmps = flip (,) 0 . runType . Template . fst <$> ts in
                             map (\(ctor, fields) ->
                               let name = '_' : runProperName ctor ++ "_"
@@ -439,6 +439,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = CppVar . runIdent $ f a
   qualifiedToCpp f (Qualified (Just mn') a) | mn /= mn' = CppAccessor (identToCpp $ f a) (CppScope (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
+
+  qualifiedToStr' :: (a -> Ident) -> Qualified a -> String
+  qualifiedToStr' = qualifiedToStr mn
 
   -- TODO: These checks (esp the string one) are bad -- find a better way or propose a change to PS
   isDict :: CI.Expr Ann -> Bool
