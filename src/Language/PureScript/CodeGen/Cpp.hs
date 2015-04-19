@@ -358,7 +358,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         val = CppDataType qname tmps in
     flip CppInstanceOf val <$> exprToCpp expr
 
-
   modDataToCpps :: m [Cpp]
   modDataToCpps = do
     let ds = M.toList

@@ -68,6 +68,33 @@ literals = mkPattern' match
     objectPropertyToString :: String -> String
     objectPropertyToString s | identNeedsEscaping s = show s
                              | otherwise = s
+  match (CppFunction name tmps args rty qs ret) = fmap concat $ sequence
+    [ if null tmps
+        then return []
+        else do
+          indentString <- currentIndent
+          return (templDecl' (Left tmps) ++ "\n" ++ indentString)
+    , return $ concatMap (++ " ") $ runQualifier <$> filter (/= CppConstructor) qs
+    , return $ if CppConstructor `elem` qs || CppDestructor `elem` qs
+                 then []
+                 else "auto "
+    , return name
+    , return $ parens (intercalate ", " $ argstr <$> args)
+    , if CppConstructor `elem` qs && (not . null) args
+        then let cpps = ": " ++ intercalate ", " ((\(a, _) -> a ++ parens a) <$> args) in
+          if length args > 2
+            then do
+              indentString <- withIndent currentIndent
+              return ('\n' : indentString ++ cpps)
+            else return (' ' : cpps)
+        else return []
+    , return $ if null rty then [] else " -> " ++ rty
+    , if ret == CppNoOp
+        then return ";"
+        else do
+          cpps <- prettyPrintCpp' ret
+          return $ ' ' : cpps
+    ]
   match (CppBlock sts) = fmap concat $ sequence
     [ return "{\n"
     , withIndent $ prettyStatements sts
@@ -251,15 +278,6 @@ indexer = mkPattern' match
   match (CppIndexer index val) = (,) <$> prettyPrintCpp' index <*> pure val
   match _ = mzero
 
-fun :: Pattern PrinterState Cpp ((String, String, [(String, String)], String, [String]), Cpp)
-fun = mkPattern' match
-  where
-  match (CppFunction name tmps args rty qs ret) = do
-    indentString <- currentIndent
-    let templ = if null tmps then [] else templDecl' (Left tmps) ++ "\n" ++ indentString
-    return ((templ, name, args, rty, runQualifier <$> qs), ret)
-  match _ = mzero
-
 lam :: Pattern PrinterState Cpp (([(String, String)], String), Cpp)
 lam = mkPattern match
   where
@@ -367,21 +385,6 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap app $ \args val -> val ++ parens args ]
                   , [ Wrap partapp $ \(args, n) _ -> "bind<" ++ show n ++ ">(" ++ args ++ ")" ]
                   , [ unary CppNew "new " ]
-                  , [ Wrap fun $ \(templ, name, args, rty, quals) ret -> []
-                        ++ templ
-                        ++ concatMap (++ " ") (filter (/=":") quals)
-                        ++ (if "~" `elem` quals || ":" `elem` quals
-                              then ""
-                              else "auto ")
-                        ++ name
-                        ++ let args' = argstr <$> args in
-                           parens (intercalate ", " args')
-                        ++ (if ":" `elem` quals && (not . null) args
-                              then " : " ++ intercalate ", " ((\(a,_) -> a ++ parens a) <$> args)
-                              else [])
-                        ++ (if null rty then "" else " -> ")
-                        ++ rty
-                        ++ if null ret then ";" else ' ' : ret ]
                   , [ Wrap lam $ \(args, rty) ret -> "[=] "
                         ++ let args' = argstr <$> args in
                            parens (intercalate ", " args')
