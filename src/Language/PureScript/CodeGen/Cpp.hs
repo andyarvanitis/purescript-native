@@ -102,17 +102,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     toCpp ((name, _), e@CI.Literal{})
       | Just ty <- tyFromExpr e = declToCpp (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
     toCpp ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
-      | Just ty <- tyFromExpr e = do
-        e' <- exprToCpp e
-        let tparams = templparams' $ mktype mn ty
-            tparams' = fst <$> tparams
-            block = CppBlock [CppReturn (CppApp (asTemplate tparams' e') [CppVar "arg"])]
-        return $ CppFunction name
-                             tparams
-                             [("arg", argtype' mn ty)]
-                             (rettype' mn ty)
-                             [CppInline, CppStatic]
-                             block
+      | Just ty <- tyFromExpr e,
+        tparams <- templparams' (mktype mn ty) = varDeclToFn name e ty tparams [CppInline, CppStatic]
     toCpp ((name, _), e)
       | Just ty <- tyFromExpr e = declToCpp (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
     toCpp ((name, _), e) = return $ trace (name ++ " :: " ++ show e ++ "\n") CppNoOp
@@ -126,6 +117,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                  [Ident "__unused"]
                  [CI.Return (_, _, Nothing, Nothing) (CI.Var (_, _, Nothing, Nothing) _)]) = False
     isNormalFn _ = True
+
+  declToCpp (CI.VarDecl (_, _, _, _) (Ident name) expr)
+    | Just ty <- tyFromExpr expr,
+      ty'@(Just Function{}) <- mktype mn ty,
+      tparams@(_:_) <- templparams' ty' = varDeclToFn name expr ty tparams [CppInline]
 
   declToCpp (CI.VarDecl (_, _, ty, _) ident expr) =
     CppVariableIntroduction (identToCpp ident, maybe [] (typestr mn) ty) . Just <$> exprToCpp expr
@@ -430,6 +426,22 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   unApp :: CI.Expr Ann -> [CI.Expr Ann] -> (CI.Expr Ann, [CI.Expr Ann])
   unApp (CI.App _ val args1) args2 = unApp val (args1 ++ args2)
   unApp other args = (other, args)
+
+  -- |
+  -- Avoiding templated args - a C++14 feature - for now by converting the decl to a
+  -- passthrough function.
+  --
+  varDeclToFn :: String -> CI.Expr Ann -> T.Type -> [(String, Int)] -> [CppQualifier] -> m Cpp
+  varDeclToFn name expr ty tparams qs = do
+    e' <- exprToCpp expr
+    let tparams' = fst <$> tparams
+        block = CppBlock [CppReturn (CppApp (asTemplate tparams' e') [CppVar "arg"])]
+    return $ CppFunction name
+                         tparams
+                         [("arg", argtype' mn ty)]
+                         (rettype' mn ty)
+                         qs
+                         block
 
   -- |
   -- Generate code in the simplified C++11 intermediate representation for a reference to a
