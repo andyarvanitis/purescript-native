@@ -70,7 +70,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
   let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
-  datas <- modDataToCpps
+  datas <- modDatasToCpps
   let moduleBody = header : (CppInclude <$> cppImports')
                    ++ [CppNamespace (runModuleName mn) $
                         (CppUseNamespace <$> cppImports') ++ datas ++ foreigns' ++ optimized]
@@ -354,37 +354,38 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         val = CppDataType qname tmps in
     flip CppInstanceOf val <$> exprToCpp expr
 
-  modDataToCpps :: m [Cpp]
-  modDataToCpps = do
-    let ds = M.toList
-               . M.mapWithKey (\k a -> snd a)
-               . M.filterWithKey (\(Qualified mn' _) _ -> mn' == Just mn)
-               . M.filter (isData . snd)
-               $ types env
-    let dtys = map (\(ty, DataType ts _) ->
-                     let name = qualifiedToStr' (Ident . runProperName) ty in
-                     CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
-                       [] []
-                       [CppFunction name [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]
-               ) ds
-    let dcons = concatMap (\(ty, DataType ts cs) ->
-                            let super = qualifiedToStr' (Ident . runProperName) ty
-                                tmps = flip (,) 0 . runType . Template . fst <$> ts in
-                            map (\(ctor, fields) ->
-                              let name = '_' : runProperName ctor ++ "_"
-                                  args = zip (("value" ++) . show <$> [0..]) (typestr mn <$> fields) in
-                              CppStruct (name, Left tmps)
-                                        [(super, fst <$> tmps)]
-                                        []
-                                        (if null args
-                                          then []
-                                          else (flip CppVariableIntroduction Nothing <$> args) ++
-                                               [ CppFunction name [] args [] [CppConstructor] (CppBlock [])
-                                               , CppFunction name [] [] [] [CppConstructor, CppDelete] CppNoOp
-                                               ])
-                            ) cs
-                ) ds
-    return (dtys ++ dcons)
+  modDatasToCpps :: m [Cpp]
+  modDatasToCpps
+    | ds@(_:_) <- M.toList
+                 . M.mapWithKey (\k a -> snd a)
+                 . M.filterWithKey (\(Qualified mn' _) _ -> mn' == Just mn)
+                 . M.filter (isData . snd)
+                 $ types env = do
+      let dtys = map (\(ty, DataType ts _) ->
+                       let name = qualifiedToStr' (Ident . runProperName) ty in
+                       CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
+                         [] []
+                         [CppFunction name [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]
+                 ) ds
+      let dcons = concatMap (\(ty, DataType ts cs) ->
+                              let super = qualifiedToStr' (Ident . runProperName) ty
+                                  tmps = flip (,) 0 . runType . Template . fst <$> ts in
+                              map (\(ctor, fields) ->
+                                let name = '_' : runProperName ctor ++ "_"
+                                    args = zip (("value" ++) . show <$> [0..]) (typestr mn <$> fields) in
+                                CppStruct (name, Left tmps)
+                                          [(super, fst <$> tmps)]
+                                          []
+                                          (if null args
+                                            then []
+                                            else (flip CppVariableIntroduction Nothing <$> args) ++
+                                                 [ CppFunction name [] args [] [CppConstructor] (CppBlock [])
+                                                 , CppFunction name [] [] [] [CppConstructor, CppDelete] CppNoOp
+                                                 ])
+                              ) cs
+                  ) ds
+      return (dtys ++ dcons)
+    | otherwise = return []
     where
       isData :: TypeKind -> Bool
       isData DataType{} = True
