@@ -34,7 +34,7 @@ A small strongly typed programming language with expressive types that compiles 
 
 #### TO-DO:
 
-* Proper break-out of pure11 generation — just a hacked fork right now
+* Proper break-out of pure11 generation — just a hacked fork right now (see note above on `core-imp`)
 * Get automated builds/tests up and running ([underway](https://github.com/andyarvanitis/pure11/tree/pure11/examples/passing))
 * Support for `type` in generator (e.g. generate C++11 `using`)
 * Optimized `newtype` (some work already done, but disabled for now)
