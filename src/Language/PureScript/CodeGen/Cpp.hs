@@ -220,16 +220,16 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp :: CI.Expr Ann -> m Cpp
   exprToCpp (CI.Literal _ lit) =
     literalToValueCpp lit
-  exprToCpp (CI.Accessor _ prop@(CI.Literal _ (StringLiteral name)) expr@(CI.Var (_, _, Just ty, _) _)) = do
+  exprToCpp (CI.Accessor _ prop@(CI.Literal _ (StringLiteral name)) expr@(CI.Var (_, _, ty, _) _)) = do
     expr' <- exprToCpp expr
     prop' <- exprToCpp prop
     return (toCpp expr' prop')
     where
     toCpp :: Cpp -> Cpp -> Cpp
-    toCpp e p | (CppStringLiteral name) <- p,
-                Just (Map pairs) <- mktype mn ty,
+    toCpp e p | Just ty' <- ty,
+                Just (Map pairs) <- mktype mn ty',
                 Just t <- lookup name pairs = CppMapAccessor (CppCast CppNoOp (runType t)) (CppIndexer p e)
-    toCpp e p = CppIndexer p e
+    toCpp e p = CppAccessor name e
   exprToCpp (CI.Accessor _ prop expr) =
     CppIndexer <$> exprToCpp prop <*> exprToCpp expr
   exprToCpp (CI.Indexer _ index expr) =
