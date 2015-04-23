@@ -234,6 +234,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         convert cpp = cpp
         qname :: String
         qname = qualifiedToStr' (Ident . runProperName) ctor
+    addTypes _ cpp = return cpp
   statmentToCpp (CI.Return _ expr) =
     CppReturn <$> exprToCpp expr
   statmentToCpp (CI.Throw _ msg) =
