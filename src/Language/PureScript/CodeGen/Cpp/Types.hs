@@ -60,7 +60,7 @@ typeName Function{} = "fn"
 typeName EffectFunction{} = "eff_fn"
 typeName Data{} = "data"
 typeName List{} = "list"
-typeName Map{} = "map"
+typeName Map{} = "any_map"
 typeName Template{} = ""
 typeName _ = ""
 
