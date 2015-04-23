@@ -64,7 +64,7 @@ isUsed var1 = everythingOnCpp (||) check
 targetVariable :: Cpp -> String
 targetVariable (CppVar var) = var
 targetVariable (CppScope var) = var
-targetVariable (CppAccessor _ tgt) = targetVariable tgt
+targetVariable (CppAccessor _ _ tgt) = targetVariable tgt
 targetVariable (CppIndexer _ tgt) = targetVariable tgt
 targetVariable _ = error "Invalid argument to targetVariable"
 

@@ -81,28 +81,28 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   isPure (CppApp purePoly [effDict]) | isPurePoly purePoly && isEffDict C.applicativeEffDictionary effDict = True
   isPure _ = False
   -- Check if an expression represents the polymorphic >>= function
-  isBindPoly (CppAccessor prop (CppVar prelude)) = prelude == C.prelude && prop == identToCpp (Op (C.>>=))
-  isBindPoly (CppAccessor prop (CppScope prelude)) = prelude == C.prelude && prop == identToCpp (Op (C.>>=))
+  isBindPoly (CppAccessor _ prop (CppVar prelude)) = prelude == C.prelude && prop == identToCpp (Op (C.>>=))
+  isBindPoly (CppAccessor _ prop (CppScope prelude)) = prelude == C.prelude && prop == identToCpp (Op (C.>>=))
   isBindPoly (CppIndexer (CppStringLiteral bind) (CppVar prelude)) = prelude == C.prelude && bind == (C.>>=)
   isBindPoly _ = False
   -- Check if an expression represents the polymorphic return function
-  isRetPoly (CppAccessor returnEscaped (CppVar prelude)) = prelude == C.prelude && returnEscaped == C.returnEscaped
-  isRetPoly (CppAccessor returnEscaped (CppScope prelude)) = prelude == C.prelude && returnEscaped == C.returnEscaped
+  isRetPoly (CppAccessor _ returnEscaped (CppVar prelude)) = prelude == C.prelude && returnEscaped == C.returnEscaped
+  isRetPoly (CppAccessor _ returnEscaped (CppScope prelude)) = prelude == C.prelude && returnEscaped == C.returnEscaped
   isRetPoly (CppIndexer (CppStringLiteral return') (CppVar prelude)) = prelude == C.prelude && return' == C.return
   isRetPoly _ = False
   -- Check if an expression represents the polymorphic pure function
-  isPurePoly (CppAccessor pure' (CppVar prelude)) = prelude == C.prelude && pure' == C.pure'
-  isPurePoly (CppAccessor pure' (CppScope prelude)) = prelude == C.prelude && pure' == C.pure'
+  isPurePoly (CppAccessor _ pure' (CppVar prelude)) = prelude == C.prelude && pure' == C.pure'
+  isPurePoly (CppAccessor _ pure' (CppScope prelude)) = prelude == C.prelude && pure' == C.pure'
   isPurePoly (CppIndexer (CppStringLiteral pure') (CppVar prelude)) = prelude == C.prelude && pure' == C.pure'
   isPurePoly _ = False
   -- Check if an expression represents a function in the Ef module
-  isEffFunc name (CppAccessor name' (CppVar eff)) = eff == C.eff && name == name'
-  isEffFunc name (CppAccessor name' (CppScope eff)) = eff == C.eff && name == name'
+  isEffFunc name (CppAccessor _ name' (CppVar eff)) = eff == C.eff && name == name'
+  isEffFunc name (CppAccessor _ name' (CppScope eff)) = eff == C.eff && name == name'
   isEffFunc _ _ = False
   -- Check if an expression represents the Monad Eff dictionary
   isEffDict name (CppVar ident) | ident == name = True
-  isEffDict name (CppAccessor prop (CppVar eff)) = eff == C.eff && prop == name
-  isEffDict name (CppAccessor prop (CppScope eff)) = eff == C.eff && prop == name
+  isEffDict name (CppAccessor _ prop (CppVar eff)) = eff == C.eff && prop == name
+  isEffDict name (CppAccessor _ prop (CppScope eff)) = eff == C.eff && prop == name
   isEffDict _ _ = False
   -- Remove __do function applications which remain after desugaring
   undo :: Cpp -> Cpp
@@ -140,15 +140,15 @@ inlineST = everywhereOnCpp convertBlock
   convert agg (CppApp f [arg]) | isSTFunc C.newSTRef f =
    CppLambda [] [] (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral [(C.stRefValue, arg)]])
   convert agg (CppApp (CppApp f [ref]) []) | isSTFunc C.readSTRef f =
-    if agg then ref else CppAccessor C.stRefValue ref
+    if agg then ref else CppAccessor [] C.stRefValue ref
   convert agg (CppApp (CppApp (CppApp f [ref]) [arg]) []) | isSTFunc C.writeSTRef f =
-    if agg then CppAssignment ref arg else CppAssignment (CppAccessor C.stRefValue ref) arg
+    if agg then CppAssignment ref arg else CppAssignment (CppAccessor [] C.stRefValue ref) arg
   convert agg (CppApp (CppApp (CppApp f [ref]) [func]) []) | isSTFunc C.modifySTRef f =
-    if agg then CppAssignment ref (CppApp func [ref]) else  CppAssignment (CppAccessor C.stRefValue ref) (CppApp func [CppAccessor C.stRefValue ref])
+    if agg then CppAssignment ref (CppApp func [ref]) else  CppAssignment (CppAccessor [] C.stRefValue ref) (CppApp func [CppAccessor [] C.stRefValue ref])
   convert _ other = other
   -- Check if an expression represents a function in the ST module
-  isSTFunc name (CppAccessor name' (CppVar st)) = st == C.st && name == name'
-  isSTFunc name (CppAccessor name' (CppScope st)) = st == C.st && name == name'
+  isSTFunc name (CppAccessor _ name' (CppVar st)) = st == C.st && name == name'
+  isSTFunc name (CppAccessor _ name' (CppScope st)) = st == C.st && name == name'
   isSTFunc _ _ = False
   -- Find all ST Refs initialized in this block
   findSTRefsIn = everythingOnCpp (++) isSTRef

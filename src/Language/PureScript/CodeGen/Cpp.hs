@@ -141,6 +141,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp (CI.VarDecl (_, _, ty, _) ident expr) =
     CppVariableIntroduction (identToCpp ident, maybe [] (typestr mn) ty) . Just <$> exprToCpp expr
 
+  -- TODO: fix when proper Meta info added
   declToCpp (CI.Function _ ident [Ident "dict"]
     [CI.Return _ (CI.Accessor _ _ (CI.Var _ (Qualified Nothing (Ident "dict"))))]) =
     return CppNoOp
@@ -216,8 +217,23 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     elses' <- CppBlock <$> mapM statmentToCpp elses
     CppIfElse <$> exprToCpp cond <*> pure thens' <*> pure (Just elses')
   statmentToCpp (CI.IfElse _ cond thens Nothing) = do
-    thens' <- CppBlock <$> mapM statmentToCpp thens
+    block <- CppBlock <$> mapM statmentToCpp thens
+    thens' <- addTypes cond block
     CppIfElse <$> exprToCpp cond <*> pure thens' <*> pure Nothing
+    where
+    addTypes :: CI.Expr Ann -> Cpp -> m Cpp
+    addTypes (CI.IsTagOf _ ctor e) sts = do
+      e' <- exprToCpp e
+      return (typeAccessors e' sts)
+      where
+      typeAccessors :: Cpp -> Cpp -> Cpp
+      typeAccessors acc = everywhereOnCpp convert
+        where
+        convert :: Cpp -> Cpp
+        convert (CppAccessor [] prop cpp) | cpp == acc = CppAccessor qname prop cpp
+        convert cpp = cpp
+        qname :: String
+        qname = qualifiedToStr' (Ident . runProperName) ctor
   statmentToCpp (CI.Return _ expr) =
     CppReturn <$> exprToCpp expr
   statmentToCpp (CI.Throw _ msg) =
@@ -245,7 +261,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     toCpp e p | Just ty' <- ty,
                 Just (Map pairs) <- mktype mn ty',
                 Just t <- lookup name pairs = CppMapAccessor (CppCast CppNoOp (runType t)) (CppIndexer p e)
-    toCpp e p = CppAccessor name e
+    toCpp e p = CppAccessor (maybe [] (typestr mn) ty) name e
   exprToCpp (CI.Accessor _ prop expr) =
     CppIndexer <$> exprToCpp prop <*> exprToCpp expr
   exprToCpp (CI.Indexer _ index expr) =
@@ -443,9 +459,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       block = CppBlock (objAssign:copy:extend ++ [CppReturn cppNewObj])
       objAssign = CppVariableIntroduction (newObj, []) (Just $ CppObjectLiteral [])
       copy = CppForIn key obj $ CppBlock [CppIfElse cond assign Nothing]
-      cond = CppApp (CppAccessor "hasOwnProperty" obj) [cppKey]
+      cond = CppApp (CppAccessor [] "hasOwnProperty" obj) [cppKey]
       assign = CppBlock [CppAssignment (CppIndexer cppKey cppNewObj) (CppIndexer cppKey obj)]
-      stToAssign (s, cpp) = CppAssignment (CppAccessor s cppNewObj) cpp
+      stToAssign (s, cpp) = CppAssignment (CppAccessor [] s cppNewObj) cpp
       extend = map stToAssign sts
     return $ CppApp (CppLambda [] [] block) []
 
@@ -477,13 +493,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   --
   qualifiedToCpp :: (a -> Ident) -> Qualified a -> Cpp
   qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = CppVar . runIdent $ f a
-  qualifiedToCpp f (Qualified (Just mn') a) | mn /= mn' = CppAccessor (identToCpp $ f a) (CppScope (moduleNameToCpp mn'))
+  qualifiedToCpp f (Qualified (Just mn') a) | mn /= mn' = CppAccessor [] (identToCpp $ f a) (CppScope (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
 
   qualifiedToStr' :: (a -> Ident) -> Qualified a -> String
   qualifiedToStr' = qualifiedToStr mn
 
-  -- TODO: These checks (esp the string one) are bad -- find a better way or propose a change to PS
+  -- TODO: fix when proper Meta info added
   isDict :: CI.Expr Ann -> Bool
   isDict (CI.Var (_, _, Nothing, Nothing) (Qualified (Just _) _)) = True
   isDict (CI.Var (_, _, Nothing, Nothing) (Qualified Nothing (Ident name))) | "__dict_" `isPrefixOf` name = True
@@ -510,8 +526,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   asTemplate :: [String] -> Cpp -> Cpp
   asTemplate [] cpp = cpp
   asTemplate ps (CppVar name) = CppVar (name ++ '<' : intercalate "," ps ++ ">")
-  asTemplate ps (CppAccessor prop cpp)
-    | prop' <- P.prettyPrintCpp [asTemplate ps (CppVar prop)] = CppAccessor prop' cpp
+  asTemplate ps (CppAccessor typ prop cpp)
+    | prop' <- P.prettyPrintCpp [asTemplate ps (CppVar prop)] = CppAccessor typ prop' cpp
   asTemplate ps (CppApp f args) = CppApp (asTemplate ps f) args
   asTemplate _ cpp = cpp
 

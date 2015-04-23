@@ -38,7 +38,7 @@ shouldInline (CppScope _) = True
 shouldInline (CppNumericLiteral _) = True
 shouldInline (CppStringLiteral _) = True
 shouldInline (CppBooleanLiteral _) = True
-shouldInline (CppAccessor _ val) = shouldInline val
+shouldInline (CppAccessor _ _ val) = shouldInline val
 shouldInline _ = False
 
 etaConvert :: Cpp -> Cpp
@@ -96,7 +96,7 @@ inlineOperator (m, op) f = everywhereOnCpp convert
   convert :: Cpp -> Cpp
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
-  isOp (CppAccessor longForm (CppScope m')) = m == m' && longForm == identToCpp (Op op)
+  isOp (CppAccessor _ longForm (CppScope m')) = m == m' && longForm == identToCpp (Op op)
   isOp _ = False
 
 inlineCommonOperators :: Cpp -> Cpp
@@ -177,8 +177,8 @@ inlineCommonOperators = applyAll $
   isNFn :: String -> Int -> Cpp -> Bool
   isNFn prefix n (CppVar name) = name == (prefix ++ show n)
   isNFn prefix n (CppScope name) = name == (prefix ++ show n)
-  isNFn prefix n (CppAccessor name (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
-  isNFn prefix n (CppAccessor name (CppScope dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
+  isNFn prefix n (CppAccessor _ name (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
+  isNFn prefix n (CppAccessor _ name (CppScope dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
   isNFn _ _ _ = False
 
   runFn :: Int -> Cpp -> Cpp
@@ -194,12 +194,12 @@ inlineCommonOperators = applyAll $
 
 isPreludeDict :: String -> Cpp -> Bool
 isPreludeDict dictName (CppInstance prelude _ prop _) = prelude == C.prelude && prop == dictName
-isPreludeDict dictName (CppAccessor prop (CppScope prelude)) = prelude == C.prelude && prop == dictName
+isPreludeDict dictName (CppAccessor _ prop (CppScope prelude)) = prelude == C.prelude && prop == dictName
 isPreludeDict _ _ = False
 
 isPreludeFn :: String -> Cpp -> Bool
 isPreludeFn fnName (CppInstance prelude _ fnName' _) = prelude == C.prelude && fnName' == fnName
-isPreludeFn fnName (CppAccessor fnName' (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
-isPreludeFn fnName (CppAccessor longForm (CppAccessor prelude (CppVar _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
-isPreludeFn fnName (CppAccessor longForm (CppAccessor prelude (CppScope _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
+isPreludeFn fnName (CppAccessor _ fnName' (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
+isPreludeFn fnName (CppAccessor _ longForm (CppAccessor _ prelude (CppVar _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
+isPreludeFn fnName (CppAccessor _ longForm (CppAccessor _ prelude (CppScope _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
 isPreludeFn _ _ = False

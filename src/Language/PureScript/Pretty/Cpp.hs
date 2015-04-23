@@ -126,7 +126,7 @@ literals = mkPattern' match
     [ return $ "using " ++ name' ++ " = " ++ name
                ++ if null typs'
                     then []
-                    else ('<' : intercalate "," (fst <$> typs) ++ ">")
+                    else angles (intercalate "," (fst <$> typs))
     , return ";"
     , return "\n"
     ]
@@ -150,14 +150,14 @@ literals = mkPattern' match
     ]
   match (CppDataType name []) = return (name ++ "_")
   match (CppDataType name typs) =
-    return (prettyPrintCpp1 (CppDataType name []) ++ '<' : intercalate "," typs ++ ">")
+    return (prettyPrintCpp1 (CppDataType name []) ++ angles (intercalate "," typs))
   match (CppDataConstructor name typs) =
-    return ("construct" ++ '<' : prettyPrintCpp1 (CppDataType name typs) ++ ">")
+    return ("construct" ++ angles (prettyPrintCpp1 (CppDataType name typs)))
   match (CppCast val typ) =
-    return ("cast" ++ '<' : typ ++ ">" ++ parens (prettyPrintCpp1 val))
+    return ("cast" ++ angles typ ++ parens (prettyPrintCpp1 val))
   match (CppVar ident) = return ident
-  match (CppInstance [] (cls, _) _ params) = return $ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
-  match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
+  match (CppInstance [] (cls, _) _ params) = return $ cls ++ angles (intercalate "," (snd <$> params))
+  match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ angles (intercalate "," (snd <$> params))
   match (CppScope ident) = return ident
 --   match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
@@ -267,11 +267,11 @@ conditional = mkPattern match
   match (CppConditional cond th el) = Just ((th, el), cond)
   match _ = Nothing
 
-accessor :: Pattern PrinterState Cpp (String, Cpp)
+accessor :: Pattern PrinterState Cpp ((String, String), Cpp)
 accessor = mkPattern match
   where
-  match (CppAccessor _ CppScope{}) = Nothing
-  match (CppAccessor prop val) = Just (prop, val)
+  match (CppAccessor _ _ CppScope{}) = Nothing
+  match (CppAccessor typ prop val) = Just ((typ, prop), val)
   match _ = Nothing
 
 mapAccessor :: Pattern PrinterState Cpp (String, Cpp)
@@ -283,10 +283,10 @@ mapAccessor = mkPattern match
 scope :: Pattern PrinterState Cpp (String, Cpp)
 scope = mkPattern match
   where
-  match (CppAccessor prop val@CppScope{}) = Just (prop, val)
+  match (CppAccessor _ prop val@CppScope{}) = Just (prop, val)
   match (CppApp val [inst@CppInstance{}]) =
     let val' = case val of
-                 (CppAccessor v (CppScope _)) -> v
+                 (CppAccessor _ v (CppScope _)) -> v
                  _ -> prettyPrintCpp1 val
         inst' = CppScope (prettyPrintCpp1 inst)
     in Just (if '<' `elem` val' then "template " ++ val' else val', inst')
@@ -318,14 +318,14 @@ app = mkPattern' match
 partapp :: Pattern PrinterState Cpp ((String, Int), Cpp)
 partapp = mkPattern' match
   where
-  match (CppPartialApp (CppAccessor val' _) (inst@CppInstance{} : args) n) = do
+  match (CppPartialApp (CppAccessor t val' _) (inst@CppInstance{} : args) n) = do
     inst' <- prettyPrintCpp' inst
-    cpps <- mapM prettyPrintCpp' (CppAccessor val' (CppScope inst') : args)
+    cpps <- mapM prettyPrintCpp' (CppAccessor t val' (CppScope inst') : args)
     return ((intercalate ", " cpps, n), CppNoOp)
   match (CppPartialApp val (inst@CppInstance{} : args) n) = do
     val' <- prettyPrintCpp' val
     inst' <- prettyPrintCpp' inst
-    cpps <- mapM prettyPrintCpp' (CppAccessor val' (CppScope inst') : args)
+    cpps <- mapM prettyPrintCpp' (CppAccessor [] val' (CppScope inst') : args)
     return ((intercalate ", " cpps, n), CppNoOp)
   match (CppPartialApp val args n) = do
     cpps <- mapM prettyPrintCpp' (val : args)
@@ -399,12 +399,13 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   matchValue = buildPrettyPrinter operators (literals <+> fmap parens matchValue)
   operators :: OperatorTable PrinterState Cpp String
   operators =
-    OperatorTable [ [ Wrap accessor $ \prop val -> "(*" ++ val ++ ")." ++ prop ]
+    OperatorTable [ [ Wrap accessor $ \(typ, prop) val ->
+                                        "get" ++ (if null typ then "" else angles typ) ++ parens val ++ '.' : prop ]
                   , [ Wrap mapAccessor $ \prop val -> val ++ '.' : prop ]
                   , [ Wrap scope $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ parens args ]
-                  , [ Wrap partapp $ \(args, n) _ -> "bind<" ++ show n ++ ">(" ++ args ++ ")" ]
+                  , [ Wrap partapp $ \(args, n) _ -> "bind" ++ angles (show n) ++ parens args ]
                   , [ unary CppNew "new " ]
                   , [ Wrap lam $ \(args, rty) ret -> "[=] "
                         ++ let args' = argstr <$> args in
@@ -445,7 +446,7 @@ dotsTo chr = map (\c -> if c == '.' then chr else c)
 
 classstr :: (String, [String]) -> String
 classstr (name, []) = name
-classstr (name, params) = name ++ '<' : intercalate ", " params ++ ">"
+classstr (name, params) = name ++ angles (intercalate ", " params)
 
 argstr :: (String, String) -> String
 argstr ([], typ) = typ
@@ -453,7 +454,7 @@ argstr (name, []) = "auto " ++ name
 argstr (name, typ) = typ ++ ' ' : name
 
 templDecl :: [(String, Int)] -> String
-templDecl ps = "template <" ++ intercalate ", " (go <$> ps) ++ ">"
+templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))
   where
   go :: (String, Int) -> String
   go (name, 0) = "typename " ++ name
@@ -464,6 +465,9 @@ templDecl' (Left []) = []
 templDecl' (Left params) = templDecl params
 templDecl' (Right []) = []
 templDecl' (Right _) = templDecl []
+
+angles :: String -> String
+angles s = '<' : s ++ ">"
 
 linebreak :: [Cpp]
 linebreak = [CppRaw ""]
