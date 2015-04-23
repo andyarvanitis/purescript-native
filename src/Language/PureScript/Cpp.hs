@@ -205,6 +205,7 @@ make outputDir ms prefix = do
     writeTextFile (outputDir </> "CMakeLists.txt") cmakeListsTxt
     writeTextFile (outputDir </> "PureScript/PureScript.hh") $ BU.toString $(embedFile "include/purescript.hh")
     writeTextFile (outputDir </> "PureScript/shared_list.hh") $ BU.toString $(embedFile "include/shared_list.hh")
+    writeTextFile (outputDir </> "PureScript/any_map.hh") $ BU.toString $(embedFile "include/any_map.hh")
 
   (desugared, nextVar) <- runSupplyT 0 $ zip (map fst marked) <$> desugar (map snd marked)
 

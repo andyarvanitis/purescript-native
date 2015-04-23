@@ -84,9 +84,13 @@ data Cpp
   --
   | CppObjectLiteral [(String, Cpp)]
   -- |
-  -- An object property accessor expression
+  -- An general property accessor expression
   --
   | CppAccessor String Cpp
+  -- |
+  -- An map object property accessor expression
+  --
+  | CppMapAccessor Cpp Cpp
   -- |
   -- A function introduction (name, template types, arguments, return type, qualifiers, body)
   --
@@ -107,6 +111,10 @@ data Cpp
   -- 'data' constructor (name, template types)
   --
   | CppDataConstructor String [String]
+  -- |
+  -- Value type cast
+  --
+  | CppCast Cpp String
   -- |
   -- Function application
   --
@@ -274,6 +282,7 @@ everywhereOnCpp f = go
   go (CppIndexer j1 j2) = f (CppIndexer (go j1) (go j2))
   go (CppObjectLiteral cpp) = f (CppObjectLiteral (map (fmap go) cpp))
   go (CppAccessor prop j) = f (CppAccessor prop (go j))
+  go (CppMapAccessor j1 j2) = f (CppMapAccessor (go j1) (go j2))
   go (CppFunction name tmps args rty qs j) = f (CppFunction name tmps args rty qs (go j))
   go (CppLambda args rty j) = f (CppLambda args rty (go j))
   go (CppStruct name supers cms ims) = f (CppStruct name supers (map go cms) (map go ims))
@@ -307,6 +316,7 @@ everywhereOnCppTopDown f = go . f
   go (CppIndexer j1 j2) = CppIndexer (go (f j1)) (go (f j2))
   go (CppObjectLiteral cpp) = CppObjectLiteral (map (fmap (go . f)) cpp)
   go (CppAccessor prop j) = CppAccessor prop (go (f j))
+  go (CppMapAccessor j1 j2) = CppMapAccessor (go (f j1)) (go (f j2))
   go (CppFunction name tmps args rty qs j) = CppFunction name tmps args rty qs (go (f j))
   go (CppLambda args rty j) = CppLambda args rty (go (f j))
   go (CppStruct name supers cms ims) = CppStruct name supers (map (go . f) cms) (map (go . f) ims)
@@ -339,6 +349,7 @@ everythingOnCpp (<>) f = go
   go j@(CppIndexer j1 j2) = f j <> go j1 <> go j2
   go j@(CppObjectLiteral cpp) = foldl (<>) (f j) (map (go . snd) cpp)
   go j@(CppAccessor _ j1) = f j <> go j1
+  go j@(CppMapAccessor j1 j2) = f j <> go j1 <> go j2
   go j@(CppFunction _ _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ j1) = f j <> go j1
   go j@(CppStruct _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)

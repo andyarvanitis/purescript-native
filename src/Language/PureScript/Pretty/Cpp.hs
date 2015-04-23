@@ -53,21 +53,18 @@ literals = mkPattern' match
     , fmap (intercalate ", ") $ forM xs prettyPrintCpp'
     , return " ]"
     ]
-  match (CppObjectLiteral []) = return "{}"
+  match (CppObjectLiteral []) = return "nullptr"
   match (CppObjectLiteral ps) = fmap concat $ sequence
-    [ return "{\n"
+    [ return $ typeName (Map []) ++ " {\n"
     , withIndent $ do
-        cpps <- forM ps $ \(key, value) -> fmap ((objectPropertyToString key ++ ": ") ++) . prettyPrintCpp' $ value
+        cpps <- forM ps $ \(key, value) ->
+                            fmap ((++) ("{ " ++ show key ++ ", ") . flip (++) " }") . prettyPrintCpp' $ value
         indentString <- currentIndent
         return $ intercalate ", \n" $ map (indentString ++) cpps
     , return "\n"
     , currentIndent
     , return "}"
     ]
-    where
-    objectPropertyToString :: String -> String
-    objectPropertyToString s | identNeedsEscaping s = show s
-                             | otherwise = s
   match (CppFunction name tmps args rty qs ret) = fmap concat $ sequence
     [ if null tmps
         then return []
@@ -144,6 +141,8 @@ literals = mkPattern' match
     return (prettyPrintCpp1 (CppDataType name []) ++ '<' : intercalate "," typs ++ ">")
   match (CppDataConstructor name typs) =
     return ("construct" ++ '<' : prettyPrintCpp1 (CppDataType name typs) ++ ">")
+  match (CppCast val typ) =
+    return ("cast" ++ '<' : typ ++ ">" ++ parens (prettyPrintCpp1 val))
   match (CppVar ident) = return ident
   match (CppInstance [] (cls, _) _ params) = return $ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
   match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ '<' : intercalate "," (snd <$> params) ++ ">"
@@ -260,6 +259,13 @@ accessor :: Pattern PrinterState Cpp (String, Cpp)
 accessor = mkPattern match
   where
   match (CppAccessor prop val@CppVar{}) = Just (prop, val)
+  match (CppAccessor prop val@CppIndexer{}) = Just (prop, val)
+  match _ = Nothing
+
+mapAccessor :: Pattern PrinterState Cpp (String, Cpp)
+mapAccessor = mkPattern match
+  where
+  match (CppMapAccessor prop val) = Just (prettyPrintCpp1 prop, val)
   match _ = Nothing
 
 scope :: Pattern PrinterState Cpp (String, Cpp)
@@ -382,6 +388,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   operators :: OperatorTable PrinterState Cpp String
   operators =
     OperatorTable [ [ Wrap accessor $ \prop val -> "(*" ++ val ++ ")." ++ prop ]
+                  , [ Wrap mapAccessor $ \prop val -> val ++ '.' : prop ]
                   , [ Wrap scope $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ parens args ]

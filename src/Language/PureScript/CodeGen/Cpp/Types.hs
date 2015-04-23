@@ -33,6 +33,7 @@ data Type = Native String
           | Function Type Type
           | Data Type [Type]
           | List Type
+          | Map [(String,Type)]
           | Template String
           | ParamTemplate String [Type]
           | EffectFunction Type
@@ -45,6 +46,7 @@ runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
 runType tt@(Data t []) = typeName tt ++ '<' : runType t ++ ">"
 runType tt@(Data t ts) = typeName tt ++ '<' : runType t ++ '<' : intercalate "," (map runType ts) ++ ">>"
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
+runType tt@(Map _) = typeName tt
 runType (Template []) = error "Bad template parameter"
 runType tt@(Template name) =  typeName tt ++ capitalize name
   where
@@ -58,6 +60,7 @@ typeName Function{} = "fn"
 typeName EffectFunction{} = "eff_fn"
 typeName Data{} = "data"
 typeName List{} = "list"
+typeName Map{} = "map"
 typeName Template{} = ""
 typeName _ = ""
 
@@ -160,7 +163,23 @@ mktype _ (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
   Just $ Native (typeName (EffectFunction (Template [])))
 mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a) []
 mktype m (T.ConstrainedType _ ty) = mktype m ty
-mktype _ (T.RCons _ _ _) = Just $ Template "rowType"
+
+
+mktype m r@(T.RCons _ _ _)
+  | (rs, _) <- T.rowToList r = Just (Map (rowPairs rs))
+  where
+  rowPairs :: [(String, T.Type)] -> [(String, Type)]
+  rowPairs rs = map (\(n, t) -> (n, fromJust t)) $ filter (isJust . snd) (map (\(n,t) -> (n, mktype m t)) rs)
+
+-- mktype m r@(T.RCons _ _ _)
+--   | (rs, r') <- T.rowToList r =
+--     case mktype m r' of
+--       Just (Template t) -> Just (Template t)
+--       _ -> Just $ Template "TR"
+--       -- _ -> let fields = map (\(name,ty) -> typestr m ty ++ ' ' : name) rs in
+--       --      Just . Native $ "struct { " ++ concatMap (++ "; ") fields ++ "}"
+--   | otherwise = Just $ Template "rowType"
+
 mktype _ T.REmpty = Nothing
 mktype _ b = error $ "Unknown type: " ++ show b
 
@@ -270,9 +289,14 @@ templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
 --  go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(runType a, [])]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (EffectFunction b, EffectFunction b') = go args (b, b')
-    go args (Data t _, EffectFunction t') = trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args
+    go args (Data t _, EffectFunction t') =
+      trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args
     go args (Data t [], Data t' []) = go args (t, t')
     go args (Data t ts, Data t' ts') = args ++ go [] (t, t') ++ concatMap (go []) (zip ts ts')
+    go args (Data t _, Template t') =
+      trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args -- ++ [(t', runType t)]
+    go args (Data t _, Map ts) =
+      trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show ts) args
     go args (List t, List t') = go args (t, t')
     go args (Native t, Native t')
       | t == t' = args
