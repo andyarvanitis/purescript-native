@@ -374,7 +374,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                               let super = qualifiedToStr' (Ident . runProperName) ty
                                   tmps = flip (,) 0 . runType . Template . fst <$> ts in
                               map (\(ctor, fields) ->
-                                let name = '_' : runProperName ctor ++ "_"
+                                let name = runProperName ctor ++ "_"
                                     args = zip (("value" ++) . show <$> [0..]) (typestr mn <$> fields) in
                                 CppStruct (name, Left tmps)
                                           [(super, fst <$> tmps)]

@@ -136,7 +136,7 @@ literals = mkPattern' match
     , currentIndent
     , return "};"
     ]
-  match (CppDataType name []) = return ('_' : name ++ "_")
+  match (CppDataType name []) = return (name ++ "_")
   match (CppDataType name typs) =
     return (prettyPrintCpp1 (CppDataType name []) ++ '<' : intercalate "," typs ++ ">")
   match (CppDataConstructor name typs) =
