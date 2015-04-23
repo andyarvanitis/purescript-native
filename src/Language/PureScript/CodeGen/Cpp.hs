@@ -220,7 +220,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp :: CI.Expr Ann -> m Cpp
   exprToCpp (CI.Literal _ lit) =
     literalToValueCpp lit
-  exprToCpp (CI.Accessor _ prop@(CI.Literal _ (StringLiteral name)) expr@(CI.Var (_, _, ty, _) _)) = do
+  exprToCpp (CI.Accessor _ prop@(CI.Literal _ (StringLiteral name)) expr@(CI.Var (_, _, ty, _) _))
+    | not ("__superclass_" `isPrefixOf` name) = do -- TODO: fix when proper Meta info added
     expr' <- exprToCpp expr
     prop' <- exprToCpp prop
     return (toCpp expr' prop')
