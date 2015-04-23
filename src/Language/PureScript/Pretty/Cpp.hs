@@ -16,7 +16,8 @@
 {-# LANGUAGE PatternGuards #-}
 
 module Language.PureScript.Pretty.Cpp (
-    prettyPrintCpp
+    prettyPrintCpp,
+    linebreak
 ) where
 
 import Data.List
@@ -29,7 +30,6 @@ import Control.PatternArrows
 import qualified Control.Arrow as A
 
 import Language.PureScript.CodeGen.Cpp.AST
-import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Comments
 import Language.PureScript.CoreImp.Operators
@@ -128,6 +128,7 @@ literals = mkPattern' match
                     then []
                     else ('<' : intercalate "," (fst <$> typs) ++ ">")
     , return ";"
+    , return "\n"
     ]
   match (CppStruct (name, params) supers cms ims) = let tmps = templDecl' params in
     fmap concat $ sequence $
@@ -269,7 +270,7 @@ conditional = mkPattern match
 accessor :: Pattern PrinterState Cpp (String, Cpp)
 accessor = mkPattern match
   where
-  match (CppAccessor prop val@CppScope{}) = Nothing
+  match (CppAccessor _ CppScope{}) = Nothing
   match (CppAccessor prop val) = Just (prop, val)
   match _ = Nothing
 
@@ -463,3 +464,6 @@ templDecl' (Left []) = []
 templDecl' (Left params) = templDecl params
 templDecl' (Right []) = []
 templDecl' (Right _) = templDecl []
+
+linebreak :: [Cpp]
+linebreak = [CppRaw ""]

@@ -73,7 +73,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   datas <- modDatasToCpps
   let moduleBody = header : (CppInclude <$> cppImports')
                    ++ [CppNamespace (runModuleName mn) $
-                        (CppUseNamespace <$> cppImports') ++ datas ++ foreigns' ++ optimized]
+                        (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ foreigns' ++ optimized]
   return $ case additional of
     MakeOptions -> moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
