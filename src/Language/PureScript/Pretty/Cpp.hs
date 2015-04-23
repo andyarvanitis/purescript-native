@@ -118,6 +118,17 @@ literals = mkPattern' match
   match (CppUseNamespace name) = fmap concat $ sequence
     [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
     ]
+  match (CppTypeAlias (name', typs') (name, typs)) =
+    let tmps' = templDecl typs' in fmap concat $ sequence $
+    (if null typs'
+      then []
+      else [return tmps', return "\n", currentIndent]) ++
+    [ return $ "using " ++ name' ++ " = " ++ name
+               ++ if null typs'
+                    then []
+                    else ('<' : intercalate "," (fst <$> typs) ++ ">")
+    , return ";"
+    ]
   match (CppStruct (name, params) supers cms ims) = let tmps = templDecl' params in
     fmap concat $ sequence $
     (if null tmps
@@ -258,8 +269,8 @@ conditional = mkPattern match
 accessor :: Pattern PrinterState Cpp (String, Cpp)
 accessor = mkPattern match
   where
-  match (CppAccessor prop val@CppVar{}) = Just (prop, val)
-  match (CppAccessor prop val@CppIndexer{}) = Just (prop, val)
+  match (CppAccessor prop val@CppScope{}) = Nothing
+  match (CppAccessor prop val) = Just (prop, val)
   match _ = Nothing
 
 mapAccessor :: Pattern PrinterState Cpp (String, Cpp)

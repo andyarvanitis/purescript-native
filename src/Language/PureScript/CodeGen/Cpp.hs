@@ -364,20 +364,25 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                  . M.filterWithKey (\(Qualified mn' _) _ -> mn' == Just mn)
                  . M.filter (isData . snd)
                  $ types env = do
-      let dtys = map (\(ty, DataType ts _) ->
-                       let name = qualifiedToStr' (Ident . runProperName) ty in
-                       CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
-                         [] []
-                         [CppFunction name [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]
+      let dtys = map (\(ty, DataType ts cs) ->
+                       if length cs == 1
+                         then CppNoOp
+                         else let name = qualifiedToStr' (Ident . runProperName) ty in
+                              CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
+                                [] []
+                                [CppFunction name [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]
                  ) ds
       let dcons = concatMap (\(ty, DataType ts cs) ->
                               let super = qualifiedToStr' (Ident . runProperName) ty
-                                  tmps = flip (,) 0 . runType . Template . fst <$> ts in
+                                  tmps = flip (,) 0 . runType . Template . fst <$> ts
+                                  super' = if length cs == 1
+                                             then []
+                                             else [(super, fst <$> tmps)] in
                               map (\(ctor, fields) ->
                                 let name = runProperName ctor ++ "_"
                                     args = zip (("value" ++) . show <$> [0..]) (typestr mn <$> fields) in
                                 CppStruct (name, Left tmps)
-                                          [(super, fst <$> tmps)]
+                                          super'
                                           []
                                           (if null args
                                             then []
@@ -386,6 +391,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                                  , CppFunction name [] [] [] [CppConstructor, CppDelete] CppNoOp
                                                  ])
                               ) cs
+                              ++ if length cs == 1
+                                   then [CppTypeAlias (super,tmps) ((++ "_") . runProperName . fst $ head cs, tmps)]
+                                   else []
                   ) ds
       return (dtys ++ dcons)
     | otherwise = return []
