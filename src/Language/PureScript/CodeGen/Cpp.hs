@@ -67,19 +67,34 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let foreigns' = [] -- mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
   cppDecls <- mapM declToCpp decls
   optimized <- T.traverse optimize (concatMap expandSeq cppDecls)
+  let optimized' = removeCodeAfterReturnStatements <$> optimized
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
   let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
   datas <- modDatasToCpps
   let moduleBody = header : (CppInclude <$> cppImports')
                    ++ [CppNamespace (runModuleName mn) $
-                        (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ foreigns' ++ optimized]
+                        (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ foreigns' ++ optimized']
   return $ case additional of
     MakeOptions -> moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
     _ -> []
 
   where
+  -- TODO: remove this after CoreImp optimizations are finished
+  --
+  removeCodeAfterReturnStatements :: Cpp -> Cpp
+  removeCodeAfterReturnStatements = everywhereOnCpp (removeFromBlock go)
+    where
+    go :: [Cpp] -> [Cpp]
+    go cpps | not (any isCppReturn cpps) = cpps
+           | otherwise = let (body, ret : _) = span (not . isCppReturn) cpps in body ++ [ret]
+    isCppReturn (CppReturn _) = True
+    isCppReturn _ = False
+    removeFromBlock :: ([Cpp] -> [Cpp]) -> Cpp -> Cpp
+    removeFromBlock go (CppBlock sts) = CppBlock (go sts)
+    removeFromBlock _  cpp = cpp
+
   declToCpp :: CI.Decl Ann -> m Cpp
   -- |
   -- Typeclass instance definition
