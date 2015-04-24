@@ -102,9 +102,7 @@ literals = mkPattern' match
     , return "}"
     ]
   match (CppNamespace name sts) = fmap concat $ sequence
-    [ return "\n"
-    , currentIndent
-    , return $ "namespace " ++ name ++ " {\n"
+    [ return $ "namespace " ++ name ++ " {\n"
     , withIndent $ prettyStatements sts
     , return "\n"
     , currentIndent
@@ -118,15 +116,13 @@ literals = mkPattern' match
   match (CppUseNamespace name) = fmap concat $ sequence
     [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
     ]
-  match (CppTypeAlias (name', typs') (name, typs)) =
-    let tmps' = templDecl typs' in fmap concat $ sequence $
-    (if null typs'
-      then []
-      else [return tmps', return "\n", currentIndent]) ++
-    [ return $ "using " ++ name' ++ " = " ++ name
-               ++ if null typs'
-                    then []
-                    else angles (intercalate "," (fst <$> typs))
+  match (CppTypeAlias (newName, newTyps) (name, typs) spec) =
+    let (tmps, name') = if null newTyps then ([], name)
+                                        else ([return (templDecl newTyps), return "\n", currentIndent],
+                                              name ++ angles (intercalate "," (fst <$> typs)))
+    in fmap concat $ sequence $
+    tmps ++
+    [ return $ "using " ++ newName ++ " = " ++ if null spec then name' else spec ++ angles name'
     , return ";"
     , return "\n"
     ]

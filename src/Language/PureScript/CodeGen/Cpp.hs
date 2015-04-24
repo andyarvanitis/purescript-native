@@ -73,8 +73,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
   datas <- modDatasToCpps
   let moduleBody = header : (CppInclude <$> cppImports')
-                   ++ [CppNamespace (runModuleName mn) $
-                        (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ foreigns' ++ optimized']
+                ++ P.linebreak
+                ++ [CppNamespace (runModuleName mn) $
+                   (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ foreigns' ++ optimized']
   return $ case additional of
     MakeOptions -> moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
@@ -397,48 +398,59 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                  . M.filterWithKey (\(Qualified mn' _) _ -> mn' == Just mn)
                  . M.filter (isData . snd)
                  $ types env = do
-      let dtys = dataTypes ds
-      let dcons = dataCtors ds
-      return (dtys ++ dcons)
+      let types = dataTypes ds
+          (ctors, aliases) = dataCtors ds
+      return (types ++ asManaged types ++ ctors ++ asManaged ctors ++ aliases)
     | otherwise = return []
-    where
+      where
       isData :: TypeKind -> Bool
       isData DataType{} = True
       isData _ = False
-      dataTypes :: [(Qualified ProperName, TypeKind)] -> [Cpp]
-      dataTypes = map go
+
+      asManaged:: [Cpp] -> [Cpp]
+      asManaged = concatMap go
         where
-        go :: (Qualified ProperName, TypeKind) -> Cpp
-        go (_, DataType _ [_]) = CppNoOp
-        go (typ, DataType ts cs) =
-          let name = qual typ in
-          CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
-                    [] []
-                    [CppFunction name [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]
-      dataCtors :: [(Qualified ProperName, TypeKind)] -> [Cpp]
-      dataCtors = concatMap go
+        go :: Cpp -> [Cpp]
+        go (CppNamespace ns cpps) = fromStruct ns <$> cpps
+        go _ = []
+        fromStruct :: String -> Cpp -> Cpp
+        fromStruct ns (CppStruct (name, Left tmps) _ _ _) =
+          CppTypeAlias (name, tmps) (ns ++ "::" ++ name, tmps) "managed"
+
+      dataTypes :: [(Qualified ProperName, TypeKind)] -> [Cpp]
+      dataTypes ds | cpps@(_:_) <- concatMap go ds = [CppNamespace "type" cpps]
+                   | otherwise = []
         where
         go :: (Qualified ProperName, TypeKind) -> [Cpp]
+        go (_, DataType _ [_]) = []
         go (typ, DataType ts cs) =
-          map ctorStruct cs ++ aliases
+          [CppStruct (qual typ, Left (flip (,) 0 . runType . Template . fst <$> ts))
+                     [] []
+                     [CppFunction (qual typ) [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]]
+        go _ = []
+
+      dataCtors :: [(Qualified ProperName, TypeKind)] -> ([Cpp], [Cpp])
+      dataCtors ds | cpps@(_:_) <- concatMap (fst . go) ds,
+                     aliases <- catMaybes $ map (snd . go) ds = ([CppNamespace "value" cpps], aliases)
+                   | otherwise = ([],[])
+        where
+        go :: (Qualified ProperName, TypeKind) -> ([Cpp], Maybe Cpp)
+        go (typ, DataType ts cs) = (map ctorStruct cs, alias)
           where
-          aliases :: [Cpp]
-          aliases | [_] <- cs = [CppTypeAlias (qual typ, tmps) ((++ "_") . runProperName . fst $ head cs, tmps)]
-                  | otherwise = []
+          alias :: Maybe Cpp
+          alias | [_] <- cs = Just $ CppTypeAlias (qual typ, tmps) ((++ "_") . runProperName . fst $ head cs, tmps) []
+                | otherwise = Nothing
           tmps :: [(String, Int)]
           tmps = flip (,) 0 . runType . Template . fst <$> ts
           ctorStruct :: (ProperName, [T.Type]) -> Cpp
           ctorStruct (ctor, fields) =
-            CppStruct (name, Left tmps)
-                      supers
-                      []
-                      members
+            CppStruct (name, Left tmps) supers [] members
             where
             name :: String
             name = runProperName ctor ++ "_"
             supers :: [(String, [String])]
             supers | [_] <- cs = []
-                   | otherwise = [(qual typ, fst <$> tmps)]
+                   | otherwise = [(addNamespace "type" (qual typ), fst <$> tmps)]
             members :: [Cpp]
             members | ms@(_:_) <- zip (("value" ++) . show <$> [0..]) (typestr mn <$> fields)
                       = (flip CppVariableIntroduction Nothing <$> ms) ++
@@ -446,8 +458,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                         , CppFunction name [] [] [] [CppConstructor, CppDelete] CppNoOp
                         ]
                     | otherwise = []
+        go _ = ([], Nothing)
+
       qual :: Qualified ProperName -> String
       qual name = qualifiedToStr' (Ident . runProperName) name
+
+      addNamespace :: String -> String -> String
+      addNamespace ns s | ':' `elem` s,
+                          (s1,s2) <- splitAt (last $ findIndices (==':') s) s = s1 ++ ':' : ns ++ ':' : s2
+                        | otherwise = ns ++ "::" ++ s
 
   unaryToCpp :: UnaryOp -> CppUnaryOp
   unaryToCpp Negate = CppNegate

@@ -158,7 +158,7 @@ data Cpp
   -- |
   -- Type alias, e.g. "using T = U" (new name and template types, original name and template types)
   --
-  | CppTypeAlias (String,[(String, Int)]) (String,[(String, Int)])
+  | CppTypeAlias (String,[(String, Int)]) (String,[(String, Int)]) String
   -- |
   -- A variable introduction and optional initialization
   --
