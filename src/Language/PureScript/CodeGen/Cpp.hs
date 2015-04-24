@@ -134,8 +134,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                  [CI.Return (_, _, Nothing, Nothing) (CI.Var (_, _, Nothing, Nothing) _)]) = False
     isNormalFn _ = True
 
-  declToCpp (CI.VarDecl (_, _, _, _) (Ident name) expr)
+  -- Note: for vars, avoiding templated args - a C++14 feature - for now
+  declToCpp (CI.VarDecl _ (Ident name) expr)
     | Just ty <- tyFromExpr expr,
+      T.ForAll{} <- ty,
       ty'@(Just Function{}) <- mktype mn ty,
       tparams@(_:_) <- templparams' ty' = varDeclToFn name expr ty tparams [CppInline]
 
