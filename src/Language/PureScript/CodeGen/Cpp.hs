@@ -397,43 +397,57 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                  . M.filterWithKey (\(Qualified mn' _) _ -> mn' == Just mn)
                  . M.filter (isData . snd)
                  $ types env = do
-      let dtys = map (\(ty, DataType ts cs) ->
-                       if length cs == 1
-                         then CppNoOp
-                         else let name = qualifiedToStr' (Ident . runProperName) ty in
-                              CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
-                                [] []
-                                [CppFunction name [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]
-                 ) ds
-      let dcons = concatMap (\(ty, DataType ts cs) ->
-                              let super = qualifiedToStr' (Ident . runProperName) ty
-                                  tmps = flip (,) 0 . runType . Template . fst <$> ts
-                                  super' = if length cs == 1
-                                             then []
-                                             else [(super, fst <$> tmps)] in
-                              map (\(ctor, fields) ->
-                                let name = runProperName ctor ++ "_"
-                                    args = zip (("value" ++) . show <$> [0..]) (typestr mn <$> fields) in
-                                CppStruct (name, Left tmps)
-                                          super'
-                                          []
-                                          (if null args
-                                            then []
-                                            else (flip CppVariableIntroduction Nothing <$> args) ++
-                                                 [ CppFunction name [] args [] [CppConstructor] (CppBlock [])
-                                                 , CppFunction name [] [] [] [CppConstructor, CppDelete] CppNoOp
-                                                 ])
-                              ) cs
-                              ++ if length cs == 1
-                                   then [CppTypeAlias (super,tmps) ((++ "_") . runProperName . fst $ head cs, tmps)]
-                                   else []
-                  ) ds
+      let dtys = dataTypes ds
+      let dcons = dataCtors ds
       return (dtys ++ dcons)
     | otherwise = return []
     where
       isData :: TypeKind -> Bool
       isData DataType{} = True
       isData _ = False
+      dataTypes :: [(Qualified ProperName, TypeKind)] -> [Cpp]
+      dataTypes = map go
+        where
+        go :: (Qualified ProperName, TypeKind) -> Cpp
+        go (_, DataType _ [_]) = CppNoOp
+        go (typ, DataType ts cs) =
+          let name = qual typ in
+          CppStruct (name, Left (flip (,) 0 . runType . Template . fst <$> ts))
+                    [] []
+                    [CppFunction name [] [] [] [CppVirtual, CppDestructor, CppDefault] CppNoOp]
+      dataCtors :: [(Qualified ProperName, TypeKind)] -> [Cpp]
+      dataCtors = concatMap go
+        where
+        go :: (Qualified ProperName, TypeKind) -> [Cpp]
+        go (typ, DataType ts cs) =
+          map ctorStruct cs ++ aliases
+          where
+          aliases :: [Cpp]
+          aliases | [_] <- cs = [CppTypeAlias (qual typ, tmps) ((++ "_") . runProperName . fst $ head cs, tmps)]
+                  | otherwise = []
+          tmps :: [(String, Int)]
+          tmps = flip (,) 0 . runType . Template . fst <$> ts
+          ctorStruct :: (ProperName, [T.Type]) -> Cpp
+          ctorStruct (ctor, fields) =
+            CppStruct (name, Left tmps)
+                      supers
+                      []
+                      members
+            where
+            name :: String
+            name = runProperName ctor ++ "_"
+            supers :: [(String, [String])]
+            supers | [_] <- cs = []
+                   | otherwise = [(qual typ, fst <$> tmps)]
+            members :: [Cpp]
+            members | ms@(_:_) <- zip (("value" ++) . show <$> [0..]) (typestr mn <$> fields)
+                      = (flip CppVariableIntroduction Nothing <$> ms) ++
+                        [ CppFunction name [] ms [] [CppConstructor] (CppBlock [])
+                        , CppFunction name [] [] [] [CppConstructor, CppDelete] CppNoOp
+                        ]
+                    | otherwise = []
+      qual :: Qualified ProperName -> String
+      qual name = qualifiedToStr' (Ident . runProperName) name
 
   unaryToCpp :: UnaryOp -> CppUnaryOp
   unaryToCpp Negate = CppNegate
