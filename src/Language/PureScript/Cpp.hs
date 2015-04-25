@@ -203,9 +203,11 @@ make outputDir ms prefix = do
 
   when (any fst marked) $ do -- TODO: it should only be updated if any files have been added/removed
     writeTextFile (outputDir </> "CMakeLists.txt") cmakeListsTxt
+    writeTextFile (outputDir </> "PureScript/any_map.hh") $ BU.toString $(embedFile "include/any_map.hh")
+    writeTextFile (outputDir </> "PureScript/any_map.hh") $ BU.toString $(embedFile "include/bind.hh")
+    writeTextFile (outputDir </> "PureScript/any_map.hh") $ BU.toString $(embedFile "include/memory.hh")
     writeTextFile (outputDir </> "PureScript/PureScript.hh") $ BU.toString $(embedFile "include/purescript.hh")
     writeTextFile (outputDir </> "PureScript/shared_list.hh") $ BU.toString $(embedFile "include/shared_list.hh")
-    writeTextFile (outputDir </> "PureScript/any_map.hh") $ BU.toString $(embedFile "include/any_map.hh")
 
   (desugared, nextVar) <- runSupplyT 0 $ zip (map fst marked) <$> desugar (map snd marked)
 
