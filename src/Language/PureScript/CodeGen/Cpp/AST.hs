@@ -120,9 +120,9 @@ data Cpp
   --
   | CppApp Cpp [Cpp]
   -- |
-  -- Partial function application (fn, args, num of parameters not applied)
+  -- Partial function application (fn, args, arg types, num of parameters not applied)
   --
-  | CppPartialApp Cpp [Cpp] Int
+  | CppPartialApp Cpp [Cpp] [String] Int
   -- |
   -- Variable
   --
@@ -291,7 +291,7 @@ everywhereOnCpp f = go
   go (CppLambda args rty j) = f (CppLambda args rty (go j))
   go (CppStruct name supers cms ims) = f (CppStruct name supers (map go cms) (map go ims))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
-  go (CppPartialApp j cpp n) = f (CppPartialApp (go j) (map go cpp) n)
+  go (CppPartialApp j cpp typs n) = f (CppPartialApp (go j) (map go cpp) typs n)
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
@@ -325,7 +325,7 @@ everywhereOnCppTopDown f = go . f
   go (CppLambda args rty j) = CppLambda args rty (go (f j))
   go (CppStruct name supers cms ims) = CppStruct name supers (map (go . f) cms) (map (go . f) ims)
   go (CppApp j cpp) = CppApp (go (f j)) (map (go . f) cpp)
-  go (CppPartialApp j cpp n) = CppPartialApp (go (f j)) (map (go . f) cpp) n
+  go (CppPartialApp j cpps typs n) = CppPartialApp (go (f j)) (map (go . f) cpps) typs n
   go (CppConditional j1 j2 j3) = CppConditional (go (f j1)) (go (f j2)) (go (f j3))
   go (CppBlock cpp) = CppBlock (map (go . f) cpp)
   go (CppNamespace name cpp) = CppNamespace name (map (go . f) cpp)
@@ -358,7 +358,7 @@ everythingOnCpp (<>) f = go
   go j@(CppLambda _ _ j1) = f j <> go j1
   go j@(CppStruct _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
-  go j@(CppPartialApp j1 cpp _) = foldl (<>) (f j <> go j1) (map go cpp)
+  go j@(CppPartialApp j1 cpp _ _) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)

@@ -286,12 +286,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       CI.Var (_, _, _, Just IsNewtype) _ -> return (head args')
 
       CI.Var (_, _, Just ty, Just (IsConstructor _ fields)) name ->
-        let argsNotApp = length fields - length args
+        let fieldCount = length fields
+            argsNotApp = fieldCount - length args
             qname = qualifiedToStr' id name
             tmps = maybe [] getDataTypeArgs (mktype mn ty >>= getDataType qname)
             val = CppDataConstructor qname tmps in
         if argsNotApp > 0
-          then return (CppPartialApp val args' argsNotApp)
+          then let argTypes = maybe [] (init . fnTypesN fieldCount) (mktype mn ty) in
+               return (CppPartialApp val args' (runType <$> argTypes) argsNotApp)
           else return (CppApp val args')
 
       CI.Var (_, _, _, Just IsTypeClassConstructor) name ->
@@ -342,10 +344,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
   exprToCpp (CI.Var (_, _, ty, Just (IsConstructor _ fields)) ident) =
     let qname = qualifiedToStr' id ident
-        tmps = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname) in
-    return $ if null fields
+        tmps = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
+        fieldCount = length fields in
+    return $ if fieldCount == 0
                then CppApp (CppDataConstructor (qualifiedToStr' id ident) tmps) []
-               else CppPartialApp (CppDataConstructor (qualifiedToStr' id ident) tmps) [] (length fields)
+               else let argTypes = maybe [] (map runType . init . fnTypesN fieldCount) (ty >>= mktype mn) in
+                    CppPartialApp (CppDataConstructor (qualifiedToStr' id ident) tmps) [] argTypes fieldCount
 
   -- Typeclass instance dictionary
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))

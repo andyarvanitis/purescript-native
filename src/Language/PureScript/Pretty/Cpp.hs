@@ -309,21 +309,27 @@ app = mkPattern' match
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
     return (intercalate ", " cpps, val)
+  match (CppPartialApp (CppDataConstructor name ttyps) args atyps _) = do
+    args' <- mapM prettyPrintCpp' args
+    dtmps <- prettyPrintCpp' (CppData name ttyps)
+    let fn = "constructor" ++ angles (dtmps ++ concatMap (", " ++) atyps)
+    return (intercalate ", " args', CppVar fn)
   match _ = mzero
 
 partapp :: Pattern PrinterState Cpp ((String, Int), Cpp)
 partapp = mkPattern' match
   where
-  match (CppPartialApp (CppAccessor t val' _) (inst@CppInstance{} : args) n) = do
+  match (CppPartialApp (CppDataConstructor{}) _ _ _) = mzero
+  match (CppPartialApp (CppAccessor t val' _) (inst@CppInstance{} : args) _ n) = do
     inst' <- prettyPrintCpp' inst
     cpps <- mapM prettyPrintCpp' (CppAccessor t val' (CppScope inst') : args)
     return ((intercalate ", " cpps, n), CppNoOp)
-  match (CppPartialApp val (inst@CppInstance{} : args) n) = do
+  match (CppPartialApp val (inst@CppInstance{} : args) _ n) = do
     val' <- prettyPrintCpp' val
     inst' <- prettyPrintCpp' inst
     cpps <- mapM prettyPrintCpp' (CppAccessor [] val' (CppScope inst') : args)
     return ((intercalate ", " cpps, n), CppNoOp)
-  match (CppPartialApp val args n) = do
+  match (CppPartialApp val args _ n) = do
     cpps <- mapM prettyPrintCpp' (val : args)
     return ((intercalate ", " cpps, n), CppNoOp)
   match _ = mzero
@@ -426,7 +432,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                     , binary    LessThanOrEqual      "<="
                     , binary    GreaterThan          ">"
                     , binary    GreaterThanOrEqual   ">="
-                    , AssocR instanceOf $ \v1 v2 -> "instanceof<" ++ v2 ++ ">(" ++ v1 ++ ")" ]
+                    , AssocR instanceOf $ \v1 v2 -> "instance_of" ++ angles v2 ++ parens v1 ]
                   , [ binary    Equal                "=="
                     , binary    NotEqual             "!=" ]
                   , [ binary    BitwiseAnd           "&" ]
