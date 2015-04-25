@@ -43,8 +43,8 @@ runType :: Type -> String
 runType (Native name) = name
 runType tt@(Function a b) = typeName tt ++ '<' : runType a ++ "," ++ runType b ++ ">"
 runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
-runType tt@(Data t []) = typeName tt ++ '<' : runType t ++ ">"
-runType tt@(Data t ts) = typeName tt ++ '<' : runType t ++ '<' : intercalate "," (map runType ts) ++ ">>"
+runType tt@(Data t []) = runType t
+runType tt@(Data t ts) = runType t ++ '<' : intercalate "," (map runType ts) ++ ">"
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
 runType tt@(Map _) = typeName tt
 runType (Template []) = error "Bad template parameter"
@@ -105,7 +105,7 @@ mktype m (T.TypeApp
 
 mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-             T.REmpty) = Just $ Native "std::nullptr_t"
+             T.REmpty) = Just $ Map []
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))

@@ -104,11 +104,11 @@ data Cpp
   --
   | CppStruct (String, Either [(String, Int)] [String]) [(String, [String])] [Cpp] [Cpp]
   -- |
-  -- 'data' type (name, template types)
+  -- 'data' constructor type (name, template types)
   --
-  | CppDataType String [String]
+  | CppData String [String]
   -- |
-  -- 'data' constructor (name, template types)
+  -- 'data' constructor function (name, template types)
   --
   | CppDataConstructor String [String]
   -- |

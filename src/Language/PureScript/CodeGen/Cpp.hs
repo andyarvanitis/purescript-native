@@ -390,7 +390,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.IsTagOf (_, _, ty, _) ctor expr) =
     let qname = qualifiedToStr' (Ident . runProperName) ctor
         tmps = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
-        val = CppDataType qname tmps in
+        val = CppData qname tmps in
     flip CppInstanceOf val <$> exprToCpp expr
 
   modDatasToCpps :: m [Cpp]
@@ -440,7 +440,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go (typ, DataType ts cs) = (map ctorStruct cs, alias)
           where
           alias :: Maybe Cpp
-          alias | [_] <- cs = Just $ CppTypeAlias (qual typ, tmps) ((++ "_") . runProperName . fst $ head cs, tmps) []
+          alias | [_] <- cs =
+            Just $ CppTypeAlias (qual typ, tmps)
+                                (P.prettyPrintCpp [flip CppData [] . runProperName . fst $ head cs], tmps)
+                                []
                 | otherwise = Nothing
           tmps :: [(String, Int)]
           tmps = flip (,) 0 . runType . Template . fst <$> ts
@@ -449,12 +452,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
             CppStruct (name, Left tmps) supers [] members
             where
             name :: String
-            name = runProperName ctor ++ "_"
+            name = P.prettyPrintCpp [flip CppData [] $ runProperName ctor]
             supers :: [(String, [String])]
             supers | [_] <- cs = []
                    | otherwise = [(addNamespace "type" (qual typ), fst <$> tmps)]
             members :: [Cpp]
-            members | ms@(_:_) <- zip (("value" ++) . show <$> [0..]) (typestr mn <$> fields)
+            members | fields'@(_:_) <- filter (/=Map[]) . catMaybes $ mktype mn <$> fields,
+                      ms <- zip (("value" ++) . show <$> [0..]) (runType <$> fields')
                       = (flip CppVariableIntroduction Nothing <$> ms) ++
                         [ CppFunction name [] ms [] [CppConstructor] (CppBlock [])
                         , CppFunction name [] [] [] [CppConstructor, CppDelete] CppNoOp

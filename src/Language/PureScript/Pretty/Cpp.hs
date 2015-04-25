@@ -144,11 +144,11 @@ literals = mkPattern' match
     , currentIndent
     , return "};"
     ]
-  match (CppDataType name []) = return (name ++ "_")
-  match (CppDataType name typs) =
-    return (prettyPrintCpp1 (CppDataType name []) ++ angles (intercalate "," typs))
+  match (CppData name []) = return (name ++ "_")
+  match (CppData name typs) =
+    return (prettyPrintCpp1 (CppData name []) ++ angles (intercalate "," typs))
   match (CppDataConstructor name typs) =
-    return ("construct" ++ angles (prettyPrintCpp1 (CppDataType name typs)))
+    return ("construct" ++ angles (prettyPrintCpp1 (CppData name typs)))
   match (CppCast val typ) =
     return ("cast" ++ angles typ ++ parens (prettyPrintCpp1 val))
   match (CppVar ident) = return ident
