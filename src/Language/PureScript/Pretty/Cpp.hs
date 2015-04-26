@@ -409,7 +409,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap app $ \args val -> val ++ parens args ]
                   , [ Wrap partapp $ \(args, n) _ -> "bind" ++ angles (show n) ++ parens args ]
                   , [ unary CppNew "new " ]
-                  , [ Wrap lam $ \(args, rty) ret -> "[=] "
+                  , [ Wrap lam $ \(args, rty) ret -> "[=]"
                         ++ let args' = argstr <$> args in
                            parens (intercalate ", " args')
                         ++ (if null rty then [] else " -> " ++ rty)

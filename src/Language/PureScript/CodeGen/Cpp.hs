@@ -159,14 +159,21 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
   declToCpp (CI.Function (_, _, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
+    -- C++ doesn't support nested functions
+    let block' = everywhereOnCpp functionToLambda block
     return $ CppFunction (identToCpp ident)
                          (templparams' $ mktype mn ty)
                          [(identToCpp arg, argtype' mn ty)]
                          (rettype' mn ty)
                          []
-                         block
+                         block'
+    where
+    functionToLambda :: Cpp -> Cpp
+    functionToLambda (CppFunction name _ args rtyp _ body) =
+      CppVariableIntroduction (name, []) (Just (CppLambda args rtyp body))
+    functionToLambda cpp = cpp
 
-  declToCpp (CI.Function (_, _, Just ty, _) ident args body) = return CppNoOp -- TODO: non-curried functions
+  declToCpp (CI.Function (_, _, Just ty, _) ident args body) = return CppNoOp -- TODO: support non-curried functions?
 
   -- |
   -- Typeclass declaration
