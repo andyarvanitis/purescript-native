@@ -185,7 +185,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     functionToLambda cpp = cpp
 
   -- This covers 'let' expressions
-  declToCpp (CI.Function (_, _, Nothing, _) ident [arg] body) = do
+  declToCpp (CI.Function (_, _, Nothing, Nothing) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
     return $ CppFunction (identToCpp ident) [] [(identToCpp arg, [])] [] [] block
 
