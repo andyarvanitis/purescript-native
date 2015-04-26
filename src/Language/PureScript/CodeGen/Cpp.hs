@@ -70,14 +70,17 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let optimized' = removeCodeAfterReturnStatements <$> optimized
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
-  let header = if comments && not (null coms) then CppComment coms CppNoOp else CppNoOp
   datas <- modDatasToCpps
-  let moduleBody = header : (CppInclude <$> cppImports')
-                ++ P.linebreak
+  let moduleHeader = (CppInclude <$> cppImports')
+                  ++ P.linebreak
+                  ++ [CppNamespace (runModuleName mn) $
+                       (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ toHeader optimized']
+  let moduleBody = CppInclude (runModuleName mn)
+                 : P.linebreak
                 ++ [CppNamespace (runModuleName mn) $
-                   (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ foreigns' ++ optimized']
+                     (CppUseNamespace <$> cppImports') ++ P.linebreak ++ toBody optimized']
   return $ case additional of
-    MakeOptions -> moduleBody
+    MakeOptions -> moduleHeader ++ CppEndOfHeader : moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
     _ -> []
 
@@ -605,3 +608,26 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       fns' <- (\(i,t) -> (identToCpp i, t)) <$> fns
       = Just (fst <$> params, constraints, (sortBy (compare `on` fst) fns'))
   findClass _ = Nothing
+
+  toHeader :: [Cpp] -> [Cpp]
+  toHeader = catMaybes . map go
+    where
+    go :: Cpp -> Maybe Cpp
+    go cpp@(CppNamespace{}) = Just cpp
+    go cpp@(CppStruct{}) = Just cpp
+    go cpp@(CppFunction name [] args rtyp qs _) = Just (CppFunction name [] args rtyp qs CppNoOp)
+    go cpp@(CppFunction{}) = Just cpp
+    go cpp@(CppVariableIntroduction{}) = Just cpp
+    go _ = Nothing
+
+  toBody :: [Cpp] -> [Cpp]
+  toBody = catMaybes . map go
+    where
+    go :: Cpp -> Maybe Cpp
+    go cpp@(CppFunction name [] args rtyp qs _) = Just cpp
+    go cpp@(CppVariableIntroduction _ (Just CppNumericLiteral{})) = Nothing
+    go cpp@(CppVariableIntroduction _ (Just CppStringLiteral{})) = Nothing
+    go cpp@(CppVariableIntroduction _ (Just CppBooleanLiteral{})) = Nothing
+    go cpp@(CppVariableIntroduction _ (Just CppArrayLiteral{})) = Nothing
+    go cpp@(CppVariableIntroduction _ (Just CppObjectLiteral{})) = Nothing
+    go _ = Nothing

@@ -44,6 +44,7 @@ literals = mkPattern' match
   where
   match :: Cpp -> StateT PrinterState Maybe String
   match CppNoOp = return []
+  match CppEndOfHeader = return []
   match (CppNumericLiteral n) = return $ either show show n
   match (CppStringLiteral s) = return $ string s
   match (CppBooleanLiteral True) = return "true"
