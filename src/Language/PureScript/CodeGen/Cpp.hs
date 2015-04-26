@@ -169,9 +169,25 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                          block'
     where
     functionToLambda :: Cpp -> Cpp
-    functionToLambda (CppFunction name _ args rtyp _ body) =
+    -- No templates
+    functionToLambda (CppFunction name [] args rtyp _ body) =
       CppVariableIntroduction (name, []) (Just (CppLambda args rtyp body))
+    -- Has templates, so use generic lambdas
+    functionToLambda (CppFunction name _ args _ _ body) =
+      let body' = everywhereOnCpp lamToGenLam body in
+      CppVariableIntroduction (name, []) (Just (CppLambda (toDeduced <$> args) [] body'))
+      where
+      toDeduced :: (String, String) -> (String, String)
+      toDeduced (n, _) = (n, [])
+      lamToGenLam :: Cpp -> Cpp
+      lamToGenLam (CppLambda as _ b) = CppLambda (toDeduced <$> as) [] b
+      lamToGenLam c = c
     functionToLambda cpp = cpp
+
+  -- This covers 'let' expressions
+  declToCpp (CI.Function (_, _, Nothing, _) ident [arg] body) = do
+    block <- CppBlock <$> mapM statmentToCpp body
+    return $ CppFunction (identToCpp ident) [] [(identToCpp arg, [])] [] [] block
 
   declToCpp (CI.Function (_, _, Just ty, _) ident args body) = return CppNoOp -- TODO: support non-curried functions?
 
