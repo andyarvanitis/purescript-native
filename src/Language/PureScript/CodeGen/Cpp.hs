@@ -517,20 +517,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- Shallow copy an object.
   --
   extendObj :: Cpp -> [(String, Cpp)] -> m Cpp
-  extendObj obj sts = do
-    newObj <- freshName
-    key <- freshName
-    let
-      cppKey = CppVar key
-      cppNewObj = CppVar newObj
-      block = CppBlock (objAssign:copy:extend ++ [CppReturn cppNewObj])
-      objAssign = CppVariableIntroduction (newObj, []) (Just $ CppObjectLiteral [])
-      copy = CppForIn key obj $ CppBlock [CppIfElse cond assign Nothing]
-      cond = CppApp (CppAccessor [] "hasOwnProperty" obj) [cppKey]
-      assign = CppBlock [CppAssignment (CppIndexer cppKey cppNewObj) (CppIndexer cppKey obj)]
-      stToAssign (s, cpp) = CppAssignment (CppAccessor [] s cppNewObj) cpp
-      extend = map stToAssign sts
-    return $ CppApp (CppLambda [] [] block) []
+  extendObj = error "Extend obj TBD"
 
   -- |
   --
