@@ -77,10 +77,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                   ++ P.linebreak
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ toHeader optimized']
-  let moduleBody = CppInclude (runModuleName mn)
-                 : P.linebreak
-                ++ [CppNamespace (runModuleName mn) $
-                     (CppUseNamespace <$> cppImports') ++ P.linebreak ++ toBody optimized']
+  let bodyCpps = toBody optimized'
+      moduleBody = CppInclude (runModuleName mn) : P.linebreak
+                ++ if null bodyCpps
+                     then []
+                     else [CppNamespace (runModuleName mn) $
+                            (CppUseNamespace <$> cppImports') ++ P.linebreak ++ bodyCpps]
   return $ case additional of
     MakeOptions -> moduleHeader ++ CppEndOfHeader : moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
