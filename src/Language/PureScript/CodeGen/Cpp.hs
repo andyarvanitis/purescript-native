@@ -54,6 +54,8 @@ import qualified Language.PureScript.Pretty.Cpp as P
 
 import Debug.Trace
 
+data DeclLevel = TopLevel | InnerLevel deriving (Eq, Show);
+
 -- |
 -- Generate code in the simplified C++11 intermediate representation for all declarations in a
 -- module.
@@ -65,7 +67,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   cppImports <- T.traverse (pure . runModuleName) . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
   let cppImports' = "PureScript" : cppImports
   let foreigns' = [] -- mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
-  cppDecls <- mapM declToCpp decls
+  cppDecls <- mapM (declToCpp TopLevel) decls
   optimized <- T.traverse optimize (concatMap expandSeq cppDecls)
   let optimized' = removeCodeAfterReturnStatements <$> optimized
   let isModuleEmpty = null exps
@@ -99,11 +101,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     removeFromBlock go (CppBlock sts) = CppBlock (go sts)
     removeFromBlock _  cpp = cpp
 
-  declToCpp :: CI.Decl Ann -> m Cpp
+  declToCpp :: DeclLevel -> CI.Decl Ann -> m Cpp
   -- |
   -- Typeclass instance definition
   --
-  declToCpp (CI.VarDecl _ ident expr)
+  declToCpp _ (CI.VarDecl _ ident expr)
     | Just (classname@(Qualified _ (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
       Just (params, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
@@ -116,15 +118,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     toCpp :: ((String, T.Type), CI.Expr Ann) -> m Cpp
     toCpp ((name, _), CI.AnonFunction ty ags sts) = do
-      fn' <- declToCpp $ CI.Function ty (Ident name) ags sts
+      fn' <- declToCpp TopLevel $ CI.Function ty (Ident name) ags sts
       return (addQual CppStatic fn')
     toCpp ((name, _), e@CI.Literal{})
-      | Just ty <- tyFromExpr e = declToCpp (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
+      | Just ty <- tyFromExpr e = declToCpp InnerLevel (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
     toCpp ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
       | Just ty <- tyFromExpr e,
         tparams <- templparams' (mktype mn ty) = varDeclToFn name e ty tparams [CppInline, CppStatic]
     toCpp ((name, _), e)
-      | Just ty <- tyFromExpr e = declToCpp (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
+      | Just ty <- tyFromExpr e = declToCpp InnerLevel (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
     toCpp ((name, _), e) = return $ trace (name ++ " :: " ++ show e ++ "\n") CppNoOp
 
     addQual :: CppQualifier -> Cpp -> Cpp
@@ -138,29 +140,28 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     isNormalFn _ = True
 
   -- Note: for vars, avoiding templated args - a C++14 feature - for now
-  declToCpp (CI.VarDecl _ (Ident name) expr)
+  declToCpp TopLevel (CI.VarDecl _ (Ident name) expr)
     | Just ty <- tyFromExpr expr,
-      T.ForAll{} <- ty,
       ty'@(Just Function{}) <- mktype mn ty,
       tparams@(_:_) <- templparams' ty' = varDeclToFn name expr ty tparams [CppInline]
 
-  declToCpp (CI.VarDecl (_, _, ty, _) ident expr) =
+  declToCpp _ (CI.VarDecl (_, _, ty, _) ident expr) =
     CppVariableIntroduction (identToCpp ident, maybe [] (typestr mn) ty) . Just <$> exprToCpp expr
 
   -- TODO: fix when proper Meta info added
-  declToCpp (CI.Function _ ident [Ident "dict"]
+  declToCpp TopLevel (CI.Function _ ident [Ident "dict"]
     [CI.Return _ (CI.Accessor _ _ (CI.Var _ (Qualified Nothing (Ident "dict"))))]) =
     return CppNoOp
 
-  declToCpp (CI.Function (ss, com, Just (T.ConstrainedType ts ty), _) ident args [body]) = do
+  declToCpp lvl (CI.Function (ss, com, Just (T.ConstrainedType ts ty), _) ident args [body]) = do
     let fn' = drop' (length ts) ([], body)
-    declToCpp $ CI.Function (ss, com, Just ty, Nothing) ident (fst fn') [snd fn']
+    declToCpp lvl $ CI.Function (ss, com, Just ty, Nothing) ident (fst fn') [snd fn']
       where
         drop' :: Int -> ([Ident], CI.Statement Ann) -> ([Ident], CI.Statement Ann)
         drop' n (args, CI.Return _ (CI.AnonFunction _ args' [body])) | n > 0 = drop' (n-1) (args ++ args', body)
         drop' _ a = a
 
-  declToCpp (CI.Function (_, _, Just ty, _) ident [arg] body) = do
+  declToCpp _ (CI.Function (_, _, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
     -- C++ doesn't support nested functions
     let block' = everywhereOnCpp functionToLambda block
@@ -188,16 +189,16 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     functionToLambda cpp = cpp
 
   -- This covers 'let' expressions
-  declToCpp (CI.Function (_, _, Nothing, Nothing) ident [arg] body) = do
+  declToCpp InnerLevel (CI.Function (_, _, Nothing, Nothing) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
     return $ CppFunction (identToCpp ident) [] [(identToCpp arg, [])] [] [] block
 
-  declToCpp (CI.Function (_, _, Just ty, _) ident args body) = return CppNoOp -- TODO: support non-curried functions?
+  declToCpp _ (CI.Function (_, _, Just ty, _) ident args body) = return CppNoOp -- TODO: support non-curried functions?
 
   -- |
   -- Typeclass declaration
   --
-  declToCpp (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
+  declToCpp TopLevel (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
     | Just (params, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
     let tmps = runType . Template <$> params
         fnTemplPs = concatMap (templparams' . mktype mn . snd) fns
@@ -228,15 +229,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- |
   -- data declarations (to omit)
   --
-  declToCpp (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) = return CppNoOp
-  declToCpp (CI.Constructor _ _ ctor []) = return CppNoOp
-  declToCpp (CI.Constructor (_, _, _, meta) _ ctor fields) = return CppNoOp
+  declToCpp TopLevel (CI.Constructor (_, _, _, Just IsNewtype) _ ctor _) = return CppNoOp
+  declToCpp TopLevel (CI.Constructor _ _ ctor []) = return CppNoOp
+  declToCpp TopLevel (CI.Constructor (_, _, _, meta) _ ctor fields) = return CppNoOp
 
-  declToCpp d = return CppNoOp -- TODO: includes Function IsNewtype
+  declToCpp TopLevel d = return CppNoOp -- TODO: includes Function IsNewtype
 
   statmentToCpp :: CI.Statement Ann -> m Cpp
   statmentToCpp (CI.Expr e) = exprToCpp e
-  statmentToCpp (CI.Decl d) = declToCpp d
+  statmentToCpp (CI.Decl d) = declToCpp InnerLevel d
   statmentToCpp (CI.Assignment _ assignee expr) =
     CppAssignment <$> exprToCpp assignee <*> exprToCpp expr
   statmentToCpp (CI.Loop _ cond body) =
