@@ -626,9 +626,4 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     go :: Cpp -> Maybe Cpp
     go cpp@(CppFunction name [] args rtyp qs _) = Just cpp
-    go cpp@(CppVariableIntroduction _ (Just CppNumericLiteral{})) = Nothing
-    go cpp@(CppVariableIntroduction _ (Just CppStringLiteral{})) = Nothing
-    go cpp@(CppVariableIntroduction _ (Just CppBooleanLiteral{})) = Nothing
-    go cpp@(CppVariableIntroduction _ (Just CppArrayLiteral{})) = Nothing
-    go cpp@(CppVariableIntroduction _ (Just CppObjectLiteral{})) = Nothing
     go _ = Nothing
