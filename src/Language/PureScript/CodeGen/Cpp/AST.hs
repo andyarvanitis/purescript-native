@@ -18,9 +18,9 @@
 module Language.PureScript.CodeGen.Cpp.AST where
 
 import Data.Data
-
 import Language.PureScript.CoreImp.Operators
 import Language.PureScript.Comments
+import Language.PureScript.CodeGen.Cpp.Types
 
 -- |
 -- Built-in unary operators
@@ -86,7 +86,7 @@ data Cpp
   -- |
   -- An general property accessor expression (optional type, property, expr)
   --
-  | CppAccessor String String Cpp
+  | CppAccessor (Maybe Type) String Cpp
   -- |
   -- An map object property accessor expression
   --
@@ -94,27 +94,27 @@ data Cpp
   -- |
   -- A function introduction (name, template types, arguments, return type, qualifiers, body)
   --
-  | CppFunction String [(String, Int)] [(String, String)] String [CppQualifier] Cpp
+  | CppFunction String [(String, Int)] [(String, Maybe Type)] (Maybe Type) [CppQualifier] Cpp
   -- |
   -- A lambda introduction (arguments, return type, body)
   --
-  | CppLambda [(String, String)] String Cpp
+  | CppLambda [(String, Maybe Type)] (Maybe Type) Cpp
   -- |
   -- A C++ struct declaration (name with any template types, superclasses, class methods, instance methods)
   --
-  | CppStruct (String, Either [(String, Int)] [String]) [(String, [String])] [Cpp] [Cpp]
+  | CppStruct (String, Either [(String, Int)] [Type]) [(String, [String])] [Cpp] [Cpp]
   -- |
   -- 'data' constructor type (name, template types)
   --
-  | CppData String [String]
+  | CppData String [Type]
   -- |
   -- 'data' constructor function (name, template types)
   --
-  | CppDataConstructor String [String]
+  | CppDataConstructor String [Type]
   -- |
   -- Value type cast
   --
-  | CppCast Cpp String
+  | CppCast Cpp Type
   -- |
   -- Function application
   --
@@ -122,7 +122,7 @@ data Cpp
   -- |
   -- Partial function application (fn, args, arg types, num of parameters not applied)
   --
-  | CppPartialApp Cpp [Cpp] [String] Int
+  | CppPartialApp Cpp [Cpp] [Type] Int
   -- |
   -- Variable
   --
@@ -130,7 +130,7 @@ data Cpp
   -- |
   -- Typeclass instance (module, classname and fns, instance name, parameters [names, types])
   --
-  | CppInstance String (String, [String]) String [(String, String)]
+  | CppInstance String (String, [String]) String [(String, Maybe Type)]
   -- |
   -- Scope (e.g., namespace, class static member, etc.)
   --
@@ -162,7 +162,7 @@ data Cpp
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction (String, String) (Maybe Cpp)
+  | CppVariableIntroduction (String, Maybe Type) (Maybe Cpp)
   -- |
   -- A variable assignment
   --
@@ -231,39 +231,6 @@ data Cpp
   -- Commented C++11
   --
   | CppComment [Comment] Cpp deriving (Show, Eq, Data, Typeable)
-
--- |
--- Value C++11 qualifiers
---
-data CppQualifier
-  -- |
-  -- Struct, class, file, etc. static
-  --
-  = CppStatic
-  -- |
-  -- Virtual function
-  --
-  | CppVirtual
-  -- |
-  -- C++ class constructor function
-  --
-  | CppConstructor
-  -- |
-  -- C++ class destructor function
-  --
-  | CppDestructor
-  -- |
-  -- C++ class constructor/destructor, default implementation
-  --
-  | CppDefault
-  -- |
-  -- C++ class constructor/destructor, deleted
-  --
-  | CppDelete
-  -- |
-  -- Inline function
-  --
-  | CppInline deriving (Show, Eq, Data, Typeable)
 
 --
 -- Expand a Cpp sequence (non-recursively)

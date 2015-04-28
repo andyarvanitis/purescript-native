@@ -86,7 +86,7 @@ literals = mkPattern' match
               return ('\n' : indentString ++ cpps)
             else return (' ' : cpps)
         else return []
-    , return $ if null rty then [] else " -> " ++ rty
+    , return (maybe "" ((" -> " ++) . runType) rty)
     , return $ if CppDefault `elem` qs then " = default" else []
     , return $ if CppDelete `elem` qs then " = delete" else []
     , if ret == CppNoOp
@@ -132,7 +132,7 @@ literals = mkPattern' match
     (if null tmps
       then []
       else [return tmps, return "\n", currentIndent]) ++
-    [ return $ "struct " ++ classstr (name, either (const []) id params)
+    [ return $ "struct " ++ classstr (name, either (const []) (map runType) params)
     , return $ if null supers then
                  []
                else
@@ -147,20 +147,20 @@ literals = mkPattern' match
     ]
   match (CppData name []) = return (name ++ "_")
   match (CppData name typs) =
-    return (prettyPrintCpp1 (CppData name []) ++ angles (intercalate "," typs))
+    return (prettyPrintCpp1 (CppData name []) ++ angles (intercalate "," $ runType <$> typs))
   match (CppDataConstructor name typs) =
     return ("construct" ++ angles (prettyPrintCpp1 (CppData name typs)))
   match (CppCast val typ) =
-    return ("cast" ++ angles typ ++ parens (prettyPrintCpp1 val))
+    return ("cast" ++ angles (runType typ) ++ parens (prettyPrintCpp1 val))
   match (CppVar ident) = return ident
-  match (CppInstance [] (cls, _) _ params) = return $ cls ++ angles (intercalate "," (snd <$> params))
-  match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ angles (intercalate "," (snd <$> params))
+  match (CppInstance [] (cls, _) _ params) = return $ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
+  match (CppInstance mn (cls, _) _ params) = return $ mn ++ "::" ++ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
   match (CppScope ident) = return ident
 --   match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction (ident, typ) value) = fmap concat $ sequence
     [ return "const "
-    , return ((if null typ then "auto" else typ) ++ " ")
+    , return (maybe "auto" runType typ ++ " ")
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
     , return ";"
@@ -265,7 +265,7 @@ conditional = mkPattern match
   match (CppConditional cond th el) = Just ((th, el), cond)
   match _ = Nothing
 
-accessor :: Pattern PrinterState Cpp ((String, String), Cpp)
+accessor :: Pattern PrinterState Cpp ((Maybe Type, String), Cpp)
 accessor = mkPattern match
   where
   match (CppAccessor _ _ CppScope{}) = Nothing
@@ -296,7 +296,7 @@ indexer = mkPattern' match
   match (CppIndexer index val) = (,) <$> prettyPrintCpp' index <*> pure val
   match _ = mzero
 
-lam :: Pattern PrinterState Cpp (([(String, String)], String), Cpp)
+lam :: Pattern PrinterState Cpp (([(String, Maybe Type)], Maybe Type), Cpp)
 lam = mkPattern match
   where
   match (CppLambda args rty ret) = Just ((args, rty), ret)
@@ -314,7 +314,7 @@ app = mkPattern' match
   match (CppPartialApp (CppDataConstructor name ttyps) args atyps _) = do
     args' <- mapM prettyPrintCpp' args
     dtmps <- prettyPrintCpp' (CppData name ttyps)
-    let fn = "constructor" ++ angles (dtmps ++ concatMap (", " ++) atyps)
+    let fn = "constructor" ++ angles (dtmps ++ concatMap ((", " ++) . runType) atyps)
     return (intercalate ", " args', CppVar fn)
   match _ = mzero
 
@@ -329,7 +329,7 @@ partapp = mkPattern' match
   match (CppPartialApp val (inst@CppInstance{} : args) _ n) = do
     val' <- prettyPrintCpp' val
     inst' <- prettyPrintCpp' inst
-    cpps <- mapM prettyPrintCpp' (CppAccessor [] val' (CppScope inst') : args)
+    cpps <- mapM prettyPrintCpp' (CppAccessor Nothing val' (CppScope inst') : args)
     return ((intercalate ", " cpps, n), CppNoOp)
   match (CppPartialApp val args _ n) = do
     cpps <- mapM prettyPrintCpp' (val : args)
@@ -404,7 +404,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   operators :: OperatorTable PrinterState Cpp String
   operators =
     OperatorTable [ [ Wrap accessor $ \(typ, prop) val ->
-                                        "get" ++ (if null typ then "" else angles typ) ++ parens val ++ '.' : prop ]
+                                        "get" ++ (maybe "" (angles . runType) typ) ++ parens val ++ '.' : prop ]
                   , [ Wrap mapAccessor $ \prop val -> val ++ '.' : prop ]
                   , [ Wrap scope $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
@@ -414,7 +414,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap lam $ \(args, rty) ret -> "[=]"
                         ++ let args' = argstr <$> args in
                            parens (intercalate ", " args')
-                        ++ (if null rty then [] else " -> " ++ rty)
+                        ++ maybe "" ((" -> " ++) . runType) rty
                         ++ " "
                         ++ ret ]
                   , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
@@ -452,10 +452,10 @@ classstr :: (String, [String]) -> String
 classstr (name, []) = name
 classstr (name, params) = name ++ angles (intercalate ", " params)
 
-argstr :: (String, String) -> String
-argstr ([], typ) = typ
-argstr (name, []) = "auto " ++ name
-argstr (name, typ) = typ ++ ' ' : name
+argstr :: (String, Maybe Type) -> String
+argstr ([], Just typ) = runType typ
+argstr (name, Nothing) = "auto " ++ name
+argstr (name, Just typ) = runType typ ++ ' ' : name
 
 templDecl :: [(String, Int)] -> String
 templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))
@@ -464,7 +464,7 @@ templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))
   go (name, 0) = "typename " ++ name
   go (name, n) = templDecl (flip (,) 0 . (('_' : name) ++) . show <$> [1..n]) ++ " class " ++ name
 
-templDecl' :: Either [(String, Int)] [String] -> String
+templDecl' :: Either [(String, Int)] [Type] -> String
 templDecl' (Left []) = []
 templDecl' (Left params) = templDecl params
 templDecl' (Right []) = []

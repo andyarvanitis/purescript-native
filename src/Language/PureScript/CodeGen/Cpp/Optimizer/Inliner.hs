@@ -25,6 +25,7 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner (
 
 import Data.Maybe (fromMaybe)
 
+import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.Optimizer.Common
@@ -159,19 +160,19 @@ inlineCommonOperators = applyAll $
     where
     convert :: Cpp -> Cpp
     convert (CppApp mkFnN [CppLambda [_] _ (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
-      CppLambda [] [] (CppBlock cpp)
+      CppLambda [] Nothing (CppBlock cpp)
     convert other = other
   mkFn n = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
     convert orig@(CppApp mkFnN [fn]) | isNFn C.mkFn n mkFnN =
       case collectArgs n [] fn of
-        Just (args, cpp) -> CppLambda args [] (CppBlock cpp)
+        Just (args, cpp) -> CppLambda args Nothing (CppBlock cpp)
         Nothing -> orig
     convert other = other
-    collectArgs :: Int -> [(String, String)] -> Cpp -> Maybe ([(String, String)], [Cpp])
-    collectArgs 1 acc (CppLambda [oneArg] [] (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
-    collectArgs m acc (CppLambda [oneArg] [] (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
+    collectArgs :: Int -> [(String, Maybe Type)] -> Cpp -> Maybe ([(String, Maybe Type)], [Cpp])
+    collectArgs 1 acc (CppLambda [oneArg] Nothing (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
+    collectArgs m acc (CppLambda [oneArg] Nothing (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
     collectArgs _ _   _ = Nothing
 
   isNFn :: String -> Int -> Cpp -> Bool

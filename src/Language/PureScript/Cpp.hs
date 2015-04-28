@@ -127,7 +127,7 @@ generateMain env cpp = do
     Just mmi -> do
       when ((mmi, Ident C.main) `M.notMember` names env) $
         throwError . errorMessage $ NameIsUndefined (Ident C.main)
-      return $ cpp ++ [CppApp (CppAccessor [] C.main (CppAccessor [] (moduleNameToCpp mmi) (CppVar (browserNamespace additional)))) []]
+      return $ cpp ++ [CppApp (CppAccessor Nothing C.main (CppAccessor Nothing (moduleNameToCpp mmi) (CppVar (browserNamespace additional)))) []]
     _ -> return cpp
 
 -- |

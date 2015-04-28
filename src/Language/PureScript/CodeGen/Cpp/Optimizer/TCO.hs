@@ -16,6 +16,7 @@
 module Language.PureScript.CodeGen.Cpp.Optimizer.TCO (tco) where
 
 import Language.PureScript.Options
+import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CodeGen.Cpp.AST
 
 -- |
@@ -32,7 +33,7 @@ tco' = everywhereOnCpp convert
   tcoLabel = "tco"
   tcoVar :: String -> String
   tcoVar arg = "__tco_" ++ arg
-  copyVar :: (String, String) -> (String, String)
+  copyVar :: (String, Maybe Type) -> (String, Maybe Type)
   copyVar (nm, ty) = ("__copy_" ++ nm, ty)
   convert :: Cpp -> Cpp
   convert cpp@(CppVariableIntroduction (name, typ) (Just fn@CppFunction{})) =
@@ -46,7 +47,7 @@ tco' = everywhereOnCpp convert
               CppVariableIntroduction (name, typ) (Just (replace (toLoop name allArgs body')))
         | otherwise -> cpp
   convert cpp = cpp
-  collectAllFunctionArgs :: [[(String, String)]] -> (Cpp -> Cpp) -> Cpp -> ([[(String, String)]], Cpp, Cpp -> Cpp)
+  collectAllFunctionArgs :: [[(String, Maybe Type)]] -> (Cpp -> Cpp) -> Cpp -> ([[(String, Maybe Type)]], Cpp, Cpp -> Cpp)
   collectAllFunctionArgs allArgs f (CppFunction ident tmps args rty qs (CppBlock (body@(CppReturn _):_))) =
     collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident tmps (map copyVar args) rty qs (CppBlock [b]))) body
   collectAllFunctionArgs allArgs f (CppFunction ident tmps args rty qs body@(CppBlock _)) =
@@ -75,7 +76,7 @@ tco' = everywhereOnCpp convert
     countSelfCallsInTailPosition _ = 0
     countSelfCallsUnderFunctions (CppFunction _ _ _ _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
     countSelfCallsUnderFunctions _ = 0
-  toLoop :: String -> [(String, String)] -> Cpp -> Cpp
+  toLoop :: String -> [(String, Maybe Type)] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
         map (\arg -> CppVariableIntroduction arg (Just (CppVar (fst $ copyVar arg)))) allArgs ++
         [ CppLabel tcoLabel $ CppWhile (CppBooleanLiteral True) (CppBlock [ everywhereOnCpp loopify cpp ]) ]
@@ -86,7 +87,7 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppBlock $ zipWith (\val arg ->
-                    CppVariableIntroduction (tcoVar arg, []) (Just val)) allArgumentValues (map fst allArgs)
+                    CppVariableIntroduction (tcoVar arg, Nothing) (Just val)) allArgumentValues (map fst allArgs)
                   ++ map (\arg ->
                     CppAssignment (CppVar arg) (CppVar (tcoVar arg))) (map fst allArgs)
                   ++ [ CppContinue tcoLabel ]
