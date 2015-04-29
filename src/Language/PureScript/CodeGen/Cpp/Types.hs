@@ -30,9 +30,8 @@ import qualified Language.PureScript.Types as T
 
 import Debug.Trace
 
-data Type = Native String
+data Type = Native String [Type]
           | Function Type Type
-          | Data Type [Type]
           | List Type
           | Map [(String,Type)]
           | Template String
@@ -74,15 +73,14 @@ data CppQualifier
   | CppInline deriving (Show, Eq, Data, Typeable)
 
 runType :: Type -> String
-runType (Native name) = name
+runType (Native t []) = t
+runType (Native t ts) = t ++ '<' : intercalate "," (map runType ts) ++ ">"
 runType tt@(Function a b) = typeName tt ++ '<' : runType a ++ "," ++ runType b ++ ">"
 runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
-runType (Data t []) = runType t
-runType (Data t ts) = runType t ++ '<' : intercalate "," (map runType ts) ++ ">"
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
 runType tt@(Map _) = typeName tt
 runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
--- runType (Template []) = error "Bad template parameter"
+runType (Template []) = error "Bad template parameter"
 runType tt@(Template name) = typeName tt ++ capitalize name
   where
   capitalize :: String -> String
@@ -93,7 +91,6 @@ runType (ParamTemplate name ts) = runType (Template name) ++ '<' : (intercalate 
 typeName :: Type -> String
 typeName Function{} = "fn"
 typeName EffectFunction{} = "eff_fn"
-typeName Data{} = "data"
 typeName List{} = "list"
 typeName Map{} = "any_map"
 typeName Template{} = ""
@@ -104,7 +101,6 @@ everywhereOnTypes :: (Type -> Type) -> Type -> Type
 everywhereOnTypes f = go
   where
   go (Function t1 t2) = f (Function (go t1) (go t2))
-  go (Data t ts) = f (Data (go t) (map go ts))
   go (List t) = f (List (go t))
   go (Map ts) = f (Map (map (\(n,t) -> (n, go t)) ts))
   go (ParamTemplate s ts) = f (ParamTemplate s (map go ts))
@@ -113,16 +109,11 @@ everywhereOnTypes f = go
 
 mktype :: ModuleName -> T.Type -> Maybe Type
 
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))    = Just $ Native "double"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))    = Just $ Native "string"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean")))   = Just $ Native "bool"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Integral")))  = Just $ Native "int"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Int")))       = Just $ Native "int"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Integer")))   = Just $ Native "long long"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Char")))      = Just $ Native "char"
-
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prelude"])) (ProperName "Float")))  = Just $ Native "double"
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prelude"])) (ProperName "Double"))) = Just $ Native "double"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just $ Native "double" []
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just $ Native "string" []
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just $ Native "bool" []
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Int")))     = Just $ Native "int" []
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Char")))    = Just $ Native "char" []
 
 mktype _ (T.TypeApp
             (T.TypeApp
@@ -138,7 +129,7 @@ mktype m (T.TypeApp
 -- This covers ((->) r)
 mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-            _) = Just $ Native (typeName (Function (Template []) (Template [])))
+            _) = Just $ Native (typeName (Function (Template []) (Template []))) []
 
 mktype m (T.TypeApp a
             (T.TypeApp
@@ -176,7 +167,7 @@ mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
                                                               ProperName "Monad",
                                                               ProperName "Eff"]))) (ProperName "Eff")))
-            _) = Just $ Native (typeName (EffectFunction (Template [])))
+            _) = Just $ Native (typeName (EffectFunction (Template []))) []
 
 mktype m app@T.TypeApp{}
   | (name, tys@(_:_)) <- tyapp app [] = Just $ ParamTemplate (identToCpp $ Ident name) tys
@@ -190,42 +181,32 @@ mktype m app@T.TypeApp{}
 mktype m (T.TypeApp T.Skolem{} b) = mktype m b
 
 mktype m app@(T.TypeApp a b)
-  | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Just $ Data t []
-  | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Just $ Data t ts
-  | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Just $ Data t []
-  | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Just $ Data t ts
-  | (T.TypeApp _ _) <- a, (t:ts) <- dataCon m app = Just $ Data t ts
+  | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Just $ Native (runType t) []
+  | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Just $ Native (runType t) ts
+  | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Just $ Native (runType t) []
+  | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Just $ Native (runType t) ts
+  | (T.TypeApp _ _) <- a, (t:ts) <- dataCon m app = Just $ Native (runType t) ts
 
 mktype m (T.ForAll _ ty _) = mktype m ty
 mktype _ (T.Skolem name _ _) = Just $ Template (identToCpp $ Ident name)
 mktype _ (T.TypeVar name) = Just $ Template (identToCpp $ Ident name)
 mktype _ (T.TUnknown n) = Just $ Template ('T' : show n)
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) =
-  Just $ Native (typeName (Function (Template []) (Template [])))
+  Just $ Native (typeName (Function (Template []) (Template []))) []
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) =
-  Just $ Native (typeName (List (Template [])))
+  Just $ Native (typeName (List (Template []))) []
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
                                                            ProperName "Monad",
                                                            ProperName "Eff"]))) (ProperName "Eff"))) =
-  Just $ Native (typeName (EffectFunction (Template [])))
-mktype m a@(T.TypeConstructor _) = Just $ Data (Native $ qualDataTypeName m a) []
+  Just $ Native (typeName (EffectFunction (Template []))) []
+mktype m a@(T.TypeConstructor _) = Just $ Native (qualDataTypeName m a) []
 mktype m (T.ConstrainedType _ ty) = mktype m ty
-
 
 mktype m r@(T.RCons _ _ _)
   | (rs, _) <- T.rowToList r = Just (Map (rowPairs rs))
   where
   rowPairs :: [(String, T.Type)] -> [(String, Type)]
   rowPairs rs = map (\(n, t) -> (n, fromJust t)) $ filter (isJust . snd) (map (\(n,t) -> (n, mktype m t)) rs)
-
--- mktype m r@(T.RCons _ _ _)
---   | (rs, r') <- T.rowToList r =
---     case mktype m r' of
---       Just (Template t) -> Just (Template t)
---       _ -> Just $ Template "TR"
---       -- _ -> let fields = map (\(name,ty) -> typestr m ty ++ ' ' : name) rs in
---       --      Just . Native $ "struct { " ++ concatMap (++ "; ") fields ++ "}"
---   | otherwise = Just $ Template "rowType"
 
 mktype _ T.REmpty = Nothing
 mktype _ b = error $ "Unknown type: " ++ show b
@@ -272,7 +253,7 @@ templateVars = nub . sortBy (compare `on` name) . go
   go (Function a b) = go a ++ go b
   go (EffectFunction b) = go b
   go (List a) = go a
-  go (Data a ts) = go a ++ concatMap go ts
+  go (Native _ ts) = concatMap go ts
   go _ = []
   name :: Type -> String
   name (Template n) = n
@@ -284,7 +265,7 @@ templparams (ParamTemplate p ts) = concatMap templparams ts ++ [(runType (Templa
 templparams (Function a b) = templparams a ++ templparams b
 templparams (EffectFunction b) = templparams b
 templparams (List a) = templparams a
-templparams (Data a ts) = templparams a ++ concatMap templparams ts
+templparams (Native _ ts) = concatMap templparams ts
 templparams _ = []
 
 templparams' :: Maybe Type -> [(String, Int)]
@@ -295,19 +276,19 @@ dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)
 dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _))
   | Just a' <- mktype m a = [a']
   | otherwise = []
-dataCon m a@(T.TypeConstructor _) = [Native $ qualDataTypeName m a]
+dataCon m a@(T.TypeConstructor _) = [Native (qualDataTypeName m a) []]
 dataCon m a
   | Just a' <- mktype m a = [a']
   | otherwise = []
 
 getDataType :: String -> Type -> Maybe Type
 getDataType name (Function _ b) = getDataType name b
-getDataType name t@(Data (Native name') _) | name' == name = Just t
+getDataType name t@(Native name' _) | name' == name = Just t
 getDataType _ _ = Nothing
 
 getDataTypeArgs :: Type -> [Type]
-getDataTypeArgs (Data _ []) = []
-getDataTypeArgs (Data _ ts) = ts
+getDataTypeArgs (Native _ []) = []
+getDataTypeArgs (Native _ ts) = ts
 getDataTypeArgs _ = []
 
 -- TODO: this should be moved out of this module
@@ -346,60 +327,21 @@ templateArgs = nubBy ((==) `on` runType . fst) . sortBy (compare `on` runType . 
       args ++ (Template t, EffectFunction anytype) : (go [] (b, b'))
     go args (ParamTemplate t [a], List a') =
       args ++ (Template t, List anytype) : (go [] (a, a'))
---  go args (ParamTemplate t [a], Data a') =
---    args ++ ((Template t), typeName (Data a')) : (go [] (a, a'))
---  go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(a, [])]
     go args (a@DeclType{}, a') = args ++ [(a, a')]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (EffectFunction b, EffectFunction b') = go args (b, b')
-    go args (Data t _, EffectFunction t') =
+    go args (Native t _, EffectFunction t') =
       trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args
-    go args (Data t [], Data t' []) = go args (t, t')
-    go args (Data t ts, Data t' ts') = args ++ go [] (t, t') ++ concatMap (go []) (zip ts ts')
-    go args (Data t _, Template t') =
+    go args (Native _ ts, Native _ ts') = args ++ concatMap (go []) (zip ts ts')
+    go args (Native t _, Template t') =
       trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args -- ++ [(t', t)]
-    go args (Data t _, Map ts) =
+    go args (Native t _, Map ts) =
       trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show ts) args
     go args (List t, List t') = go args (t, t')
-    go args (Native t, Native t')
+    go args (Native t _, Native t' _)
       | t == t' = args
       | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
     go _ (t1', t2') = error ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2')
 
     anytype :: Type
     anytype = Template []
-
--- templateArgs :: (Type, Type) -> [(String,String)]
--- templateArgs = nubBy ((==) `on` fst) . sortBy (compare `on` fst). go []
---   where
---     go :: [(String,String)] -> (Type, Type) -> [(String,String)]
---     go args (a@Template{}, a') = args ++ [(runType a, runType a')]
---     go args (ParamTemplate p ts, ParamTemplate p' ts') =
---       args ++ (runType (Template p), runType (Template p')) : concatMap (go []) (zip ts ts')
---     go args (ParamTemplate t [a, b], Function a' b') =
---       args ++ (runType (Template t), typeName (Function anytype anytype)) : (go [] (a, a')) ++ (go [] (b, b'))
---     go args (ParamTemplate t [b], EffectFunction b') =
---       args ++ (runType (Template t), typeName (EffectFunction anytype)) : (go [] (b, b'))
---     go args (ParamTemplate t [a], List a') =
---       args ++ (runType (Template t), typeName (List anytype)) : (go [] (a, a'))
--- --  go args (ParamTemplate t [a], Data a') =
--- --    args ++ (runType (Template t), typeName (Data a')) : (go [] (a, a'))
--- --  go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(runType a, [])]
---     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
---     go args (EffectFunction b, EffectFunction b') = go args (b, b')
---     go args (Data t _, EffectFunction t') =
---       trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args
---     go args (Data t [], Data t' []) = go args (t, t')
---     go args (Data t ts, Data t' ts') = args ++ go [] (t, t') ++ concatMap (go []) (zip ts ts')
---     go args (Data t _, Template t') =
---       trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args -- ++ [(t', runType t)]
---     go args (Data t _, Map ts) =
---       trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show ts) args
---     go args (List t, List t') = go args (t, t')
---     go args (Native t, Native t')
---       | t == t' = args
---       | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
---     go _ (t1', t2') = error ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2')
---
---     anytype :: Type
---     anytype = Template []

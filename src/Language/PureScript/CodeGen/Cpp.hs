@@ -45,7 +45,7 @@ import Language.PureScript.CoreImp.Operators
 import Language.PureScript.Names
 import Language.PureScript.Options
 import Language.PureScript.Traversals (sndM)
-import Language.PureScript.Environment hiding (Data)
+import Language.PureScript.Environment
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.CoreImp.AST as CI
 import qualified Language.PureScript.Types as T
@@ -218,9 +218,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go (Just (Function t1 t2)) | isNothing (go (Just t1)) || isNothing (go (Just t2)) = Nothing
         go (Just (Function t1 t2)) | Just t1' <- go (Just t1),
                                      Just t2' <- go (Just t2) = Just (Function t1' t2')
-        go (Just (Data t1 t2s)) | isNothing (go (Just t1)) || any isNothing (go . Just <$> t2s) = Nothing
-        go (Just (Data t1 t2s)) | Just t1' <- go (Just t1),
-                                  t2s' <- catMaybes $ go . Just <$> t2s = Just (Data t1' t2s')
+        go (Just (Native _ t2s)) | any isNothing (go . Just <$> t2s) = Nothing
+        go (Just (Native t1 t2s)) = let t2s' = catMaybes $ go . Just <$> t2s in Just (Native t1 t2s')
         go (Just (EffectFunction t1)) | Just t' <- lookup (Just t1) ts = t'
         go t' = t'
 
@@ -259,7 +258,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                     CppNoOp
     toCpp _ (name, ty) =
       -- TODO: add qualifiers to CppVariableIntroduction
-      CppVariableIntroduction (name, Just (Native (runQualifier CppStatic ++ ' ' : typestr mn ty))) Nothing
+      CppVariableIntroduction (name, Just (Native (runQualifier CppStatic ++ ' ' : typestr mn ty) [])) Nothing
     toCpp _ f = error $ show f
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
     toStrings (name, tys) = (qualifiedToStr' (Ident . runProperName) name, typestr mn <$> tys)
@@ -301,7 +300,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         convert (CppAccessor Nothing prop cpp) | cpp == acc = CppAccessor qtyp prop cpp
         convert cpp = cpp
         qtyp :: Maybe Type
-        qtyp = Just (Native (qualifiedToStr' (Ident . runProperName) ctor))
+        qtyp = Just (Native (qualifiedToStr' (Ident . runProperName) ctor) [])
     addTypes _ cpp = return cpp
   statmentToCpp (CI.Return _ expr) =
     CppReturn <$> exprToCpp expr
@@ -397,10 +396,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
             | runModuleName mn' == mname,
               identToCpp ident `elem` fns
               = let paramNames = fst <$> params
-                    fp = if any (isNothing . snd) params
-                           then zip paramNames . map (Just . fromMaybe (Template "?") . (`lookup` templArgs) . Template . fst)
-                           else id
-                    arg' = CppInstance mname (cn, fns) inst (fp params)
+                    params' = if any (isNothing . snd) params
+                                then let ps = (flip lookup templArgs . Template . fst) <$> params
+                                     in zip paramNames ps
+                                else params
+                    arg' = CppInstance mname (cn, fns) inst params'
                 in (Just arg', filter (not . (`elem` paramNames) . runType . fst) templArgs)
             | otherwise = (Nothing, templArgs)
           go arg@(CppApp (CppIndexer _ inst@CppInstance{}) [CppVar "undefined"]) = go inst
@@ -623,13 +623,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   asTemplate :: [Type] -> Cpp -> Cpp
   asTemplate [] cpp = cpp
   asTemplate ps (CppVar name) = CppVar (name ++ '<' : intercalate "," (runType <$> ps) ++ ">")
-  -- asTemplate ps (CppAccessor typ prop cpp)
-  --   | prop' <- P.prettyPrintCpp [asTemplate ps (CppVar prop)] = CppAccessor typ prop' cpp
-
   asTemplate ps (CppAccessor t prop cpp)
-    | Just t' <- t, typ <- Data t' ps = CppAccessor (Just typ) prop cpp
-    | typ <- Data (Template []) ps = CppAccessor (Just typ) prop cpp
-
+    | Just (Native t' _) <- t = CppAccessor (Just (Native t' ps)) prop cpp
+    | otherwise = CppAccessor (Just (Native [] ps)) prop cpp
   asTemplate ps (CppApp f args) = CppApp (asTemplate ps f) args
   asTemplate _ cpp = cpp
 
