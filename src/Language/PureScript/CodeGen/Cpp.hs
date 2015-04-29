@@ -184,7 +184,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           argName = identToCpp arg
           argType = argtype typ
           retType = rettype typ
-          replacements = traceShowId $ replaceAll (argName, argType) <$> tmps
+          replacements = replaceAll (argName, argType) <$> tmps
           replacedBlock = replaceTypes replacements block'
 
           removedTypes = zip tmps (repeat Nothing)
@@ -196,7 +196,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       where
       replaceAll :: (String, Maybe Type) -> Maybe Type -> (Maybe Type, Maybe Type)
       replaceAll (argName, argType) typ'
-        | argType == typ' = (argType, Just (Native ("decltype(" ++ argName ++ ")")))
+        | argType == typ' = (argType, Just (DeclType argName))
       replaceAll (_, argType) _ = (argType, Nothing)
 
       replaceTypes :: [(Maybe Type, Maybe Type)] -> Cpp -> Cpp
@@ -205,11 +205,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         where
         replace (CppLambda [(argn, argt)] rett b) = CppLambda [(argn, applyChanges typs argt)] (applyChanges typs rett) b
         replace (CppInstance mod cls iname ps) = CppInstance mod cls iname (zip (fst <$> ps) (applyChanges typs . snd <$> ps))
-
-  -- Typeclass instance (module, classname and fns, instance name, parameters [names, types])
---  | CppInstance String (String, [String]) String [(String, Maybe Type)]
-
-        replace other = traceShowId other
+        replace (CppAccessor typ p e) = CppAccessor (applyChanges typs typ) p e
+        replace other = other
 
       applyChanges :: [(Maybe Type, Maybe Type)] -> Maybe Type -> Maybe Type
       applyChanges [] t = t
@@ -217,16 +214,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       applyChanges ts t = go t
         where
         go :: Maybe Type -> Maybe Type
-        go (Just Template{}) | Just t' <- lookup t ts = t'
-        go (Just (Function t1 t2)) | Just (Just t1') <- lookup (Just t1) ts,
-                                     Just (Just t2') <- lookup (Just t2) ts = Just (Function t1' t2')
-        go (Just (Function t1 t2)) | Just _ <- lookup (Just t1) ts = Nothing
-        go (Just (Function t1 t2)) | Just _ <- lookup (Just t2) ts = Nothing
+        go tmp@(Just (Template _)) | Just t' <- lookup tmp ts = t'
+        go (Just (Function t1 t2)) | isNothing (go (Just t1)) || isNothing (go (Just t2)) = Nothing
+        go (Just (Function t1 t2)) | Just t1' <- go (Just t1),
+                                     Just t2' <- go (Just t2) = Just (Function t1' t2')
+        go (Just (Data t1 t2s)) | isNothing (go (Just t1)) || any isNothing (go . Just <$> t2s) = Nothing
+        go (Just (Data t1 t2s)) | Just t1' <- go (Just t1),
+                                  t2s' <- catMaybes $ go . Just <$> t2s = Just (Data t1' t2s')
         go (Just (EffectFunction t1)) | Just t' <- lookup (Just t1) ts = t'
-
-        go (Just (Data t1 _)) | Just (Just t') <- lookup (Just t1) ts = Just (Data t' [])
-
-        go t = t
+        go t' = t'
 
   -- This covers 'let' expressions
   declToCpp InnerLevel (CI.Function (_, _, Nothing, Nothing) ident [arg] body) = do
@@ -627,8 +623,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   asTemplate :: [Type] -> Cpp -> Cpp
   asTemplate [] cpp = cpp
   asTemplate ps (CppVar name) = CppVar (name ++ '<' : intercalate "," (runType <$> ps) ++ ">")
-  asTemplate ps (CppAccessor typ prop cpp)
-    | prop' <- P.prettyPrintCpp [asTemplate ps (CppVar prop)] = CppAccessor typ prop' cpp
+  -- asTemplate ps (CppAccessor typ prop cpp)
+  --   | prop' <- P.prettyPrintCpp [asTemplate ps (CppVar prop)] = CppAccessor typ prop' cpp
+
+  asTemplate ps (CppAccessor t prop cpp)
+    | Just t' <- t, typ <- Data t' ps = CppAccessor (Just typ) prop cpp
+    | typ <- Data (Template []) ps = CppAccessor (Just typ) prop cpp
+
   asTemplate ps (CppApp f args) = CppApp (asTemplate ps f) args
   asTemplate _ cpp = cpp
 

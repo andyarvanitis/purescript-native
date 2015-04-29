@@ -82,7 +82,7 @@ runType (Data t ts) = runType t ++ '<' : intercalate "," (map runType ts) ++ ">"
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
 runType tt@(Map _) = typeName tt
 runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
-runType (Template []) = error "Bad template parameter"
+-- runType (Template []) = error "Bad template parameter"
 runType tt@(Template name) = typeName tt ++ capitalize name
   where
   capitalize :: String -> String
