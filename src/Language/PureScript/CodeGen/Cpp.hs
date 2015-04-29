@@ -113,7 +113,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     let (_, fs) = unApp expr []
         fs' = filter (isNormalFn) fs
         classname' = qualifiedToStr' (Ident . runProperName) classname
-        params' = runType . Template <$> params
+        params' = runType . flip Template [] <$> params
         inst = CppInstance [] (classname', fst <$> fns) [] (zip params' typs)
     cpps <- mapM toCpp (zip fns fs')
     return $ CppStruct (unqualClass, Right (catMaybes typs)) [] cpps []
@@ -214,7 +214,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       applyChanges ts t = go t
         where
         go :: Maybe Type -> Maybe Type
-        go tmp@(Just (Template _)) | Just t' <- lookup tmp ts = t'
+        go tmp@(Just (Template _ _)) | Just t' <- lookup tmp ts = t'
         go (Just (Function t1 t2)) | isNothing (go (Just t1)) || isNothing (go (Just t2)) = Nothing
         go (Just (Function t1 t2)) | Just t1' <- go (Just t1),
                                      Just t2' <- go (Just t2) = Just (Function t1' t2')
@@ -236,7 +236,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   --
   declToCpp TopLevel (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) fields)
     | Just (params, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
-    let tmps = runType . Template <$> params
+    let tmps = runType . flip Template [] <$> params
         fnTemplPs = concatMap (templparams' . mktype mn . snd) fns
         classTemplParams = zip tmps $ fromMaybe 0 . flip lookup fnTemplPs <$> tmps
     in
@@ -397,7 +397,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
               identToCpp ident `elem` fns
               = let paramNames = fst <$> params
                     params' = if any (isNothing . snd) params
-                                then let ps = (flip lookup templArgs . Template . fst) <$> params
+                                then let ps = (flip lookup templArgs . flip Template [] . fst) <$> params
                                      in zip paramNames ps
                                 else params
                     arg' = CppInstance mname (cn, fns) inst params'
@@ -423,7 +423,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     | Just (qname@(Qualified (Just mn') (ProperName cname)), types) <- findInstance ident,
       Just (params, _, fns) <- findClass qname
     = let fs' = fst <$> fns
-          params' = runType . Template <$> params
+          params' = runType . flip Template [] <$> params
       in return $ CppInstance (runModuleName mn') (cname, fs') instname (zip params' types)
  -- Constraint typeclass dictionary
  -- TODO: Make sure this pattern will not change in PS
@@ -496,7 +496,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go :: (Qualified ProperName, TypeKind) -> [Cpp]
         go (_, DataType _ [_]) = []
         go (typ, DataType ts cs) =
-          [CppStruct (qual typ, Left (flip (,) 0 . runType . Template . fst <$> ts))
+          [CppStruct (qual typ, Left (flip (,) 0 . runType . flip Template [] . fst <$> ts))
                      [] []
                      [CppFunction (qual typ) [] [] Nothing [CppVirtual, CppDestructor, CppDefault] CppNoOp]]
         go _ = []
@@ -516,7 +516,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                 []
                 | otherwise = Nothing
           tmps :: [(String, Int)]
-          tmps = flip (,) 0 . runType . Template . fst <$> ts
+          tmps = flip (,) 0 . runType . flip Template [] . fst <$> ts
           ctorStruct :: (ProperName, [T.Type]) -> Cpp
           ctorStruct (ctor, fields) =
             CppStruct (name, Left tmps) supers [] members
@@ -575,7 +575,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   varDeclToFn :: String -> CI.Expr Ann -> T.Type -> [(String, Int)] -> [CppQualifier] -> m Cpp
   varDeclToFn name expr ty tparams qs = do
     e' <- exprToCpp expr
-    let tparams' = Template . fst <$> tparams
+    let tparams' = flip Template [] . fst <$> tparams
         block = CppBlock [CppReturn (CppApp (asTemplate tparams' e') [CppVar "arg"])]
         typ = mktype mn ty
     return $ CppFunction name
