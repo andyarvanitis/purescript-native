@@ -310,7 +310,7 @@ runQualifier CppDefault = ""
 runQualifier CppDelete = ""
 
 templateArgs :: (Type, Type) -> [(Type, Type)]
-templateArgs = nubBy ((==) `on` runType . fst) . sortBy (compare `on` runType . fst). go []
+templateArgs = sortBy (compare `on` runType . fst) . nub . go []
   where
     go :: [(Type, Type)] -> (Type, Type) -> [(Type, Type)]
     go args (a@(Template _ []), a') = args ++ [(a, a')]

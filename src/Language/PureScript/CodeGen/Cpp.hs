@@ -374,12 +374,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         filteredArgs = catMaybes $ fst <$> templsFromDicts
 
         templArgsFromDicts :: [(Type, Type)]
-        templArgsFromDicts = nubBy ((==) `on` runType . fst)
-                           . sortBy (compare `on` runType . fst) $ concatMap snd templsFromDicts
+        templArgsFromDicts = sortBy (compare `on` runType . fst) . nub $ concatMap snd templsFromDicts
 
         templArgs :: [(Type, Type)]
-        templArgs = nubBy ((==) `on` runType . fst)
-                  . sortBy (compare `on` runType . fst) . concat $ templateArgs <$> tysMapping
+        templArgs = sortBy (compare `on` runType . fst) . nub . concat $ templateArgs <$> tysMapping
           where
           fnTyList = maybe [] (fnTypesN (length normalArgs)) (mktype mn ty)
           exprTyList = (tyFromExpr' <$> normalArgs) ++ [tyFromExpr' e]
