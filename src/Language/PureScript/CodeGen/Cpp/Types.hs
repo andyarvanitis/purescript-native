@@ -37,6 +37,7 @@ data Type = Native String
           | Map [(String,Type)]
           | Template String
           | ParamTemplate String [Type]
+          | DeclType String
           | EffectFunction Type
           deriving (Eq, Show, Data, Typeable)
 -- |
@@ -76,10 +77,11 @@ runType :: Type -> String
 runType (Native name) = name
 runType tt@(Function a b) = typeName tt ++ '<' : runType a ++ "," ++ runType b ++ ">"
 runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
-runType    (Data t []) = runType t
-runType    (Data t ts) = runType t ++ '<' : intercalate "," (map runType ts) ++ ">"
+runType (Data t []) = runType t
+runType (Data t ts) = runType t ++ '<' : intercalate "," (map runType ts) ++ ">"
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
 runType tt@(Map _) = typeName tt
+runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
 runType (Template []) = error "Bad template parameter"
 runType tt@(Template name) = typeName tt ++ capitalize name
   where
@@ -95,6 +97,7 @@ typeName Data{} = "data"
 typeName List{} = "list"
 typeName Map{} = "any_map"
 typeName Template{} = ""
+typeName DeclType{} = "decltype"
 typeName _ = ""
 
 everywhereOnTypes :: (Type -> Type) -> Type -> Type
@@ -346,6 +349,7 @@ templateArgs = nubBy ((==) `on` runType . fst) . sortBy (compare `on` runType . 
 --  go args (ParamTemplate t [a], Data a') =
 --    args ++ ((Template t), typeName (Data a')) : (go [] (a, a'))
 --  go args (a@(Template "rowType"), a'@(Template "rowType")) = args ++ [(a, [])]
+    go args (a@DeclType{}, a') = args ++ [(a, a')]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (EffectFunction b, EffectFunction b') = go args (b, b')
     go args (Data t _, EffectFunction t') =
