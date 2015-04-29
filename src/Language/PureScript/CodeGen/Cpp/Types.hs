@@ -79,7 +79,7 @@ runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
 runType tt@(Map _) = typeName tt
 runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
-runType tt@(Template t []) = typeName tt ++ t
+runType tt@(Template t []) = typeName tt ++ capitalize t
   where
   capitalize :: String -> String
   capitalize (c:cs) = toUpper c : cs

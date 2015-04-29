@@ -284,11 +284,10 @@ scope = mkPattern match
   match (CppAccessor _ prop val@CppScope{}) = Just (prop, val)
   match (CppApp val [inst@CppInstance{}]) =
     let val' = case val of
-                 (CppAccessor (Just typ) v (CppScope _)) -> "template " ++ v ++ runType typ
-                 (CppAccessor t v (CppScope _)) -> v
+                 (CppAccessor _ v (CppScope _)) -> v
                  _ -> prettyPrintCpp1 val
         inst' = CppScope (prettyPrintCpp1 inst)
-    in Just (val', inst')
+    in Just (if '<' `elem` val' then "template " ++ val' else val', inst')
   match _ = Nothing
 
 indexer :: Pattern PrinterState Cpp (String, Cpp)
