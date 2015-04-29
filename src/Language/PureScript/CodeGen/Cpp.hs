@@ -184,20 +184,17 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           argName = identToCpp arg
           argType = argtype typ
           retType = rettype typ
-          replacements = replaceAll (argName, argType) <$> tmps
+          replacements = replacementPair (argName, argType) <$> tmps
           replacedBlock = replaceTypes replacements block'
-
           removedTypes = zip tmps (repeat Nothing)
           replacedArgs = applyChanges removedTypes argType
           replacedRet = applyChanges removedTypes retType
-
       in CppLambda [(argName, replacedArgs)] replacedRet replacedBlock
-
       where
-      replaceAll :: (String, Maybe Type) -> Maybe Type -> (Maybe Type, Maybe Type)
-      replaceAll (argName, argType) typ'
+      replacementPair :: (String, Maybe Type) -> Maybe Type -> (Maybe Type, Maybe Type)
+      replacementPair (argName, argType) typ'
         | argType == typ' = (argType, Just (DeclType argName))
-      replaceAll (_, argType) _ = (argType, Nothing)
+      replacementPair (_, argType) _ = (argType, Nothing)
 
       replaceTypes :: [(Maybe Type, Maybe Type)] -> Cpp -> Cpp
       replaceTypes [] = id
