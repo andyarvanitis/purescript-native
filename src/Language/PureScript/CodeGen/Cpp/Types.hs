@@ -120,8 +120,10 @@ mktype _ (T.TypeApp
 mktype m (T.TypeApp
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-               a) b) | Just a' <- mktype m a, Just b' <- mktype m b = Just $ Function a' b'
-                     | otherwise = Nothing
+               a) b) = do
+                 a' <- mktype m a
+                 b' <- mktype m b
+                 return (Function a' b')
 
 -- This covers ((->) r)
 mktype _ (T.TypeApp
@@ -131,16 +133,15 @@ mktype _ (T.TypeApp
 mktype m (T.TypeApp a
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-               b)) | Just a' <- mktype m a, Just b' <- mktype m b = Just $ Function a' b'
+               b)) | Just a' <- mktype m a, Just b' <- mktype m b = Just (Function a' b')
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
-             a) | Just t <- mktype m a = Just $ List t
-                | otherwise = Nothing
+             a) = mktype m a >>= Just . List
 
 mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-             T.REmpty) = Just $ Map []
+             T.REmpty) = Just (Map [])
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
@@ -209,27 +210,16 @@ mktype _ T.REmpty = Nothing
 mktype _ b = error $ "Unknown type: " ++ show b
 
 typestr :: ModuleName -> T.Type -> String
-typestr m t | Just t' <- mktype m t = runType t'
-            | otherwise = []
-
-arity :: Maybe Type -> Maybe Int
-arity (Just (Function _ b)) = Just (1 + fromMaybe 0 (arity (Just b)))
-arity _ = Nothing
+typestr m t = maybe [] runType (mktype m t)
 
 argtype :: Maybe Type -> Maybe Type
 argtype (Just (Function a _)) = Just a
 argtype _ = Nothing
 
-argtype' :: ModuleName -> T.Type -> String
-argtype' m = maybe [] runType . argtype . mktype m
-
 rettype :: Maybe Type -> Maybe Type
 rettype (Just (Function _ b)) = Just b
 rettype (Just (EffectFunction b)) = Just b
 rettype _ = Nothing
-
-rettype' :: ModuleName -> T.Type -> String
-rettype' m = maybe [] runType . rettype . mktype m
 
 fnTypesN :: Int -> Type -> [Type]
 fnTypesN 0 t = [t]
@@ -268,13 +258,10 @@ templparams' = sortBy (compare `on` fst) . nub . maybe [] templparams
 
 dataCon :: ModuleName -> T.Type -> [Type]
 dataCon m (T.TypeApp a b) = (dataCon m a) ++ (dataCon m b)
-dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _))
-  | Just a' <- mktype m a = [a']
-  | otherwise = []
+dataCon m a@(T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) _)) =
+  maybe [] (replicate 1) (mktype m a)
 dataCon m a@(T.TypeConstructor _) = [Native (qualDataTypeName m a) []]
-dataCon m a
-  | Just a' <- mktype m a = [a']
-  | otherwise = []
+dataCon m a = maybe [] (replicate 1) (mktype m a)
 
 getDataType :: String -> Type -> Maybe Type
 getDataType name (Function _ b) = getDataType name b
