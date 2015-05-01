@@ -86,10 +86,28 @@ inlineValues :: Cpp -> Cpp
 inlineValues = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
-  convert (CppApp fn [dict]) | isPreludeDict C.semiringNumber dict && isPreludeFn C.zero fn = CppNumericLiteral (Left 0)
-  convert (CppApp fn [dict]) | isPreludeDict C.semiringNumber dict && isPreludeFn C.one fn = CppNumericLiteral (Left 1)
-  convert (CppApp (CppApp fn [x]) [y]) | isPreludeFn (C.%) fn = CppBinary Modulus x y
+  convert (CppApp fn [dict]) | isDict semiringNumber dict && isFn fnZero fn = CppNumericLiteral (Left 0)
+                            | isDict semiringNumber dict && isFn fnOne fn = CppNumericLiteral (Left 1)
+                            | isDict semiringInt dict && isFn fnZero fn = CppNumericLiteral (Left 0)
+                            | isDict semiringInt dict && isFn fnOne fn = CppNumericLiteral (Left 1)
+                            | isDict boundedBoolean dict && isFn fnBottom fn = CppBooleanLiteral False
+                            | isDict boundedBoolean dict && isFn fnTop fn = CppBooleanLiteral True
+  convert (CppApp fn [value]) | isFn fromNumber fn = CppBinary BitwiseOr value (CppNumericLiteral (Left 0))
+  convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y])
+    | isDict semiringInt dict && isFn fnAdd fn = CppBinary BitwiseOr (CppBinary Add x y) (CppNumericLiteral (Left 0))
+    | isDict semiringInt dict && isFn fnMultiply fn = CppBinary BitwiseOr (CppBinary Multiply x y) (CppNumericLiteral (Left 0))
+    | isDict moduloSemiringInt dict && isFn fnDivide fn = CppBinary BitwiseOr (CppBinary Divide x y) (CppNumericLiteral (Left 0))
+    | isDict ringInt dict && isFn fnSubtract fn = CppBinary BitwiseOr (CppBinary Subtract x y) (CppNumericLiteral (Left 0))
   convert other = other
+  fnZero = (C.prelude, C.zero)
+  fnOne = (C.prelude, C.one)
+  fnBottom = (C.prelude, C.bottom)
+  fnTop = (C.prelude, C.top)
+  fromNumber = (C.dataInt, C.fromNumber)
+  fnAdd = (C.prelude, (C.+))
+  fnDivide = (C.prelude, (C./))
+  fnMultiply = (C.prelude, (C.*))
+  fnSubtract = (C.prelude, (C.-))
 
 inlineOperator :: (String, String) -> (Cpp -> Cpp -> Cpp) -> Cpp -> Cpp
 inlineOperator (m, op) f = everywhereOnCpp convert
@@ -102,58 +120,83 @@ inlineOperator (m, op) f = everywhereOnCpp convert
 
 inlineCommonOperators :: Cpp -> Cpp
 inlineCommonOperators = applyAll $
-  [ binary C.semiringNumber (C.+) Add
-  , binary C.semiringNumber (C.*) Multiply
-  , binary C.ringNumber (C.-) Subtract
-  , unary  C.ringNumber C.negate CppNegate
-  , binary C.moduloSemiringNumber (C./) Divide
+  [ binary semiringNumber (C.+) Add
+  , binary semiringNumber (C.*) Multiply
 
-  , binary C.ordNumber (C.<) LessThan
-  , binary C.ordNumber (C.>) GreaterThan
-  , binary C.ordNumber (C.<=) LessThanOrEqual
-  , binary C.ordNumber (C.>=) GreaterThanOrEqual
+  , binary ringNumber (C.-) Subtract
+  , unary  ringNumber C.negate CppNegate
+  , binary ringInt (C.-) Subtract
+  , unary  ringInt C.negate CppNegate
 
-  , binary C.eqNumber (C.==) Equal
-  , binary C.eqNumber (C./=) NotEqual
-  , binary C.eqString (C.==) Equal
-  , binary C.eqString (C./=) NotEqual
-  , binary C.eqBoolean (C.==) Equal
-  , binary C.eqBoolean (C./=) NotEqual
+  , binary moduloSemiringNumber (C./) Divide
+  , binary moduloSemiringInt C.mod Modulus
 
-  , binary C.semigroupString (C.<>) Add
-  , binary C.semigroupString (C.++) Add
+  , binary eqNumber (C.==) Equal
+  , binary eqNumber (C./=) NotEqual
+  , binary eqInt (C.==) Equal
+  , binary eqInt (C./=) NotEqual
+  , binary eqString (C.==) Equal
+  , binary eqString (C./=) NotEqual
+  , binary eqBoolean (C.==) Equal
+  , binary eqBoolean (C./=) NotEqual
 
-  , binaryFunction C.bitsNumber C.shl ShiftLeft
-  , binaryFunction C.bitsNumber C.shr ShiftRight
-  , binaryFunction C.bitsNumber C.zshr ZeroFillShiftRight
-  , binary         C.bitsNumber (C..&.) BitwiseAnd
-  , binary         C.bitsNumber (C..|.) BitwiseOr
-  , binary         C.bitsNumber (C..^.) BitwiseXor
-  , unary          C.bitsNumber C.complement CppBitwiseNot
+  , binary ordNumber (C.<) LessThan
+  , binary ordNumber (C.>) GreaterThan
+  , binary ordNumber (C.<=) LessThanOrEqual
+  , binary ordNumber (C.>=) GreaterThanOrEqual
+  , binary ordInt (C.<) LessThan
+  , binary ordInt (C.>) GreaterThan
+  , binary ordInt (C.<=) LessThanOrEqual
+  , binary ordInt (C.>=) GreaterThanOrEqual
 
-  , binary C.boolLikeBoolean (C.&&) And
-  , binary C.boolLikeBoolean (C.||) Or
-  , unary  C.boolLikeBoolean C.not CppNot
+  , binary semigroupString (C.<>) Add
+  , binary semigroupString (C.++) Add
+
+  , binary latticeBoolean (C.&&) And
+  , binary latticeBoolean (C.||) Or
+  , binaryFunction latticeBoolean C.inf And
+  , binaryFunction latticeBoolean C.sup Or
+  , unary complementedLatticeBoolean C.not CppNot
+
+  , binary' C.dataIntBits (C..|.) BitwiseOr
+  , binary' C.dataIntBits (C..&.) BitwiseAnd
+  , binary' C.dataIntBits (C..^.) BitwiseXor
+  , binary' C.dataIntBits C.shl ShiftLeft
+  , binary' C.dataIntBits C.shr ShiftRight
+  , binary' C.dataIntBits C.zshr ZeroFillShiftRight
+  , unary'  C.dataIntBits C.complement CppBitwiseNot
   ] ++
   [ fn | i <- [0..10], fn <- [ mkFn i, runFn i ] ]
   where
-  binary :: String -> String -> BinaryOp -> Cpp -> Cpp
-  binary dictName opString op = everywhereOnCpp convert
+  binary :: (String, String) -> String -> BinaryOp -> Cpp -> Cpp
+  binary dict opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y]) | isPreludeDict dictName dict && isPreludeFn (identToCpp . Ident $ opString) fn = CppBinary op x y
+    convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isDict dict dict' && isPreludeFn opString fn = CppBinary op x y
     convert other = other
-  binaryFunction :: String -> String -> BinaryOp -> Cpp -> Cpp
-  binaryFunction dictName fnName op = everywhereOnCpp convert
+  binary' :: String -> String -> BinaryOp -> Cpp -> Cpp
+  binary' moduleName opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y]) | isPreludeFn fnName fn && isPreludeDict dictName dict = CppBinary op x y
+    convert (CppApp (CppApp fn [x]) [y]) | isFn (moduleName, opString) fn = CppBinary op x y
     convert other = other
-  unary :: String -> String -> CppUnaryOp -> Cpp -> Cpp
-  unary dictName fnName op = everywhereOnCpp convert
+  binaryFunction :: (String, String) -> String -> BinaryOp -> Cpp -> Cpp
+  binaryFunction dict fnName op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp (CppApp fn [dict]) [x]) | isPreludeFn fnName fn && isPreludeDict dictName dict = CppUnary op x
+    convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isPreludeFn fnName fn && isDict dict dict' = CppBinary op x y
+    convert other = other
+  unary :: (String, String) -> String -> CppUnaryOp -> Cpp -> Cpp
+  unary dict fnName op = everywhereOnCpp convert
+    where
+    convert :: Cpp -> Cpp
+    convert (CppApp (CppApp fn [dict']) [x]) | isPreludeFn fnName fn && isDict dict dict' = CppUnary op x
+    convert other = other
+  unary' :: String -> String -> CppUnaryOp -> Cpp -> Cpp
+  unary' moduleName fnName op = everywhereOnCpp convert
+    where
+    convert :: Cpp -> Cpp
+    convert (CppApp fn [x]) | isFn (moduleName, fnName) fn = CppUnary op x
     convert other = other
   mkFn :: Int -> Cpp -> Cpp
   mkFn 0 = everywhereOnCpp convert
@@ -193,10 +236,30 @@ inlineCommonOperators = applyAll $
     go m acc (CppApp lhs [arg]) = go (m - 1) (arg : acc) lhs
     go _ _   _ = Nothing
 
-isPreludeDict :: String -> Cpp -> Bool
-isPreludeDict dictName (CppInstance prelude _ prop _) = prelude == C.prelude && prop == dictName
-isPreludeDict dictName (CppAccessor _ prop (CppScope prelude)) = prelude == C.prelude && prop == dictName
-isPreludeDict _ _ = False
+
+-- -- (f <<< g $ x) = f (g x)
+-- -- (f <<< g)     = \x -> f (g x)
+-- inlineArrComposition :: (Applicative m, MonadSupply m) => Cpp -> m Cpp
+-- inlineArrComposition = everywhereOnCppTopDownM convert
+--   where
+--   convert :: (MonadSupply m) => Cpp -> m Cpp
+--   convert (CppApp (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) [z]) | isArrCompose dict' fn =
+--     return $ CppApp x [CppApp y [z]]
+--   convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isArrCompose dict' fn = do
+--     arg <- freshName
+--     return $ CppFunction Nothing [arg] (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
+--   convert other = return other
+--   isArrCompose :: Cpp -> Cpp -> Bool
+--   isArrCompose dict' fn = isDict semigroupoidArr dict' && isPreludeFn (C.<<<) fn
+
+isDict :: (String, String) -> Cpp -> Bool
+isDict (moduleName, dictName) (CppAccessor _ x (CppVar y)) = x == dictName && y == moduleName
+isDict _ _ = False
+
+isFn :: (String, String) -> Cpp -> Bool
+isFn (moduleName, fnName) (CppAccessor _ x (CppVar y)) = x == fnName && y == moduleName
+isFn (moduleName, fnName) (CppIndexer (CppStringLiteral x) (CppVar y)) = x == fnName && y == moduleName
+isFn _ _ = False
 
 isPreludeFn :: String -> Cpp -> Bool
 isPreludeFn fnName (CppInstance prelude _ fnName' _) = prelude == C.prelude && fnName' == fnName
@@ -204,3 +267,54 @@ isPreludeFn fnName (CppAccessor _ fnName' (CppScope prelude)) = prelude == C.pre
 isPreludeFn fnName (CppAccessor _ longForm (CppAccessor _ prelude (CppVar _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
 isPreludeFn fnName (CppAccessor _ longForm (CppAccessor _ prelude (CppScope _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
 isPreludeFn _ _ = False
+
+semiringNumber :: (String, String)
+semiringNumber = (C.prelude, C.semiringNumber)
+
+semiringInt :: (String, String)
+semiringInt = (C.dataInt, C.semiringInt)
+
+ringNumber :: (String, String)
+ringNumber = (C.prelude, C.ringNumber)
+
+ringInt :: (String, String)
+ringInt = (C.dataInt, C.ringInt)
+
+moduloSemiringNumber :: (String, String)
+moduloSemiringNumber = (C.prelude, C.moduloSemiringNumber)
+
+moduloSemiringInt :: (String, String)
+moduloSemiringInt = (C.dataInt, C.moduloSemiringInt)
+
+eqNumber :: (String, String)
+eqNumber = (C.prelude, C.eqNumber)
+
+eqInt :: (String, String)
+eqInt = (C.dataInt, C.eqInt)
+
+eqString :: (String, String)
+eqString = (C.prelude, C.eqNumber)
+
+eqBoolean :: (String, String)
+eqBoolean = (C.prelude, C.eqNumber)
+
+ordNumber :: (String, String)
+ordNumber = (C.prelude, C.ordNumber)
+
+ordInt :: (String, String)
+ordInt = (C.dataInt, C.ordInt)
+
+semigroupString :: (String, String)
+semigroupString = (C.prelude, C.semigroupString)
+
+boundedBoolean :: (String, String)
+boundedBoolean = (C.prelude, C.boundedBoolean)
+
+latticeBoolean :: (String, String)
+latticeBoolean = (C.prelude, C.latticeBoolean)
+
+complementedLatticeBoolean :: (String, String)
+complementedLatticeBoolean = (C.prelude, C.complementedLatticeBoolean)
+
+-- semigroupoidArr :: (String, String)
+-- semigroupoidArr = (C.prelude, C.semigroupoidArr)

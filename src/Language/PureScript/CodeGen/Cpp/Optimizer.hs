@@ -69,7 +69,7 @@ optimize' cpp = do
     , inlineValues
     , inlineOperator (C.prelude, (C.$)) $ \f x -> CppApp f [x]
     , inlineOperator (C.prelude, (C.#)) $ \x f -> CppApp f [x]
-    , inlineOperator (C.preludeUnsafe, C.unsafeIndex) $ flip CppIndexer
+    , inlineOperator (C.dataArrayUnsafe, C.unsafeIndex) $ flip CppIndexer
     , inlineCommonOperators ]) cpp
 
 untilFixedPoint :: (Eq a) => (a -> a) -> a -> a
