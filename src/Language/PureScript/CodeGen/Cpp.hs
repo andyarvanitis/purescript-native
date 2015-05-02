@@ -660,5 +660,5 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   toBody = catMaybes . map go
     where
     go :: Cpp -> Maybe Cpp
-    go cpp@(CppFunction{}) = Just cpp
+    go cpp@(CppFunction _ [] _ _ _ _) = Just cpp
     go _ = Nothing
