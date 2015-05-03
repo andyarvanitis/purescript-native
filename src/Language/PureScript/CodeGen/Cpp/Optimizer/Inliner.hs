@@ -77,7 +77,7 @@ inlineVariables = everywhereOnCpp $ removeFromBlock go
   where
   go :: [Cpp] -> [Cpp]
   go [] = []
-  go (CppVariableIntroduction (var, _) (Just cpp) : sts)
+  go (CppVariableIntroduction (var, _) _ (Just cpp) : sts)
     | shouldInline cpp && not (any (isReassigned var) sts) && not (any (isRebound cpp) sts) && not (any (isUpdated var) sts) =
       go (map (replaceIdent var cpp) sts)
   go (s:sts) = s : go sts

@@ -21,7 +21,6 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo (
 import Data.List (nub)
 import Data.Maybe (fromJust, isJust)
 
-import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.Names
@@ -154,7 +153,8 @@ inlineST = everywhereOnCpp convertBlock
   -- Find all ST Refs initialized in this block
   findSTRefsIn = everythingOnCpp (++) isSTRef
     where
-    isSTRef (CppVariableIntroduction (ident, Nothing) (Just (CppApp (CppApp f [_]) []))) | isSTFunc C.newSTRef f = [ident]
+    isSTRef (CppVariableIntroduction (ident, Nothing) _ (Just (CppApp (CppApp f [_]) [])))
+      | isSTFunc C.newSTRef f = [ident]
     isSTRef _ = []
   -- Find all STRefs used as arguments to readSTRef, writeSTRef, modifySTRef
   findAllSTUsagesIn = everythingOnCpp (++) isSTUsage

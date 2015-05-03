@@ -145,8 +145,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       ty'@(Just Function{}) <- mktype mn ty,
       tparams@(_:_) <- templparams' ty' = varDeclToFn name expr ty tparams [CppInline]
 
-  declToCpp _ (CI.VarDecl (_, _, ty, _) ident expr) =
-    CppVariableIntroduction (identToCpp ident, ty >>= mktype mn) . Just <$> exprToCpp expr
+  declToCpp _ (CI.VarDecl (_, _, ty, _) ident expr) = do
+    expr' <- exprToCpp expr
+    return $ CppVariableIntroduction (identToCpp ident, ty >>= mktype mn) [] (Just expr')
 
   -- TODO: fix when proper Meta info added
   declToCpp TopLevel (CI.Function _ _ [Ident "dict"]
@@ -174,7 +175,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- C++ doesn't support nested functions, so use lambdas
   declToCpp InnerLevel (CI.Function (_, _, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
-    return $ CppVariableIntroduction (identToCpp ident, Nothing) (Just (asLambda block))
+    return $ CppVariableIntroduction (identToCpp ident, Nothing) [] (Just (asLambda block))
     where
     asLambda block' =
       let typ = mktype mn ty
@@ -221,7 +222,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- This covers 'let' expressions
   declToCpp InnerLevel (CI.Function (_, _, Nothing, Nothing) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
-    return $ CppVariableIntroduction (identToCpp ident, Nothing)
+    return $ CppVariableIntroduction (identToCpp ident, Nothing) []
                (Just (CppLambda [(identToCpp arg, Nothing)] Nothing block))
 
   declToCpp InnerLevel CI.Function{} = return CppNoOp -- TODO: Are these possible?
@@ -252,9 +253,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                     (Just rtyp)
                     [CppStatic]
                     CppNoOp
-    toCpp _ (name, ty) =
-      -- TODO: add qualifiers to CppVariableIntroduction
-      CppVariableIntroduction (name, Just (Native (runQualifier CppStatic ++ ' ' : typestr mn ty) [])) Nothing
+    toCpp tmps (name, ty) =
+      -- TODO: need better handling for these. Variable templates would help.
+      let typ = mktype mn ty
+          qs | Just typ' <- typ,
+               tmps'@(_:_) <- templateVars typ',
+               any (not . (`elem` tmps)) (runType <$> tmps') = [CppIgnored]
+             | otherwise = [] in
+      CppVariableIntroduction (name, typ) (qs ++ [CppStatic]) Nothing
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
     toStrings (name, tys) = (qualifiedToStr' (Ident . runProperName) name, typestr mn <$> tys)
 
@@ -524,7 +530,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
             members :: [Cpp]
             members | fields'@(_:_) <- filter (/=(Just (Map []))) $ mktype mn <$> fields,
                       ms <- zip (("value" ++) . show <$> ([0..] :: [Int])) fields'
-                      = (flip CppVariableIntroduction Nothing <$> ms) ++
+                      = ((\i -> CppVariableIntroduction i [] Nothing) <$> ms) ++
                         [ CppFunction name [] ms Nothing [CppConstructor] (CppBlock [])
                         , CppFunction name [] [] Nothing [CppConstructor, CppDelete] CppNoOp
                         ]

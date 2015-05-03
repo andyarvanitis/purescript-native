@@ -69,7 +69,13 @@ data CppQualifier
   -- |
   -- Inline function
   --
-  | CppInline deriving (Show, Eq, Data, Typeable)
+  | CppInline
+  -- |
+  -- Ignored (ignored but still visible, e.g. commented out)
+  --
+  | CppIgnored
+  --
+  deriving (Show, Eq, Data, Typeable)
 
 runType :: Type -> String
 runType (Native t []) = t
@@ -295,6 +301,7 @@ runQualifier CppConstructor = ""
 runQualifier CppDestructor = "~"
 runQualifier CppDefault = ""
 runQualifier CppDelete = ""
+runQualifier CppIgnored = "//"
 
 templateArgs :: (Type, Type) -> [(Type, Type)]
 templateArgs = sortBy (compare `on` runType . fst) . nub . go []

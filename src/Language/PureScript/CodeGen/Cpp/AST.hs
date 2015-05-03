@@ -162,7 +162,7 @@ data Cpp
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction (String, Maybe Type) (Maybe Cpp)
+  | CppVariableIntroduction (String, Maybe Type) [CppQualifier] (Maybe Cpp)
   -- |
   -- A variable assignment
   --
@@ -262,7 +262,7 @@ everywhereOnCpp f = go
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
-  go (CppVariableIntroduction name j) = f (CppVariableIntroduction name (fmap go j))
+  go (CppVariableIntroduction name qs j) = f (CppVariableIntroduction name qs (fmap go j))
   go (CppAssignment j1 j2) = f (CppAssignment (go j1) (go j2))
   go (CppWhile j1 j2) = f (CppWhile (go j1) (go j2))
   go (CppFor name j1 j2 j3) = f (CppFor name (go j1) (go j2) (go j3))
@@ -296,7 +296,7 @@ everywhereOnCppTopDown f = go . f
   go (CppConditional j1 j2 j3) = CppConditional (go (f j1)) (go (f j2)) (go (f j3))
   go (CppBlock cpp) = CppBlock (map (go . f) cpp)
   go (CppNamespace name cpp) = CppNamespace name (map (go . f) cpp)
-  go (CppVariableIntroduction name j) = CppVariableIntroduction name (fmap (go . f) j)
+  go (CppVariableIntroduction name qs j) = CppVariableIntroduction name qs (fmap (go . f) j)
   go (CppAssignment j1 j2) = CppAssignment (go (f j1)) (go (f j2))
   go (CppWhile j1 j2) = CppWhile (go (f j1)) (go (f j2))
   go (CppFor name j1 j2 j3) = CppFor name (go (f j1)) (go (f j2)) (go (f j3))
@@ -329,7 +329,7 @@ everythingOnCpp (<>) f = go
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)
-  go j@(CppVariableIntroduction _ (Just j1)) = f j <> go j1
+  go j@(CppVariableIntroduction _ _ (Just j1)) = f j <> go j1
   go j@(CppAssignment j1 j2) = f j <> go j1 <> go j2
   go j@(CppWhile j1 j2) = f j <> go j1 <> go j2
   go j@(CppFor _ j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
