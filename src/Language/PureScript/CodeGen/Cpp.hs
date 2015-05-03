@@ -79,10 +79,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                        (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ toHeader optimized']
   let bodyCpps = toBody optimized'
       moduleBody = CppInclude (runModuleName mn) : P.linebreak
-                ++ if null bodyCpps
-                     then []
-                     else [CppNamespace (runModuleName mn) $
-                            (CppUseNamespace <$> cppImports') ++ P.linebreak ++ bodyCpps]
+                ++ (if null bodyCpps
+                      then []
+                      else [CppNamespace (runModuleName mn) $
+                             (CppUseNamespace <$> cppImports') ++ P.linebreak ++ bodyCpps])
+                ++ (if isMain mn then [nativeMain] else [])
   return $ case additional of
     MakeOptions -> moduleHeader ++ CppEndOfHeader : moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
@@ -662,3 +663,19 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go :: Cpp -> Maybe Cpp
     go cpp@(CppFunction _ [] _ _ _ _) = Just cpp
     go _ = Nothing
+
+isMain :: ModuleName -> Bool
+isMain (ModuleName [ProperName "Main"]) = True
+isMain _ = False
+
+nativeMain :: Cpp
+nativeMain = CppFunction "main"
+               []
+               [ ([], Just (Native "int" []))
+               , ([], Just (Native "char *[]" []))
+               ]
+               (Just (Native "int" []))
+               []
+               (CppBlock [ CppApp (CppAccessor Nothing "main" (CppScope "Main")) []
+                         , CppReturn (CppNumericLiteral (Left 0))
+                         ])
