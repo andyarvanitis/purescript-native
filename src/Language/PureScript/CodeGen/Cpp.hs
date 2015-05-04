@@ -642,7 +642,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   asTemplate ps (CppAccessor t prop cpp)
     | Just (Native t' _) <- t = CppAccessor (Just (Native t' ps)) prop cpp
     | otherwise = CppAccessor (Just (Native [] ps)) prop cpp
-  asTemplate ps (CppApp f args) = CppApp (asTemplate ps f) args
   asTemplate _ cpp = cpp
 
   -- |
