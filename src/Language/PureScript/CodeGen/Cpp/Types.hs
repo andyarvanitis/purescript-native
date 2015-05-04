@@ -134,7 +134,7 @@ mktype m (T.TypeApp
 -- This covers ((->) r)
 mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-            _) = Just $ Native (typeName (Function (Template [] []) (Template [] []))) []
+            _) = Just $ Native "fn_r" []
 
 mktype m (T.TypeApp a
             (T.TypeApp
