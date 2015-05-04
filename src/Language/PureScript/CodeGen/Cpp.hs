@@ -124,7 +124,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       | Just ty <- tyFromExpr e = declToCpp InnerLevel (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
     toCpp ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
       | Just ty <- tyFromExpr e,
-        tparams <- templparams' (mktype mn ty) = varDeclToFn name e ty tparams [CppInline, CppStatic]
+        tparams@(_:_) <- templparams' (mktype mn ty) = varDeclToFn name e ty tparams [CppInline, CppStatic]
     toCpp ((name, _), e)
       | Just ty <- tyFromExpr e = declToCpp InnerLevel (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
     toCpp ((name, _), e) = return $ trace (name ++ " :: " ++ show e ++ "\n") CppNoOp
