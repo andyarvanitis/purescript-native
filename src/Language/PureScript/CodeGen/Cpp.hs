@@ -234,7 +234,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp TopLevel (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) _)
     | Just (params, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
     let tmps = runType . flip Template [] <$> params
-        fnTemplPs = concatMap (templparams' . mktype mn . snd) fns
+        fnTemplPs = nub $ (concatMap (templparams' . mktype mn . snd) fns) ++
+                          (concatMap constraintParams constraints)
         classTemplParams = zip tmps $ fromMaybe 0 . flip lookup fnTemplPs <$> tmps
     in
     return $ CppStruct (ctor, Left classTemplParams)
@@ -242,13 +243,26 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                        (toCpp tmps <$> fns)
                        []
     where
+    tmpParams :: [(String, T.Type)] -> [(String, Int)]
+    tmpParams fns = concatMap (templparams' . mktype mn . snd) fns
+    constraintParams :: T.Constraint -> [(String, Int)]
+    constraintParams (cname@(Qualified _ pn), cps)
+      | Just (ps, _, fs) <- findClass cname,
+        ps' <- runType . flip Template [] <$> ps,
+        tps@(_:_) <- filter ((`elem` ps') . fst) (tmpParams fs),
+        ts@(_:_) <- (\p -> case find ((== p) . fst) tps of
+                             Just (p', n) -> n
+                             _ -> 0) <$> ps' = let cps' = typestr mn <$> cps in
+                                               zip cps' ts
+    constraintParams _ = []
+
     toCpp :: [String] -> (String, T.Type) -> Cpp
     toCpp tmps (name, ty)
       | ty'@(Just _) <- mktype mn ty,
         Just atyp <- argtype ty',
         Just rtyp <- rettype ty'
       = CppFunction name
-                    (filter (not . (`elem` tmps) . fst) $ templparams' ty')
+                    (filter ((`notElem` tmps) . fst) $ templparams' ty')
                     [([], Just atyp)]
                     (Just rtyp)
                     [CppStatic]
@@ -258,7 +272,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       let typ = mktype mn ty
           qs | Just typ' <- typ,
                tmps'@(_:_) <- templateVars typ',
-               any (not . (`elem` tmps)) (runType <$> tmps') = [CppIgnored]
+               any (`notElem` tmps) (runType <$> tmps') = [CppIgnored]
              | otherwise = [] in
       CppVariableIntroduction (name, typ) (qs ++ [CppStatic]) Nothing
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
@@ -400,7 +414,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                      in zip paramNames ps
                                 else params
                     arg' = CppInstance mname (cn, fns) inst params'
-                in (Just arg', filter (not . (`elem` paramNames) . runType . fst) templArgs)
+                in (Just arg', filter ((`notElem` paramNames) . runType . fst) templArgs)
             | otherwise = (Nothing, templArgs)
           go (CppApp (CppIndexer _ inst@CppInstance{}) [CppVar "undefined"]) = go inst
           go arg = (Just arg, [])
