@@ -127,16 +127,14 @@ literals = mkPattern' match
     , return ";"
     , return "\n"
     ]
-  match (CppStruct (name, params) supers cms ims) = let tmps = templDecl' params in
-    fmap concat $ sequence $
-    (if null tmps
+  match (CppStruct (name, params) typs supers cms ims) = fmap concat $ sequence $
+    (if null params && null typs
       then []
-      else [return tmps, return "\n", currentIndent]) ++
-    [ return $ "struct " ++ classstr (name, either (const []) (map runType) params)
-    , return $ if null supers then
-                 []
-               else
-                 " : public " ++ intercalate ", public " (classstr <$> supers)
+      else [return (templDecl params), return "\n", currentIndent]) ++
+    [ return $ "struct " ++ classstr (name, runType <$> typs)
+    , return $ if null supers
+                 then []
+                 else " : public " ++ intercalate ", public " (classstr <$> supers)
     , return " {\n"
     , withIndent $ prettyStatements cms
     , return $ if null cms then [] else "\n"

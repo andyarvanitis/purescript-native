@@ -90,7 +90,7 @@ runType tt@(Template t []) = typeName tt ++ capitalize t
   capitalize :: String -> String
   capitalize (c:cs) = toUpper c : cs
   capitalize s = s
-runType tt@(Template t ts) = runType (Template t []) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
+runType (Template t ts) = runType (Template t []) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
 
 typeName :: Type -> String
 typeName Function{} = "fn"
@@ -132,9 +132,9 @@ mktype m (T.TypeApp
                  return (Function a' b')
 
 -- This covers ((->) r)
-mktype _ (T.TypeApp
-            (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-            _) = Just $ Native "fn_r" []
+mktype m (T.TypeApp
+           (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
+            r) | Just r' <- mktype m r  = Just $ Native "fn_" [r']
 
 mktype m (T.TypeApp a
             (T.TypeApp
@@ -321,7 +321,7 @@ templateArgs = sortBy (compare `on` runType . fst) . nub . go []
     go args (EffectFunction b, EffectFunction b') = go args (b, b')
     go args (Native t _, EffectFunction t') =
       trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args
-    go args (Native _ ts, Native _ ts') = args ++ concatMap (go []) (zip ts ts')
+    go args (Native _ ts@(_:_), Native _ ts'@(_:_)) = args ++ concatMap (go []) (zip ts ts')
     go args (Native t _, Template t' []) =
       trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args -- ++ [(t', t)]
     go args (Native t _, Map ts) =

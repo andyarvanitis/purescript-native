@@ -113,21 +113,24 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       Just (_, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
         fs' = filter (isNormalFn) fs
-    cpps <- mapM toCpp (zip fns fs')
-    return $ CppStruct (unqualClass, Right (catMaybes typs)) [] cpps []
+        tmps = nub . sort $ concatMap templparams (catMaybes typs)
+        typs' = catMaybes typs
+    cpps <- mapM (toCpp tmps) (zip fns fs')
+    return $ CppStruct (unqualClass, tmps) typs' [] cpps []
     where
-    toCpp :: ((String, T.Type), CI.Expr Ann) -> m Cpp
-    toCpp ((name, _), CI.AnonFunction ty ags sts) = do
+    toCpp :: [(String, Int)] -> ((String, T.Type), CI.Expr Ann) -> m Cpp
+    toCpp tmps ((name, _), CI.AnonFunction ty ags sts) = do
       fn' <- declToCpp TopLevel $ CI.Function ty (Ident name) ags sts
-      return (addQual CppStatic fn')
-    toCpp ((name, _), e@CI.Literal{})
+      return (addQual CppStatic (removeTemplates tmps fn'))
+    toCpp tmps ((name, _), e@CI.Literal{})
       | Just ty <- tyFromExpr e = declToCpp InnerLevel (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
-    toCpp ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
+    toCpp tmps ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
       | Just ty <- tyFromExpr e,
-        tparams@(_:_) <- templparams' (mktype mn ty) = varDeclToFn name e ty tparams [CppInline, CppStatic]
-    toCpp ((name, _), e)
+        tparams@(_:_) <- templparams' (mktype mn ty)
+       = varDeclToFn name e ty (filter (`notElem` tmps) tparams) [CppInline, CppStatic]
+    toCpp tmps ((name, _), e)
       | Just ty <- tyFromExpr e = declToCpp InnerLevel (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
-    toCpp ((name, _), e) = return $ trace (name ++ " :: " ++ show e ++ "\n") CppNoOp
+    toCpp tmps ((name, _), e) = return $ trace (name ++ " :: " ++ show e ++ "\n") CppNoOp
 
     addQual :: CppQualifier -> Cpp -> Cpp
     addQual q (CppFunction name tmps args rty qs cpp) = CppFunction name tmps args rty (q : qs) cpp
@@ -238,7 +241,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                           (concatMap constraintParams constraints)
         classTemplParams = zip tmps $ fromMaybe 0 . flip lookup fnTemplPs <$> tmps
     in
-    return $ CppStruct (ctor, Left classTemplParams)
+    return $ CppStruct (ctor, classTemplParams)
+                       []
                        (toStrings <$> constraints)
                        (toCpp tmps <$> fns)
                        []
@@ -500,7 +504,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go (CppNamespace ns cpps) = fromStruct ns <$> cpps
         go _ = []
         fromStruct :: String -> Cpp -> Cpp
-        fromStruct ns (CppStruct (name, Left tmps) _ _ _) =
+        fromStruct ns (CppStruct (name, tmps) _ _ _ _) =
           CppTypeAlias (name, tmps) (ns ++ "::" ++ name, tmps) "managed"
         fromStruct _ _ = CppNoOp
 
@@ -511,8 +515,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go :: (Qualified ProperName, TypeKind) -> [Cpp]
         go (_, DataType _ [_]) = []
         go (typ, DataType ts _) =
-          [CppStruct (qual typ, Left (flip (,) 0 . runType . flip Template [] . fst <$> ts))
-                     [] []
+          [CppStruct (qual typ, flip (,) 0 . runType . flip Template [] . fst <$> ts)
+                     [] [] []
                      [CppFunction (qual typ) [] [] Nothing [CppVirtual, CppDestructor, CppDefault] CppNoOp]]
         go _ = []
 
@@ -534,7 +538,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           tmps = flip (,) 0 . runType . flip Template [] . fst <$> ts
           ctorStruct :: (ProperName, [T.Type]) -> Cpp
           ctorStruct (ctor, fields) =
-            CppStruct (name, Left tmps) supers [] members
+            CppStruct (name, tmps) [] supers [] members
             where
             name :: String
             name = P.prettyPrintCpp [flip CppData [] $ runProperName ctor]
@@ -643,6 +647,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     | Just (Native t' _) <- t = CppAccessor (Just (Native t' ps)) prop cpp
     | otherwise = CppAccessor (Just (Native [] ps)) prop cpp
   asTemplate _ cpp = cpp
+
+  removeTemplates :: [(String, Int)] -> Cpp -> Cpp
+  removeTemplates tmps = everywhereOnCpp remove
+    where
+    remove (CppFunction name ts args rtyp qs body) =
+      let ts' = filter (`notElem` tmps) ts in CppFunction name ts' args rtyp qs body
+    remove other = other
 
   -- |
   -- Find a type class instance in scope by name, retrieving its class name and construction types.

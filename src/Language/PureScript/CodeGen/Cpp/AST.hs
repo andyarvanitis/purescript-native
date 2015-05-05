@@ -102,7 +102,7 @@ data Cpp
   -- |
   -- A C++ struct declaration (name with any template types, superclasses, class methods, instance methods)
   --
-  | CppStruct (String, Either [(String, Int)] [Type]) [(String, [String])] [Cpp] [Cpp]
+  | CppStruct (String, [(String, Int)]) [Type] [(String, [String])] [Cpp] [Cpp]
   -- |
   -- 'data' constructor type (name, template types)
   --
@@ -256,7 +256,7 @@ everywhereOnCpp f = go
   go (CppMapAccessor j1 j2) = f (CppMapAccessor (go j1) (go j2))
   go (CppFunction name tmps args rty qs j) = f (CppFunction name tmps args rty qs (go j))
   go (CppLambda args rty j) = f (CppLambda args rty (go j))
-  go (CppStruct name supers cms ims) = f (CppStruct name supers (map go cms) (map go ims))
+  go (CppStruct name typs supers cms ims) = f (CppStruct name typs supers (map go cms) (map go ims))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
   go (CppPartialApp j cpp typs n) = f (CppPartialApp (go j) (map go cpp) typs n)
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
@@ -290,7 +290,7 @@ everywhereOnCppTopDown f = go . f
   go (CppMapAccessor j1 j2) = CppMapAccessor (go (f j1)) (go (f j2))
   go (CppFunction name tmps args rty qs j) = CppFunction name tmps args rty qs (go (f j))
   go (CppLambda args rty j) = CppLambda args rty (go (f j))
-  go (CppStruct name supers cms ims) = CppStruct name supers (map (go . f) cms) (map (go . f) ims)
+  go (CppStruct name typs supers cms ims) = CppStruct name typs supers (map (go . f) cms) (map (go . f) ims)
   go (CppApp j cpp) = CppApp (go (f j)) (map (go . f) cpp)
   go (CppPartialApp j cpps typs n) = CppPartialApp (go (f j)) (map (go . f) cpps) typs n
   go (CppConditional j1 j2 j3) = CppConditional (go (f j1)) (go (f j2)) (go (f j3))
@@ -323,7 +323,7 @@ everythingOnCpp (<>) f = go
   go j@(CppMapAccessor j1 j2) = f j <> go j1 <> go j2
   go j@(CppFunction _ _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ j1) = f j <> go j1
-  go j@(CppStruct _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)
+  go j@(CppStruct _ _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppPartialApp j1 cpp _ _) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
