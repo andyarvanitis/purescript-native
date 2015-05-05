@@ -214,6 +214,8 @@ make outputDir ms prefix = do
     writeTextFile (outputDir </> "PureScript/memory.hh")      $ BU.toString $(embedFile "include/memory.hh")
     writeTextFile (outputDir </> "PureScript/PureScript.hh")  $ BU.toString $(embedFile "include/purescript.hh")
     writeTextFile (outputDir </> "PureScript/shared_list.hh") $ BU.toString $(embedFile "include/shared_list.hh")
+    -- TODO: temporary
+    writeTextFile (outputDir </> "PureScript/prelude_ffi.hh") $ BU.toString $(embedFile "include/prelude_ffi.hh")
 
   (desugared, nextVar) <- runSupplyT 0 $ zip (map fst marked) <$> desugar (map snd marked)
 

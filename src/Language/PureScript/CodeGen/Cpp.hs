@@ -74,6 +74,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   comments <- not <$> asks optionsNoComments
   datas <- modDatasToCpps
   let moduleHeader = (CppInclude <$> cppImports')
+                  ++ [CppRaw "#include \"PureScript/prelude_ffi.hh\""] -- TODO: temporary
                   ++ P.linebreak
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ toHeader optimized']
