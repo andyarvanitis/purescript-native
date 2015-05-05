@@ -109,6 +109,10 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
+  match (CppSequence cpps) = fmap concat $ sequence
+    [ return "\n"
+    , prettyStatements cpps
+    ]
   match (CppInclude name) =
     let fullpath = (dotsTo '/' name) ++ '/' : (last . words . dotsTo ' ' $ name) in
     fmap concat $ sequence

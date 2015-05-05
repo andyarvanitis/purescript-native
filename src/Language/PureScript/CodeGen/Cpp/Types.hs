@@ -71,6 +71,10 @@ data CppQualifier
   --
   | CppInline
   -- |
+  -- Constant expression
+  --
+  | CppConstExpr
+  -- |
   -- Ignored (ignored but still visible, e.g. commented out)
   --
   | CppIgnored
@@ -301,6 +305,7 @@ runQualifier CppConstructor = ""
 runQualifier CppDestructor = "~"
 runQualifier CppDefault = ""
 runQualifier CppDelete = ""
+runQualifier CppConstExpr = "constexpr"
 runQualifier CppIgnored = "//"
 
 templateArgs :: (Type, Type) -> [(Type, Type)]

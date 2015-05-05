@@ -123,15 +123,30 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     toCpp tmps ((name, _), CI.AnonFunction ty ags sts) = do
       fn' <- declToCpp TopLevel $ CI.Function ty (Ident name) ags sts
       return (addQual CppStatic (removeTemplates tmps fn'))
-    toCpp tmps ((name, _), e@CI.Literal{})
-      | Just ty <- tyFromExpr e = declToCpp InnerLevel (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
     toCpp tmps ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
       | Just ty <- tyFromExpr e,
         tparams@(_:_) <- templparams' (mktype mn ty)
        = varDeclToFn name e ty (filter (`notElem` tmps) tparams) [CppInline, CppStatic]
     toCpp tmps ((name, _), e)
-      | Just ty <- tyFromExpr e = declToCpp InnerLevel (CI.VarDecl (Nothing, [], Just ty, Nothing) (Ident name) e)
+      | Just ty <- tyFromExpr e,
+        Just Function{} <- mktype mn ty =
+        varDeclToFn name e ty [] [CppInline, CppStatic]
+    toCpp tmps ((name, _), e@(CI.Literal _ NumericLiteral{}))
+      | Just ty <- tyFromExpr e = literalCpp name ty e
+    toCpp tmps ((name, _), e@(CI.Literal _ BooleanLiteral{}))
+      | Just ty <- tyFromExpr e = literalCpp name ty e
+    toCpp tmps ((name, _), e@(CI.Literal _ CharLiteral{}))
+      | Just ty <- tyFromExpr e = literalCpp name ty e
+    toCpp tmps ((name, _), e)
+      | Just ty <- tyFromExpr e = do
+        e' <- exprToCpp e
+        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic] (Just e')
     toCpp tmps ((name, _), e) = return $ trace (name ++ " :: " ++ show e ++ "\n") CppNoOp
+
+    literalCpp :: String -> T.Type -> CI.Expr Ann -> m Cpp
+    literalCpp name ty e = do
+        e' <- exprToCpp e
+        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic, CppConstExpr] (Just e')
 
     addQual :: CppQualifier -> Cpp -> Cpp
     addQual q (CppFunction name tmps args rty qs cpp) = CppFunction name tmps args rty (q : qs) cpp
@@ -146,8 +161,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- Note: for vars, avoiding templated args - a C++14 feature - for now
   declToCpp TopLevel (CI.VarDecl _ (Ident name) expr)
     | Just ty <- tyFromExpr expr,
-      ty'@(Just Function{}) <- mktype mn ty,
-      tparams@(_:_) <- templparams' ty' = varDeclToFn name expr ty tparams [CppInline]
+      -- ty'@(Just Function{}) <- mktype mn ty,
+      tparams@(_:_) <- templparams' (mktype mn ty) = varDeclToFn name expr ty tparams [CppInline]
 
   declToCpp _ (CI.VarDecl (_, _, ty, _) ident expr) = do
     expr' <- exprToCpp expr
@@ -682,6 +697,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     go :: Cpp -> Maybe Cpp
     go cpp@(CppNamespace{}) = Just cpp
+    go (CppStruct (s, []) ts supers ms@(_:_) [])
+      | ms'@(_:_) <- fromConst <$> ms = Just (CppStruct (s, []) ts supers ms' [])
+      where
+      fromConst :: Cpp -> Cpp
+      fromConst (CppVariableIntroduction (name, typ@(Just _)) qs cpp)
+        | CppConstExpr `notElem` qs = CppVariableIntroduction (name, typ) qs Nothing
+      fromConst cpp = cpp
     go cpp@(CppStruct{}) = Just cpp
     go (CppFunction name [] args rtyp qs _) = Just (CppFunction name [] args rtyp qs CppNoOp)
     go cpp@(CppFunction{}) = Just cpp
@@ -693,6 +715,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     go :: Cpp -> Maybe Cpp
     go cpp@(CppFunction _ [] _ _ _ _) = Just cpp
+    go (CppStruct (s, []) ts _ ms@(_:_) _)
+      | ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
+      where
+      fromConst :: Cpp -> Maybe Cpp
+      fromConst (CppVariableIntroduction (name, typ@(Just _)) qs cpp)
+        | CppConstExpr `notElem` qs && CppStatic `elem` qs =
+          let fullname = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name in
+          Just (CppVariableIntroduction (fullname, typ) [] cpp)
+      fromConst _ = Nothing
     go _ = Nothing
 
 isMain :: ModuleName -> Bool
