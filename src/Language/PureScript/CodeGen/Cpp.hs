@@ -192,30 +192,43 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                          block
 
   declToCpp TopLevel (CI.Function (_, _, Just ty, _) ident [] body@[CI.Return _ e])
-    | typ <- mktype mn ty,
+    | typ@(Just typ') <- mktype mn ty,
       tmps <- templparams' typ = do
-      e' <- exprToCpp e
-      dtmps' <- dtmps
-      let tmps' = flip Template [] . fst <$> tmps
-      let f | ftmps@(_:_) <- filter (`notElem` dtmps') tmps' = asTemplate ftmps e'
-            | otherwise = e'
-          block = CppBlock [CppReturn (CppApp f [CppVar P.mkarg])]
-      return $ CppFunction (identToCpp ident)
-                           tmps
-                           [(P.mkarg, argtype typ)]
-                           (rettype typ)
-                           []
-                           block
+        (e', dtmps', fns', dict) <- fromDict
+        f <- exprToCpp e'
+        let tmps' = flip Template [] . fst <$> tmps
+            templMapping | Just (Just ftyp') <- lookup (fname f) fns' = templateArgs (ftyp', typ')
+                         | otherwise = []
+            dictTempls = catMaybes $ flip lookup templMapping <$> dtmps'
+            f' | ftmps@(_:_) <- filter (`notElem` dictTempls) tmps'
+                 = CppApp (asTemplate ftmps f) [convertArg dictTempls dict]
+               | otherwise = f
+            block = CppBlock [CppReturn (CppApp f' [CppVar P.mkarg])]
+        return $ CppFunction (identToCpp ident)
+                             tmps
+                             [(P.mkarg, argtype typ)]
+                             (rettype typ)
+                             []
+                             block
       where
-      -- look for dict arg
-      dtmps :: m [Type]
-      dtmps | (_, (arg:_)) <- unApp e [],
-              isDict arg = do
-                arg' <- exprToCpp arg
-                return $ case arg' of
-                           (CppInstance _ _ _ ts) -> catMaybes $ snd <$> ts
-                           _ -> []
-            | otherwise = return []
+      fromDict :: m (CI.Expr Ann, [Type], [(String, Maybe Type)], Cpp)
+      fromDict | (f, (arg:_)) <- unApp e [],
+                 isDict arg = do
+                   arg' <- exprToCpp arg
+                   return $ case arg' of
+                              (CppInstance _ (_, fns) _ ts) -> (f, catMaybes $ snd <$> ts, fns, arg')
+                              _ -> (e, [], [], CppNoOp)
+               | otherwise = return (e, [], [], CppNoOp)
+      fname :: Cpp -> String
+      fname (CppVar name) = name
+      fname (CppApp (CppVar name) _) = name
+      fname cpp = P.prettyPrintCpp [cpp]
+      convertArg :: [Type] -> Cpp -> Cpp
+      convertArg ts (CppInstance m cls i ps) =
+        let m' = if m == runModuleName mn
+                   then []
+                   else m in CppInstance m' cls i (zip (fst <$> ps) (Just <$> ts))
+      convertArg _ cpp = cpp
 
   -- C++ doesn't support nested functions, so use lambdas
   declToCpp InnerLevel (CI.Function (_, _, Just ty, _) ident [arg] body) = do
@@ -453,7 +466,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           go :: Cpp -> (Maybe Cpp, [(Type, Type)])
           go (CppInstance mname (cn, fns) inst params)
             | runModuleName mn' == mname,
-              identToCpp ident `elem` fns
+              identToCpp ident `elem` (fst <$> fns)
               = let paramNames = fst <$> params
                     params' = if any (isNothing . snd) params
                                 then let ps = (flip lookup templArgs . flip Template [] . fst) <$> params
@@ -481,7 +494,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))
     | Just (qname@(Qualified (Just mn') (ProperName cname)), types') <- findInstance ident,
       Just (params, _, fns) <- findClass qname
-    = let fs' = fst <$> fns
+    = let fs' = (\(f,t) -> (f, mktype mn t)) <$> fns
           params' = runType . flip Template [] <$> params
       in return $ CppInstance (runModuleName mn') (cname, fs') instname (zip params' types')
  -- Constraint typeclass dictionary
@@ -493,7 +506,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       mname <- reverse . drop 1 $ dropWhile (not . isPunctuation) reversedName,
       Just (params, supers, fns) <- findClass (Qualified (Just (ModuleName [ProperName mname])) (ProperName cname))
     = let superFns = getFns supers
-          fs' = fst <$> fns ++ superFns
+          fs' = (\(f,t) -> (f, mktype mn t)) <$> fns ++ superFns
       in return $ CppInstance mname (cname, fs') [] (zip params (Just . flip Template [] <$> params))
     where
     getFns :: [T.Constraint] -> [(String, T.Type)]
