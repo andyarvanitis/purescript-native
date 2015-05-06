@@ -37,7 +37,23 @@ data Type = Native String [Type]
           | Template String [Type]
           | DeclType String
           | EffectFunction Type
-          deriving (Eq, Show, Data, Typeable)
+          deriving (Show, Data, Typeable)
+
+instance Eq Type where
+  (Native t ts) == (Native t' ts') = t == t' && ts == ts'
+  (Function a b) == (Function a' b') = a == a' && b == b'
+  (List a) == (List a') = a == a'
+  (Map ms) == (Map ms') = ms == ms'
+  (Template t ts) == (Template t' ts') = cap t == cap t' && ts == ts'
+    where
+    cap :: String -> String
+    cap (c:cs) = toUpper c : cs
+    cap s = s
+  (DeclType e) == (DeclType e') = e == e'
+  (EffectFunction b) == (EffectFunction b') = b == b'
+  a == b = False
+  a /= b = not (a == b)
+
 -- |
 -- Value C++11 qualifiers
 --

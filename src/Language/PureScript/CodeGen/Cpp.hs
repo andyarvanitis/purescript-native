@@ -191,6 +191,32 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                          []
                          block
 
+  declToCpp TopLevel (CI.Function (_, _, Just ty, _) ident [] body@[CI.Return _ e])
+    | typ <- mktype mn ty,
+      tmps <- templparams' typ = do
+      e' <- exprToCpp e
+      dtmps' <- dtmps
+      let tmps' = flip Template [] . fst <$> tmps
+      let f | ftmps@(_:_) <- filter (`notElem` dtmps') tmps' = asTemplate ftmps e'
+            | otherwise = e'
+          block = CppBlock [CppReturn (CppApp f [CppVar P.mkarg])]
+      return $ CppFunction (identToCpp ident)
+                           tmps
+                           [(P.mkarg, argtype typ)]
+                           (rettype typ)
+                           []
+                           block
+      where
+      -- look for dict arg
+      dtmps :: m [Type]
+      dtmps | (_, (arg:_)) <- unApp e [],
+              isDict arg = do
+                arg' <- exprToCpp arg
+                return $ case arg' of
+                           (CppInstance _ _ _ ts) -> catMaybes $ snd <$> ts
+                           _ -> []
+            | otherwise = return []
+
   -- C++ doesn't support nested functions, so use lambdas
   declToCpp InnerLevel (CI.Function (_, _, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
@@ -245,7 +271,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                (Just (CppLambda [(identToCpp arg, Nothing)] Nothing block))
 
   declToCpp InnerLevel CI.Function{} = return CppNoOp -- TODO: Are these possible?
-  declToCpp _ (CI.Function (_, _, Just _, _) _ _ _) = return CppNoOp -- TODO: support non-curried functions?
+  declToCpp _ (CI.Function (_, _, Just _, _) _ (_:_) _) = return CppNoOp -- TODO: support non-curried functions?
 
   -- |
   -- Typeclass declaration
@@ -468,7 +494,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       Just (params, supers, fns) <- findClass (Qualified (Just (ModuleName [ProperName mname])) (ProperName cname))
     = let superFns = getFns supers
           fs' = fst <$> fns ++ superFns
-      in return $ CppInstance mname (cname, fs') [] (zip params (repeat Nothing))
+      in return $ CppInstance mname (cname, fs') [] (zip params (Just . flip Template [] <$> params))
     where
     getFns :: [T.Constraint] -> [(String, T.Type)]
     getFns = concatMap go
@@ -612,11 +638,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   varDeclToFn name expr ty tparams qs = do
     e' <- exprToCpp expr
     let tparams' = flip Template [] . fst <$> tparams
-        block = CppBlock [CppReturn (CppApp (asTemplate tparams' e') [CppVar "arg"])]
+        block = CppBlock [CppReturn (CppApp (asTemplate tparams' e') [CppVar P.mkarg])]
         typ = mktype mn ty
     return $ CppFunction name
                          tparams
-                         [("arg", argtype typ)]
+                         [(P.mkarg, argtype typ)]
                          (rettype typ)
                          qs
                          block
@@ -656,12 +682,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   tyFromExpr' :: CI.Expr Ann -> Maybe Type
   tyFromExpr' expr = tyFromExpr expr >>= mktype mn
 
+  -- TODO: add type/template info to CppVar?
   asTemplate :: [Type] -> Cpp -> Cpp
   asTemplate [] cpp = cpp
   asTemplate ps (CppVar name) = CppVar (name ++ '<' : intercalate "," (runType <$> ps) ++ ">")
   asTemplate ps (CppAccessor t prop cpp)
     | Just (Native t' _) <- t = CppAccessor (Just (Native t' ps)) prop cpp
     | otherwise = CppAccessor (Just (Native [] ps)) prop cpp
+  asTemplate ps (CppApp (CppVar f) args) = CppApp (CppVar $ f ++ '<' : intercalate "," (runType <$> ps) ++ ">") args
   asTemplate _ cpp = cpp
 
   removeTemplates :: [(String, Int)] -> Cpp -> Cpp

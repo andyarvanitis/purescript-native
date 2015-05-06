@@ -17,6 +17,7 @@
 
 module Language.PureScript.Pretty.Cpp (
     prettyPrintCpp,
+    mkarg,
     linebreak
 ) where
 
@@ -475,6 +476,9 @@ templDecl' (Right _) = templDecl []
 
 angles :: String -> String
 angles s = '<' : s ++ ">"
+
+mkarg :: String
+mkarg = "arg"
 
 linebreak :: [Cpp]
 linebreak = [CppRaw ""]
