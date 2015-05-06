@@ -107,56 +107,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
   declToCpp :: DeclLevel -> CI.Decl Ann -> m Cpp
   -- |
-  -- Typeclass instance definition
+  -- Typeclass instance definitions
   --
-  declToCpp _ (CI.VarDecl _ ident expr)
-    | Just (classname@(Qualified _ (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
-      Just (_, _, fns) <- findClass classname = do
-    let (_, fs) = unApp expr []
-        fs' = filter (isNormalFn) fs
-        tmps = nub . sort $ concatMap templparams (catMaybes typs)
-        typs' = catMaybes typs
-    cpps <- mapM (toCpp tmps) (zip fns fs')
-    return $ CppStruct (unqualClass, tmps) typs' [] cpps []
-    where
-    toCpp :: [(String, Int)] -> ((String, T.Type), CI.Expr Ann) -> m Cpp
-    toCpp tmps ((name, _), CI.AnonFunction ty ags sts) = do
-      fn' <- declToCpp TopLevel $ CI.Function ty (Ident name) ags sts
-      return (addQual CppStatic (removeTemplates tmps fn'))
-    toCpp tmps ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
-      | Just ty <- tyFromExpr e,
-        tparams@(_:_) <- templparams' (mktype mn ty)
-       = varDeclToFn name e ty (filter (`notElem` tmps) tparams) [CppInline, CppStatic]
-    toCpp tmps ((name, _), e)
-      | Just ty <- tyFromExpr e,
-        Just Function{} <- mktype mn ty =
-        varDeclToFn name e ty [] [CppInline, CppStatic]
-    toCpp tmps ((name, _), e@(CI.Literal _ NumericLiteral{}))
-      | Just ty <- tyFromExpr e = literalCpp name ty e
-    toCpp tmps ((name, _), e@(CI.Literal _ BooleanLiteral{}))
-      | Just ty <- tyFromExpr e = literalCpp name ty e
-    toCpp tmps ((name, _), e@(CI.Literal _ CharLiteral{}))
-      | Just ty <- tyFromExpr e = literalCpp name ty e
-    toCpp tmps ((name, _), e)
-      | Just ty <- tyFromExpr e = do
-        e' <- exprToCpp e
-        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic] (Just e')
-    toCpp tmps ((name, _), e) = return $ trace (name ++ " :: " ++ show e ++ "\n") CppNoOp
-
-    literalCpp :: String -> T.Type -> CI.Expr Ann -> m Cpp
-    literalCpp name ty e = do
-        e' <- exprToCpp e
-        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic, CppConstExpr] (Just e')
-
-    addQual :: CppQualifier -> Cpp -> Cpp
-    addQual q (CppFunction name tmps args rty qs cpp) = CppFunction name tmps args rty (q : qs) cpp
-    addQual _ cpp = cpp
-
-    isNormalFn :: (CI.Expr Ann) -> Bool
-    isNormalFn (CI.AnonFunction _
-                 [Ident "__unused"]
-                 [CI.Return (_, _, Nothing, Nothing) (CI.Var (_, _, Nothing, Nothing) _)]) = False
-    isNormalFn _ = True
+  declToCpp TopLevel (CI.VarDecl _ ident expr)
+    | Just _ <- findInstance (Qualified (Just mn) ident) = instanceDeclToCpp ident expr
+  declToCpp TopLevel (CI.Function ty@(_, _, Just T.ConstrainedType{}, _) ident ags [CI.Return _ expr])
+    | Just _ <- findInstance (Qualified (Just mn) ident)
+     = instanceDeclToCpp ident expr
 
   -- Note: for vars, avoiding templated args - a C++14 feature - for now
   declToCpp TopLevel (CI.VarDecl _ (Ident name) expr)
@@ -345,6 +302,56 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp _ (CI.Constructor (_, _, _, _) _ _ _) = return CppNoOp
 
   declToCpp TopLevel _ = return CppNoOp -- TODO: includes Function IsNewtype
+
+  instanceDeclToCpp :: Ident -> CI.Expr Ann -> m Cpp
+  instanceDeclToCpp ident expr
+    | Just (classname@(Qualified _ (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
+      Just (_, _, fns) <- findClass classname = do
+    let (_, fs) = unApp expr []
+        fs' = filter (isNormalFn) fs
+        tmps = nub . sort $ concatMap templparams (catMaybes typs)
+        typs' = catMaybes typs
+    cpps <- mapM (toCpp tmps) (zip fns fs')
+    return $ CppStruct (unqualClass, tmps) typs' [] cpps []
+    where
+    toCpp :: [(String, Int)] -> ((String, T.Type), CI.Expr Ann) -> m Cpp
+    toCpp tmps ((name, _), CI.AnonFunction ty ags sts) = do
+      fn' <- declToCpp TopLevel $ CI.Function ty (Ident name) ags sts
+      return (addQual CppStatic (removeTemplates tmps fn'))
+    toCpp tmps ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
+      | Just ty <- tyFromExpr e,
+        tparams@(_:_) <- templparams' (mktype mn ty)
+       = varDeclToFn name e ty (filter (`notElem` tmps) tparams) [CppInline, CppStatic]
+    toCpp tmps ((name, _), e)
+      | Just ty <- tyFromExpr e,
+        Just Function{} <- mktype mn ty =
+        varDeclToFn name e ty [] [CppInline, CppStatic]
+    toCpp tmps ((name, _), e@(CI.Literal _ NumericLiteral{}))
+      | Just ty <- tyFromExpr e = literalCpp name ty e
+    toCpp tmps ((name, _), e@(CI.Literal _ BooleanLiteral{}))
+      | Just ty <- tyFromExpr e = literalCpp name ty e
+    toCpp tmps ((name, _), e@(CI.Literal _ CharLiteral{}))
+      | Just ty <- tyFromExpr e = literalCpp name ty e
+    toCpp tmps ((name, _), e)
+      | Just ty <- tyFromExpr e = do
+        e' <- exprToCpp e
+        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic] (Just e')
+    toCpp tmps ((name, _), e) = return $ trace (name ++ " :: " ++ show e ++ "\n") CppNoOp
+
+    literalCpp :: String -> T.Type -> CI.Expr Ann -> m Cpp
+    literalCpp name ty e = do
+        e' <- exprToCpp e
+        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic, CppConstExpr] (Just e')
+
+    addQual :: CppQualifier -> Cpp -> Cpp
+    addQual q (CppFunction name tmps args rty qs cpp) = CppFunction name tmps args rty (q : qs) cpp
+    addQual _ cpp = cpp
+
+    isNormalFn :: (CI.Expr Ann) -> Bool
+    isNormalFn (CI.AnonFunction _
+                 [Ident "__unused"]
+                 [CI.Return (_, _, Nothing, Nothing) (CI.Var (_, _, Nothing, Nothing) _)]) = False
+    isNormalFn _ = True
 
   statmentToCpp :: CI.Statement Ann -> m Cpp
   statmentToCpp (CI.Expr e) = exprToCpp e
