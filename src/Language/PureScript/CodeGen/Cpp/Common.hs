@@ -119,6 +119,7 @@ nameIsCppReserved name =
               , "final"
               , "float"
               , "fn"
+              , "fn_"
               , "for"
               , "friend"
               , "get"

@@ -99,6 +99,8 @@ data CppQualifier
 
 runType :: Type -> String
 runType (Native t []) = t
+-- TODO: make this a separate type
+runType (Native "fn_" [t]) = "fn_<" ++ runType t ++ ">::template _"
 runType (Native t ts) = t ++ '<' : intercalate "," (map runType ts) ++ ">"
 runType tt@(Function a b) = typeName tt ++ '<' : runType a ++ "," ++ runType b ++ ">"
 runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
