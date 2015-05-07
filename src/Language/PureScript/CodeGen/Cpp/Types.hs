@@ -206,7 +206,9 @@ mktype m app@T.TypeApp{}
 
 mktype m (T.TypeApp T.Skolem{} b) = mktype m b
 
+-- TODO: Need to review this due to refactoring
 mktype m app@(T.TypeApp a b)
+  | (T.TypeConstructor _) <- a, T.TypeApp{} <- b, Just t <- mktype m b = Just t
   | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Just $ Native (runType t) []
   | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Just $ Native (runType t) ts
   | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Just $ Native (runType t) []

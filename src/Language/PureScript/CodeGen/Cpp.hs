@@ -112,8 +112,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp TopLevel (CI.VarDecl _ ident expr)
     | Just _ <- findInstance (Qualified (Just mn) ident) = instanceDeclToCpp ident expr
   declToCpp TopLevel (CI.Function ty@(_, _, Just T.ConstrainedType{}, _) ident ags [CI.Return _ expr])
-    | Just _ <- findInstance (Qualified (Just mn) ident)
-     = instanceDeclToCpp ident expr
+    | Just _ <- findInstance (Qualified (Just mn) ident) = instanceDeclToCpp ident expr
 
   -- Note: for vars, avoiding templated args - a C++14 feature - for now
   declToCpp TopLevel (CI.VarDecl _ (Ident name) expr)
@@ -400,8 +399,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp :: CI.Expr Ann -> m Cpp
   exprToCpp (CI.Literal _ lit) =
     literalToValueCpp lit
-  exprToCpp (CI.Accessor _ prop@(CI.Literal _ (StringLiteral name)) expr@(CI.Var (_, _, ty, _) _))
-    | not ("__superclass_" `isPrefixOf` name) = do -- TODO: fix when proper Meta info added
+   -- TODO: Change how this is done when proper Meta info added
+  exprToCpp z@(CI.Accessor tt (CI.Literal _ (StringLiteral name)) expr)
+    | "__superclass_" `isPrefixOf` name = return CppNoOp
+  exprToCpp (CI.Accessor _ prop@(CI.Literal _ (StringLiteral name)) expr@(CI.Var (_, _, ty, _) _)) = do
     expr' <- exprToCpp expr
     prop' <- exprToCpp prop
     return (toCpp expr' prop')
