@@ -450,7 +450,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
       CI.Var (_, _, _, Just IsTypeClassConstructor) _ ->
         return CppNoOp
-      CI.Var (_, _, Just ty, _) (Qualified (Just mn') ident) -> do
+      CI.Var (_, _, ty, _) (Qualified (Just mn') ident) -> do
         let (targs, argsToApply) = if length normalArgs == length args
                                      then (templArgs, args')
                                      else (templArgsFromDicts, filteredArgs)
@@ -469,7 +469,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         templArgs :: [(Type, Type)]
         templArgs = sortBy (compare `on` runType . fst) . nub . concat $ templateArgs <$> tysMapping
           where
-          fnTyList = maybe [] (fnTypesN (length normalArgs)) (mktype mn ty)
+          fnTyList = maybe [] (fnTypesN (length normalArgs)) (ty >>= mktype mn)
           exprTyList = (tyFromExpr' <$> normalArgs) ++ [tyFromExpr' e]
           tysMapping = (\(a,b) -> (a, fromJust b)) <$> filter (isJust . snd) (zip fnTyList exprTyList)
 
