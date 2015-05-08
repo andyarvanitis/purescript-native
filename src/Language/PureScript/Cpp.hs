@@ -311,9 +311,6 @@ importPrelude = addDefaultImport preludeModuleName
 version :: Version
 version = Paths.version
 
-dotsTo :: Char -> String -> String
-dotsTo chr = map (\c -> if c == '.' then chr else c)
-
 -- TODO: quick and dirty for now -- explicit file list would be better
 cmakeListsTxt :: String
 cmakeListsTxt = intercalate "\n" lines'

@@ -18,7 +18,8 @@
 module Language.PureScript.Pretty.Cpp (
     prettyPrintCpp,
     mkarg,
-    linebreak
+    linebreak,
+    dotsTo
 ) where
 
 import Data.List

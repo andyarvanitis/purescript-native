@@ -74,11 +74,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
   datas <- modDatasToCpps
-  let moduleHeader = (CppInclude <$> cppImports')
+  let moduleHeader = headerBegin
+                  ++ P.linebreak
+                  ++ (CppInclude <$> cppImports')
                   ++ [CppRaw "#include \"PureScript/prelude_ffi.hh\""] -- TODO: temporary
                   ++ P.linebreak
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ toHeader optimized']
+                  ++ P.linebreak
+                  ++ headerEnd
   let bodyCpps = toBody optimized'
       moduleBody = CppInclude (runModuleName mn) : P.linebreak
                 ++ (if null bodyCpps
@@ -775,6 +779,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           Just (CppVariableIntroduction (fullname, typ) [] cpp)
       fromConst _ = Nothing
     go _ = Nothing
+
+  headerBegin :: [Cpp]
+  headerBegin = [CppRaw ("#ifndef " ++ headerModName),
+                 CppRaw ("#define " ++ headerModName)]
+  headerEnd :: [Cpp]
+  headerEnd = [CppRaw ("#endif // " ++ headerModName)]
+  headerModName :: String
+  headerModName = P.dotsTo '_' (runModuleName mn ++ "_HH")
 
 isMain :: ModuleName -> Bool
 isMain (ModuleName [ProperName "Main"]) = True
