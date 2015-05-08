@@ -52,9 +52,9 @@ literals = mkPattern' match
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
   match (CppArrayLiteral xs) = fmap concat $ sequence
-    [ return "[ "
+    [ return "{ "
     , fmap (intercalate ", ") $ forM xs prettyPrintCpp'
-    , return " ]"
+    , return " }"
     ]
   match (CppObjectLiteral []) = return "nullptr"
   match (CppObjectLiteral ps) = fmap concat $ sequence
