@@ -34,6 +34,7 @@ import qualified Data.Map as M
 import Control.Applicative
 import Control.Monad.Reader (MonadReader, asks)
 import Control.Monad.Supply.Class
+import Control.Monad (when)
 
 import Language.PureScript.AST.Declarations (ForeignCode(..))
 import Language.PureScript.CodeGen.Cpp.AST as AST
@@ -311,6 +312,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         tmps = nub . sort $ concatMap templparams (catMaybes typs)
         typs' = catMaybes typs
     cpps <- mapM (toCpp tmps) (zip fns fs')
+    when (length fns /= length fs') (error $ "Instance function list mismatch!\n" ++ show fs')
     return $ CppStruct (unqualClass, tmps) typs' [] cpps []
     where
     toCpp :: [(String, Int)] -> ((String, T.Type), CI.Expr Ann) -> m Cpp
@@ -347,9 +349,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     addQual _ cpp = cpp
 
     isNormalFn :: (CI.Expr Ann) -> Bool
-    isNormalFn (CI.AnonFunction _
-                 [Ident "__unused"]
-                 [CI.Return (_, _, Nothing, Nothing) (CI.Var (_, _, Nothing, Nothing) _)]) = False
+    isNormalFn (CI.AnonFunction _ [Ident "__unused"] [CI.Return _ e]) | Nothing <- tyFromExpr e = False
     isNormalFn _ = True
 
   statmentToCpp :: CI.Statement Ann -> m Cpp
@@ -399,9 +399,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp :: CI.Expr Ann -> m Cpp
   exprToCpp (CI.Literal _ lit) =
     literalToValueCpp lit
-   -- TODO: Change how this is done when proper Meta info added
-  exprToCpp z@(CI.Accessor tt (CI.Literal _ (StringLiteral name)) expr)
-    | "__superclass_" `isPrefixOf` name = return CppNoOp
+
+  -- TODO: Change how this is done when proper Meta info added
+  exprToCpp (CI.Accessor tt (CI.Literal _ (StringLiteral name)) expr)
+    | "__superclass_" `isPrefixOf` name = exprToCpp expr
   exprToCpp (CI.Accessor _ prop@(CI.Literal _ (StringLiteral name)) expr@(CI.Var (_, _, ty, _) _)) = do
     expr' <- exprToCpp expr
     prop' <- exprToCpp prop
@@ -483,7 +484,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                     arg' = CppInstance mname (cn, fns) inst params'
                 in (Just arg', filter ((`notElem` paramNames) . runType . fst) templArgs)
             | otherwise = (Nothing, templArgs)
-          go (CppApp (CppIndexer _ inst@CppInstance{}) [CppVar "undefined"]) = go inst
+          go (CppApp inst@CppInstance{} _) = go inst
           go arg = (Just arg, [])
 
       -- TODO: verify this
