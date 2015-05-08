@@ -105,7 +105,7 @@ literals = mkPattern' match
     , return "}"
     ]
   match (CppNamespace name sts) = fmap concat $ sequence
-    [ return $ "namespace " ++ name ++ " {\n"
+    [ return $ "namespace " ++ (dotsTo '_' name) ++ " {\n"
     , withIndent $ prettyStatements sts
     , return "\n"
     , currentIndent
