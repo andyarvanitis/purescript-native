@@ -82,6 +82,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ toHeader optimized']
                   ++ P.linebreak
+                  ++ toHeaderExtNs optimized'
                   ++ headerEnd
   let bodyCpps = toBody optimized'
       moduleBody = CppInclude (runModuleName mn) : P.linebreak
@@ -89,6 +90,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                       then []
                       else [CppNamespace (runModuleName mn) $
                              (CppUseNamespace <$> cppImports') ++ P.linebreak ++ bodyCpps])
+                ++ P.linebreak
+                ++ toBodyExtNs optimized'
+                ++ P.linebreak
                 ++ (if isMain mn then [nativeMain] else [])
   return $ case additional of
     MakeOptions -> moduleHeader ++ CppEndOfHeader : moduleBody
@@ -309,7 +313,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
   instanceDeclToCpp :: Ident -> CI.Expr Ann -> m Cpp
   instanceDeclToCpp ident expr
-    | Just (classname@(Qualified _ (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
+    | Just (classname@(Qualified (Just classmn) (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
       Just (_, _, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
         fs' = filter (isNormalFn) fs
@@ -317,7 +321,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         typs' = catMaybes typs
     cpps <- mapM (toCpp tmps) (zip fns fs')
     when (length fns /= length fs') (error $ "Instance function list mismatch!\n" ++ show fs')
-    return $ CppStruct (unqualClass, tmps) typs' [] cpps []
+    let struct = CppStruct (unqualClass, tmps) typs' [] cpps []
+    return $ if classmn == mn
+               then struct
+               else CppNamespace ("::" ++ runModuleName classmn) [CppUseNamespace (runModuleName mn), struct]
     where
     toCpp :: [(String, Int)] -> ((String, T.Type), CI.Expr Ann) -> m Cpp
     toCpp tmps ((name, _), CI.AnonFunction ty ags sts) = do
@@ -750,6 +757,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   toHeader = catMaybes . map go
     where
     go :: Cpp -> Maybe Cpp
+    go (CppNamespace (':':':':_) _) = Nothing
     go cpp@(CppNamespace{}) = Just cpp
     go (CppStruct (s, []) ts supers ms@(_:_) [])
       | ms'@(_:_) <- fromConst <$> ms = Just (CppStruct (s, []) ts supers ms' [])
@@ -764,10 +772,19 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go cpp@(CppVariableIntroduction{}) = Just cpp
     go _ = Nothing
 
+  toHeaderExtNs :: [Cpp] -> [Cpp]
+  toHeaderExtNs = catMaybes . map go
+    where
+    go :: Cpp -> Maybe Cpp
+    go (CppNamespace (':':':':name) cs) = Just (CppNamespace name cs)
+    go _ = Nothing
+
   toBody :: [Cpp] -> [Cpp]
   toBody = catMaybes . map go
     where
     go :: Cpp -> Maybe Cpp
+    go (CppNamespace (':':':':_) _) = Nothing
+    go (CppNamespace name cpps) = Just (CppNamespace name (toBody cpps))
     go cpp@(CppFunction _ [] _ _ _ _) = Just cpp
     go (CppStruct (s, []) ts _ ms@(_:_) _)
       | ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
@@ -778,6 +795,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           let fullname = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name in
           Just (CppVariableIntroduction (fullname, typ) [] cpp)
       fromConst _ = Nothing
+    go _ = Nothing
+
+  toBodyExtNs :: [Cpp] -> [Cpp]
+  toBodyExtNs = catMaybes . map go
+    where
+    go :: Cpp -> Maybe Cpp
+    go (CppNamespace (':':':':name) cs) | [cpp] <- toBody [CppNamespace name cs] = Just cpp
     go _ = Nothing
 
   headerBegin :: [Cpp]
