@@ -217,7 +217,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go t' = t'
 
   -- This covers 'let' expressions
-  declToCpp InnerLevel (CI.Function (_, _, Nothing, Nothing) ident [arg] body) = do
+  declToCpp InnerLevel e@(CI.Function (_, _, Nothing, Nothing) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
     return $ CppVariableIntroduction (identToCpp ident, Nothing) []
                (Just (CppLambda [(identToCpp arg, Nothing)] Nothing block))
@@ -668,7 +668,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       return $ flip (foldl (\fn a -> CppApp fn [a])) (instArgs' ++ normArgs) (asTemplate tmplts f')
     where
       instanceArg :: String -> Cpp -> Bool
-      instanceArg fname i@(CppInstance mn' (clss, fns) _ _) | Just _ <- lookup (simpleFn fname) fns = True
+      instanceArg fname i@(CppInstance mn' (clss, fns) _ _) | Just _ <- lookup (P.stripScope fname) fns = True
       instanceArg fname (CppApp i@CppInstance{} _) = instanceArg fname i
       instanceArg _ _ = False
 
@@ -679,7 +679,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
       instanceFnType :: String -> Cpp -> Maybe Type
       instanceFnType fname i@(CppInstance mn' (clss, fns) _ ps)
-        | Just (Just typ) <- lookup fname fns = Just $ everywhereOnTypes go typ
+        | Just (Just typ) <- lookup (P.stripScope fname) fns = Just $ everywhereOnTypes go typ
         where
         go t@(Template name _) | Just (Just t') <- lookup name ps,
                                    [(t1,t2)] <- templateReplacements (t, t') = t2
@@ -807,9 +807,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   headerEnd = [CppRaw ("#endif // " ++ headerModName)]
   headerModName :: String
   headerModName = P.dotsTo '_' (runModuleName mn ++ "_HH")
-
-simpleFn :: String -> String
-simpleFn = reverse . takeWhile (/=':') . reverse
 
 isMain :: ModuleName -> Bool
 isMain (ModuleName [ProperName "Main"]) = True

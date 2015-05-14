@@ -16,10 +16,11 @@
 {-# LANGUAGE PatternGuards #-}
 
 module Language.PureScript.Pretty.Cpp (
-    prettyPrintCpp,
-    mkarg,
+    dotsTo,
     linebreak,
-    dotsTo
+    mkarg,
+    prettyPrintCpp,
+    stripScope
 ) where
 
 import Data.List
@@ -483,6 +484,9 @@ templDecl' (Left []) = []
 templDecl' (Left params) = templDecl params
 templDecl' (Right []) = []
 templDecl' (Right _) = templDecl []
+
+stripScope :: String -> String
+stripScope = reverse . takeWhile (/=':') . reverse
 
 angles :: String -> String
 angles s = '<' : s ++ ">"

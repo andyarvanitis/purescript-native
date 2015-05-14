@@ -356,9 +356,9 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
     go args (Native _ ts@(_:_), Native _ ts'@(_:_)) = args ++ concatMap (go []) (zip ts ts')
     go args (List t, List t') = go args (t, t')
     go args (Map ms, Map ms') = args ++ concatMap (go []) (zip (map snd ms) (map snd ms'))
-    go args (Native t _, Native t' _)
-      | t == t' = args
-      | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
+    go args (Native t _, Native t' _) = args
+      -- | t == t' = args
+      -- | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
     go _ (t1', t2') = error ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2')
 
 templateReplacements :: (Type, Type) -> [(Type, Type)]
