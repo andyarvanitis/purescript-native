@@ -23,6 +23,7 @@ import Data.Char
 import Data.Maybe
 import Data.Function (on)
 import Data.Data
+import Control.Monad (liftM2)
 import Language.PureScript.Names
 import Language.PureScript.CodeGen.Cpp.Common
 import qualified Language.PureScript.Constants as C
@@ -51,7 +52,7 @@ instance Eq Type where
     cap s = s
   (DeclType e) == (DeclType e') = e == e'
   (EffectFunction b) == (EffectFunction b') = b == b'
-  a == b = False
+  _ == _ = False
   a /= b = not (a == b)
 
 -- |
@@ -101,8 +102,11 @@ runType :: Type -> String
 runType (Native t []) = t
 -- TODO: make this a separate type
 runType (Native "fn_" [t]) = "fn_<" ++ runType t ++ ">::template _"
+runType (Native [] ts) = intercalate "," (map runType ts)
 runType (Native t ts) = t ++ '<' : intercalate "," (map runType ts) ++ ">"
+runType tt@(Function (Template [] []) (Template [] [])) = typeName tt
 runType tt@(Function a b) = typeName tt ++ '<' : runType a ++ "," ++ runType b ++ ">"
+runType tt@(EffectFunction (Template [] [])) = typeName tt
 runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
 runType tt@(List t) = typeName tt ++ '<' : runType t ++ ">"
 runType tt@(Map _) = typeName tt
@@ -239,6 +243,9 @@ mktype m r@(T.RCons _ _ _)
 mktype _ T.REmpty = Nothing
 mktype _ b = error $ "Unknown type: " ++ show b
 
+mkTemplate :: String -> Type
+mkTemplate s = Template s []
+
 typestr :: ModuleName -> T.Type -> String
 typestr m t = maybe [] runType (mktype m t)
 
@@ -328,8 +335,8 @@ runQualifier CppDelete = ""
 runQualifier CppConstExpr = "constexpr"
 runQualifier CppIgnored = "//"
 
-templateArgs :: (Type, Type) -> [(Type, Type)]
-templateArgs = sortBy (compare `on` runType . fst) . nub . go []
+templateMappings :: (Type, Type) -> [(Type, Type)]
+templateMappings = sortBy (compare `on` runType . fst) . nub . go []
   where
     go :: [(Type, Type)] -> (Type, Type) -> [(Type, Type)]
     go args (a@(Template _ []), a') = args ++ [(a, a')]
@@ -337,6 +344,8 @@ templateArgs = sortBy (compare `on` runType . fst) . nub . go []
       args ++ ((Template p []), (Template p' [])) : concatMap (go []) (zip ts ts')
     go args (Template t [a, b], Function a' b') =
       args ++ (Template t [], Function anytype anytype) : (go [] (a, a')) ++ (go [] (b, b'))
+    go args (Template t [a, b], Native "fn" []) =
+      args ++ [(Template t [], Function a b)]
     go args (Template t [b], EffectFunction b') =
       args ++ (Template t [], EffectFunction anytype) : (go [] (b, b'))
     go args (Template t [a], List a') =
@@ -344,18 +353,19 @@ templateArgs = sortBy (compare `on` runType . fst) . nub . go []
     go args (a@DeclType{}, a') = args ++ [(a, a')]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (EffectFunction b, EffectFunction b') = go args (b, b')
-    go args (Native t _, EffectFunction t') =
-      trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args
     go args (Native _ ts@(_:_), Native _ ts'@(_:_)) = args ++ concatMap (go []) (zip ts ts')
-    go args (Native t _, Template t' []) =
-      trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show t') args -- ++ [(t', t)]
-    go args (Native t _, Map ts) =
-      trace ("Temporarily ignoring type mismatch: " ++ show t ++ " ; " ++ show ts) args
     go args (List t, List t') = go args (t, t')
+    go args (Map ms, Map ms') = args ++ concatMap (go []) (zip (map snd ms) (map snd ms'))
     go args (Native t _, Native t' _)
       | t == t' = args
       | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
     go _ (t1', t2') = error ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2')
 
-    anytype :: Type
-    anytype = Template [] []
+templateReplacements :: (Type, Type) -> [(Type, Type)]
+templateReplacements = filter (\(a,b) -> a /= b) . templateMappings
+
+templateSpecs :: Maybe Type -> Maybe Type -> [Type]
+templateSpecs tyDecl tyExpr = map snd $ maybe [] templateMappings (liftM2 (,) tyDecl tyExpr)
+
+anytype :: Type
+anytype = Template [] []

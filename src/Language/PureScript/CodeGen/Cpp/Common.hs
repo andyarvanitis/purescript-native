@@ -81,7 +81,6 @@ nameIsCppReserved name =
               , "and_eq"
               , "any_map"
               , "asm"
-              , "arg"
               , "auto"
               , "bind"
               , "bitand"

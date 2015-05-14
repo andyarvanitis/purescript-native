@@ -128,9 +128,9 @@ data Cpp
   --
   | CppVar String
   -- |
-  -- Typeclass instance (module, classname and fns, instance name, parameters [names, types])
+  -- Typeclass instance (module, classname(s) and fns, instance name, parameters [names, types])
   --
-  | CppInstance String (String, [(String, Maybe Type)]) String [(String, Maybe Type)]
+  | CppInstance String ([String], [(String, Maybe Type)]) String [(String, Maybe Type)]
   -- |
   -- Scope (e.g., namespace, class static member, etc.)
   --
