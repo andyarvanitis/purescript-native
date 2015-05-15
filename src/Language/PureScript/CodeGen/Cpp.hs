@@ -128,6 +128,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp TopLevel (CI.Function ty@(_, _, Just T.ConstrainedType{}, _) ident _ [CI.Return _ expr])
     | Just _ <- findInstance (Qualified (Just mn) ident) = instanceDeclToCpp ident expr
 
+  declToCpp TopLevel (CI.VarDecl _ ident expr)
+    | Just ty <- tyFromExpr expr,
+      (Just EffectFunction{}) <- mktype mn ty = fnDeclCpp ty ident [] expr []
+
   -- Note: for vars, avoiding templated args - a C++14 feature - for now
   declToCpp TopLevel (CI.VarDecl _ ident expr)
     | Just ty <- tyFromExpr expr,
@@ -717,22 +721,35 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   fnDeclCpp :: T.Type -> Ident -> [(String, Int)] -> CI.Expr Ann -> [CppQualifier] -> m Cpp
   fnDeclCpp ty ident tmplts e qs = do
       let typ = mktype mn ty
-      e' <- toApp
+          atyp = argtype typ
+      e' <- toApp atyp
       return $ CppFunction (identToCpp ident)
                            tmplts
-                           [(P.mkarg, argtype typ)]
+                           (fnArg atyp)
                            (rettype typ)
                            qs
                            (CppBlock [CppReturn e'])
       where
-      toApp :: m Cpp
-      toApp | (CI.Var _ qid@(Qualified mname vid)) <- e =
-              let ty' = findValue (fromMaybe mn mname) vid
-                  app' = CI.App (Nothing, [], Just ty, Nothing)
-                                (CI.Var (Nothing, [], ty', Nothing) qid)
-                                [CI.Var nullAnn (Qualified Nothing (Ident P.mkarg))] in
-              fnAppCpp app'
-            | otherwise = CppApp <$> fnAppCpp e <*> pure [CppVar P.mkarg]
+      toApp :: Maybe Type -> m Cpp
+      toApp atyp | (CI.Var _ qid@(Qualified mname vid)) <- e =
+                   let ty' = findValue (fromMaybe mn mname) vid
+                       app' = CI.App (Nothing, [], Just ty, Nothing)
+                                     (CI.Var (Nothing, [], ty', Nothing) qid)
+                                     (appArg atyp) in
+                   fnAppCpp app'
+                 | otherwise = CppApp <$> fnAppCpp e <*> appArg' atyp
+
+      fnArg :: Maybe Type -> [(String, Maybe Type)]
+      fnArg Nothing = []
+      fnArg atyp = [(P.mkarg, atyp)]
+
+      appArg :: Maybe Type -> [CI.Expr Ann]
+      appArg Nothing = []
+      appArg _ = [CI.Var nullAnn (Qualified Nothing (Ident P.mkarg))]
+
+      appArg' :: Maybe Type -> m [Cpp]
+      appArg' Nothing = return []
+      appArg' _ = return [CppVar P.mkarg]
 
   -- |
   -- Find a type class instance in scope by name, retrieving its class name and construction types.
