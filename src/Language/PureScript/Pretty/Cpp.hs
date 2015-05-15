@@ -136,6 +136,11 @@ literals = mkPattern' match
     , return ";"
     , return "\n"
     ]
+  match (CppStruct (name, params@(_:_)) [] _ _ _) = fmap concat $ sequence $
+    [ return (templDecl params)
+    , return $ " struct " ++ classstr (name, [])
+    , return ";"
+    ]
   match (CppStruct (name, params) typs supers cms ims) = fmap concat $ sequence $
     (if null params && null typs
       then []

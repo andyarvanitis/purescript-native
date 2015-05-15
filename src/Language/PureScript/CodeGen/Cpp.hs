@@ -28,8 +28,10 @@ import Data.List
 import Data.Char
 import Data.Function (on)
 import Data.Maybe
+import Data.Tuple (swap)
 import qualified Data.Traversable as T (traverse)
 import qualified Data.Map as M
+import qualified Data.Graph as G
 
 import Control.Applicative
 import Control.Monad.Reader (MonadReader, asks)
@@ -80,9 +82,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                   ++ [CppRaw "#include \"PureScript/prelude_ffi.hh\""] -- TODO: temporary
                   ++ P.linebreak
                   ++ [CppNamespace (runModuleName mn) $
-                       (CppUseNamespace <$> cppImports') ++ P.linebreak ++ datas ++ toHeader optimized']
+                       (CppUseNamespace <$> cppImports') ++ P.linebreak
+                                                         ++ datas
+                                                         ++ depSortDecls (toHeader optimized')
+                     ]
                   ++ P.linebreak
-                  ++ toHeaderExtNs optimized'
+                  ++ depSortDecls (toHeaderExtNs optimized')
                   ++ headerEnd
   let bodyCpps = toBody optimized'
       moduleBody = CppInclude (runModuleName mn) : P.linebreak
@@ -288,14 +293,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   instanceDeclToCpp :: Ident -> CI.Expr Ann -> m Cpp
   instanceDeclToCpp ident expr
     | Just (classname@(Qualified (Just classmn) (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
-      Just (_, _, fns) <- findClass classname = do
+      Just (params, constraints, fns) <- findClass classname = do
     let (_, fs) = unApp expr []
         fs' = filter (isNormalFn) fs
         tmplts = nub . sort $ concatMap templparams (catMaybes typs)
         typs' = catMaybes typs
     cpps <- mapM (toCpp tmplts) (zip fns fs')
     when (length fns /= length fs') (error $ "Instance function list mismatch!\n" ++ show fs')
-    let struct = CppStruct (unqualClass, tmplts) typs' [] cpps []
+    let tmaps = zip (Just . mkTemplate <$> params) typs
+        struct = CppStruct (unqualClass, tmplts) typs' (toStrings tmaps <$> constraints) cpps []
     return $ if classmn == mn
                then struct
                else CppNamespace ("::" ++ runModuleName classmn) [CppUseNamespace (runModuleName mn), struct]
@@ -323,6 +329,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         e' <- exprToCpp e
         return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic] (Just e')
     toCpp tmplts ((name, _), e) = return $ error $ (name ++ " :: " ++ show e ++ "\n")
+
+    toStrings :: [(Maybe Type, Maybe Type)] -> (Qualified ProperName, [T.Type]) -> (String, [String])
+    toStrings tmaps (name, tys)
+      | ts' <- mapTy <$> tys = (qualifiedToStr' (Ident . runProperName) name, ts')
+      where
+      mapTy :: T.Type -> String
+      mapTy t | Just (Just tname) <- lookup (mktype mn t) tmaps = runType tname
+      mapTy _ = "?"
 
     literalCpp :: String -> T.Type -> CI.Expr Ann -> m Cpp
     literalCpp name ty e = do
@@ -807,6 +821,43 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   headerEnd = [CppRaw ("#endif // " ++ headerModName)]
   headerModName :: String
   headerModName = P.dotsTo '_' (runModuleName mn ++ "_HH")
+
+  -- |
+  -- Dependency (topological) sorting
+  --
+  depSortDecls :: [Cpp] -> [Cpp]
+  depSortDecls cpps = reverse $
+    catMaybes $ flip lookup vertexCpps <$> G.topSort (G.buildG (1, length cpps) (concatMap findEdges cpps))
+    where
+    findEdges :: Cpp -> [G.Edge]
+    findEdges cpp@(CppStruct _ _ supers _ _) =
+      let supers' = catMaybes $ flip lookup vertexes <$> (map (\(a, b) -> (P.stripScope a, b)) supers) in
+      (,) (fromJust (lookup (sortInfo cpp) vertexes)) <$> supers'
+    findEdges (CppNamespace _ [CppUseNamespace{}, cpp']) = findEdges cpp'
+    findEdges cpp = everythingOnCpp (++) go cpp
+      where
+      go :: Cpp -> [G.Edge]
+      go cpp'@CppInstance{}
+       | Just thisVertex <- lookup cpp vertexCpps',
+         Just depVertex <- lookup (sortInfo cpp') vertexes = [(thisVertex, depVertex)]
+      go _ = []
+    findEdges _ = []
+
+    sortInfo :: Cpp -> (String, [String])
+    sortInfo (CppStruct (name, _) ts _ _ _) = (name, runType <$> ts)
+    sortInfo (CppInstance mn' (c:_,_) _ ps)
+      | runModuleName mn == mn' = (P.stripScope c, runType <$> catMaybes (snd <$> ps))
+    sortInfo (CppNamespace _ [CppUseNamespace{}, cpp']) = sortInfo cpp'
+    sortInfo z = ([],[])
+
+    vertexes :: [((String, [String]), G.Vertex)]
+    vertexes = zip (sortInfo <$> cpps) [1 ..]
+
+    vertexCpps :: [(G.Vertex, Cpp)]
+    vertexCpps = zip [1 ..] cpps
+
+    vertexCpps' :: [(Cpp, G.Vertex)]
+    vertexCpps' = swap <$> vertexCpps
 
 isMain :: ModuleName -> Bool
 isMain (ModuleName [ProperName "Main"]) = True
