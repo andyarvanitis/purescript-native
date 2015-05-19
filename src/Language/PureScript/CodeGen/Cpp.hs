@@ -87,7 +87,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                                          ++ depSortDecls (toHeader optimized')
                      ]
                   ++ P.linebreak
-                  ++ depSortDecls (toHeaderExtNs optimized')
                   ++ headerEnd
   let bodyCpps = toBody optimized'
       moduleBody = CppInclude (runModuleName mn) : P.linebreak
@@ -95,8 +94,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                       then []
                       else [CppNamespace (runModuleName mn) $
                              (CppUseNamespace <$> cppImports') ++ P.linebreak ++ bodyCpps])
-                ++ P.linebreak
-                ++ toBodyExtNs optimized'
                 ++ P.linebreak
                 ++ (if isMain mn then [nativeMain] else [])
   return $ case additional of
@@ -784,7 +781,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   toHeader = catMaybes . map go
     where
     go :: Cpp -> Maybe Cpp
-    go (CppNamespace (':':':':_) _) = Nothing
     go cpp@(CppNamespace{}) = Just cpp
     go (CppStruct (s, []) ts supers ms@(_:_) [])
       | ms'@(_:_) <- fromConst <$> ms = Just (CppStruct (s, []) ts supers ms' [])
@@ -799,18 +795,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go cpp@(CppVariableIntroduction{}) = Just cpp
     go _ = Nothing
 
-  toHeaderExtNs :: [Cpp] -> [Cpp]
-  toHeaderExtNs = catMaybes . map go
-    where
-    go :: Cpp -> Maybe Cpp
-    go (CppNamespace (':':':':name) cs) = Just (CppNamespace name cs)
-    go _ = Nothing
-
   toBody :: [Cpp] -> [Cpp]
   toBody = catMaybes . map go
     where
     go :: Cpp -> Maybe Cpp
-    go (CppNamespace (':':':':_) _) = Nothing
     go (CppNamespace name cpps) = Just (CppNamespace name (toBody cpps))
     go cpp@(CppFunction _ [] _ _ _ _) = Just cpp
     go (CppStruct (s, []) ts _ ms@(_:_) _)
@@ -822,13 +810,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           let fullname = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name in
           Just (CppVariableIntroduction (fullname, typ) [] cpp)
       fromConst _ = Nothing
-    go _ = Nothing
-
-  toBodyExtNs :: [Cpp] -> [Cpp]
-  toBodyExtNs = catMaybes . map go
-    where
-    go :: Cpp -> Maybe Cpp
-    go (CppNamespace (':':':':name) cs) | [cpp] <- toBody [CppNamespace name cs] = Just cpp
     go _ = Nothing
 
   headerBegin :: [Cpp]

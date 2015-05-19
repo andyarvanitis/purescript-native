@@ -106,13 +106,45 @@ literals = mkPattern' match
     , return "}"
     ]
   match (CppNamespace _ []) = return []
-  match (CppNamespace name sts) = fmap concat $ sequence
-    [ return $ "namespace " ++ (dotsTo '_' name) ++ " {\n"
+  match (CppNamespace (':':':':name) sts) = fmap concat $ sequence $
+    [ return "\n"
+    , currentIndent
+    , return $ "namespace " ++ (dotsTo '_' name) ++ " {\n"
     , withIndent $ prettyStatements sts
     , return "\n"
     , currentIndent
     , return "}"
     ]
+  match (CppNamespace name sts) = fmap concat $ sequence $
+    [ return "\n"
+    , currentIndent
+    , return $ "namespace " ++ (dotsTo '_' name) ++ " {\n"
+    , withIndent $ prettyStatements sts'
+    , return "\n"
+    , currentIndent
+    , return "}"
+    ]
+    ++ let (cpp', cpps') = fromNested nested' in
+       map match cpp'
+    ++ if null cpps' then [] else [match (CppNamespace name (filter isUseNamespace sts ++ cpps'))]
+    where
+    (sts', nested') = break isNestedNamespace sts
+    fromNested :: [Cpp] -> ([Cpp], [Cpp])
+    fromNested [] = ([],[])
+    fromNested cpps@((CppNamespace nm _):_) = ([foldl1 combineNamespaces namespaces], others)
+      where
+      (namespaces, others) = span inSameNamespace cpps
+      inSameNamespace :: Cpp -> Bool
+      inSameNamespace (CppNamespace nm' _) | nm' == nm = True
+      inSameNamespace _ = False
+    combineNamespaces :: Cpp -> Cpp -> Cpp
+    combineNamespaces (CppNamespace nm ss) (CppNamespace nm' ss')
+      | nm == nm' = CppNamespace nm (ss ++ filter (not . isUseNamespace) ss')
+    combineNamespaces _ _ = error "Cannot fold cpps"
+    isUseNamespace :: Cpp -> Bool
+    isUseNamespace (CppUseNamespace{}) = True
+    isUseNamespace _ = False
+
   match (CppSequence []) = return []
   match (CppSequence cpps) = fmap concat $ sequence
     [ return "\n"
@@ -134,7 +166,6 @@ literals = mkPattern' match
     tmps ++
     [ return $ "using " ++ newName ++ " = " ++ if null spec then name' else spec ++ angles name'
     , return ";"
-    , return "\n"
     ]
   match (CppStruct (name, params@(_:_)) [] _ _ _) = fmap concat $ sequence $
     [ return (templDecl params)
@@ -489,6 +520,10 @@ templDecl' (Left []) = []
 templDecl' (Left params) = templDecl params
 templDecl' (Right []) = []
 templDecl' (Right _) = templDecl []
+
+isNestedNamespace :: Cpp -> Bool
+isNestedNamespace (CppNamespace (':':':':_) _) = True
+isNestedNamespace _ = False
 
 stripScope :: String -> String
 stripScope = reverse . takeWhile (/=':') . reverse
