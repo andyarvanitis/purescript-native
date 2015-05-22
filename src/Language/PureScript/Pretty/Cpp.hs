@@ -69,13 +69,18 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
-  match (CppFunction name tmps args rty qs ret) = fmap concat $ sequence
-    [ if null tmps
+  match (CppFunction name tmps args rty qs ret) =
+    let qs' = delete CppTemplSpec qs in
+    fmap concat $ sequence
+    [ do
+      indentString <- currentIndent
+      return $ maybe [] ((++ "\n" ++ indentString) . runQualifier) (find (== CppTemplSpec) qs)
+    , if null tmps
         then return []
         else do
           indentString <- currentIndent
           return (templDecl' (Left tmps) ++ "\n" ++ indentString)
-    , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs
+    , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs'
     , return $ if CppConstructor `elem` qs || CppDestructor `elem` qs
                  then []
                  else "auto "
@@ -137,6 +142,7 @@ literals = mkPattern' match
       inSameNamespace :: Cpp -> Bool
       inSameNamespace (CppNamespace nm' _) | nm' == nm = True
       inSameNamespace _ = False
+    fromNested _ = error "Not a nested namespace"
     combineNamespaces :: Cpp -> Cpp -> Cpp
     combineNamespaces (CppNamespace nm ss) (CppNamespace nm' ss')
       | nm == nm' = CppNamespace nm (ss ++ filter (not . isUseNamespace) ss')
@@ -167,9 +173,9 @@ literals = mkPattern' match
     [ return $ "using " ++ newName ++ " = " ++ if null spec then name' else spec ++ angles name'
     , return ";"
     ]
-  match (CppStruct (name, params@(_:_)) [] _ _ _) = fmap concat $ sequence $
-    [ return (templDecl params)
-    , return $ " struct " ++ classstr (name, [])
+  match (CppStruct (name, []) typs@(_:_) [] [] []) = fmap concat $ sequence $
+    [ return $ "EXTERN "
+    , return $ parens ("template struct " ++ classstr (name, runType <$> typs))
     , return ";"
     ]
   match (CppStruct (name, params) typs supers cms ims) = fmap concat $ sequence $

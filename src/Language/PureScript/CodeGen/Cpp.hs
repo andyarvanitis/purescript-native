@@ -28,10 +28,8 @@ import Data.List
 import Data.Char
 import Data.Function (on)
 import Data.Maybe
-import Data.Tuple (swap)
 import qualified Data.Traversable as T (traverse)
 import qualified Data.Map as M
-import qualified Data.Graph as G
 
 import Control.Applicative
 import Control.Monad.Reader (MonadReader, asks)
@@ -54,6 +52,7 @@ import qualified Language.PureScript.CoreImp.AST as CI
 import qualified Language.PureScript.Types as T
 import qualified Language.PureScript.TypeClassDictionaries as TCD
 import qualified Language.PureScript.Pretty.Cpp as P
+import qualified Language.PureScript.Pretty.Common as P
 
 import Debug.Trace
 
@@ -76,26 +75,32 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
   datas <- modDatasToCpps
-  let moduleHeader = headerBegin
+  let moduleHeader = fileBegin "HH"
                   ++ P.linebreak
                   ++ (CppInclude <$> cppImports')
                   ++ [CppRaw "#include \"PureScript/prelude_ffi.hh\""] -- TODO: temporary
                   ++ P.linebreak
+                  ++ headerDefsBegin
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak
                                                          ++ datas
-                                                         ++ depSortDecls (toHeader optimized')
+                                                         ++ toHeader optimized'
                      ]
                   ++ P.linebreak
-                  ++ headerEnd
+                  ++ headerDefsEnd
+                  ++ P.linebreak
+                  ++ fileEnd "HH"
   let bodyCpps = toBody optimized'
-      moduleBody = CppInclude (runModuleName mn) : P.linebreak
+      moduleBody = fileBegin "CC"
+                ++ P.linebreak
+                ++ CppInclude (runModuleName mn) : P.linebreak
                 ++ (if null bodyCpps
                       then []
                       else [CppNamespace (runModuleName mn) $
                              (CppUseNamespace <$> cppImports') ++ P.linebreak ++ bodyCpps])
                 ++ P.linebreak
                 ++ (if isMain mn then [nativeMain] else [])
+                ++ fileEnd "CC"
   return $ case additional of
     MakeOptions -> moduleHeader ++ CppEndOfHeader : moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
@@ -235,16 +240,16 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- Typeclass declaration
   --
   declToCpp TopLevel (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) _)
-    | Just (params, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) =
+    | Just (params, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) = do
     let tmplts = runType . mkTemplate <$> params
         fnTemplPs = nub $ (concatMap (templparams' . mktype mn . snd) fns) ++
                           (concatMap constraintParams constraints)
         classTemplParams = zip tmplts $ fromMaybe 0 . flip lookup fnTemplPs <$> tmplts
-    in
+    cpps' <- mapM (toCpp tmplts) fns
     return $ CppStruct (ctor, classTemplParams)
                        []
                        (toStrings <$> constraints)
-                       (toCpp tmplts <$> fns)
+                       cpps'
                        []
     where
     tmpParams :: [(String, T.Type)] -> [(String, Int)]
@@ -260,25 +265,30 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                                zip cps' ts
     constraintParams _ = []
 
-    toCpp :: [String] -> (String, T.Type) -> Cpp
+    toCpp :: [String] -> (String, T.Type) -> m Cpp
     toCpp tmplts (name, ty)
       | ty'@(Just _) <- mktype mn ty,
         Just atyp <- argtype ty',
         Just rtyp <- rettype ty'
-      = CppFunction name
-                    (filter ((`notElem` tmplts) . fst) $ templparams' ty')
-                    [([], Just atyp)]
-                    (Just rtyp)
-                    [CppStatic]
-                    CppNoOp
-    toCpp tmplts (name, ty) =
-      -- TODO: need better handling for these. Variable templates would help.
-      let typ = mktype mn ty
-          qs | Just typ' <- typ,
-               tmplts'@(_:_) <- templateVars typ',
-               any (`notElem` tmplts) (runType <$> tmplts') = [CppIgnored]
-             | otherwise = [] in
-      CppVariableIntroduction (name, typ) (qs ++ [CppStatic]) Nothing
+      = return $ CppFunction name
+                             (filter ((`notElem` tmplts) . fst) $ templparams' ty')
+                             [([], Just atyp)]
+                             (Just rtyp)
+                             [CppStatic]
+                             CppNoOp
+    -- TODO: really need C++14 template vars to do this properly
+    toCpp tmplts (name, ty)
+      | typ@(Just (Template _ [tA, tB])) <- mktype mn ty,
+        tmplts'@(_:_) <- filter ((`notElem` tmplts) . fst) $ templparams' typ = do
+        let typ = mktype mn ty
+        return $ CppFunction name
+                             tmplts'
+                             [(P.mkarg, Just tA)]
+                             (Just tB)
+                             [CppStatic]
+                             CppNoOp
+    toCpp tmplts (name, ty) = return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic] Nothing
+
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
     toStrings (name, tys) = (qualifiedToStr' (Ident . runProperName) name, typestr mn <$> tys)
 
@@ -342,7 +352,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     literalCpp :: String -> T.Type -> CI.Expr Ann -> m Cpp
     literalCpp name ty e = do
         e' <- exprToCpp e
-        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic, CppConstExpr] (Just e')
+        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic] (Just e')
 
     addQual :: CppQualifier -> Cpp -> Cpp
     addQual q (CppFunction name tmplts args rty qs cpp) = CppFunction name tmplts args rty (q : qs) cpp
@@ -665,6 +675,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       let ts' = filter (`notElem` tmplts) ts in CppFunction name ts' args rtyp qs body
     remove other = other
 
+  hasTemplates :: Cpp -> Bool
+  hasTemplates = everythingOnCpp (||) go
+    where
+    go :: Cpp -> Bool
+    go (CppFunction _ (_:_) _ _ _ _) = True
+    go _ = False
+
   fnAppCpp :: CI.Expr Ann -> m Cpp
   fnAppCpp e = do
       let (f, args) = unApp e []
@@ -781,13 +798,28 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   toHeader = catMaybes . map go
     where
     go :: Cpp -> Maybe Cpp
-    go cpp@(CppNamespace{}) = Just cpp
+    go (CppNamespace name cpps) = Just (CppNamespace name (toHeader cpps))
+    go cpp@(CppUseNamespace{}) = Just cpp
+    go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) [])
+      | all (not . hasTemplates) ms = Just (CppStruct (s, []) ts [] [] [])
+    go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) [])
+      | ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
+      where
+      fromConst :: Cpp -> Maybe Cpp
+      fromConst (CppVariableIntroduction (name, typ@(Just _)) qs cpp)
+        | CppStatic `elem` qs =
+          Just $ CppVariableIntroduction (fullname name, typ) [CppTemplSpec] cpp
+      fromConst (CppFunction name tmplts args rtyp qs body) =
+        Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
+      fromConst cpp = Nothing
+      fullname :: String -> String
+      fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
     go (CppStruct (s, []) ts supers ms@(_:_) [])
       | ms'@(_:_) <- fromConst <$> ms = Just (CppStruct (s, []) ts supers ms' [])
       where
       fromConst :: Cpp -> Cpp
-      fromConst (CppVariableIntroduction (name, typ@(Just _)) qs cpp)
-        | CppConstExpr `notElem` qs = CppVariableIntroduction (name, typ) qs Nothing
+      fromConst (CppVariableIntroduction (name, typ@(Just _)) qs cpp) =
+        CppVariableIntroduction (name, typ) qs Nothing
       fromConst cpp = cpp
     go cpp@(CppStruct{}) = Just cpp
     go (CppFunction name [] args rtyp qs _) = Just (CppFunction name [] args rtyp qs CppNoOp)
@@ -800,62 +832,39 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     go :: Cpp -> Maybe Cpp
     go (CppNamespace name cpps) = Just (CppNamespace name (toBody cpps))
+    go cpp@(CppUseNamespace{}) = Just cpp
     go cpp@(CppFunction _ [] _ _ _ _) = Just cpp
-    go (CppStruct (s, []) ts _ ms@(_:_) _)
-      | ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
+    go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) _)
+      | all (not . hasTemplates) ms,
+        ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
       where
       fromConst :: Cpp -> Maybe Cpp
       fromConst (CppVariableIntroduction (name, typ@(Just _)) qs cpp)
-        | CppConstExpr `notElem` qs && CppStatic `elem` qs =
-          let fullname = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name in
-          Just (CppVariableIntroduction (fullname, typ) [] cpp)
-      fromConst _ = Nothing
+        | CppStatic `elem` qs =
+          Just $ CppVariableIntroduction (fullname name, typ) [CppTemplSpec] cpp
+      fromConst (CppFunction name tmplts args rtyp qs body) =
+        Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
+      fromConst cpp = Nothing
+      fullname :: String -> String
+      fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
     go _ = Nothing
 
-  headerBegin :: [Cpp]
-  headerBegin = [CppRaw ("#ifndef " ++ headerModName),
-                 CppRaw ("#define " ++ headerModName)]
-  headerEnd :: [Cpp]
-  headerEnd = [CppRaw ("#endif // " ++ headerModName)]
-  headerModName :: String
-  headerModName = P.dotsTo '_' (runModuleName mn ++ "_HH")
+  fileBegin :: String -> [Cpp]
+  fileBegin suffix = [CppRaw ("#ifndef " ++ fileModName suffix),
+                      CppRaw ("#define " ++ fileModName suffix)]
+  fileEnd :: String -> [Cpp]
+  fileEnd suffix = [CppRaw ("#endif // " ++ fileModName suffix)]
+  fileModName :: String -> String
+  fileModName suffix = P.dotsTo '_' (runModuleName mn ++ '_' : suffix)
 
-  -- |
-  -- Dependency (topological) sorting
-  --
-  depSortDecls :: [Cpp] -> [Cpp]
-  depSortDecls cpps = reverse $
-    catMaybes $ flip lookup vertexCpps <$> G.topSort (G.buildG (1, length cpps) (concatMap findEdges cpps))
-    where
-    findEdges :: Cpp -> [G.Edge]
-    findEdges cpp@(CppStruct _ _ supers _ _) =
-      let supers' = catMaybes $ flip lookup vertexes <$> (map (\(a, b) -> (P.stripScope a, b)) supers) in
-      (,) (fromJust (lookup (sortInfo cpp) vertexes)) <$> supers'
-    findEdges (CppNamespace _ [CppUseNamespace{}, cpp']) = findEdges cpp'
-    findEdges cpp = everythingOnCpp (++) go cpp
-      where
-      go :: Cpp -> [G.Edge]
-      go cpp'@CppInstance{}
-       | Just thisVertex <- lookup cpp vertexCpps',
-         Just depVertex <- lookup (sortInfo cpp') vertexes = [(thisVertex, depVertex)]
-      go _ = []
-    findEdges _ = []
-
-    sortInfo :: Cpp -> (String, [String])
-    sortInfo (CppStruct (name, _) ts _ _ _) = (name, runType <$> ts)
-    sortInfo (CppInstance mn' (c:_,_) _ ps)
-      | runModuleName mn == mn' = (P.stripScope c, runType <$> catMaybes (snd <$> ps))
-    sortInfo (CppNamespace _ [CppUseNamespace{}, cpp']) = sortInfo cpp'
-    sortInfo z = ([],[])
-
-    vertexes :: [((String, [String]), G.Vertex)]
-    vertexes = zip (sortInfo <$> cpps) [1 ..]
-
-    vertexCpps :: [(G.Vertex, Cpp)]
-    vertexCpps = zip [1 ..] cpps
-
-    vertexCpps' :: [(Cpp, G.Vertex)]
-    vertexCpps' = swap <$> vertexCpps
+  headerDefsBegin :: [Cpp]
+  headerDefsBegin = [CppRaw ("#if !defined" ++ P.parens (fileModName "CC")),
+                     CppRaw "#define EXTERN(e) extern e",
+                     CppRaw "#else",
+                     CppRaw "#define EXTERN(e)",
+                     CppRaw "#endif"]
+  headerDefsEnd :: [Cpp]
+  headerDefsEnd = [CppRaw "#undef EXTERN"]
 
 isMain :: ModuleName -> Bool
 isMain (ModuleName [ProperName "Main"]) = True

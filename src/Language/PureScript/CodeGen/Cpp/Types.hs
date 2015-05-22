@@ -92,10 +92,9 @@ data CppQualifier
   --
   | CppConstExpr
   -- |
-  -- Ignored (ignored but still visible, e.g. commented out)
+  -- Template partial specialization
   --
-  | CppIgnored
-  --
+  | CppTemplSpec
   deriving (Show, Eq, Data, Typeable)
 
 runType :: Type -> String
@@ -333,7 +332,7 @@ runQualifier CppDestructor = "~"
 runQualifier CppDefault = ""
 runQualifier CppDelete = ""
 runQualifier CppConstExpr = "constexpr"
-runQualifier CppIgnored = "//"
+runQualifier CppTemplSpec = "template <>"
 
 templateMappings :: (Type, Type) -> [(Type, Type)]
 templateMappings = sortBy (compare `on` runType . fst) . nub . go []
