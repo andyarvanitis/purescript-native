@@ -98,7 +98,7 @@ data Cpp
   -- |
   -- A lambda introduction (arguments, return type, body)
   --
-  | CppLambda [(String, Maybe Type)] (Maybe Type) Cpp
+  | CppLambda [CppCaptureType] [(String, Maybe Type)] (Maybe Type) Cpp
   -- |
   -- A C++ struct declaration (name with any template types, superclasses, class methods, instance methods)
   --
@@ -162,7 +162,7 @@ data Cpp
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction (String, Maybe Type) [CppQualifier] (Maybe Cpp)
+  | CppVariableIntroduction (String, Maybe Type) [(String, Int)] [CppQualifier] (Maybe Cpp)
   -- |
   -- A variable assignment
   --
@@ -255,14 +255,14 @@ everywhereOnCpp f = go
   go (CppAccessor t prop j) = f (CppAccessor t prop (go j))
   go (CppMapAccessor j1 j2) = f (CppMapAccessor (go j1) (go j2))
   go (CppFunction name tmps args rty qs j) = f (CppFunction name tmps args rty qs (go j))
-  go (CppLambda args rty j) = f (CppLambda args rty (go j))
+  go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
   go (CppStruct name typs supers cms ims) = f (CppStruct name typs supers (map go cms) (map go ims))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
   go (CppPartialApp j cpp typs n) = f (CppPartialApp (go j) (map go cpp) typs n)
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
-  go (CppVariableIntroduction name qs j) = f (CppVariableIntroduction name qs (fmap go j))
+  go (CppVariableIntroduction name tmps qs j) = f (CppVariableIntroduction name tmps qs (fmap go j))
   go (CppAssignment j1 j2) = f (CppAssignment (go j1) (go j2))
   go (CppWhile j1 j2) = f (CppWhile (go j1) (go j2))
   go (CppFor name j1 j2 j3) = f (CppFor name (go j1) (go j2) (go j3))
@@ -289,14 +289,14 @@ everywhereOnCppTopDown f = go . f
   go (CppAccessor t prop j) = CppAccessor t prop (go (f j))
   go (CppMapAccessor j1 j2) = CppMapAccessor (go (f j1)) (go (f j2))
   go (CppFunction name tmps args rty qs j) = CppFunction name tmps args rty qs (go (f j))
-  go (CppLambda args rty j) = CppLambda args rty (go (f j))
+  go (CppLambda cps args rty j) = CppLambda cps args rty (go (f j))
   go (CppStruct name typs supers cms ims) = CppStruct name typs supers (map (go . f) cms) (map (go . f) ims)
   go (CppApp j cpp) = CppApp (go (f j)) (map (go . f) cpp)
   go (CppPartialApp j cpps typs n) = CppPartialApp (go (f j)) (map (go . f) cpps) typs n
   go (CppConditional j1 j2 j3) = CppConditional (go (f j1)) (go (f j2)) (go (f j3))
   go (CppBlock cpp) = CppBlock (map (go . f) cpp)
   go (CppNamespace name cpp) = CppNamespace name (map (go . f) cpp)
-  go (CppVariableIntroduction name qs j) = CppVariableIntroduction name qs (fmap (go . f) j)
+  go (CppVariableIntroduction name tmps qs j) = CppVariableIntroduction name tmps qs (fmap (go . f) j)
   go (CppAssignment j1 j2) = CppAssignment (go (f j1)) (go (f j2))
   go (CppWhile j1 j2) = CppWhile (go (f j1)) (go (f j2))
   go (CppFor name j1 j2 j3) = CppFor name (go (f j1)) (go (f j2)) (go (f j3))
@@ -322,14 +322,14 @@ everythingOnCpp (<>) f = go
   go j@(CppAccessor _ _ j1) = f j <> go j1
   go j@(CppMapAccessor j1 j2) = f j <> go j1 <> go j2
   go j@(CppFunction _ _ _ _ _ j1) = f j <> go j1
-  go j@(CppLambda _ _ j1) = f j <> go j1
+  go j@(CppLambda _ _ _ j1) = f j <> go j1
   go j@(CppStruct _ _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppPartialApp j1 cpp _ _) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)
-  go j@(CppVariableIntroduction _ _ (Just j1)) = f j <> go j1
+  go j@(CppVariableIntroduction _ _ _ (Just j1)) = f j <> go j1
   go j@(CppAssignment j1 j2) = f j <> go j1 <> go j2
   go j@(CppWhile j1 j2) = f j <> go j1 <> go j2
   go j@(CppFor _ j1 j2 j3) = f j <> go j1 <> go j2 <> go j3

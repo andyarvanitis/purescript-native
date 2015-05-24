@@ -36,7 +36,7 @@ tco' = everywhereOnCpp convert
   copyVar :: (String, Maybe Type) -> (String, Maybe Type)
   copyVar (nm, ty) = ("__copy_" ++ nm, ty)
   convert :: Cpp -> Cpp
-  convert cpp@(CppVariableIntroduction (name, typ) qs (Just fn@CppFunction{})) =
+  convert cpp@(CppVariableIntroduction (name, typ) tmps qs (Just fn@CppFunction{})) =
     let
       (argss, body', replace) = collectAllFunctionArgs [] id fn
     in case () of
@@ -44,7 +44,7 @@ tco' = everywhereOnCpp convert
             let
               allArgs = concat $ reverse argss
             in
-              CppVariableIntroduction (name, typ) qs (Just (replace (toLoop name allArgs body')))
+              CppVariableIntroduction (name, typ) tmps qs (Just (replace (toLoop name allArgs body')))
         | otherwise -> cpp
   convert cpp = cpp
   collectAllFunctionArgs :: [[(String, Maybe Type)]] -> (Cpp -> Cpp) -> Cpp -> ([[(String, Maybe Type)]], Cpp, Cpp -> Cpp)
@@ -78,7 +78,7 @@ tco' = everywhereOnCpp convert
     countSelfCallsUnderFunctions _ = 0
   toLoop :: String -> [(String, Maybe Type)] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
-        map (\arg -> CppVariableIntroduction arg [] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
+        map (\arg -> CppVariableIntroduction arg [] [] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
         [ CppLabel tcoLabel $ CppWhile (CppBooleanLiteral True) (CppBlock [ everywhereOnCpp loopify cpp ]) ]
     where
     loopify :: Cpp -> Cpp
@@ -87,7 +87,7 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppBlock $ zipWith (\val arg ->
-                    CppVariableIntroduction (tcoVar arg, Nothing) [] (Just val)) allArgumentValues (map fst allArgs)
+                    CppVariableIntroduction (tcoVar arg, Nothing) [] [] (Just val)) allArgumentValues (map fst allArgs)
                   ++ map (\arg ->
                     CppAssignment (CppVar arg) (CppVar (tcoVar arg))) (map fst allArgs)
                   ++ [ CppContinue tcoLabel ]

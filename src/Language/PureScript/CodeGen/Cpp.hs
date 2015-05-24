@@ -143,7 +143,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
   declToCpp _ (CI.VarDecl (_, _, ty, _) ident expr) = do
     expr' <- exprToCpp expr
-    return $ CppVariableIntroduction (identToCpp ident, ty >>= mktype mn) [] (Just expr')
+    return $ CppVariableIntroduction (identToCpp ident, ty >>= mktype mn) [] [] (Just expr')
 
   -- TODO: fix when proper Meta info added
   declToCpp TopLevel (CI.Function _ _ [Ident "dict"]
@@ -183,7 +183,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- C++ doesn't support nested functions, so use lambdas
   declToCpp InnerLevel (CI.Function (_, _, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
-    return $ CppVariableIntroduction (identToCpp ident, Nothing) [] (Just (asLambda block))
+    return $ CppVariableIntroduction (identToCpp ident, Nothing) [] [] (Just (asLambda block))
     where
     asLambda block' =
       let typ = mktype mn ty
@@ -196,7 +196,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           removedTypes = zip tmplts (repeat Nothing)
           replacedArgs = applyChanges removedTypes argType
           replacedRet = applyChanges removedTypes retType
-      in CppLambda [(argName, replacedArgs)] replacedRet replacedBlock
+      in CppLambda [CppCaptureAll] [(argName, replacedArgs)] replacedRet replacedBlock
       where
       replacementPair :: (String, Maybe Type) -> Maybe Type -> (Maybe Type, Maybe Type)
       replacementPair (argName, argType) typ'
@@ -207,7 +207,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       replaceTypes [] = id
       replaceTypes typs = everywhereOnCpp replace
         where
-        replace (CppLambda [(argn, argt)] rett b) = CppLambda [(argn, applyChanges typs argt)] (applyChanges typs rett) b
+        replace (CppLambda cps [(argn, argt)] rett b) = CppLambda cps [(argn, applyChanges typs argt)] (applyChanges typs rett) b
         replace (CppInstance mn' cls iname ps) = CppInstance mn' cls iname (zip (fst <$> ps) (applyChanges typs . snd <$> ps))
         replace (CppAccessor typ p e) = CppAccessor (applyChanges typs typ) p e
         replace other = other
@@ -230,8 +230,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- This covers 'let' expressions
   declToCpp InnerLevel e@(CI.Function (_, _, Nothing, Nothing) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
-    return $ CppVariableIntroduction (identToCpp ident, Nothing) []
-               (Just (CppLambda [(identToCpp arg, Nothing)] Nothing block))
+    return $ CppVariableIntroduction (identToCpp ident, Nothing) [] []
+               (Just (CppLambda [CppCaptureAll] [(identToCpp arg, Nothing)] Nothing block))
 
   declToCpp InnerLevel CI.Function{} = return CppNoOp -- TODO: Are these possible?
   declToCpp _ (CI.Function (_, _, Just _, _) _ (_:_) _) = return CppNoOp -- TODO: support non-curried functions?
@@ -276,18 +276,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                              (Just rtyp)
                              [CppStatic]
                              CppNoOp
-    -- TODO: really need C++14 template vars to do this properly
     toCpp tmplts (name, ty)
-      | typ@(Just (Template _ [tA, tB])) <- mktype mn ty,
+      | typ <- mktype mn ty,
         tmplts'@(_:_) <- filter ((`notElem` tmplts) . fst) $ templparams' typ = do
-        let typ = mktype mn ty
-        return $ CppFunction name
-                             tmplts'
-                             [(P.mkarg, Just tA)]
-                             (Just tB)
-                             [CppStatic]
-                             CppNoOp
-    toCpp tmplts (name, ty) = return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic] Nothing
+        return $ CppVariableIntroduction (name, typ) tmplts' [CppStatic] Nothing
+    toCpp tmplts (name, ty) = return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] Nothing
 
     toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
     toStrings (name, tys) = (qualifiedToStr' (Ident . runProperName) name, typestr mn <$> tys)
@@ -318,9 +311,20 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                else CppNamespace ("::" ++ runModuleName classmn) [CppUseNamespace (runModuleName mn), struct]
     where
     toCpp :: [(String, Int)] -> ((String, T.Type), CI.Expr Ann) -> m Cpp
-    toCpp tmplts ((name, _), CI.AnonFunction ty ags sts) = do
-      fn' <- declToCpp TopLevel $ CI.Function ty (Ident name) ags sts
-      return (addQual CppStatic (removeTemplates tmplts fn'))
+    toCpp tmplts ((name, ty'), CI.AnonFunction ti@(_, _, Just ty, _) ags sts) = do
+      let typ = mktype mn ty'
+      fn' <- declToCpp TopLevel $ CI.Function ti (Ident name) ags sts
+      let cpp = addQual CppStatic (removeTemplates tmplts fn')
+      return (case mktype mn ty' of
+                Just Function{} -> cpp
+                Just _ -> asLambda cpp
+                _ -> cpp)
+      where
+      asLambda :: Cpp -> Cpp
+      asLambda (CppFunction _ tmplts' args rty qs body) =
+        CppVariableIntroduction (name, mktype mn ty) tmplts' [CppStatic] (Just $ CppLambda [] args rty body)
+      asLambda cpp = cpp
+
     toCpp tmplts ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
       | Just ty <- tyFromExpr e,
         tmplts'@(_:_) <- templparams' (mktype mn ty)
@@ -338,7 +342,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     toCpp tmplts ((name, _), e)
       | Just ty <- tyFromExpr e = do
         e' <- exprToCpp e
-        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic] (Just e')
+        return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] (Just e')
     toCpp tmplts ((name, _), e) = return $ error $ (name ++ " :: " ++ show e ++ "\n")
 
     toStrings :: [(Maybe Type, Maybe Type)] -> (Qualified ProperName, [T.Type]) -> (String, [String])
@@ -352,7 +356,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     literalCpp :: String -> T.Type -> CI.Expr Ann -> m Cpp
     literalCpp name ty e = do
         e' <- exprToCpp e
-        return $ CppVariableIntroduction (name, mktype mn ty) [CppStatic] (Just e')
+        return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] (Just e')
 
     addQual :: CppQualifier -> Cpp -> Cpp
     addQual q (CppFunction name tmplts args rty qs cpp) = CppFunction name tmplts args rty (q : qs) cpp
@@ -430,7 +434,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   exprToCpp (CI.AnonFunction (_, _, Just ty, _) [arg] stmnts') = do
     body <- CppBlock <$> mapM statmentToCpp stmnts'
     let typ = mktype mn ty
-    return $ CppLambda [(identToCpp arg, argtype typ)] (rettype typ) body
+    return $ CppLambda [CppCaptureAll] [(identToCpp arg, argtype typ)] (rettype typ) body
   exprToCpp (CI.AnonFunction _ _ _) = return CppNoOp -- TODO: non-curried lambdas
 
   -- |
@@ -584,7 +588,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
             members :: [Cpp]
             members | fields'@(_:_) <- filter (/=(Just (Map []))) $ mktype mn <$> fields,
                       ms <- zip (("value" ++) . show <$> ([0..] :: [Int])) fields'
-                      = ((\i -> CppVariableIntroduction i [] Nothing) <$> ms) ++
+                      = ((\i -> CppVariableIntroduction i [] [] Nothing) <$> ms) ++
                         [ CppFunction name [] ms Nothing [CppConstructor] (CppBlock [])
                         , CppFunction name [] [] Nothing [CppConstructor, CppDelete] CppNoOp
                         ]
@@ -806,9 +810,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       | ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
       where
       fromConst :: Cpp -> Maybe Cpp
-      fromConst (CppVariableIntroduction (name, typ@(Just _)) qs cpp)
+      fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs cpp)
         | CppStatic `elem` qs =
-          Just $ CppVariableIntroduction (fullname name, typ) [CppTemplSpec] cpp
+          Just $ CppVariableIntroduction (fullname name, typ) tmps [CppTemplSpec] cpp
       fromConst (CppFunction name tmplts args rtyp qs body) =
         Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
       fromConst cpp = Nothing
@@ -818,8 +822,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       | ms'@(_:_) <- fromConst <$> ms = Just (CppStruct (s, []) ts supers ms' [])
       where
       fromConst :: Cpp -> Cpp
-      fromConst (CppVariableIntroduction (name, typ@(Just _)) qs cpp) =
-        CppVariableIntroduction (name, typ) qs Nothing
+      fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs cpp) =
+        CppVariableIntroduction (name, typ) tmps qs Nothing
       fromConst cpp = cpp
     go cpp@(CppStruct{}) = Just cpp
     go (CppFunction name [] args rtyp qs _) = Just (CppFunction name [] args rtyp qs CppNoOp)
@@ -839,9 +843,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
       where
       fromConst :: Cpp -> Maybe Cpp
-      fromConst (CppVariableIntroduction (name, typ@(Just _)) qs cpp)
+      fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs cpp)
         | CppStatic `elem` qs =
-          Just $ CppVariableIntroduction (fullname name, typ) [CppTemplSpec] cpp
+          Just $ CppVariableIntroduction (fullname name, typ) tmps [CppTemplSpec] cpp
       fromConst (CppFunction name tmplts args rtyp qs body) =
         Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
       fromConst cpp = Nothing

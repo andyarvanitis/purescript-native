@@ -97,6 +97,13 @@ data CppQualifier
   | CppTemplSpec
   deriving (Show, Eq, Data, Typeable)
 
+-- |
+-- C++ lambda capture list
+--
+data CppCaptureType
+  = CppCaptureAll
+  deriving (Show, Eq, Data, Typeable)
+
 runType :: Type -> String
 runType (Native t []) = t
 -- TODO: make this a separate type
@@ -333,6 +340,9 @@ runQualifier CppDefault = ""
 runQualifier CppDelete = ""
 runQualifier CppConstExpr = "constexpr"
 runQualifier CppTemplSpec = "template <>"
+
+runCaptureType :: CppCaptureType -> String
+runCaptureType CppCaptureAll = "="
 
 templateMappings :: (Type, Type) -> [(Type, Type)]
 templateMappings = sortBy (compare `on` runType . fst) . nub . go []

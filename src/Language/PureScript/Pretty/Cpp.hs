@@ -209,8 +209,18 @@ literals = mkPattern' match
   match (CppScope ident) = return ident
 --   match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
-  match (CppVariableIntroduction (ident, typ) qs value) = fmap concat $ sequence
-    [ return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs
+  match (CppVariableIntroduction (ident, typ) tmps qs value) =
+    let qs' = delete CppTemplSpec qs in
+    fmap concat $ sequence
+    [ do
+      indentString <- currentIndent
+      return $ maybe [] ((++ "\n" ++ indentString) . runQualifier) (find (== CppTemplSpec) qs)
+    , if null tmps
+        then return []
+        else do
+          indentString <- currentIndent
+          return (templDecl' (Left tmps) ++ "\n" ++ indentString)
+    , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs'
     , return "const "
     , return (maybe "auto" runType typ ++ " ")
     , return ident
@@ -348,10 +358,10 @@ indexer = mkPattern' match
   match (CppIndexer index val) = (,) <$> prettyPrintCpp' index <*> pure val
   match _ = mzero
 
-lam :: Pattern PrinterState Cpp (([(String, Maybe Type)], Maybe Type), Cpp)
+lam :: Pattern PrinterState Cpp ((String, [(String, Maybe Type)], Maybe Type), Cpp)
 lam = mkPattern match
   where
-  match (CppLambda args rty ret) = Just ((args, rty), ret)
+  match (CppLambda caps args rty ret) = Just ((concatMap runCaptureType caps, args, rty), ret)
   match _ = Nothing
 
 app :: Pattern PrinterState Cpp (String, Cpp)
@@ -468,7 +478,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap app $ \args val -> val ++ parens args ]
                   , [ Wrap partapp $ \(args, n) _ -> "bind" ++ angles (show n) ++ parens args ]
                   , [ unary CppNew "new " ]
-                  , [ Wrap lam $ \(args, rty) ret -> "[=]"
+                  , [ Wrap lam $ \(caps, args, rty) ret -> '[' : caps ++ "]"
                         ++ let args' = argstr <$> args in
                            parens (intercalate ", " args')
                         ++ maybe "" ((" -> " ++) . runType) rty

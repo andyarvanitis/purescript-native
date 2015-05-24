@@ -23,6 +23,7 @@ import Data.Maybe (fromJust, isJust)
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Common
+import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Names
 import Language.PureScript.Options
 import qualified Language.PureScript.Constants as C
@@ -66,10 +67,10 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   --   CppFunction fnName [] [] rty [] $ CppBlock (CppVariableIntroduction arg (Just (CppApp m [])) : map applyReturns cpp)
   -- Desugar untilE
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =
-    CppApp (CppLambda [] Nothing (CppBlock [ CppWhile (CppUnary CppNot (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
+    CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppUnary CppNot (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
   -- Desugar whileE
   convert (CppApp (CppApp (CppApp f [arg1]) [arg2]) []) | isEffFunc C.whileE f =
-    CppApp (CppLambda [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
+    CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
   convert other = other
   -- Check if an expression represents a monomorphic call to >>= for the Eff monad
   isBind (CppApp bindPoly [effDict]) | isBindPoly bindPoly && isEffDict C.bindEffDictionary effDict = True
@@ -138,7 +139,7 @@ inlineST = everywhereOnCpp convertBlock
   -- or in a more aggressive way, turning wrappers into local variables depending on the
   -- agg(ressive) parameter.
   convert agg (CppApp f [arg]) | isSTFunc C.newSTRef f =
-   CppLambda [] Nothing (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral [(C.stRefValue, arg)]])
+   CppLambda [CppCaptureAll] [] Nothing (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral [(C.stRefValue, arg)]])
   convert agg (CppApp (CppApp f [ref]) []) | isSTFunc C.readSTRef f =
     if agg then ref else CppAccessor Nothing C.stRefValue ref
   convert agg (CppApp (CppApp (CppApp f [ref]) [arg]) []) | isSTFunc C.writeSTRef f =
@@ -153,7 +154,7 @@ inlineST = everywhereOnCpp convertBlock
   -- Find all ST Refs initialized in this block
   findSTRefsIn = everythingOnCpp (++) isSTRef
     where
-    isSTRef (CppVariableIntroduction (ident, Nothing) _ (Just (CppApp (CppApp f [_]) [])))
+    isSTRef (CppVariableIntroduction (ident, Nothing) _ _ (Just (CppApp (CppApp f [_]) [])))
       | isSTFunc C.newSTRef f = [ident]
     isSTRef _ = []
   -- Find all STRefs used as arguments to readSTRef, writeSTRef, modifySTRef
