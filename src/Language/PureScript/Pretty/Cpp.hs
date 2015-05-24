@@ -276,6 +276,7 @@ literals = mkPattern' match
     [ return $ lbl ++ ": "
     , prettyPrintCpp' cpp
     ]
+  match (CppComment [] cpp) = match cpp
   match (CppComment com cpp) = fmap concat $ sequence $
     [ return "\n"
     , currentIndent

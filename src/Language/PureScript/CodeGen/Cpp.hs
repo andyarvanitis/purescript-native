@@ -163,12 +163,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   declToCpp TopLevel (CI.Function (_, comms, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
     let typ = mktype mn ty
-    return (CppComment comms (CppFunction (identToCpp ident)
-                                          (templparams' typ)
-                                          [(identToCpp arg, argtype typ)]
-                                          (rettype typ)
-                                          []
-                                          block))
+    let f = CppFunction (identToCpp ident)
+                        (templparams' typ)
+                        [(identToCpp arg, argtype typ)]
+                        (rettype typ)
+                        []
+                        block
+    return (CppComment comms f)
+
   -- Point-free top-level functions
   declToCpp TopLevel (CI.Function (_, comms, Just ty, _) ident [] [(CI.Return _ e)])
     | tmplts@(_:_) <- templparams' (mktype mn ty) = do
@@ -247,11 +249,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                           (concatMap constraintParams constraints)
         classTemplParams = zip tmplts $ fromMaybe 0 . flip lookup fnTemplPs <$> tmplts
     cpps' <- mapM (toCpp tmplts) fns
-    return (CppComment comms (CppStruct (ctor, classTemplParams)
-                              []
-                              (toStrings <$> constraints)
-                              cpps'
-                              []))
+    let struct' = CppStruct (ctor, classTemplParams)
+                            []
+                            (toStrings <$> constraints)
+                            cpps'
+                            []
+    return (CppComment comms struct')
     where
     tmpParams :: [(String, T.Type)] -> [(String, Int)]
     tmpParams fns = concatMap (templparams' . mktype mn . snd) fns
@@ -324,6 +327,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       asLambda :: Cpp -> Cpp
       asLambda (CppFunction _ tmplts' args rty qs body) =
         CppVariableIntroduction (name, mktype mn ty) tmplts' [CppStatic] (Just $ CppLambda [] args rty body)
+      asLambda (CppComment comms cpp') = CppComment comms (asLambda cpp')
       asLambda cpp = cpp
 
     toCpp tmplts ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
@@ -361,6 +365,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
     addQual :: CppQualifier -> Cpp -> Cpp
     addQual q (CppFunction name tmplts args rty qs cpp) = CppFunction name tmplts args rty (q : qs) cpp
+    addQual q (CppComment comms cpp') = CppComment comms (addQual q cpp')
     addQual _ cpp = cpp
 
     isNormalFn :: (CI.Expr Ann) -> Bool
@@ -403,8 +408,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     return . CppThrow $ CppApp (CppVar "runtime_error") [CppStringLiteral msg]
   statmentToCpp (CI.Label _ lbl stmnt) =
     CppLabel lbl <$> statmentToCpp stmnt
-  statmentToCpp (CI.Comment _ coms') =
-    return $ CppComment coms' (CppBlock []) -- whoops
+  statmentToCpp (CI.Comment _ _) = return CppNoOp
 
   loopStatementToCpp :: CI.LoopStatement Ann -> m Cpp
   loopStatementToCpp (CI.Break _ lbl) = return . CppBreak $ fromMaybe "" lbl
@@ -678,6 +682,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     remove (CppFunction name ts args rtyp qs body) =
       let ts' = filter (`notElem` tmplts) ts in CppFunction name ts' args rtyp qs body
+    remove (CppComment comms cpp') = CppComment comms (remove cpp')
     remove other = other
 
   hasTemplates :: Cpp -> Bool
@@ -685,6 +690,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     go :: Cpp -> Bool
     go (CppFunction _ (_:_) _ _ _ _) = True
+    go (CppComment _ cpp') = go cpp'
     go _ = False
 
   fnAppCpp :: CI.Expr Ann -> m Cpp
@@ -816,6 +822,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           Just $ CppVariableIntroduction (fullname name, typ) tmps [CppTemplSpec] cpp
       fromConst (CppFunction name tmplts args rtyp qs body) =
         Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
+      fromConst (CppComment comms cpp) | Just cpp' <- fromConst cpp = Just (CppComment comms cpp')
       fromConst cpp = Nothing
       fullname :: String -> String
       fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
@@ -830,7 +837,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go (CppFunction name [] args rtyp qs _) = Just (CppFunction name [] args rtyp qs CppNoOp)
     go cpp@(CppFunction{}) = Just cpp
     go cpp@(CppVariableIntroduction{}) = Just cpp
-    go cpp@(CppComment _ cpp') | (_:_) <- toHeader [cpp'] = Just cpp
+    go cpp@(CppComment _ cpp') | Just _ <- go cpp' = Just cpp
     go _ = Nothing
 
   toBody :: [Cpp] -> [Cpp]
@@ -850,10 +857,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           Just $ CppVariableIntroduction (fullname name, typ) tmps [CppTemplSpec] cpp
       fromConst (CppFunction name tmplts args rtyp qs body) =
         Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
+      fromConst (CppComment comms cpp) | Just cpp' <- fromConst cpp = Just (CppComment comms cpp')
       fromConst cpp = Nothing
       fullname :: String -> String
       fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
-    go cpp@(CppComment _ cpp') | (_:_) <- toBody [cpp'] = Just cpp
+    go cpp@(CppComment _ cpp') | Just _ <- go cpp' = Just cpp
     go _ = Nothing
 
   fileBegin :: String -> [Cpp]
