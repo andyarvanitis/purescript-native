@@ -160,19 +160,20 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         drop' n (args, CI.Return _ (CI.AnonFunction _ args' [body'])) | n > 0 = drop' (n-1) (args ++ args', body')
         drop' _ a = a
 
-  declToCpp TopLevel (CI.Function (_, _, Just ty, _) ident [arg] body) = do
+  declToCpp TopLevel (CI.Function (_, comms, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
     let typ = mktype mn ty
-    return $ CppFunction (identToCpp ident)
-                         (templparams' typ)
-                         [(identToCpp arg, argtype typ)]
-                         (rettype typ)
-                         []
-                         block
-
+    return (CppComment comms (CppFunction (identToCpp ident)
+                                          (templparams' typ)
+                                          [(identToCpp arg, argtype typ)]
+                                          (rettype typ)
+                                          []
+                                          block))
   -- Point-free top-level functions
-  declToCpp TopLevel (CI.Function (_, _, Just ty, _) ident [] [(CI.Return _ e)])
-    | tmplts@(_:_) <- templparams' (mktype mn ty) = fnDeclCpp ty ident tmplts e []
+  declToCpp TopLevel (CI.Function (_, comms, Just ty, _) ident [] [(CI.Return _ e)])
+    | tmplts@(_:_) <- templparams' (mktype mn ty) = do
+      cpp' <- fnDeclCpp ty ident tmplts e []
+      return (CppComment comms cpp')
 
   -- declToCpp TopLevel (CI.Function ti@(_, _, Just ty, _) ident [] [(CI.Return _ e@(CI.App _ f args))])
   --   | tmplts@(_:_) <- templparams' (mktype mn ty) = let e' = CI.App ti f args in
@@ -239,18 +240,18 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- |
   -- Typeclass declaration
   --
-  declToCpp TopLevel (CI.Constructor (_, _, _, Just IsTypeClassConstructor) _ (Ident ctor) _)
+  declToCpp TopLevel (CI.Constructor (_, comms, _, Just IsTypeClassConstructor) _ (Ident ctor) _)
     | Just (params, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) = do
     let tmplts = runType . mkTemplate <$> params
         fnTemplPs = nub $ (concatMap (templparams' . mktype mn . snd) fns) ++
                           (concatMap constraintParams constraints)
         classTemplParams = zip tmplts $ fromMaybe 0 . flip lookup fnTemplPs <$> tmplts
     cpps' <- mapM (toCpp tmplts) fns
-    return $ CppStruct (ctor, classTemplParams)
-                       []
-                       (toStrings <$> constraints)
-                       cpps'
-                       []
+    return (CppComment comms (CppStruct (ctor, classTemplParams)
+                              []
+                              (toStrings <$> constraints)
+                              cpps'
+                              []))
     where
     tmpParams :: [(String, T.Type)] -> [(String, Int)]
     tmpParams fns = concatMap (templparams' . mktype mn . snd) fns
@@ -829,6 +830,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go (CppFunction name [] args rtyp qs _) = Just (CppFunction name [] args rtyp qs CppNoOp)
     go cpp@(CppFunction{}) = Just cpp
     go cpp@(CppVariableIntroduction{}) = Just cpp
+    go cpp@(CppComment _ cpp') | (_:_) <- toHeader [cpp'] = Just cpp
     go _ = Nothing
 
   toBody :: [Cpp] -> [Cpp]
@@ -851,6 +853,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       fromConst cpp = Nothing
       fullname :: String -> String
       fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
+    go cpp@(CppComment _ cpp') | (_:_) <- toBody [cpp'] = Just cpp
     go _ = Nothing
 
   fileBegin :: String -> [Cpp]
