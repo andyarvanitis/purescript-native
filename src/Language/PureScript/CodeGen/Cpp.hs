@@ -494,7 +494,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       '_' : reversedName <- dropWhile isNumber (reverse prefixStripped),
       cname <- reverse $ takeWhile (not . isPunctuation) reversedName,
       mname <- reverse . drop 1 $ dropWhile (not . isPunctuation) reversedName,
-      Just (params, supers, fns) <- findClass (Qualified (Just (ModuleName [ProperName mname])) (ProperName cname))
+      mnames <- words (P.dotsTo ' ' mname),
+      Just (params, supers, fns) <- findClass (Qualified (Just (ModuleName (ProperName <$> mnames))) (ProperName cname))
     = let superFns = getFns supers
           fs' = (\(f,t) -> (f, mktype mn t)) <$> fns ++ superFns
       in return $ CppInstance mname (cname : (show . fst <$> supers), fs') [] (zip params (Just . mkTemplate <$> params))
@@ -506,7 +507,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       go cls | Just (_, clss, fns) <- findClass (fst cls) = fns ++ getFns clss
       go _ = []
 
-  exprToCpp (CI.Var _ ident) =
+  exprToCpp (CI.Var _ ident) = do
     return $ varToCpp ident
     where
     varToCpp :: Qualified Ident -> Cpp

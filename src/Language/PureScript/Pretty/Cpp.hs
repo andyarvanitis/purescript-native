@@ -205,7 +205,7 @@ literals = mkPattern' match
   match (CppInstance [] (cls:_, _) _ params) =
     return $ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
   match (CppInstance mn (cls:_, _) _ params) =
-    return $ mn ++ "::" ++ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
+    return $ (dotsTo '_' mn) ++ "::" ++ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
   match (CppScope ident) = return ident
 --   match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
