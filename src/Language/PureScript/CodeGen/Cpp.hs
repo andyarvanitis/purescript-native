@@ -334,7 +334,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
     toCpp tmplts ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
       | Just ty <- tyFromExpr e,
-        tmplts'@(_:_) <- templparams' (mktype mn ty)
+        typ@(Just Function{}) <- mktype mn ty,
+        tmplts'@(_:_) <- templparams' typ
        = fnDeclCpp ty (Ident name) (filter (`notElem` tmplts) tmplts') e [CppInline, CppStatic]
     toCpp tmplts ((name, _), e)
       | Just ty <- tyFromExpr e,
