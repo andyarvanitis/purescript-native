@@ -260,13 +260,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     tmpParams fns = concatMap (templparams' . mktype mn . snd) fns
     constraintParams :: T.Constraint -> [(String, Int)]
     constraintParams (cname@(Qualified _ pn), cps)
-      | Just (ps, _, fs) <- findClass cname,
+      | Just (ps, constraints', fs) <- findClass cname,
         ps' <- runType . mkTemplate <$> ps,
         tps@(_:_) <- filter ((`elem` ps') . fst) (tmpParams fs),
         ts@(_:_) <- (\p -> case find ((== p) . fst) tps of
                              Just (p', n) -> n
                              _ -> 0) <$> ps' = let cps' = typestr mn <$> cps in
-                                               zip cps' ts
+                                               zip cps' ts ++ concatMap constraintParams constraints'
+    constraintParams (cname, _)
+      | Just (ps, constraints'@(_:_), fs) <- findClass cname = concatMap constraintParams constraints'
     constraintParams _ = []
 
     toCpp :: [String] -> (String, T.Type) -> m Cpp
