@@ -447,6 +447,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- |
   -- Function application
   --
+  exprToCpp (CI.App _ e [CI.Var _ (Qualified (Just (ModuleName [ProperName "Prim"])) (Ident "undefined"))]) =
+    exprToCpp e
   exprToCpp (CI.App _ f []) = flip CppApp [] <$> exprToCpp f
   exprToCpp e@CI.App{} = do
     let (f, args) = unApp e []

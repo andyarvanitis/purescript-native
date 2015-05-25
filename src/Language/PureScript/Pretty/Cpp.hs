@@ -474,7 +474,11 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
     OperatorTable [ [ Wrap accessor $ \(typ, prop) val ->
                                         "get" ++ (maybe "" (angles . runType) typ) ++ parens val ++ '.' : prop ]
                   , [ Wrap mapAccessor $ \prop val -> val ++ '.' : prop ]
-                  , [ Wrap scope $ \(typ, prop) val -> val ++ "::" ++ prop ++ (maybe "" (angles . runType) typ) ]
+                  , [ Wrap scope $ \(typ, prop) val ->
+                                     let prop' = if typ /= Nothing && '<' `elem` val
+                                                   then "template " ++ prop
+                                                   else prop in
+                                     val ++ "::" ++ prop' ++ (maybe "" (angles . runType) typ) ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ parens args ]
                   , [ Wrap partapp $ \(args, n) _ -> "bind" ++ angles (show n) ++ parens args ]
