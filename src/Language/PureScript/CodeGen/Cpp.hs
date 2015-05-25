@@ -762,12 +762,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                            (CppBlock [CppReturn e'])
       where
       toApp :: Maybe Type -> m Cpp
-      toApp atyp | (CI.Var _ qid@(Qualified mname vid)) <- e =
-                   let ty' = findValue (fromMaybe mn mname) vid
-                       app' = CI.App (Nothing, [], Just ty, Nothing)
-                                     (CI.Var (Nothing, [], ty', Nothing) qid)
-                                     (appArg atyp) in
-                   fnAppCpp app'
+      toApp atyp | (CI.Var _ qid@(Qualified mname vid)) <- e,
+                   Just ty' <- findValue (fromMaybe mn mname) vid =
+                   fnAppCpp $ CI.App (Nothing, [], Just ty, Nothing)
+                                     (CI.Var (Nothing, [], Just ty', Nothing) qid)
+                                     (appArg atyp)
+                 | (CI.Var (_, _, Just ty', _) qid) <- e =
+                   fnAppCpp $ CI.App (Nothing, [], Just ty, Nothing)
+                                     (CI.Var (Nothing, [], Just ty', Nothing) qid)
+                                     (appArg atyp)
                  | otherwise = CppApp <$> fnAppCpp e <*> appArg' atyp
 
       fnArg :: Maybe Type -> [(String, Maybe Type)]
