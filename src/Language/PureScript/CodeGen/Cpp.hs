@@ -846,7 +846,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go (CppFunction name [] args rtyp qs _) = Just (CppFunction name [] args rtyp qs CppNoOp)
     go cpp@(CppFunction{}) = Just cpp
     go cpp@(CppVariableIntroduction{}) = Just cpp
-    go cpp@(CppComment _ cpp') | Just _ <- go cpp' = Just cpp
+    go cpp@(CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
     go _ = Nothing
 
   toBody :: [Cpp] -> [Cpp]
@@ -870,7 +870,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       fromConst cpp = Nothing
       fullname :: String -> String
       fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
-    go cpp@(CppComment _ cpp') | Just _ <- go cpp' = Just cpp
+    go cpp@(CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
     go _ = Nothing
 
   fileBegin :: String -> [Cpp]
