@@ -221,7 +221,7 @@ literals = mkPattern' match
           indentString <- currentIndent
           return (templDecl' (Left tmps) ++ "\n" ++ indentString)
     , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs'
-    , return "const "
+    , return $ if CppMutable `notElem` qs then "const " else ""
     , return (maybe "auto" runType typ ++ " ")
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
@@ -271,7 +271,7 @@ literals = mkPattern' match
     , return ";"
     ]
   match (CppBreak lbl) = return $ "goto " ++ lbl ++ ";"
-  match (CppContinue _) = return $ "continue;"
+  match (CppContinue lbl) = return $ "goto " ++ lbl ++ ";"
   match (CppLabel lbl cpp) = fmap concat $ sequence
     [ return $ lbl ++ ": "
     , prettyPrintCpp' cpp

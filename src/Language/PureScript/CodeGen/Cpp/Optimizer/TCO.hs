@@ -36,7 +36,17 @@ tco' = everywhereOnCpp convert
   copyVar :: (String, Maybe Type) -> (String, Maybe Type)
   copyVar (nm, ty) = ("__copy_" ++ nm, ty)
   convert :: Cpp -> Cpp
-  convert cpp@(CppVariableIntroduction (name, typ) tmps qs (Just fn@CppFunction{})) =
+  convert cpp@(CppFunction name _ _ _ _ _) =
+    let
+      (argss, body', replace) = collectAllFunctionArgs [] id cpp
+    in case () of
+      _ | isTailCall name body' ->
+            let
+              allArgs = concat $ reverse argss
+            in
+              replace (toLoop name allArgs body')
+        | otherwise -> cpp
+  convert cpp@(CppVariableIntroduction (name, typ) tmps qs (Just fn@CppLambda{})) =
     let
       (argss, body', replace) = collectAllFunctionArgs [] id fn
     in case () of
@@ -52,10 +62,10 @@ tco' = everywhereOnCpp convert
     collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident tmps (map copyVar args) rty qs (CppBlock [b]))) body
   collectAllFunctionArgs allArgs f (CppFunction ident tmps args rty qs body@(CppBlock _)) =
     (args : allArgs, body, f . CppFunction ident tmps (map copyVar args) rty qs)
-  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident tmps args rty qs (CppBlock [body]))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (CppReturn (CppFunction ident tmps (map copyVar args) rty qs (CppBlock [b])))) body
-  collectAllFunctionArgs allArgs f (CppReturn (CppFunction ident tmps args rty qs body@(CppBlock _))) =
-    (args : allArgs, body, f . CppReturn . CppFunction ident tmps (map copyVar args) rty qs)
+  collectAllFunctionArgs allArgs f (CppReturn (CppLambda cps args rty (CppBlock [body]))) =
+    collectAllFunctionArgs (args : allArgs) (\b -> f (CppReturn (CppLambda cps (map copyVar args) rty (CppBlock [b])))) body
+  collectAllFunctionArgs allArgs f (CppReturn (CppLambda cps args rty body@(CppBlock _))) =
+    (args : allArgs, body, f . CppReturn . CppLambda cps (map copyVar args) rty)
   collectAllFunctionArgs allArgs f body = (allArgs, body, f)
   isTailCall :: String -> Cpp -> Bool
   isTailCall ident cpp =
@@ -78,7 +88,7 @@ tco' = everywhereOnCpp convert
     countSelfCallsUnderFunctions _ = 0
   toLoop :: String -> [(String, Maybe Type)] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
-        map (\arg -> CppVariableIntroduction arg [] [] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
+        map (\arg -> CppVariableIntroduction arg [] [CppMutable] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
         [ CppLabel tcoLabel $ CppWhile (CppBooleanLiteral True) (CppBlock [ everywhereOnCpp loopify cpp ]) ]
     where
     loopify :: Cpp -> Cpp
@@ -87,7 +97,7 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppBlock $ zipWith (\val arg ->
-                    CppVariableIntroduction (tcoVar arg, Nothing) [] [] (Just val)) allArgumentValues (map fst allArgs)
+                    CppVariableIntroduction (tcoVar arg, Nothing) [] [CppMutable] (Just val)) allArgumentValues (map fst allArgs)
                   ++ map (\arg ->
                     CppAssignment (CppVar arg) (CppVar (tcoVar arg))) (map fst allArgs)
                   ++ [ CppContinue tcoLabel ]

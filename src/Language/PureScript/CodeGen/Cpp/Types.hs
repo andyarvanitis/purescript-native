@@ -92,6 +92,10 @@ data CppQualifier
   --
   | CppConstExpr
   -- |
+  -- Mutable expression
+  --
+  | CppMutable
+  -- |
   -- Template partial specialization
   --
   | CppTemplSpec
@@ -341,6 +345,7 @@ runQualifier CppDestructor = "~"
 runQualifier CppDefault = ""
 runQualifier CppDelete = ""
 runQualifier CppConstExpr = "constexpr"
+runQualifier CppMutable = ""
 runQualifier CppTemplSpec = "template <>"
 
 runCaptureType :: CppCaptureType -> String
