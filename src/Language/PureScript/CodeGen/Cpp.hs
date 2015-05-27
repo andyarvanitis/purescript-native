@@ -177,9 +177,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       cpp' <- fnDeclCpp ty ident tmplts e []
       return (CppComment comms cpp')
 
-  -- declToCpp TopLevel (CI.Function ti@(_, _, Just ty, _) ident [] [(CI.Return _ e@(CI.App _ f args))])
-  --   | tmplts@(_:_) <- templparams' (mktype mn ty) = let e' = CI.App ti f args in
-  --                                                   fnDeclCpp ty ident tmplts e []
   -- TODO:
   declToCpp TopLevel (CI.Function (_, _, Just _, _) ident [] [CI.Return _ _]) = error $ show ident
 
@@ -317,9 +314,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                else CppNamespace ("::" ++ runModuleName classmn) [CppUseNamespace (runModuleName mn), struct]
     where
     toCpp :: [(String, Int)] -> ((String, T.Type), CI.Expr Ann) -> m Cpp
-    toCpp tmplts ((name, ty'), CI.AnonFunction ti@(_, _, Just ty, _) ags sts) = do
+    toCpp tmplts ((name, ty'), CI.AnonFunction ann'@(_, _, Just ty, _) ags sts) = do
       let typ = mktype mn ty'
-      fn' <- declToCpp TopLevel $ CI.Function ti (Ident name) ags sts
+      fn' <- declToCpp TopLevel $ CI.Function ann' (Ident name) ags sts
       let cpp = addQual CppStatic (removeTemplates tmplts fn')
       return (case mktype mn ty' of
                 Just Function{} -> cpp
@@ -348,6 +345,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     toCpp tmplts ((name, _), e@(CI.Literal _ CharLiteral{}))
       | Just ty <- tyFromExpr e = literalCpp name ty e
     toCpp tmplts ((name, _), e)
+      | Just ty <- tyFromExpr e,
+        typ <- mktype mn ty,
+        tmplts'@(_:_) <- templparams' typ = do
+        e' <- exprToCpp e
+        return $ CppVariableIntroduction (name, mktype mn ty) (filter (`notElem` tmplts) tmplts') [CppStatic] (Just e')
+    toCpp tmplts ((name, _), e)
       | Just ty <- tyFromExpr e = do
         e' <- exprToCpp e
         return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] (Just e')
@@ -368,6 +371,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
     addQual :: CppQualifier -> Cpp -> Cpp
     addQual q (CppFunction name tmplts args rty qs cpp) = CppFunction name tmplts args rty (q : qs) cpp
+    addQual q (CppVariableIntroduction name tmplts qs cpp) = CppVariableIntroduction name tmplts (q : qs) cpp
     addQual q (CppComment comms cpp') = CppComment comms (addQual q cpp')
     addQual _ cpp = cpp
 
@@ -392,7 +396,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     CppIfElse <$> exprToCpp cond <*> pure thens' <*> pure Nothing
     where
     addTypes :: CI.Expr Ann -> Cpp -> m Cpp
-    addTypes (CI.IsTagOf _ ctor e) sts = do
+    addTypes (CI.IsTagOf (_, _, ty, _) ctor e) sts = do
       e' <- exprToCpp e
       return (typeAccessors e' sts)
       where
@@ -402,8 +406,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         convert :: Cpp -> Cpp
         convert (CppAccessor Nothing prop cpp) | cpp == acc = CppAccessor qtyp prop cpp
         convert cpp = cpp
+        tmplts :: [Type]
+        tmplts = maybe [] templateVars (ty >>= mktype mn)
         qtyp :: Maybe Type
-        qtyp = Just (Native (qualifiedToStr' (Ident . runProperName) ctor) [])
+        qtyp = Just (Native (qualifiedToStr' (Ident . runProperName) ctor) tmplts)
     addTypes _ cpp = return cpp
   statmentToCpp (CI.Return _ expr) =
     CppReturn <$> exprToCpp expr
@@ -423,7 +429,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     literalToValueCpp lit
 
   -- TODO: Change how this is done when proper Meta info added
-  exprToCpp (CI.Accessor tt (CI.Literal _ (StringLiteral name)) expr)
+  exprToCpp (CI.Accessor _ (CI.Literal _ (StringLiteral name)) expr)
     | "__superclass_" `isPrefixOf` name = exprToCpp expr
   exprToCpp (CI.Accessor _ prop@(CI.Literal _ (StringLiteral name)) expr@(CI.Var (_, _, ty, _) _)) = do
     expr' <- exprToCpp expr
@@ -470,9 +476,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
       CI.Var (_, _, _, Just IsTypeClassConstructor) _ -> return CppNoOp
       CI.Var (_, _, Just ty, _) (Qualified (Just mn') ident) -> fnAppCpp e
-      CI.Var (_, _, Nothing, _) ident -> case findInstance ident of
-                                           Nothing -> fnAppCpp e
-                                           _ -> return CppNoOp
+      CI.Var (_, _, Nothing, _) ident -> (case findInstance ident of
+                                            Nothing -> fnAppCpp e
+                                            _ -> exprToCpp f)
       -- TODO: verify this
       _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> exprToCpp f
 
@@ -484,6 +490,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                then CppApp (CppDataConstructor (qualifiedToStr' id ident) tmplts) []
                else let argTypes = maybe [] (init . fnTypesN fieldCount) (ty >>= mktype mn) in
                     CppPartialApp (CppDataConstructor (qualifiedToStr' id ident) tmplts) [] argTypes fieldCount
+
+  exprToCpp (CI.Var (_, _, ty, Just IsNewtype) ident) =
+    let qname = qualifiedToStr' id ident
+        tmplts = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
+        argTypes = maybe [] (init . fnTypesN 1) (ty >>= mktype mn)
+    in return (CppPartialApp (CppDataConstructor (qualifiedToStr' id ident) tmplts) [] argTypes 1)
 
   -- Typeclass instance dictionary
   exprToCpp (CI.Var (_, _, Nothing, Nothing) ident@(Qualified (Just _) (Ident instname)))
@@ -688,6 +700,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     remove (CppFunction name ts args rtyp qs body) =
       let ts' = filter (`notElem` tmplts) ts in CppFunction name ts' args rtyp qs body
+    remove (CppVariableIntroduction name ts qs val) =
+      let ts' = filter (`notElem` tmplts) ts in CppVariableIntroduction name ts' qs val
     remove (CppComment comms cpp') = CppComment comms (remove cpp')
     remove other = other
 
@@ -696,6 +710,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     where
     go :: Cpp -> Bool
     go (CppFunction _ (_:_) _ _ _ _) = True
+    go (CppVariableIntroduction _ (_:_) _ _) = True
     go (CppComment _ cpp') = go cpp'
     go _ = False
 
@@ -762,16 +777,17 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                            (CppBlock [CppReturn e'])
       where
       toApp :: Maybe Type -> m Cpp
-      toApp atyp | (CI.Var _ qid@(Qualified mname vid)) <- e,
-                   Just ty' <- findValue (fromMaybe mn mname) vid =
-                   fnAppCpp $ CI.App (Nothing, [], Just ty, Nothing)
-                                     (CI.Var (Nothing, [], Just ty', Nothing) qid)
-                                     (appArg atyp)
-                 | (CI.Var (_, _, Just ty', _) qid) <- e =
-                   fnAppCpp $ CI.App (Nothing, [], Just ty, Nothing)
-                                     (CI.Var (Nothing, [], Just ty', Nothing) qid)
-                                     (appArg atyp)
-                 | otherwise = CppApp <$> fnAppCpp e <*> appArg' atyp
+      toApp atyp
+        | (CI.Var _ qid@(Qualified mname vid)) <- e,
+           Just ty' <- findValue (fromMaybe mn mname) vid =
+           fnAppCpp $ CI.App (Nothing, [], Just ty, Nothing)
+                             (CI.Var (Nothing, [], Just ty', Nothing) qid)
+                             (appArg atyp)
+        | (CI.Var ann'@(_, _, Just ty', _) qid) <- e =
+          fnAppCpp $ CI.App (Nothing, [], Just ty, Nothing)
+                            (CI.Var ann' qid)
+                            (appArg atyp)
+        | otherwise = CppApp <$> fnAppCpp e <*> appArg' atyp
 
       fnArg :: Maybe Type -> [(String, Maybe Type)]
       fnArg Nothing = []
@@ -853,7 +869,19 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   toBody = catMaybes . map go
     where
     go :: Cpp -> Maybe Cpp
-    go (CppNamespace name cpps) = Just (CppNamespace name (toBody cpps))
+    go (CppNamespace name cpps) =
+      let cpps' = toBody cpps in
+      if all isNoOp cpps'
+        then Nothing
+        else Just (CppNamespace name cpps')
+      where
+      isNoOp :: Cpp -> Bool
+      isNoOp CppNoOp = True
+      isNoOp (CppComment _ cpp) | isNoOp cpp = True
+      isNoOp (CppUseNamespace{}) = True
+      isNoOp (CppNamespace _ cpps) = all isNoOp cpps
+      isNoOp (CppRaw _) = True
+      isNoOp _ = False
     go cpp@(CppUseNamespace{}) = Just cpp
     go cpp@(CppFunction _ [] _ _ _ _) = Just cpp
     go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) _)
@@ -863,7 +891,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       fromConst :: Cpp -> Maybe Cpp
       fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs cpp)
         | CppStatic `elem` qs =
-          Just $ CppVariableIntroduction (fullname name, typ) tmps [CppTemplSpec] cpp
+          Just $ CppVariableIntroduction (fullname name, typ) tmps (CppTemplSpec:(delete CppStatic qs)) cpp
       fromConst (CppFunction name tmplts args rtyp qs body) =
         Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
       fromConst (CppComment comms cpp) | Just cpp' <- fromConst cpp = Just (CppComment comms cpp')

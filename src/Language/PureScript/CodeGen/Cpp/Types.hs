@@ -309,6 +309,7 @@ dataCon m a = maybe [] (replicate 1) (mktype m a)
 getDataType :: String -> Type -> Maybe Type
 getDataType name (Function _ b) = getDataType name b
 getDataType name t@(Native name' _) | name' == name = Just t
+getDataType name (Native name' ts) = Just (Native name ts)
 getDataType _ _ = Nothing
 
 getDataTypeArgs :: Type -> [Type]
@@ -359,6 +360,10 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
       args ++ (Template t [], EffectFunction anytype) : (go [] (b, b'))
     go args (Template t [a], List a') =
       args ++ (Template t [], List anytype) : (go [] (a, a'))
+    go args (Template t ts, Native t' ts') | length ts == length ts' =
+      args ++ (Template t [], Native t' []) : concatMap (go []) (zip ts ts')
+    go args (Template t ts, Native t' []) =
+      args ++ [(Template t [], Native t' [])]
     go args (a@DeclType{}, a') = args ++ [(a, a')]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (EffectFunction b, EffectFunction b') = go args (b, b')

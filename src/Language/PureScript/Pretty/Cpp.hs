@@ -472,8 +472,9 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   operators :: OperatorTable PrinterState Cpp String
   operators =
     OperatorTable [ [ Wrap accessor $ \(typ, prop) val ->
-                                        "get" ++ (maybe "" (angles . prettyPrintCpp1 . flip CppData [] . runType) typ)
-                                                        ++ parens val ++ '.' : prop ]
+                                        "get"
+                                     ++ (maybe "" (angles . (\(a,b) -> a ++ '_' : b) . break (=='<') . runType) typ)
+                                     ++ parens val ++ '.' : prop ]
                   , [ Wrap mapAccessor $ \prop val -> val ++ '.' : prop ]
                   , [ Wrap scope $ \(typ, prop) val ->
                                      let prop' = if typ /= Nothing && '<' `elem` val
