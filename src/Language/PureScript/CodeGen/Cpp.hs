@@ -722,7 +722,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       let fn = P.prettyPrintCpp [f']
           instArgs = filter (instanceArg fn) args'
           normArgs = filter normalArg args'
-      let declType = maybe (tyFromExpr' f) (instanceFnType fn) $ listToMaybe instArgs
+      let declType = (listToMaybe instArgs >>= instanceFnType fn) <|> tyFromExpr' f <|> findFnDeclType f
           exprType = fnTyFromApp' e
           allTemplates = fromMaybe [] $ templateMappings <$> (liftM2 (,) declType exprType)
           templateChanges = filter (\(a,b) -> a /= b) allTemplates
@@ -750,6 +750,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go t = t
       instanceFnType fname (CppApp i@CppInstance{} _) = instanceFnType fname i
       instanceFnType _ _ = Nothing
+
+      findFnDeclType :: CI.Expr Ann -> Maybe Type
+      findFnDeclType (CI.Var _ (Qualified mn' ident))
+        | (Just ty) <- findValue (fromMaybe mn mn') ident, typ@(Just _) <- mktype mn ty = typ
+      findFnDeclType _ = Nothing
 
       getParams :: Cpp -> [(String, Maybe Type)]
       getParams (CppInstance _ _ _ ps) = ps

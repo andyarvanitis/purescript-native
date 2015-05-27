@@ -374,7 +374,7 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
     go args (Native t _, Native t' _) = args
       -- | t == t' = args
       -- | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
-    go _ (t1', t2') = error ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2')
+    go args (t1', t2') = trace ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2') args
 
 templateReplacements :: (Type, Type) -> [(Type, Type)]
 templateReplacements = filter (\(a,b) -> a /= b) . templateMappings
