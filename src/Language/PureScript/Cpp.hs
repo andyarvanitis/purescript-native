@@ -73,7 +73,7 @@ import qualified Language.PureScript.CoreFn as CF
 import qualified Language.PureScript.CoreImp as CI
 import qualified Language.PureScript.Constants as C
 
-import qualified Paths_pure11 as Paths
+import qualified Paths_pure14 as Paths
 
 -- |
 -- Compile a collection of modules
