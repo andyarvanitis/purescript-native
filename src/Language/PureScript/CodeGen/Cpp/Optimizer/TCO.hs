@@ -62,6 +62,10 @@ tco' = everywhereOnCpp convert
     collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident tmps (map copyVar args) rty qs (CppBlock [b]))) body
   collectAllFunctionArgs allArgs f (CppFunction ident tmps args rty qs body@(CppBlock _)) =
     (args : allArgs, body, f . CppFunction ident tmps (map copyVar args) rty qs)
+  collectAllFunctionArgs allArgs f (CppLambda cps args rty (CppBlock (body@(CppReturn _):_))) =
+    collectAllFunctionArgs (args : allArgs) (\b -> f (CppLambda cps (map copyVar args) rty (CppBlock [b]))) body
+  collectAllFunctionArgs allArgs f (CppLambda cps args rty body@(CppBlock _)) =
+    (args : allArgs, body, f . CppLambda cps (map copyVar args) rty)
   collectAllFunctionArgs allArgs f (CppReturn (CppLambda cps args rty (CppBlock [body]))) =
     collectAllFunctionArgs (args : allArgs) (\b -> f (CppReturn (CppLambda cps (map copyVar args) rty (CppBlock [b])))) body
   collectAllFunctionArgs allArgs f (CppReturn (CppLambda cps args rty body@(CppBlock _))) =
