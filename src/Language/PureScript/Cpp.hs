@@ -73,7 +73,7 @@ import qualified Language.PureScript.CoreFn as CF
 import qualified Language.PureScript.CoreImp as CI
 import qualified Language.PureScript.Constants as C
 
-import qualified Paths_pure14 as Paths
+import qualified Paths_purescript as Paths
 
 -- |
 -- Compile a collection of modules
@@ -209,13 +209,13 @@ make outputDir ms prefix = do
 
   when (any fst marked) $ do -- TODO: it should only be updated if any files have been added/removed
     writeTextFile (outputDir </> "CMakeLists.txt") cmakeListsTxt
-    writeTextFile (outputDir </> "PureScript/any_map.hh")     $ BU.toString $(embedFile "include/any_map.hh")
-    writeTextFile (outputDir </> "PureScript/bind.hh")        $ BU.toString $(embedFile "include/bind.hh")
-    writeTextFile (outputDir </> "PureScript/memory.hh")      $ BU.toString $(embedFile "include/memory.hh")
-    writeTextFile (outputDir </> "PureScript/PureScript.hh")  $ BU.toString $(embedFile "include/purescript.hh")
-    writeTextFile (outputDir </> "PureScript/shared_list.hh") $ BU.toString $(embedFile "include/shared_list.hh")
+    writeTextFile (outputDir </> "PureScript/any_map.hh")     $ BU.toString $(embedFile "pcc/include/any_map.hh")
+    writeTextFile (outputDir </> "PureScript/bind.hh")        $ BU.toString $(embedFile "pcc/include/bind.hh")
+    writeTextFile (outputDir </> "PureScript/memory.hh")      $ BU.toString $(embedFile "pcc/include/memory.hh")
+    writeTextFile (outputDir </> "PureScript/PureScript.hh")  $ BU.toString $(embedFile "pcc/include/purescript.hh")
+    writeTextFile (outputDir </> "PureScript/shared_list.hh") $ BU.toString $(embedFile "pcc/include/shared_list.hh")
     -- TODO: temporary
-    writeTextFile (outputDir </> "PureScript/prelude_ffi.hh") $ BU.toString $(embedFile "include/prelude_ffi.hh")
+    writeTextFile (outputDir </> "PureScript/prelude_ffi.hh") $ BU.toString $(embedFile "pcc/include/prelude_ffi.hh")
 
   (desugared, nextVar) <- runSupplyT 0 $ zip (map fst marked) <$> desugar (map snd marked)
 

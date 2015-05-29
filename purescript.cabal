@@ -17,6 +17,7 @@ author: Phil Freeman <paf31@cantab.net>,
 
 extra-source-files: examples/passing/*.purs
                   , examples/failing/*.purs
+                  , pcc/include/*.hh
 
 source-repository head
     type: git
@@ -35,6 +36,7 @@ library
                    transformers-compat >= 0.3.0,
                    utf8-string >= 1 && < 2,
                    pattern-arrows >= 0.0.2 && < 0.1,
+                   file-embed >= 0.0.7 && < 0.0.8,
                    time -any,
                    boxes >= 0.1.4 && < 0.2.0,
                    aeson >= 0.8 && < 0.9,
@@ -138,6 +140,18 @@ library
                      Language.PureScript.Docs.ParseAndDesugar
                      Language.PureScript.Docs.Utils.MonoidExtras
 
+                     Language.PureScript.Cpp
+                     Language.PureScript.CodeGen.Cpp
+                     Language.PureScript.CodeGen.Cpp.AST
+                     Language.PureScript.CodeGen.Cpp.Common
+                     Language.PureScript.CodeGen.Cpp.Optimizer
+                     Language.PureScript.CodeGen.Cpp.Optimizer.Common
+                     Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
+                     Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo
+                     Language.PureScript.CodeGen.Cpp.Optimizer.TCO
+                     Language.PureScript.CodeGen.Cpp.Types
+                     Language.PureScript.Pretty.Cpp
+
                      Control.Monad.Unify
                      Control.Monad.Supply
                      Control.Monad.Supply.Class
@@ -221,6 +235,16 @@ executable psc-hierarchy
     hs-source-dirs: hierarchy
     other-modules:
     ghc-options: -Wall -O2
+
+executable pcc
+    build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
+                   mtl -any, optparse-applicative >= 0.10.0, parsec -any, purescript -any,
+                   transformers -any, transformers-compat -any
+    main-is: Main.hs
+    buildable: True
+    hs-source-dirs: pcc
+    other-modules:
+    ghc-options: -Wall -O2 -fno-warn-unused-do-bind
 
 test-suite tests
     build-depends: base >=4 && <5, containers -any, directory -any,
