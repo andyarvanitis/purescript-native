@@ -1,10 +1,10 @@
 -----------------------------------------------------------------------------
 --
 -- Module      :  Language.PureScript.CodeGen.Cpp
--- Copyright   :  (c) Phil Freeman 2013
+-- Copyright   :  (c) 2013-15 Phil Freeman, Andy Arvanitis, and other contributors
 -- License     :  MIT
 --
--- Maintainer  :  Phil Freeman <paf31@cantab.net>
+-- Maintainer  :  Andy Arvanitis
 -- Stability   :  experimental
 -- Portability :
 --
