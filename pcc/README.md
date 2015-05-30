@@ -2,6 +2,8 @@
 
 A small strongly typed programming language with expressive types that compiles to Javascript, written in and inspired by Haskell.
 
+---
+
 **Pure14** is an experimental C++14 compiler/backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane" and performant C++14 code (instead of JavaScript), in the spirit of PureScript.
 
 #### Status:
