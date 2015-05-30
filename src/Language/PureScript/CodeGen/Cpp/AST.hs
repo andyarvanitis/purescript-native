@@ -150,7 +150,7 @@ data Cpp
   -- |
   -- A C++ #include
   --
-  | CppInclude String
+  | CppInclude String String
   -- |
   -- A C++ using namespace declaration
   --

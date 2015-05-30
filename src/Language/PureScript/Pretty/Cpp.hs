@@ -156,8 +156,10 @@ literals = mkPattern' match
     [ return "\n"
     , prettyStatements cpps
     ]
-  match (CppInclude name) =
-    let fullpath = (dotsTo '/' name) ++ '/' : (last . words . dotsTo ' ' $ name) in
+  match (CppInclude path name) =
+    let fullpath
+          | null path = last . words . dotsTo ' ' $ name
+          | otherwise = (dotsTo '/' path) ++ '/' : (last . words . dotsTo ' ' $ name) in
     fmap concat $ sequence
     [ return $ "#include \"" ++ fullpath ++ ".hh\""
     ]

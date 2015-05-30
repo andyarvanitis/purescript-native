@@ -53,7 +53,6 @@ data InputOptions = InputOptions
 compile :: PCCMakeOptions -> IO ()
 compile (PCCMakeOptions input [] outputDir opts usePrefix) = do
   moduleFiles <- readInput (InputOptions (P.optionsNoPrelude opts) input)
---  foreignFiles <- forM inputForeign (\inFile -> (inFile,) <$> readFile inFile)
   case runWriterT (parseInputs moduleFiles []) of
     Left errs -> do
       hPutStrLn stderr (P.prettyPrintMultipleErrors (P.optionsVerboseErrors opts) errs)
@@ -62,7 +61,7 @@ compile (PCCMakeOptions input [] outputDir opts usePrefix) = do
       when (P.nonEmpty warnings) $
         hPutStrLn stderr (P.prettyPrintMultipleWarnings (P.optionsVerboseErrors opts) warnings)
       let filePathMap = M.fromList $ map (\(fp, P.Module _ mn _ _) -> (mn, fp)) ms
-          makeActions = buildMakeActions outputDir filePathMap {- foreigns -} usePrefix
+          makeActions = buildMakeActions outputDir filePathMap usePrefix
       e <- runMake opts $ P.make makeActions ms
       case e of
         Left errs -> do

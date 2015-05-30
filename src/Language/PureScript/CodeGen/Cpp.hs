@@ -69,7 +69,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   additional <- asks optionsAdditional
   cppImports <- T.traverse (pure . runModuleName) . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
   let cppImports' = "PureScript" : cppImports
-  let foreigns' = [] -- mapMaybe (\(_, cpp, _) -> CppRaw . runForeignCode <$> cpp) foreigns
   cppDecls <- mapM (declToCpp TopLevel) decls
   optimized <- T.traverse optimize (concatMap expandSeq cppDecls)
   let optimized' = removeCodeAfterReturnStatements <$> optimized
@@ -78,8 +77,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   datas <- modDatasToCpps
   let moduleHeader = fileBegin "HH"
                   ++ P.linebreak
-                  ++ (CppInclude <$> cppImports')
-                  ++ [CppRaw "#include \"PureScript/prelude_ffi.hh\""] -- TODO: temporary
+                  ++ ((\i -> CppInclude i i) <$> cppImports')
+                  ++ (if not (null foreigns)
+                        then [CppInclude [] (runModuleName mn ++ "_ffi")]
+                        else []
+                     )
                   ++ P.linebreak
                   ++ headerDefsBegin
                   ++ [CppNamespace (runModuleName mn) $
@@ -94,7 +96,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let bodyCpps = toBody optimized'
       moduleBody = fileBegin "CC"
                 ++ P.linebreak
-                ++ CppInclude (runModuleName mn) : P.linebreak
+                ++ CppInclude (runModuleName mn) (runModuleName mn) : P.linebreak
                 ++ (if null bodyCpps
                       then []
                       else [CppNamespace (runModuleName mn) $
