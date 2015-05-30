@@ -21,7 +21,8 @@
 module Language.PureScript.CodeGen.Cpp (
     module AST,
     module Common,
-    moduleToCpp
+    moduleToCpp,
+    P.prettyPrintCpp
 ) where
 
 import Data.List
