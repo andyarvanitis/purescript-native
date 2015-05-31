@@ -428,6 +428,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   loopStatementToCpp (CI.Statement s) = statmentToCpp s
 
   exprToCpp :: CI.Expr Ann -> m Cpp
+
+  exprToCpp (CI.Literal (_, _, Just ty, _) lit@ArrayLiteral{})
+    | Just typ <- mktype mn ty = do
+      lit' <- literalToValueCpp lit
+      return (CppApp (CppVar (runType typ)) [lit'])
   exprToCpp (CI.Literal _ lit) =
     literalToValueCpp lit
 
