@@ -304,12 +304,17 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   instanceDeclToCpp ident expr
     | Just (classname@(Qualified (Just classmn) (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
       Just (params, constraints, fns) <- findClass classname = do
-    let (_, fs) = unApp expr []
+    let (_, fs) = case expr of
+                    CI.App{} -> unApp expr []
+                    CI.AnonFunction _ _ [CI.Return _ e'@CI.App{}] -> unApp e' []
+                    _ -> error $ "Unknown expression type:\n" ++ show expr
         fs' = filter (isNormalFn) fs
         tmplts = nub . sort $ concatMap templparams (catMaybes typs)
         typs' = catMaybes typs
+    expr' <- exprToCpp expr
     cpps <- mapM (toCpp tmplts) (zip fns fs')
-    when (length fns /= length fs') (error $ "Instance function list mismatch!\n" ++ show fs')
+    when (length fns /= length fs') (error $ "Instance function list mismatch! " ++ '(': show ident ++ ")\n"
+                                          ++ show fns ++ "\n -vs- \n" ++ show fs')
     let tmaps = zip (Just . mkTemplate <$> params) typs
         struct = CppStruct (unqualClass, tmplts) typs' (toStrings tmaps <$> constraints) cpps []
     return $ if classmn == mn
