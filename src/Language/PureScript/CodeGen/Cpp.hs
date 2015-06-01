@@ -167,12 +167,16 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     block <- CppBlock <$> mapM statmentToCpp body
     let typ = mktype mn ty
     let f = CppFunction (identToCpp ident)
-                        (templparams' typ)
+                        (tmpltsUnionFavRight (templparams' typ) (filter parameterized $ templparams' typ))
                         [(identToCpp arg, argtype typ)]
                         (rettype typ)
                         []
                         block
     return (CppComment comms f)
+    where
+    parameterized :: (String, Int) -> Bool
+    parameterized (_, n) | n > 0 = True
+    parameterized _ = False
 
   -- Point-free top-level functions
   declToCpp TopLevel (CI.Function (_, comms, Just ty, _) ident [] [(CI.Return _ e)])
@@ -591,7 +595,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go :: (Qualified ProperName, TypeKind) -> [Cpp]
         go (_, DataType _ [_]) = []
         go (typ, DataType ts cs) =
-          let tmplts = replaceFromRight
+          let tmplts = tmpltsUnionFavRight
                          (flip (,) 0 . runType . mkTemplate . fst <$> ts)
                          (concatMap templateParams (snd <$> cs)) in
           [CppStruct (qual typ, tmplts)
@@ -614,7 +618,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                 []
                 | otherwise = Nothing
           tmplts :: [(String, Int)]
-          tmplts = replaceFromRight
+          tmplts = tmpltsUnionFavRight
                      (flip (,) 0 . runType . mkTemplate . fst <$> ts)
                      (concatMap templateParams (snd <$> cs))
           ctorStruct :: (ProperName, [T.Type]) -> Cpp
@@ -639,8 +643,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       templateParams :: [T.Type] -> [(String, Int)]
       templateParams = nub . concatMap (templparams' . mktype mn)
 
-      replaceFromRight :: [(String, Int)] -> [(String, Int)] -> [(String, Int)]
-      replaceFromRight t1s t2s = map go' t1s
+      tmpltsUnionFavRight :: [(String, Int)] -> [(String, Int)] -> [(String, Int)]
+      tmpltsUnionFavRight t1s t2s = map go' t1s
         where
         go' :: (String, Int) -> (String, Int)
         go' t1 | Just n <- lookup (fst t1) t2s = (fst t1, n)
@@ -741,6 +745,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go (CppVariableIntroduction _ (_:_) _ _) = True
     go (CppComment _ cpp') = go cpp'
     go _ = False
+
+  tmpltsUnionFavRight :: [(String, Int)] -> [(String, Int)] -> [(String, Int)]
+  tmpltsUnionFavRight t1s t2s = nub $ map go' t1s
+    where
+    go' :: (String, Int) -> (String, Int)
+    go' t1 | Just n <- lookup (fst t1) t2s = (fst t1, n)
+           | otherwise = t1
 
   fnAppCpp :: CI.Expr Ann -> m Cpp
   fnAppCpp e = do
