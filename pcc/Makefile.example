@@ -4,7 +4,7 @@ MODULE_DIR="modules"
 #MODULE_DIR="bower_components"
 SOURCE_DIR="src"
 
-MODULES := $(shell find $(MODULE_DIR) -name '*.purs')
+MODULES := $(shell find $(MODULE_DIR) -name '*.purs' | grep -v \/test\/)
 SOURCES := $(shell find $(SOURCE_DIR) -name '*.purs')
 
 all: main
