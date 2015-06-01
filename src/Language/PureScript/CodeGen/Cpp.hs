@@ -590,8 +590,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         where
         go :: (Qualified ProperName, TypeKind) -> [Cpp]
         go (_, DataType _ [_]) = []
-        go (typ, DataType ts _) =
-          [CppStruct (qual typ, flip (,) 0 . runType . mkTemplate . fst <$> ts)
+        go (typ, DataType ts cs) =
+          let tmplts = replaceFromRight
+                         (flip (,) 0 . runType . mkTemplate . fst <$> ts)
+                         (concatMap templateParams (snd <$> cs)) in
+          [CppStruct (qual typ, tmplts)
                      [] [] []
                      [CppFunction (qual typ) [] [] Nothing [CppVirtual, CppDestructor, CppDefault] CppNoOp]]
         go _ = []
@@ -611,7 +614,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                 []
                 | otherwise = Nothing
           tmplts :: [(String, Int)]
-          tmplts = flip (,) 0 . runType . mkTemplate . fst <$> ts
+          tmplts = replaceFromRight
+                     (flip (,) 0 . runType . mkTemplate . fst <$> ts)
+                     (concatMap templateParams (snd <$> cs))
           ctorStruct :: (ProperName, [T.Type]) -> Cpp
           ctorStruct (ctor, fields) =
             CppStruct (name, tmplts) [] supers [] members
@@ -630,6 +635,16 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                         ]
                     | otherwise = []
         go _ = ([], Nothing)
+
+      templateParams :: [T.Type] -> [(String, Int)]
+      templateParams = nub . concatMap (templparams' . mktype mn)
+
+      replaceFromRight :: [(String, Int)] -> [(String, Int)] -> [(String, Int)]
+      replaceFromRight t1s t2s = map go' t1s
+        where
+        go' :: (String, Int) -> (String, Int)
+        go' t1 | Just n <- lookup (fst t1) t2s = (fst t1, n)
+               | otherwise = t1
 
       qual :: Qualified ProperName -> String
       qual name = qualifiedToStr' (Ident . runProperName) name
