@@ -25,6 +25,7 @@ import Data.Function (on)
 import Data.Data
 import Control.Monad (liftM2)
 import Language.PureScript.Names
+import Language.PureScript.Kinds
 import Language.PureScript.CodeGen.Cpp.Common
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.Types as T
@@ -257,6 +258,10 @@ mktype _ b = error $ "Unknown type: " ++ show b
 mkTemplate :: String -> Type
 mkTemplate s = Template s []
 
+isTemplate :: Type -> Bool
+isTemplate Template{} = True
+isTemplate _ = False
+
 typestr :: ModuleName -> T.Type -> String
 typestr m t = maybe [] runType (mktype m t)
 
@@ -386,6 +391,18 @@ templateReplacements = filter (\(a,b) -> a /= b) . templateMappings
 
 templateSpecs :: Maybe Type -> Maybe Type -> [Type]
 templateSpecs tyDecl tyExpr = map snd $ maybe [] templateMappings (liftM2 (,) tyDecl tyExpr)
+
+templateFromKind :: (String, Maybe Kind) -> (String, Int)
+templateFromKind (name, Just Star) = (name, 0)
+templateFromKind (name, Just f@(FunKind _ _)) = (name, numFunKindArgs f)
+  where
+  numFunKindArgs :: Kind -> Int
+  numFunKindArgs = everythingOnKinds (+) go
+    where
+    go :: Kind -> Int
+    go (FunKind _ _) = 1
+    go _ = 0
+templateFromKind k = error $ show "Unsupported kind! (" ++ show k ++ ")"
 
 anytype :: Type
 anytype = Template [] []
