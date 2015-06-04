@@ -585,7 +585,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                  . M.filter (isData . snd)
                  $ types env = do
       let types' = dataTypes ds
-          (ctors, aliases) = dataCtors ds
+          (ctors, aliases) = dataValueCtors ds
       return (types' ++ asManaged types' ++ ctors ++ asManaged ctors ++ aliases)
     | otherwise = return []
       where
@@ -599,9 +599,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go :: Cpp -> [Cpp]
         go (CppNamespace ns cpps) = fromStruct ns <$> cpps
         go _ = []
+        -- TODO: this feels too fragile
         fromStruct :: String -> Cpp -> Cpp
+        fromStruct _ (CppStruct (_, (_:_)) [] [] [] []) = CppNoOp
+        fromStruct _ (CppStruct _ _ _ _ [CppTypeAlias{}]) = CppNoOp
         fromStruct ns (CppStruct (name, tmplts) _ _ _ _) =
-          CppTypeAlias (name, tmplts) (ns ++ "::" ++ name, tmplts) "managed"
+          let tmplts' = remTemplateDefaults tmplts in
+          CppTypeAlias (name, tmplts') (ns ++ "::" ++ name, tmplts') "managed"
         fromStruct _ _ = CppNoOp
 
       dataTypes :: [(Qualified ProperName, TypeKind)] -> [Cpp]
@@ -609,18 +613,46 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                    | otherwise = []
         where
         go :: (Qualified ProperName, TypeKind) -> [Cpp]
-        go (_, DataType _ [_]) = []
+        -- go (_, DataType _ [_]) = []
         go (typ, DataType ts cs) =
           let tmplts = tmpltsReplFromRight
                          (flip (,) 0 . runType . mkTemplate . fst <$> ts)
-                         (concatMap templateParams (snd <$> cs)) in
-          [CppStruct (qual typ, tmplts)
-                     [] [] []
-                     [CppFunction (qual typ) [] [] Nothing [CppVirtual, CppDestructor, CppDefault] CppNoOp]]
+                         (concatMap templateParams (snd <$> cs))
+          in dataTypeCtors (qual typ) tmplts
         go _ = []
 
-      dataCtors :: [(Qualified ProperName, TypeKind)] -> ([Cpp], [Cpp])
-      dataCtors ds | cpps@(_:_) <- concatMap (fst . go) ds,
+      dataTypeCtors :: String -> [(String, Int)] -> [Cpp]
+      dataTypeCtors name [] =
+        [CppStruct (name, []) [] [] []
+          [CppFunction name [] [] Nothing [CppVirtual, CppDestructor, CppDefault] CppNoOp]]
+      dataTypeCtors name [param] = [
+          CppStruct (name, [param])
+                    [] [] []
+                    [CppFunction name [] [] Nothing [CppVirtual, CppDestructor, CppDefault] CppNoOp]
+        ]
+      dataTypeCtors name params@(p:ps) = [
+          -- The template declaration
+          CppStruct (name, addTemplateDefaults params) [] [] [] []
+          -- The fully applied type constructor
+        , CppStruct (name, params)
+                    [] [] []
+                    [CppFunction name [] [] Nothing [CppVirtual, CppDestructor, CppDefault] CppNoOp]
+        ] ++ dataTypePartialCtors name [p] ps
+
+      dataTypePartialCtors :: String -> [(String, Int)] -> [(String, Int)] -> [Cpp]
+      dataTypePartialCtors name applied notApplied@(p:ps) =
+          (CppStruct (name, applied)
+                     (typeFromTemplate <$> applied)
+                     [] []
+                     [CppTypeAlias ("_", notApplied) (name, applied ++ notApplied) []])
+        : dataTypePartialCtors name (applied ++ [p]) ps
+        where
+        typeFromTemplate :: (String, Int) -> Type
+        typeFromTemplate (name, _) = Template name []
+      dataTypePartialCtors _ _ _ = []
+
+      dataValueCtors :: [(Qualified ProperName, TypeKind)] -> ([Cpp], [Cpp])
+      dataValueCtors ds | cpps@(_:_) <- concatMap (fst . go) ds,
                      aliases <- catMaybes $ map (snd . go) ds = ([CppNamespace "value" cpps], aliases)
                    | otherwise = ([],[])
         where
@@ -628,11 +660,12 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         go (typ, DataType ts cs) = (map ctorStruct cs, alias)
           where
           alias :: Maybe Cpp
-          alias | [_] <- cs =
-            Just $ CppTypeAlias (qual typ, tmplts)
-                                (P.prettyPrintCpp [flip CppData [] . runProperName . fst $ head cs], tmplts)
-                                []
-                | otherwise = Nothing
+          alias = Nothing
+          -- alias | [_] <- cs =
+          --   Just $ CppTypeAlias (qual typ, tmplts)
+          --                       (P.prettyPrintCpp [flip CppData [] . runProperName . fst $ head cs], tmplts)
+          --                       []
+          --       | otherwise = Nothing
           tmplts :: [(String, Int)]
           tmplts = tmpltsReplFromRight
                      (flip (,) 0 . runType . mkTemplate . fst <$> ts)
@@ -644,7 +677,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
             name :: String
             name = P.prettyPrintCpp [flip CppData [] $ runProperName ctor]
             supers :: [(String, [String])]
-            supers | [_] <- cs = []
+            supers  -- | [_] <- cs = []
                    | otherwise = [(addNamespace "type" (qual typ), fst <$> tmplts)]
             members :: [Cpp]
             members | fields'@(_:_) <- filter (/=(Just (Map []))) $ mktype mn <$> fields,

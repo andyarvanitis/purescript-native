@@ -404,5 +404,19 @@ templateFromKind (name, Just f@(FunKind _ _)) = (name, numFunKindArgs f)
     go _ = 0
 templateFromKind k = error $ show "Unsupported kind! (" ++ show k ++ ")"
 
+addTemplateDefaults :: [(String, Int)] -> [(String, Int)]
+addTemplateDefaults = map addDefault
+  where
+  addDefault ::  (String, Int) -> (String, Int)
+  addDefault (name, 0) = (name ++ " = void", 0)
+  addDefault (name, n) = (name ++ " = Void", n)
+
+remTemplateDefaults :: [(String, Int)] -> [(String, Int)]
+remTemplateDefaults = map remDefault
+  where
+  remDefault ::  (String, Int) -> (String, Int)
+  remDefault (name, 0) = (takeWhile isAlphaNum name, 0)
+  remDefault (name, n) = (takeWhile isAlphaNum name, n)
+
 anytype :: Type
 anytype = Template [] []

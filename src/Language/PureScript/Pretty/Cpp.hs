@@ -175,6 +175,17 @@ literals = mkPattern' match
     [ return $ "using " ++ newName ++ " = " ++ if null spec then name' else spec ++ angles name'
     , return ";"
     ]
+  match (CppStruct (name, ps@(_:_)) [] [] [] []) = fmap concat $ sequence $
+    [ return (templDecl ps), return "\n"
+    , currentIndent
+    , return ("struct " ++ name)
+    , return ";"
+    ]
+  match (CppStruct (name, []) typs@(_:_) [] [] []) = fmap concat $ sequence $
+    [ return $ "EXTERN "
+    , return $ parens ("template struct " ++ classstr (name, runType <$> typs))
+    , return ";"
+    ]
   match (CppStruct (name, []) typs@(_:_) [] [] []) = fmap concat $ sequence $
     [ return $ "EXTERN "
     , return $ parens ("template struct " ++ classstr (name, runType <$> typs))
@@ -538,7 +549,8 @@ templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))
   where
   go :: (String, Int) -> String
   go (name, 0) = "typename " ++ name
-  go (name, n) = templDecl (flip (,) 0 . (('_' : name) ++) . show <$> [1..n]) ++ " class " ++ name
+  go t@(name, _) = let [(name', n)] = remTemplateDefaults [t] in
+                   templDecl (flip (,) 0 . (('_' : name') ++) . show <$> [1..n]) ++ " class " ++ name
 
 templDecl' :: Either [(String, Int)] [Type] -> String
 templDecl' (Left []) = []
