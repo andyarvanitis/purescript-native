@@ -182,7 +182,6 @@ nameIsCppReserved name =
               , "value"
               , "virtual"
               , "void"
-              , "Void"
               , "volatile"
               , "wchar_t"
               , "while"

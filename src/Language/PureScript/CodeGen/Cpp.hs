@@ -313,24 +313,33 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                     CI.AnonFunction _ _ [CI.Return _ e'@CI.App{}] -> unApp e' []
                     _ -> error $ "Unknown expression type:\n" ++ show expr
         fs' = filter (isNormalFn) fs
-        tmplts = nub . sort $ concatMap templparams (catMaybes typs)
         typs' = catMaybes typs
+        tmplts = nub . sort $ concatMap templparams typs'
     expr' <- exprToCpp expr
     cpps <- mapM (toCpp tmplts) (zip fns fs')
     when (length fns /= length fs') (error $ "Instance function list mismatch! " ++ '(': show ident ++ ")\n"
                                           ++ show fns ++ "\n -vs- \n" ++ show fs')
     let tmaps = zip (Just . mkTemplate <$> params) typs
-        tmplts' = tmpltsReplFromRight
-                    (nub . sort $ concatMap templparams (catMaybes typs))
-                    (templatesFromTypes (catMaybes typs))
-        struct = CppStruct (unqualClass, tmplts') typs' (toStrings tmaps <$> constraints) cpps []
+        isDataTypeCtor' = isDataTypeCtor typs'
+        tmplts' = if isDataTypeCtor'
+                    then tmpltsReplFromRight
+                           (nub . sort $ concatMap templparams typs')
+                           (templatesFromKinds typs')
+                    else tmplts
+        typs'' = if isDataTypeCtor'
+                   then (TypeConstructor (P.dotsTo '_' $ runModuleName mn)) <$> typs'
+                   else typs'
+        struct = CppStruct (unqualClass, tmplts')
+                           typs''
+                           (toStrings typs'' <$> constraints)
+                           cpps
+                           []
     return $ if classmn == mn
                then struct
                else CppNamespace ("::" ++ runModuleName classmn) [CppUseNamespace (runModuleName mn), struct]
     where
     toCpp :: [(String, Int)] -> ((String, T.Type), CI.Expr Ann) -> m Cpp
     toCpp tmplts ((name, ty'), CI.AnonFunction ann'@(_, _, Just ty, _) ags sts) = do
-      let typ = mktype mn ty'
       fn' <- declToCpp TopLevel $ CI.Function ann' (Ident name) ags sts
       let cpp = addQual CppStatic (removeTemplates tmplts fn')
       return (case mktype mn ty' of
@@ -371,21 +380,26 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] (Just e')
     toCpp tmplts ((name, _), e) = return $ error $ (name ++ " :: " ++ show e ++ "\n")
 
-    toStrings :: [(Maybe Type, Maybe Type)] -> (Qualified ProperName, [T.Type]) -> (String, [String])
-    toStrings tmaps (name, tys)
-      | ts' <- mapTy <$> tys = (qualifiedToStr' (Ident . runProperName) name, ts')
-      where
-      mapTy :: T.Type -> String
-      mapTy t | Just (Just tname) <- lookup (mktype mn t) tmaps = runType tname
-      mapTy _ = "?"
+    toStrings :: [Type] -> (Qualified ProperName, [T.Type]) -> (String, [String])
+    toStrings typs (name, _) = (qualifiedToStr' (Ident . runProperName) name, runType <$> typs)
 
     literalCpp :: String -> T.Type -> CI.Expr Ann -> m Cpp
     literalCpp name ty e = do
         e' <- exprToCpp e
         return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] (Just e')
 
-    templatesFromTypes :: [Type] -> [(String, Int)]
-    templatesFromTypes ts = concatMap go ts
+    isDataTypeCtor :: [Type] -> Bool
+    isDataTypeCtor ts = any go ts
+      where
+      go :: Type -> Bool
+      go (Native nname nts@(_:_))
+        | Just (_, tk) <- M.lookup (Qualified (Just mn) (ProperName nname)) (types env),
+          DataType ps ctors <- tk = length ps /= length nts
+      go _ = False
+    isDataTypeCtor _ = False
+
+    templatesFromKinds :: [Type] -> [(String, Int)]
+    templatesFromKinds ts = concatMap go ts
       where
       go :: Type -> [(String, Int)]
       go (Native nname nts@(_:_))
@@ -395,7 +409,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       swapNames :: ((String, Int), Type) -> Maybe (String, Int)
       swapNames ((name, n), (Template t _)) = Just (runType (Template t []), n)
       swapNames _ = Nothing
-    templatesFromTypes _ = []
+    templatesFromKinds _ = []
 
     addQual :: CppQualifier -> Cpp -> Cpp
     addQual q (CppFunction name tmplts args rty qs cpp) = CppFunction name tmplts args rty (q : qs) cpp

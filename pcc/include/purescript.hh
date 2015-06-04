@@ -49,6 +49,18 @@ struct fn_ {
   using _ = fn<R,T>;
 };
 
+// Used by type constructor templates
+template <typename T>
+using void1 = void;
+template <typename T1, typename T2>
+using void2 = void;
+template <typename T1, typename T2, typename T3>
+using void3 = void;
+template <typename T1, typename T2, typename T3, typename T4>
+using void4 = void;
+template <typename T1, typename T2, typename T3, typename T4, typename T5>
+using void5 = void;
+
 } // namespace PureScript
 
 #endif // PureScript_HH

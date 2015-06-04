@@ -37,6 +37,7 @@ data Type = Native String [Type]
           | List Type
           | Map [(String,Type)]
           | Template String [Type]
+          | TypeConstructor String Type
           | DeclType String
           | EffectFunction Type
           deriving (Show, Data, Typeable)
@@ -51,6 +52,7 @@ instance Eq Type where
     cap :: String -> String
     cap (c:cs) = toUpper c : cs
     cap s = s
+  (TypeConstructor s a) == (TypeConstructor s' a') = a == a' && s == s'
   (DeclType e) == (DeclType e') = e == e'
   (EffectFunction b) == (EffectFunction b') = b == b'
   _ == _ = False
@@ -122,6 +124,7 @@ runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
 runType tt@(List t) | t'@(_:_) <- runType t = typeName tt ++ '<' : t' ++ ">"
                     | otherwise = typeName tt
 runType tt@(Map _) = typeName tt
+runType tt@(TypeConstructor mn t) = mn ++ "::" ++ typeName tt ++ runType t ++ "::template _"
 runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
 runType tt@(Template t []) = typeName tt ++ capitalize t
   where
@@ -135,6 +138,7 @@ typeName Function{} = "fn"
 typeName EffectFunction{} = "eff_fn"
 typeName List{} = "list"
 typeName Map{} = "any_map"
+typeName TypeConstructor{} = "type::"
 typeName DeclType{} = "decltype"
 typeName _ = ""
 
@@ -224,12 +228,22 @@ mktype m (T.TypeApp T.Skolem{} b) = mktype m b
 
 -- TODO: Need to review this due to refactoring
 mktype m app@(T.TypeApp a b)
-  | (T.TypeConstructor _) <- a, [t] <- dataCon m a, Just b <- mktype m b = Just $ Native (runType t) [b]
+  | (T.TypeConstructor _) <- a, [t] <- dataCon m a, Just b' <- mktype m b = Just $ Native (runType t) [b']
   | (T.TypeConstructor _) <- a, [t] <- dataCon m app = Just $ Native (runType t) []
   | (T.TypeConstructor _) <- a, (t:ts) <- dataCon m app = Just $ Native (runType t) ts
   | (T.TypeConstructor _) <- b, [t] <- dataCon m app = Just $ Native (runType t) []
   | (T.TypeConstructor _) <- b, (t:ts) <- dataCon m app = Just $ Native (runType t) ts
-  | (T.TypeApp _ _) <- a, (t:ts) <- dataCon m app = Just $ Native (runType t) ts
+  | (T.TypeApp _ _) <- a, hasCtor a = let (ctor, ps) = getCtor app [] in Just (Native ctor ps)
+    where
+    hasCtor :: T.Type -> Bool
+    hasCtor (T.TypeApp a' _) = hasCtor a'
+    hasCtor T.TypeConstructor{} = True
+    hasCtor _ = False
+    getCtor :: T.Type -> [Type] -> (String, [Type])
+    getCtor (T.TypeApp a' b') ts = getCtor a' $ (maybeToList $ mktype m b') ++ ts
+    getCtor (T.TypeConstructor c) ts = (qualifiedToStr m (Ident . runProperName) c, ts)
+    getCtor t _ = error $ "getCtor: " ++ show t
+  -- | (T.TypeApp _ _) <- a, (t:ts) <- dataCon m app = Just $ Native (runType t) ts
 
 mktype m (T.ForAll _ ty _) = mktype m ty
 mktype _ (T.Skolem name _ _) = Just $ Template (identToCpp $ Ident name) []
@@ -319,7 +333,7 @@ dataCon m a = maybe [] (replicate 1) (mktype m a)
 getDataType :: String -> Type -> Maybe Type
 getDataType name (Function _ b) = getDataType name b
 getDataType name t@(Native name' _) | name' == name = Just t
-getDataType name (Native name' ts) = Just (Native name ts)
+getDataType name (Native _ ts) = Just (Native name ts)
 getDataType _ _ = Nothing
 
 getDataTypeArgs :: Type -> [Type]
@@ -373,7 +387,7 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
       args ++ (Template t [], List anytype) : (go [] (a, a'))
     go args (Template t ts, Native t' ts') | length ts == length ts' =
       args ++ (Template t [], Native t' []) : concatMap (go []) (zip ts ts')
-    go args (Template t ts, Native t' []) =
+    go args (Template t _, Native t' []) =
       args ++ [(Template t [], Native t' [])]
     go args (a@DeclType{}, a') = args ++ [(a, a')]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
@@ -381,7 +395,7 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
     go args (Native _ ts@(_:_), Native _ ts'@(_:_)) = args ++ concatMap (go []) (zip ts ts')
     go args (List t, List t') = go args (t, t')
     go args (Map ms, Map ms') = args ++ concatMap (go []) (zip (map snd ms) (map snd ms'))
-    go args (Native t _, Native t' _) = args
+    go args (Native _ _, Native _ _) = args
       -- | t == t' = args
       -- | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
     go args (t1', t2') = trace ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2') args
@@ -409,7 +423,7 @@ addTemplateDefaults = map addDefault
   where
   addDefault ::  (String, Int) -> (String, Int)
   addDefault (name, 0) = (name ++ " = void", 0)
-  addDefault (name, n) = (name ++ " = Void", n)
+  addDefault (name, n) = (name ++ " = void" ++ show n, n)
 
 remTemplateDefaults :: [(String, Int)] -> [(String, Int)]
 remTemplateDefaults = map remDefault
