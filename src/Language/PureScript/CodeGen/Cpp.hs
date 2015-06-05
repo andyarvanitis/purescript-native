@@ -75,6 +75,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   let isModuleEmpty = null exps
   comments <- not <$> asks optionsNoComments
   datas <- modDatasToCpps
+  synonyms <- modSynonymsToCpp
   let moduleHeader = fileBegin "HH"
                   ++ P.linebreak
                   ++ ((\i -> CppInclude i i) <$> cppImports')
@@ -86,7 +87,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                   ++ headerDefsBegin
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak
-                                                         ++ datas
+                                                         ++ synonyms -- TODO: dependency sort these
+                                                         ++ datas    -- two groups (and maybe others)
                                                          ++ toHeader optimized'
                      ]
                   ++ P.linebreak
@@ -720,6 +722,20 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       addNamespace ns s | ':' `elem` s,
                           (s1,s2) <- splitAt (last $ findIndices (==':') s) s = s1 ++ ':' : ns ++ ':' : s2
                         | otherwise = ns ++ "::" ++ s
+
+  modSynonymsToCpp :: m [Cpp]
+  modSynonymsToCpp
+    | tcs <- typeClasses env,
+      ds@(_:_) <-  M.toList
+                 . M.filterWithKey (\k@(Qualified mn' _) _ -> mn' == Just mn && M.lookup k tcs == Nothing)
+                 $ typeSynonyms env = do
+      let names = qualifiedToStr' (Ident . runProperName) . fst <$> ds
+          tmplts = map templateFromKind . fst . snd <$> ds
+          typs = catMaybes $ mktype mn . snd . snd <$> ds
+          synonyms = zip3 names tmplts typs
+          cpps = (\(n,tmps,t) -> CppTypeAlias (n, tmps) (runType t, []) []) <$> synonyms
+      return cpps
+    | otherwise = return []
 
   unaryToCpp :: UnaryOp -> CppUnaryOp
   unaryToCpp Negate = CppNegate

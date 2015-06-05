@@ -167,9 +167,12 @@ literals = mkPattern' match
     [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
     ]
   match (CppTypeAlias (newName, newTyps) (name, typs) spec) =
-    let (tmps, name') = if null newTyps then ([], name)
-                                        else ([return (templDecl newTyps), return "\n", currentIndent],
-                                              name ++ angles (intercalate "," (fst <$> typs)))
+    let typs' = if null typs
+                  then []
+                  else angles (intercalate "," (fst <$> typs))
+        (tmps, name') = if null newTyps
+                          then ([], name)
+                          else ([return (templDecl newTyps), return "\n", currentIndent], name ++ typs')
     in fmap concat $ sequence $
     tmps ++
     [ return $ "using " ++ newName ++ " = " ++ if null spec then name' else spec ++ angles name'

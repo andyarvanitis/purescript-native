@@ -127,10 +127,6 @@ runType tt@(Map _) = typeName tt
 runType tt@(TypeConstructor mn t) = mn ++ "::" ++ typeName tt ++ runType t ++ "::template _"
 runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
 runType tt@(Template t []) = typeName tt ++ capitalize t
-  where
-  capitalize :: String -> String
-  capitalize (c:cs) = toUpper c : cs
-  capitalize s = s
 runType (Template t ts) = runType (Template t []) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
 
 typeName :: Type -> String
@@ -407,8 +403,8 @@ templateSpecs :: Maybe Type -> Maybe Type -> [Type]
 templateSpecs tyDecl tyExpr = map snd $ maybe [] templateMappings (liftM2 (,) tyDecl tyExpr)
 
 templateFromKind :: (String, Maybe Kind) -> (String, Int)
-templateFromKind (name, Just Star) = (name, 0)
-templateFromKind (name, Just f@(FunKind _ _)) = (name, numFunKindArgs f)
+templateFromKind (name, Just Star) = (capitalize name, 0)
+templateFromKind (name, Just f@(FunKind _ _)) = (capitalize name, numFunKindArgs f)
   where
   numFunKindArgs :: Kind -> Int
   numFunKindArgs = everythingOnKinds (+) go
@@ -434,3 +430,7 @@ remTemplateDefaults = map remDefault
 
 anytype :: Type
 anytype = Template [] []
+
+capitalize :: String -> String
+capitalize (c:cs) = toUpper c : cs
+capitalize s = s
