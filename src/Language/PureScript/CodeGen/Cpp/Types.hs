@@ -389,6 +389,7 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (EffectFunction b, EffectFunction b') = go args (b, b')
     go args (Native _ ts@(_:_), Native _ ts'@(_:_)) = args ++ concatMap (go []) (zip ts ts')
+    go args (Native t ts, Map ts') | length ts == length ts' = args ++ concatMap (go []) (zip ts (map snd ts'))
     go args (List t, List t') = go args (t, t')
     go args (Map ms, Map ms') = args ++ concatMap (go []) (zip (map snd ms) (map snd ms'))
     go args (Native _ _, Native _ _) = args
