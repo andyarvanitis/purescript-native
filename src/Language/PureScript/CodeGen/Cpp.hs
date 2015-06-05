@@ -494,6 +494,9 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     CppIndexer <$> exprToCpp prop <*> exprToCpp expr
   exprToCpp (CI.Indexer _ index expr) =
     CppIndexer <$> exprToCpp index <*> exprToCpp expr
+  exprToCpp (CI.AnonFunction _ [] stmnts') = do
+    body <- CppBlock <$> mapM statmentToCpp stmnts'
+    return $ CppLambda [] [] Nothing body
   exprToCpp (CI.AnonFunction (_, _, Just ty, _) [arg] stmnts') = do
     body <- CppBlock <$> mapM statmentToCpp stmnts'
     let typ = mktype mn ty
