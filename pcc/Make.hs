@@ -41,7 +41,7 @@ import qualified Data.Map as M
 import qualified Data.ByteString.UTF8 as BU
 
 import System.Directory (doesDirectoryExist, doesFileExist, getModificationTime, createDirectoryIfMissing)
-import System.FilePath ((</>), takeDirectory, addExtension, dropExtension, takeExtension)
+import System.FilePath ((</>), takeDirectory, addExtension, dropExtension)
 import System.IO.Error (tryIOError)
 
 import qualified Language.PureScript as P
@@ -93,7 +93,7 @@ buildMakeActions outputDir filePathMap usePrefix =
     let filePath = dotsTo '/' $ P.runModuleName mn
         fileBase = outputDir </> filePath </> (last . words . dotsTo ' ' $ P.runModuleName mn)
         srcFile = addExtension fileBase "cc"
-        headerFile = addExtension fileBase "hh"
+--      headerFile = addExtension fileBase "hh"
         externsFile = outputDir </> filePath </> "externs.purs"
     min <$> getTimestamp srcFile <*> getTimestamp externsFile
 
@@ -141,8 +141,8 @@ buildMakeActions outputDir filePathMap usePrefix =
       writeTextFile (addExtension (fileBase ++ "_ffi") "hh") text
       sfileExists <- textFileExists sfile
       when (sfileExists) $ do
-        text <- readTextFile sfile
-        writeTextFile (addExtension (fileBase ++ "_ffi") "cc") text
+        text' <- readTextFile sfile
+        writeTextFile (addExtension (fileBase ++ "_ffi") "cc") text'
 
   requiresForeign :: CR.Module a b -> Bool
   requiresForeign = not . null . CR.moduleForeign
