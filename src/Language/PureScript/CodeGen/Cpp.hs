@@ -148,7 +148,11 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
 
   declToCpp _ (CI.VarDecl (_, _, ty, _) ident expr) = do
     expr' <- exprToCpp expr
-    return $ CppVariableIntroduction (identToCpp ident, ty >>= mktype mn) [] [] (Just expr')
+    -- Remove lambda capture
+    let cpp | (CppApp (CppLambda _ args rtyp block) larg) <- expr' = CppApp (CppLambda [] args rtyp block) larg
+            | (CppLambda _ args rtyp block) <- expr' = CppLambda [] args rtyp block
+            | otherwise = expr'
+    return $ CppVariableIntroduction (identToCpp ident, ty >>= mktype mn) [] [] (Just cpp)
 
   -- TODO: fix when proper Meta info added
   declToCpp TopLevel (CI.Function _ _ [Ident "dict"]
@@ -494,14 +498,13 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     CppIndexer <$> exprToCpp prop <*> exprToCpp expr
   exprToCpp (CI.Indexer _ index expr) =
     CppIndexer <$> exprToCpp index <*> exprToCpp expr
-  exprToCpp (CI.AnonFunction _ [] stmnts') = do
+  exprToCpp (CI.AnonFunction _ (_:_:_) _) = return CppNoOp -- TODO: non-curried lambdas
+  exprToCpp (CI.AnonFunction (_, _, ty, _) args stmnts') = do
+    let typ = ty >>= mktype mn
+        args' | [arg] <- args = [(identToCpp arg, argtype typ)]
+              | otherwise = []
     body <- CppBlock <$> mapM statmentToCpp stmnts'
-    return $ CppLambda [] [] Nothing body
-  exprToCpp (CI.AnonFunction (_, _, Just ty, _) [arg] stmnts') = do
-    body <- CppBlock <$> mapM statmentToCpp stmnts'
-    let typ = mktype mn ty
-    return $ CppLambda [CppCaptureAll] [(identToCpp arg, argtype typ)] (rettype typ) body
-  exprToCpp (CI.AnonFunction _ _ _) = return CppNoOp -- TODO: non-curried lambdas
+    return $ CppLambda [CppCaptureAll] args' (rettype typ) body
 
   -- |
   -- Function application
