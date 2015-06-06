@@ -35,7 +35,6 @@ A small strongly typed programming language with expressive types that compiles 
 #### TO-DO:
 
 * Get automated builds/tests up and running ([underway](https://github.com/andyarvanitis/pure11/tree/pure11/examples/passing))
-* Support for `type` in generator (e.g. generate C++14 `using`)
 * Optimized `newtype` (some work already done, but disabled for now)
 * "Magic do" (similar work already done in inliner and TCO code)
 * Unicode (UTF-8) support for `String` (use code from my Idris backend)
