@@ -29,6 +29,7 @@ import Data.List
 import Data.Char
 import Data.Function (on)
 import Data.Maybe
+import Data.Tuple (swap)
 import qualified Data.Traversable as T (traverse)
 import qualified Data.Map as M
 
@@ -54,6 +55,7 @@ import qualified Language.PureScript.Types as T
 import qualified Language.PureScript.TypeClassDictionaries as TCD
 import qualified Language.PureScript.Pretty.Cpp as P
 import qualified Language.PureScript.Pretty.Common as P
+import qualified Data.Graph as G
 
 import Debug.Trace
 
@@ -739,9 +741,36 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
           tmplts = map templateFromKind . fst . snd <$> ds
           typs = catMaybes $ mktype mn . snd . snd <$> ds
           synonyms = zip3 names tmplts typs
-          cpps = (\(n,tmps,t) -> CppTypeAlias (n, tmps) (runType t, []) []) <$> synonyms
+          synonyms' = depSortSynonyms synonyms
+          cpps = (\(n,tmps,t) -> CppTypeAlias (n, tmps) (runType t, []) []) <$> synonyms'
       return cpps
     | otherwise = return []
+    where
+    -- |
+    -- Dependency (topological) sorting of synonyms
+    --
+    depSortSynonyms :: [(String, [(String,Int)], Type)] ->  [(String, [(String,Int)], Type)]
+    depSortSynonyms syns = reverse $
+      catMaybes $ flip lookup vertexSyns <$> G.topSort (G.buildG (1, length syns) (concatMap findEdges syns))
+      where
+      findEdges ::  (String, [(String,Int)], Type) -> [G.Edge]
+      findEdges syn@(_,_,typ) = everythingOnTypes (++) go typ
+        where
+        go ::  Type -> [G.Edge]
+        go (Native name _)
+          | Just thisVertex <- lookup syn vertexSyns',
+            Just depVertex <- lookup name vertexes = [(thisVertex, depVertex)]
+        go _ = []
+      findEdges _ = []
+
+      vertexes :: [(String, G.Vertex)]
+      vertexes = zip ((\(name,_,_) -> name) <$> syns) [1 ..]
+
+      vertexSyns :: [(G.Vertex, (String, [(String,Int)], Type))]
+      vertexSyns = zip [1 ..] syns
+
+      vertexSyns' :: [((String, [(String,Int)], Type), G.Vertex)]
+      vertexSyns' = swap <$> vertexSyns
 
   unaryToCpp :: UnaryOp -> CppUnaryOp
   unaryToCpp Negate = CppNegate

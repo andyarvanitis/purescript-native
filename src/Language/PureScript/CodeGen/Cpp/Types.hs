@@ -148,6 +148,18 @@ everywhereOnTypes f = go
   go (EffectFunction t) = f (EffectFunction (go t))
   go other = f other
 
+
+everythingOnTypes :: (r -> r -> r) -> (Type -> r) -> Type -> r
+everythingOnTypes (<>) f = go
+  where
+  go t@(Native _ tys) = foldl (<>) (f t) (map go tys)
+  go t@(Function t1 t2) = f t <> go t1 <> go t2
+  go t@(List ty) = f t <> go ty
+  go t@(Map tys) = foldl (<>) (f t) (map (go . snd) tys)
+  go t@(Template _ tys) = foldl (<>) (f t) (map go tys)
+  go t@(EffectFunction ty) = f t <> go ty
+  go other = f other
+
 mktype :: ModuleName -> T.Type -> Maybe Type
 
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just $ Native "double" []
