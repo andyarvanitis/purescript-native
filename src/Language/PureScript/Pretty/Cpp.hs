@@ -216,7 +216,10 @@ literals = mkPattern' match
   match (CppDataConstructor name typs) =
     return ("construct" ++ angles (prettyPrintCpp1 (CppData name typs)))
   match (CppCast val typ) =
-    return ("cast" ++ angles (runType typ) ++ parens (prettyPrintCpp1 val))
+    let cast = if everythingOnTypes (||) isTemplate typ
+                 then "template cast"
+                 else "cast" in
+    return (cast ++ angles (runType typ) ++ parens (prettyPrintCpp1 val))
   match (CppVar ident) = return ident
   match (CppInstance [] (cls:_, _) _ params) =
     return $ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
