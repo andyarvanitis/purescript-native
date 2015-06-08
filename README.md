@@ -30,11 +30,12 @@ A small strongly typed programming language with expressive types that compiles 
   - Built-in conversions to `std::vector`
   - Built-in conversions to `std::string` for `Char` list
 * `String` type corresponds to `std::string` (at least for now)
-* `Number` is C++ `double` type, with `Double` and `Float` aliases (`Int` is C++ `int`)
+* `Number` is C++ `double` type, `Int` is C++ `int` (for now)
 
 #### TO-DO:
 
-* Get automated builds/tests up and running ([underway](https://github.com/andyarvanitis/pure11/tree/pure11/examples/passing))
+* Fix issues with Rank-N types
+* Get automated builds/tests up and running (some work already done)
 * Optimized `newtype` (some work already done, but disabled for now)
 * "Magic do" (similar work already done in inliner and TCO code)
 * Unicode (UTF-8) support for `String` (use code from my Idris backend)
