@@ -38,7 +38,6 @@ import Control.Monad.Reader (MonadReader, asks)
 import Control.Monad.Supply.Class
 import Control.Monad (when, liftM2)
 
-import Language.PureScript.AST.Declarations (ForeignCode(..))
 import Language.PureScript.CodeGen.Cpp.AST as AST
 import Language.PureScript.CodeGen.Cpp.Common as Common
 import Language.PureScript.CodeGen.Cpp.Optimizer
@@ -66,7 +65,7 @@ data DeclLevel = TopLevel | InnerLevel deriving (Eq, Show);
 -- module.
 --
 moduleToCpp :: forall m mode. (Applicative m, Monad m, MonadReader (Options mode) m, MonadSupply m)
-           => Environment -> Module (CI.Decl Ann) ForeignCode -> m [Cpp]
+           => Environment -> Module (CI.Decl Ann) -> m [Cpp]
 moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   additional <- asks optionsAdditional
   cppImports <- T.traverse (pure . runModuleName) . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
@@ -109,7 +108,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                 ++ (if isMain mn then [nativeMain] else [])
                 ++ fileEnd "CC"
   return $ case additional of
-    MakeOptions -> moduleHeader ++ CppEndOfHeader : moduleBody
+    MakeOptions _ -> moduleHeader ++ CppEndOfHeader : moduleBody
     CompileOptions _ _ _ | not isModuleEmpty -> moduleBody
     _ -> []
 
@@ -962,9 +961,14 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   -- |
   -- Find a type class instance in scope by name, retrieving its class name and construction types.
   --
+  -- TODO: see if we can provide typeclass to make this faster
+  --
   findInstance :: Qualified Ident -> Maybe (Qualified ProperName, [Maybe Type])
   findInstance ident@(Qualified (Just mn') _)
-    | Just dict <- M.lookup (ident, Just mn) (typeClassDictionaries env),
+    | Just classMap <- M.lookup (Just mn) (typeClassDictionaries env),
+      dictMaps@(_:_) <- M.elems classMap,
+      dicts <- concat $ M.toList <$> dictMaps,
+      Just dict <- lookup ident dicts,
       classname <- TCD.tcdClassName dict,
       tys <- mktype mn' <$> TCD.tcdInstanceTypes dict
       = Just (classname, tys)

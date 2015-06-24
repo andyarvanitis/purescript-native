@@ -102,7 +102,7 @@ buildMakeActions outputDir filePathMap usePrefix =
     let path = outputDir </> (dotsTo '/' $ P.runModuleName mn) </> "externs.purs"
     (path, ) <$> readTextFile path
 
-  codegen :: CR.Module (CF.Bind CR.Ann) P.ForeignCode -> P.Environment -> P.SupplyVar -> P.Externs -> Make ()
+  codegen :: CR.Module (CF.Bind CR.Ann) -> P.Environment -> P.SupplyVar -> P.Externs -> Make ()
   codegen m env nextVar exts = do
     let mn = CR.moduleName m
     let filePath = dotsTo '/' $ P.runModuleName mn
@@ -144,7 +144,7 @@ buildMakeActions outputDir filePathMap usePrefix =
         text' <- readTextFile sfile
         writeTextFile (addExtension (fileBase ++ "_ffi") "cc") text'
 
-  requiresForeign :: CR.Module a b -> Bool
+  requiresForeign :: CR.Module a -> Bool
   requiresForeign = not . null . CR.moduleForeign
 
   dirExists :: FilePath -> Make Bool

@@ -92,7 +92,6 @@ inlineValues = everywhereOnCpp convert
                             | isDict semiringInt dict && isFn fnOne fn = CppNumericLiteral (Left 1)
                             | isDict boundedBoolean dict && isFn fnBottom fn = CppBooleanLiteral False
                             | isDict boundedBoolean dict && isFn fnTop fn = CppBooleanLiteral True
-  convert (CppApp fn [value]) | isFn fromNumber fn = CppBinary BitwiseOr value (CppNumericLiteral (Left 0))
   convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y])
     | isDict semiringInt dict && isFn fnAdd fn = CppBinary BitwiseOr (CppBinary Add x y) (CppNumericLiteral (Left 0))
     | isDict semiringInt dict && isFn fnMultiply fn = CppBinary BitwiseOr (CppBinary Multiply x y) (CppNumericLiteral (Left 0))
@@ -103,7 +102,6 @@ inlineValues = everywhereOnCpp convert
   fnOne = (C.prelude, C.one)
   fnBottom = (C.prelude, C.bottom)
   fnTop = (C.prelude, C.top)
-  fromNumber = (C.dataInt, C.fromNumber)
   fnAdd = (C.prelude, (C.+))
   fnDivide = (C.prelude, (C./))
   fnMultiply = (C.prelude, (C.*))

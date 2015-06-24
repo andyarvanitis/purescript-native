@@ -37,7 +37,7 @@ import qualified Paths_purescript as Paths
 
 import Make
 
-data PCCMakeOptions = PCCMakeOptions
+data PCCOptions = PCCOptions
   { pccmInput        :: [FilePath]
   , pccmForeignInput :: [FilePath]
   , pccmOutputDir    :: FilePath
@@ -46,13 +46,12 @@ data PCCMakeOptions = PCCMakeOptions
   }
 
 data InputOptions = InputOptions
-  { ioNoPrelude   :: Bool
-  , ioInputFiles  :: [FilePath]
+  { ioInputFiles  :: [FilePath]
   }
 
-compile :: PCCMakeOptions -> IO ()
-compile (PCCMakeOptions input [] outputDir opts usePrefix) = do
-  moduleFiles <- readInput (InputOptions (P.optionsNoPrelude opts) input)
+compile :: PCCOptions -> IO ()
+compile (PCCOptions input _ outputDir opts usePrefix) = do
+  moduleFiles <- readInput (InputOptions input)
   case runWriterT (parseInputs moduleFiles []) of
     Left errs -> do
       hPutStrLn stderr (P.prettyPrintMultipleErrors (P.optionsVerboseErrors opts) errs)
@@ -142,29 +141,31 @@ noPrefix = switch $
 
 
 options :: Parser (P.Options P.Make)
-options = P.Options <$> noPrelude
-                    <*> noTco
+options = P.Options <$> noTco
                     <*> noMagicDo
                     <*> pure Nothing
                     <*> noOpts
                     <*> verboseErrors
                     <*> (not <$> comments)
-                    <*> pure P.MakeOptions
+                    <*> additionalOptions
+  where
+  additionalOptions =
+    P.MakeOptions <$> pure Nothing
 
-pccMakeOptions :: Parser PCCMakeOptions
-pccMakeOptions = PCCMakeOptions <$> many inputFile
-                                <*> many inputForeignFile
-                                <*> outputDirectory
-                                <*> options
-                                <*> (not <$> noPrefix)
+pccOptions :: Parser PCCOptions
+pccOptions = PCCOptions <$> many inputFile
+                        <*> many inputForeignFile
+                        <*> outputDirectory
+                        <*> options
+                        <*> (not <$> noPrefix)
 
 main :: IO ()
 main = execParser opts >>= compile
   where
-  opts        = info (version <*> helper <*> pccMakeOptions) infoModList
+  opts        = info (version <*> helper <*> pccOptions) infoModList
   infoModList = fullDesc <> headerInfo <> footerInfo
-  headerInfo  = header   "pcc-make - Compiles PureScript to Javascript"
-  footerInfo  = footer $ "pcc-make " ++ showVersion Paths.version
+  headerInfo  = header   "pcc - Compiles PureScript to C++14"
+  footerInfo  = footer $ "pcc " ++ showVersion Paths.version
 
   version :: Parser (a -> a)
   version = abortOption (InfoMsg (showVersion Paths.version)) $ long "version" <> help "Show the version number" <> hidden
