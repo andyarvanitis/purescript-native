@@ -445,5 +445,4 @@ anytype :: Type
 anytype = Template [] []
 
 capitalize :: String -> String
-capitalize (c:cs) = toUpper c : cs
-capitalize s = s
+capitalize = map toUpper
