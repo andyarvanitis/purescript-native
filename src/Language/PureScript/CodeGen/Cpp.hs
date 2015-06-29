@@ -262,7 +262,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     cpps' <- mapM (toCpp tmplts) fns
     let struct' = CppStruct (ctor, classTemplParams)
                             []
-                            (toStrings <$> constraints)
+                            (constraintStrings [] <$> constraints)
                             cpps'
                             []
     return (CppComment comms struct')
@@ -299,9 +299,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         return $ CppVariableIntroduction (name, typ) tmplts' [CppStatic] Nothing
     toCpp tmplts (name, ty) = return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] Nothing
 
-    toStrings :: (Qualified ProperName, [T.Type]) -> (String, [String])
-    toStrings (name, tys) = (qualifiedToStr' (Ident . runProperName) name, typestr mn <$> tys)
-
   -- |
   -- data declarations (to omit)
   --
@@ -326,8 +323,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     cpps <- mapM (toCpp tmplts) (zip fns fs')
     when (length fns /= length fs') (error $ "Instance function list mismatch! " ++ '(': show ident ++ ")\n"
                                           ++ show fns ++ "\n -vs- \n" ++ show fs')
-    let tmaps = zip (Just . mkTemplate <$> params) typs
-        isDataTypeCtor' = isDataTypeCtor typs'
+    let isDataTypeCtor' = isDataTypeCtor typs'
         tmplts' = if isDataTypeCtor'
                     then tmpltsReplFromRight
                            (nub . sort $ concatMap templparams typs')
@@ -336,9 +332,10 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         typs'' = if isDataTypeCtor'
                    then (TypeConstructor (P.dotsTo '_' $ runModuleName mn)) <$> typs'
                    else typs'
+        tymap = zip (mkTemplate <$> params) typs''
         struct = CppStruct (unqualClass, tmplts')
                            typs''
-                           (toStrings typs'' <$> constraints)
+                           (constraintStrings tymap <$> constraints)
                            cpps
                            []
     return $ if classmn == mn
@@ -386,9 +383,6 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         e' <- exprToCpp e
         return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] (Just e')
     toCpp tmplts ((name, _), e) = return $ error $ (name ++ " :: " ++ show e ++ "\n")
-
-    toStrings :: [Type] -> (Qualified ProperName, [T.Type]) -> (String, [String])
-    toStrings typs (name, _) = (qualifiedToStr' (Ident . runProperName) name, runType <$> typs)
 
     literalCpp :: String -> T.Type -> CI.Expr Ann -> m Cpp
     literalCpp name ty e = do
@@ -865,6 +859,15 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
     go' :: (String, Int) -> (String, Int)
     go' t1 | Just n <- lookup (fst t1) t2s = (fst t1, n)
            | otherwise = t1
+
+  constraintStrings :: [(Type, Type)] -> (Qualified ProperName, [T.Type]) -> (String, [String])
+  constraintStrings [] (name, tys) = (qualifiedToStr' (Ident . runProperName) name, typestr mn <$> tys)
+  constraintStrings tymap (name, tys) = (qualifiedToStr' (Ident . runProperName) name,
+                                         runType . replace <$> catMaybes (mktype mn <$> tys))
+    where
+    replace :: Type -> Type
+    replace t | Just t' <- lookup t tymap = t'
+    replace t = t
 
   fnAppCpp :: CI.Expr Ann -> m Cpp
   fnAppCpp e = do
