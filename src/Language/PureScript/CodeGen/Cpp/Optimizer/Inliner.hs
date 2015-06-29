@@ -127,7 +127,7 @@ inlineCommonOperators = applyAll $
   , unary  ringInt C.negate CppNegate
 
   , binary moduloSemiringNumber (C./) Divide
-  , binary moduloSemiringInt C.mod Modulus
+  , binary moduloSemiringInt (C.%) Modulus
 
   , binary eqNumber (C.==) Equal
   , binary eqNumber (C./=) NotEqual
