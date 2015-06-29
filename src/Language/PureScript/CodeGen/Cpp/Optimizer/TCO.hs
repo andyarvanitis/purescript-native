@@ -110,9 +110,14 @@ tco' = everywhereOnCpp convert
     collectSelfCallArgs allArgumentValues (CppApp fn args') = collectSelfCallArgs (args' : allArgumentValues) fn
     collectSelfCallArgs allArgumentValues _ = allArgumentValues
   isSelfCall :: String -> Cpp -> Bool
-  isSelfCall ident (CppApp (CppVar ident') args) | ident == ident' && not (any isFunction args) = True
+  isSelfCall ident (CppApp (CppVar ident') args)
+    | ident == ident' && not (any isFunction args)
+                      && not (all isInstanceDict args) = True
   isSelfCall ident (CppApp fn args) | not (any isFunction args) = isSelfCall ident fn
   isSelfCall _ _ = False
   isFunction :: Cpp -> Bool
   isFunction (CppFunction _ _ _ _ _ _) = True
   isFunction _ = False
+  isInstanceDict :: Cpp -> Bool
+  isInstanceDict (CppInstance {}) = True
+  isInstanceDict _ = False
