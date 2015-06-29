@@ -188,6 +188,10 @@ nameIsCppReserved name =
               , "xor"
               , "xor_eq" ] || properNameIsCppReserved name
 
+normalizedName :: String -> String
+normalizedName ('_' : s) | last s == '_', s' <- init s, nameIsCppReserved s' = s'
+normalizedName s = s
+
 moduleNameToCpp :: ModuleName -> String
 moduleNameToCpp (ModuleName pns) =
   let name = intercalate "_" (runProperName `map` pns)

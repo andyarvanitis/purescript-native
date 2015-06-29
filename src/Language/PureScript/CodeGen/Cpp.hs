@@ -984,7 +984,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   findClass name
     | Just (params, fns, constraints) <- M.lookup name (typeClasses env),
       fns' <- (\(i,t) -> (identToCpp i, t)) <$> fns
-      = Just (fst <$> params, constraints, (sortBy (compare `on` fst) fns'))
+      = Just (fst <$> params, constraints, (sortBy (compare `on` normalizedName . fst) fns'))
   findClass _ = Nothing
 
   -- |
