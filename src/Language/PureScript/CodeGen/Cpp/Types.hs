@@ -40,6 +40,7 @@ data Type = Native String [Type]
           | TypeConstructor String Type
           | DeclType String
           | EffectFunction Type
+          | AutoType
           deriving (Show, Data, Typeable)
 
 instance Eq Type where
@@ -47,14 +48,11 @@ instance Eq Type where
   (Function a b) == (Function a' b') = a == a' && b == b'
   (List a) == (List a') = a == a'
   (Map ms) == (Map ms') = ms == ms'
-  (Template t ts) == (Template t' ts') = cap t == cap t' && ts == ts'
-    where
-    cap :: String -> String
-    cap (c:cs) = toUpper c : cs
-    cap s = s
+  (Template t ts) == (Template t' ts') = capitalize t == capitalize t' && ts == ts'
   (TypeConstructor s a) == (TypeConstructor s' a') = a == a' && s == s'
   (DeclType e) == (DeclType e') = e == e'
   (EffectFunction b) == (EffectFunction b') = b == b'
+  AutoType == AutoType = True
   _ == _ = False
   a /= b = not (a == b)
 
@@ -128,6 +126,7 @@ runType tt@(TypeConstructor mn t) = mn ++ "::" ++ typeName tt ++ runType t ++ ":
 runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
 runType tt@(Template t []) = typeName tt ++ capitalize t
 runType (Template t ts) = runType (Template t []) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
+runType AutoType = "auto"
 
 typeName :: Type -> String
 typeName Function{} = "fn"
@@ -136,6 +135,7 @@ typeName List{} = "list"
 typeName Map{} = "any_map"
 typeName TypeConstructor{} = "type::"
 typeName DeclType{} = "decltype"
+typeName AutoType = ""
 typeName _ = ""
 
 everywhereOnTypes :: (Type -> Type) -> Type -> Type
@@ -177,7 +177,7 @@ mktype m (T.TypeApp
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
                a) b) = do
-                 a' <- mktype m a
+                 a' <- mktype m (forallsToAuto a)
                  b' <- mktype m b
                  return (Function a' b')
 
@@ -189,7 +189,8 @@ mktype m (T.TypeApp
 mktype m (T.TypeApp a
             (T.TypeApp
               (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function")))
-               b)) | Just a' <- mktype m a, Just b' <- mktype m b = Just (Function a' b')
+               b)) | Just a' <- mktype m (forallsToAuto a),
+                     Just b' <- mktype m b = Just (Function a' b')
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
@@ -265,6 +266,7 @@ mktype _ (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
                                                            ProperName "Monad",
                                                            ProperName "Eff"]))) (ProperName "Eff"))) =
   Just $ Native (typeName (EffectFunction (Template [] []))) []
+mktype _ (T.TypeConstructor (Qualified Nothing (ProperName []))) = Just AutoType
 mktype m a@(T.TypeConstructor _) = Just $ Native (qualDataTypeName m a) []
 mktype m (T.ConstrainedType _ ty) = mktype m ty
 
@@ -307,26 +309,18 @@ fnTypesN n (Function a b) = a : types (n - 1) b
 fnTypesN _ _ = []
 
 templateVars :: Type -> [Type]
-templateVars = nub . sortBy (compare `on` name) . go
+templateVars = nub . sortBy (compare `on` runType) . everythingOnTypes (++) go
   where
   go :: Type -> [Type]
-  go (Template p ts) = concatMap go ts ++ [Template p []]
-  go (Function a b) = go a ++ go b
-  go (EffectFunction b) = go b
-  go (List a) = go a
-  go (Native _ ts) = concatMap go ts
+  go (Template t _) = [Template t []]
   go _ = []
-  name :: Type -> String
-  name (Template n _) = n
-  name _ = []
 
 templparams :: Type -> [(String, Int)]
-templparams (Template p ts) = concatMap templparams ts ++ [(runType (Template p []), length ts)]
-templparams (Function a b) = templparams a ++ templparams b
-templparams (EffectFunction b) = templparams b
-templparams (List a) = templparams a
-templparams (Native _ ts) = concatMap templparams ts
-templparams _ = []
+templparams = everythingOnTypes (++) go
+  where
+  go :: Type -> [(String, Int)]
+  go (Template p ts) = [(runType (Template p []), length ts)]
+  go _ = []
 
 templparams' :: Maybe Type -> [(String, Int)]
 templparams' = sortBy (compare `on` fst) . nub . maybe [] templparams
@@ -405,6 +399,7 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
     go args (List t, List t') = go args (t, t')
     go args (Map ms, Map ms') = args ++ concatMap (go []) (zip (map snd ms) (map snd ms'))
     go args (Native _ _, Native _ _) = args
+    go args (AutoType, AutoType) = args
       -- | t == t' = args
       -- | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
     go args (t1', t2') = trace ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2') args
@@ -446,3 +441,20 @@ anytype = Template [] []
 
 capitalize :: String -> String
 capitalize = map toUpper
+
+-- |
+-- Used for rank-N types
+--
+forallsToAuto :: T.Type -> T.Type
+forallsToAuto = T.everywhereOnTypes go
+  where
+  go :: T.Type -> T.Type
+  go (T.ForAll _ _ _) = T.TypeConstructor (Qualified Nothing (ProperName []))
+  go t = t
+
+typevals :: [(Type, Type)] -> Qualified Ident
+typevals ts = Qualified (Just $ ModuleName [ProperName C.prim])
+                        (Ident $ intercalate ", " $ map (typeval . runType . snd) ts)
+  where
+  typeval :: String -> String
+  typeval s = "typeval<" ++ s ++ ">"

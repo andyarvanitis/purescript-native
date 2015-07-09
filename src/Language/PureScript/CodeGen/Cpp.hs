@@ -50,6 +50,7 @@ import Language.PureScript.Traversals (sndM)
 import Language.PureScript.Environment
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.CoreImp.AST as CI
+import qualified Language.PureScript.CoreImp.Traversals as CI
 import qualified Language.PureScript.Types as T
 import qualified Language.PureScript.TypeClassDictionaries as TCD
 import qualified Language.PureScript.Pretty.Cpp as P
@@ -170,16 +171,29 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         drop' n (args, CI.Return _ (CI.AnonFunction _ args' [body'])) | n > 0 = drop' (n-1) (args ++ args', body')
         drop' _ a = a
 
-  declToCpp TopLevel (CI.Function (_, comms, Just ty, _) ident [arg] body) = do
-    block <- CppBlock <$> mapM statmentToCpp body
-    let typ = mktype mn ty
-    let f = CppFunction (identToCpp ident)
-                        (tmpltsReplFromRight (templparams' typ) (filter parameterized $ templparams' typ))
-                        [(identToCpp arg, argtype typ)]
-                        (rettype typ)
+  declToCpp TopLevel (CI.Function (_, comms, Just ty, _) ident [arg] body) | Just typ' <- mktype mn ty = do
+    let rankNs = concatMap getRankNs body
+    let body' = if null rankNs then body else replaceRankNs rankNs <$> body
+    block <- CppBlock <$> mapM statmentToCpp body'
+    let typ = Just typ'
+        argType = argtype typ
+        args = [(identToCpp arg, argType)]
+        tmplts = tmpltsReplFromRight (templparams' typ) (filter parameterized $ templparams' typ)
+        retType = rettype typ
+        block' = handleRankNCpps (templateVars typ') block
+        f = CppFunction (identToCpp ident)
+                        tmplts
+                        args
+                        retType
                         []
-                        block
-    return (CppComment comms f)
+                        block'
+        f' | Just aty' <- argType, everythingOnTypes (||) (== AutoType) aty' =
+             CppVariableIntroduction (identToCpp ident, Nothing)
+                                     tmplts
+                                     []
+                                     (Just (CppLambda [] args retType block'))
+           | otherwise = f
+    return (CppComment comms f')
     where
     parameterized :: (String, Int) -> Bool
     parameterized (_, n) | n > 0 = True
@@ -831,8 +845,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
   asTemplate ps (CppAccessor t prop cpp)
     | Just (Native t' _) <- t = CppAccessor (Just (Native t' ps)) prop cpp
     | otherwise = CppAccessor (Just (Native [] ps)) prop cpp
-  -- asTemplate ps (CppApp (CppVar f) args) = CppApp (CppVar $ f ++ '<' : intercalate "," (runType <$> ps) ++ ">") args
-  asTemplate _ cpp = {- trace (show z ++ " : " ++ show cpp) -} cpp
+  asTemplate _ cpp = cpp
 
   removeTemplates :: [(String, Int)] -> Cpp -> Cpp
   removeTemplates tmplts = everywhereOnCpp remove
@@ -925,19 +938,20 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       fixInstArg _ cpp = cpp
 
   fnDeclCpp :: T.Type -> Ident -> [(String, Int)] -> CI.Expr Ann -> [CppQualifier] -> m Cpp
-  fnDeclCpp ty ident tmplts e qs = do
-      let typ = mktype mn ty
+  fnDeclCpp ty ident tmplts expr qs | Just typ' <- mktype mn ty = do
+      let typ = Just typ'
           atyp = argtype typ
-      e' <- toApp atyp
+      appExpr <- toApp atyp expr
+      let appExpr' = handleRankNCpps (templateVars typ') appExpr
       return $ CppFunction (identToCpp ident)
                            tmplts
                            (fnArg atyp)
                            (rettype typ)
                            qs
-                           (CppBlock [CppReturn e'])
+                           (CppBlock [CppReturn appExpr'])
       where
-      toApp :: Maybe Type -> m Cpp
-      toApp atyp
+      toApp :: Maybe Type -> CI.Expr Ann -> m Cpp
+      toApp atyp e
         | (CI.Var _ qid@(Qualified mname vid)) <- e,
            Just ty' <- findValue (fromMaybe mn mname) vid =
            fnAppCpp $ CI.App (Nothing, [], Just ty, Nothing)
@@ -960,6 +974,8 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
       appArg' :: Maybe Type -> m [Cpp]
       appArg' Nothing = return []
       appArg' _ = return [CppVar P.mkarg]
+  fnDeclCpp ty ident _ _ _ =
+    error ("Cannot derive type information from " ++ show ident ++ " :: " ++ show ty)
 
   -- |
   -- Find a type class instance in scope by name, retrieving its class name and construction types.
@@ -1082,6 +1098,66 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                      CppRaw "#endif"]
   headerDefsEnd :: [Cpp]
   headerDefsEnd = [CppRaw "#undef EXTERN"]
+
+  replaceRankNs :: [(Qualified Ident, T.Type)] -> CI.Statement Ann -> CI.Statement Ann
+  replaceRankNs vs | (_, _, f, _) <- CI.everywhere id go id id = f
+    where
+    go :: CI.Expr Ann -> CI.Expr Ann
+    go e@(CI.Var (_, _, Just t, _) _)
+      | T.everythingOnTypes (||) (not . T.isMonoType) t = e
+    go e@(CI.Var (_, _, Just t, _) v)
+     | Just rankNTy <- lookup (cleanName v) vs,
+       Just rankNTyp <- mktype mn rankNTy,
+       Just varTyp <- mktype mn t,
+       mappings@(_:_) <- templateMappings (rankNTyp, varTyp)
+       = CI.App nullAnn e [CI.Var nullAnn (typevals mappings)]
+    go (CI.App ann@(_, _, Just t, _) f'@(CI.Var _ v) [a'])
+      | Just rankNTy <- lookup (cleanName v) vs,
+        Just rankNTyp <- mktype mn rankNTy,
+        Just retTyp <- mktype mn t,
+        Just argTyp <- tyFromExpr' a',
+        mappings@(_:_) <- templateMappings (rankNTyp, Function argTyp retTyp)
+        = CI.App ann (CI.App nullAnn f' [CI.Var nullAnn (typevals mappings)]) [a']
+    go e = e
+    cleanName :: Qualified Ident -> Qualified Ident
+    cleanName (Qualified m (Ident s))
+      | rev@(c:_) <- reverse s,
+        isDigit c,
+        ('_': ss@(_:_)) <- dropWhile isDigit rev = Qualified m (Ident (reverse ss))
+    cleanName n = n
+
+-- TODO: what about shadowed names?
+--
+handleRankNCpps :: [Type] -> Cpp -> Cpp
+handleRankNCpps tmplts cpp = everywhereOnCpp go cpp
+  where
+  go :: Cpp -> Cpp
+  go cpp'@(CppPartialApp _ _ ts _)
+    | rns@(_:_) <- (nub $ concatMap templateVars ts) \\ tmplts = rankNWrapper rns cpp'
+  go cpp'@(CppApp (CppDataConstructor _ ts) _)
+    | rns@(_:_) <- (nub $ concatMap templateVars ts) \\ tmplts = rankNWrapper rns cpp'
+  go cpp' = cpp'
+
+rankNWrapper :: [Type] -> Cpp -> Cpp
+rankNWrapper tmplts cpp = CppLambda []
+                                    ((\t -> ('_' : t, Just AutoType)) <$> tmplts')
+                                    Nothing
+                                    (CppBlock ((typeAlias <$> tmplts') ++ [CppReturn cpp]))
+  where
+  tmplts' :: [String]
+  tmplts' = nub . sort $ runType <$> tmplts
+  typeAlias :: String -> Cpp
+  typeAlias t = CppTypeAlias (t, []) (runType (DeclType ('_' : t)), []) []
+
+-- TODO: what about shadowed names?
+--
+getRankNs :: CI.Statement Ann -> [(Qualified Ident, T.Type)]
+getRankNs | (_, _, f, _) <- CI.everything (++) (const []) go (const []) (const []) = f
+  where
+  go :: CI.Expr Ann -> [(Qualified Ident, T.Type)]
+  go (CI.Var (_, _, Just t, _) v)
+    | T.everythingOnTypes (||) (not . T.isMonoType) t = [(v, t)]
+  go _ = []
 
 isMain :: ModuleName -> Bool
 isMain (ModuleName [ProperName "Main"]) = True

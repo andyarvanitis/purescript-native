@@ -94,7 +94,9 @@ literals = mkPattern' match
               return ('\n' : indentString ++ cpps)
             else return (' ' : cpps)
         else return []
-    , return (maybe "" ((" -> " ++) . runType) rty)
+    , let rty' | Just r' <- rty, everythingOnTypes (||) (== AutoType) r' = Nothing
+               | otherwise = rty
+      in return (maybe "" ((" -> " ++) . runType) rty')
     , return $ if CppDefault `elem` qs then " = default" else []
     , return $ if CppDelete `elem` qs then " = delete" else []
     , if ret == CppNoOp
@@ -381,7 +383,11 @@ indexer = mkPattern' match
 lam :: Pattern PrinterState Cpp ((String, [(String, Maybe Type)], Maybe Type), Cpp)
 lam = mkPattern match
   where
-  match (CppLambda caps args rty ret) = Just ((concatMap runCaptureType caps, args, rty), ret)
+  match (CppLambda caps args rty ret) =
+    let rty' | Just r' <- rty, everythingOnTypes (||) (== AutoType) r' = Nothing
+             | otherwise = rty
+    in
+    Just ((concatMap runCaptureType caps, args, rty'), ret)
   match _ = Nothing
 
 app :: Pattern PrinterState Cpp (String, Cpp)

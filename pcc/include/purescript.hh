@@ -61,6 +61,10 @@ using void4 = void;
 template <typename T1, typename T2, typename T3, typename T4, typename T5>
 using void5 = void;
 
+// Used for rank-N types
+template <typename T>
+const T typeval = T();
+
 } // namespace PureScript
 
 #endif // PureScript_HH
