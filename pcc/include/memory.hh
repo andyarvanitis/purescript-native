@@ -44,23 +44,23 @@ constexpr auto constructor(Args&&... args) ->
 template <typename T, typename U>
 constexpr auto instance_of(const std::shared_ptr<U>& a) ->
     typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value,T>::type {
-  return std::dynamic_pointer_cast<typename T::element_type>(a);
+  return std::static_pointer_cast<typename T::element_type>(a);
 }
 
 template <typename T, typename U>
 constexpr auto instance_of(const std::shared_ptr<U> a) ->
   typename std::enable_if<!std::is_assignable<std::shared_ptr<void>,T>::value,std::shared_ptr<T>>::type {
-  return std::dynamic_pointer_cast<T>(a);
+  return std::static_pointer_cast<T>(a);
 }
 
 template <typename T, typename U>
 constexpr auto get(const std::shared_ptr<U>& a) -> typename T::element_type {
-  return *std::dynamic_pointer_cast<typename T::element_type>(a);
+  return *std::static_pointer_cast<typename T::element_type>(a);
 }
 
 template <typename U>
 constexpr auto get(const std::shared_ptr<U>& a) -> U {
-  return *std::dynamic_pointer_cast<U>(a);
+  return *std::static_pointer_cast<U>(a);
 }
 
 class unsafe_any {
