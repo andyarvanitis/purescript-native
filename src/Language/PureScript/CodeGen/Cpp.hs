@@ -92,6 +92,7 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
                                                          ++ synonyms -- TODO: dependency sort these
                                                          ++ datas    -- two groups (and maybe others)
                                                          ++ toHeader optimized'
+                                                         ++ toHeaderFns optimized'
                      ]
                   ++ P.linebreak
                   ++ headerDefsEnd
@@ -1040,10 +1041,20 @@ moduleToCpp env (Module coms mn imps exps foreigns decls) = do
         CppVariableIntroduction (name, typ) tmps qs Nothing
       fromConst cpp = cpp
     go cpp@(CppStruct{}) = Just cpp
-    go (CppFunction name [] args rtyp qs _) = Just (CppFunction name [] args rtyp qs CppNoOp)
-    go cpp@(CppFunction{}) = Just cpp
+    go (CppFunction name tmplts args rtyp qs _) = Just (CppFunction name tmplts args rtyp qs CppNoOp)
     go cpp@(CppVariableIntroduction{}) = Just cpp
-    go cpp@(CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
+    go (CppComment comms cpp')
+      | Just cpp <- go cpp' = Just $ case cpp of CppFunction {} -> cpp
+                                                 _ -> CppComment comms cpp
+    go _ = Nothing
+
+  toHeaderFns :: [Cpp] -> [Cpp]
+  toHeaderFns = catMaybes . map go
+    where
+    go :: Cpp -> Maybe Cpp
+    go (CppNamespace name cpps) = Just (CppNamespace name (toHeaderFns cpps))
+    go cpp@(CppFunction _ (_:_) _ _ _ _) = Just cpp
+    go (CppComment comms cpp') | Just cpp <- go cpp' = Just (CppComment comms cpp)
     go _ = Nothing
 
   toBody :: [Cpp] -> [Cpp]
