@@ -322,6 +322,8 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
 
   declToCpp TopLevel _ = return CppNoOp -- TODO: includes Function IsNewtype
 
+  -- TODO: this part is pretty big, refactor it
+  --
   instanceDeclToCpp :: Ident -> CI.Expr Ann -> m Cpp
   instanceDeclToCpp ident expr
     | Just (classname@(Qualified (Just classmn) (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
@@ -369,7 +371,6 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
         CppVariableIntroduction (name, mktype mn ty) tmplts' [CppStatic] (Just $ CppLambda [] args rty body)
       asLambda (CppComment comms cpp') = CppComment comms (asLambda cpp')
       asLambda cpp = cpp
-
     toCpp tmplts ((name, _), e) -- Note: for vars, avoiding templated args - a C++14 feature - for now
       | Just ty <- tyFromExpr e,
         typ@(Just Function{}) <- mktype mn ty,
@@ -410,7 +411,6 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
         | Just (_, tk) <- M.lookup (Qualified (Just mn) (ProperName nname)) (types env),
           DataType ps _ <- tk = length ps /= length nts
       go _ = False
-    isDataTypeCtor _ = False
 
     templatesFromKinds :: [Type] -> [(String, Int)]
     templatesFromKinds ts = concatMap go ts
@@ -423,7 +423,6 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
       swapNames :: ((String, Int), Type) -> Maybe (String, Int)
       swapNames ((_, n), (Template t _)) = Just (runType (Template t []), n)
       swapNames _ = Nothing
-    templatesFromKinds _ = []
 
     addQual :: CppQualifier -> Cpp -> Cpp
     addQual q (CppFunction name tmplts args rty qs cpp) = CppFunction name tmplts args rty (q : qs) cpp
@@ -434,6 +433,8 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
     isNormalFn :: (CI.Expr Ann) -> Bool
     isNormalFn (CI.AnonFunction _ [Ident "__unused"] [CI.Return _ e]) | Nothing <- tyFromExpr e = False
     isNormalFn _ = True
+
+  instanceDeclToCpp ident _ = error ("Instance \"" ++ show ident ++ "\" not found")
 
   statmentToCpp :: CI.Statement Ann -> m Cpp
   statmentToCpp (CI.Expr e) = exprToCpp e
@@ -760,7 +761,6 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
           | Just thisVertex <- lookup syn vertexSyns',
             Just depVertex <- lookup name vertexes = [(thisVertex, depVertex)]
         go _ = []
-      findEdges _ = []
 
       vertexes :: [(String, G.Vertex)]
       vertexes = zip ((\(name,_,_) -> name) <$> syns) [1 ..]
