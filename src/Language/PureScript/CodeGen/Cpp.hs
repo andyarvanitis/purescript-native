@@ -678,7 +678,7 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
         : dataTypePartialCtors name (applied ++ [p]) ps
         where
         typeFromTemplate :: (String, Int) -> Type
-        typeFromTemplate (name, _) = Template name []
+        typeFromTemplate (name', _) = Template name' []
       dataTypePartialCtors _ _ _ = []
 
       dataValueCtors :: [(Qualified ProperName, TypeKind)] -> ([Cpp], [Cpp])
@@ -722,13 +722,6 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
       templateParams :: [T.Type] -> [(String, Int)]
       templateParams = nub . concatMap (templparams' . mktype mn)
 
-      tmpltsReplFromRight :: [(String, Int)] -> [(String, Int)] -> [(String, Int)]
-      tmpltsReplFromRight t1s t2s = map go' t1s
-        where
-        go' :: (String, Int) -> (String, Int)
-        go' t1 | Just n <- lookup (fst t1) t2s = (fst t1, n)
-               | otherwise = t1
-
       qual :: Qualified ProperName -> String
       qual name = qualifiedToStr' (Ident . runProperName) name
 
@@ -743,10 +736,10 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
       ds@(_:_) <-  M.toList
                  . M.filterWithKey (\k@(Qualified mn' _) _ -> mn' == Just mn && M.lookup k tcs == Nothing)
                  $ typeSynonyms env = do
-      let names = qualifiedToStr' (Ident . runProperName) . fst <$> ds
+      let names' = qualifiedToStr' (Ident . runProperName) . fst <$> ds
           tmplts = map templateFromKind . fst . snd <$> ds
           typs = catMaybes $ mktype mn . snd . snd <$> ds
-          synonyms = zip3 names tmplts typs
+          synonyms = zip3 names' tmplts typs
           synonyms' = depSortSynonyms synonyms
           cpps = (\(n,tmps,t) -> CppTypeAlias (n, tmps) (runType t, []) []) <$> synonyms'
       return cpps
@@ -896,7 +889,7 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
           instArgs' = fixInstArg templateChanges <$> instArgs
           instanceParams = concat $ catMaybes . map snd . getParams <$> instArgs'
           tmplts = filter (`notElem` instanceParams) (snd <$> allTemplates)
-      return $ flip (foldl (\fn a -> CppApp fn [a])) (instArgs' ++ normArgs) (asTemplate tmplts f')
+      return $ flip (foldl (\fn' a -> CppApp fn' [a])) (instArgs' ++ normArgs) (asTemplate tmplts f')
     where
       instanceArg :: String -> Cpp -> Bool
       instanceArg fname (CppInstance _ (_, fns) _ _) | Just _ <- lookup (P.stripScope fname) fns = True
@@ -1069,7 +1062,7 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
       isNoOp CppNoOp = True
       isNoOp (CppComment _ cpp) | isNoOp cpp = True
       isNoOp (CppUseNamespace{}) = True
-      isNoOp (CppNamespace _ cpps) = all isNoOp cpps
+      isNoOp (CppNamespace _ cpps') = all isNoOp cpps'
       isNoOp (CppRaw _) = True
       isNoOp _ = False
     go cpp@(CppUseNamespace{}) = Just cpp
