@@ -170,14 +170,14 @@ inlineCommonOperators = applyAll $
   binary dict opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp (CppApp fn@(CppAccessor _ _ (CppScope scope)) [x]) [y]) | isPreludeFn (identToCpp (Op opString)) fn = CppBinary op x y
+    convert (CppApp (CppApp fn@(CppAccessor _ _ (CppScope _)) [x]) [y]) | isPreludeFn (identToCpp (Op opString)) fn = CppBinary op x y
     convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isDict dict dict' && isPreludeFn opString fn = CppBinary op x y
     convert other = other
   binary' :: String -> String -> BinaryOp -> Cpp -> Cpp
   binary' moduleName opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp (CppApp fn@(CppAccessor _ _ (CppScope scope)) [x]) [y]) | isFn (moduleName, identToCpp (Op opString)) fn = CppBinary op x y
+    convert (CppApp (CppApp fn@(CppAccessor _ _ (CppScope _)) [x]) [y]) | isFn (moduleName, identToCpp (Op opString)) fn = CppBinary op x y
     convert (CppApp (CppApp fn [x]) [y]) | isFn (moduleName, opString) fn = CppBinary op x y
     convert other = other
   binaryFunction :: (String, String) -> String -> BinaryOp -> Cpp -> Cpp
@@ -190,14 +190,14 @@ inlineCommonOperators = applyAll $
   unary dict fnName op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp fn@(CppAccessor _ _ (CppScope scope)) [x]) | isPreludeFn (identToCpp (Op fnName)) fn = CppUnary op x
+    convert (CppApp fn@(CppAccessor _ _ (CppScope _)) [x]) | isPreludeFn (identToCpp (Op fnName)) fn = CppUnary op x
     convert (CppApp (CppApp fn [dict']) [x]) | isPreludeFn fnName fn && isDict dict dict' = CppUnary op x
     convert other = other
   unary' :: String -> String -> CppUnaryOp -> Cpp -> Cpp
   unary' moduleName fnName op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp fn@(CppAccessor _ _ (CppScope scope)) [x]) | isFn (moduleName, identToCpp (Op fnName)) fn = CppUnary op x
+    convert (CppApp fn@(CppAccessor _ _ (CppScope _)) [x]) | isFn (moduleName, identToCpp (Op fnName)) fn = CppUnary op x
     convert (CppApp fn [x]) | isFn (moduleName, fnName) fn = CppUnary op x
     convert other = other
   mkFn :: Int -> Cpp -> Cpp
@@ -260,7 +260,7 @@ isDict (moduleName, dictName) (CppInstance mn _ iname _) = iname == dictName && 
 isDict _ _ = False
 
 isFn :: (String, String) -> Cpp -> Bool
-isFn (moduleName, fnName) (CppAccessor _ fnName' (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
+isFn (_, fnName) (CppAccessor _ fnName' (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
 isFn (moduleName, fnName) (CppAccessor _ x (CppVar y)) = x == fnName && y == moduleName
 isFn (moduleName, fnName) (CppIndexer (CppStringLiteral x) (CppVar y)) = x == fnName && y == moduleName
 isFn _ _ = False
