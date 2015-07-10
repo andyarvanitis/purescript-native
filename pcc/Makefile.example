@@ -1,4 +1,4 @@
-PSC := "../.cabal-sandbox/bin/pcc"
+PCC := "../.cabal-sandbox/bin/pcc"
 
 MODULE_DIR="../../packages"
 #MODULE_DIR="bower_components"
@@ -10,7 +10,7 @@ SOURCES := $(shell find $(SOURCE_DIR) -name '*.purs')
 all: main
 
 main:
-	$(PSC) $(MODULES) $(SOURCES)
+	$(PCC) $(MODULES) $(SOURCES)
 
 clean:
 	@rm -rf output/*
