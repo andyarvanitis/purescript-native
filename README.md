@@ -9,6 +9,7 @@ A small strongly typed programming language with expressive types that compiles 
 #### Status:
 
 * Alpha (0.2) — very early, contributions welcome!
+* [Standard packages currently building, and at least lightly tested](https://github.com/andyarvanitis/pure14/wiki/Packages)
 
 #### Performance
 
