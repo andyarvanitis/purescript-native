@@ -391,11 +391,16 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
         typ <- mktype mn ty,
         tmplts'@(_:_) <- templparams' typ = do
         e' <- exprToCpp e
-        return $ CppVariableIntroduction (name, mktype mn ty) (filter (`notElem` tmplts) tmplts') [CppStatic] (Just e')
+        let cpp' | Just typ' <- typ,
+                   vs@(_:_) <- templateVars typ',
+                   not (hasTemplates' e') = Just (asTemplate vs e')
+                 | otherwise = Just e'
+        return $ CppVariableIntroduction (name, typ) (filter (`notElem` tmplts) tmplts') [CppStatic] cpp'
     toCpp _ ((name, _), e)
       | Just ty <- tyFromExpr e = do
         e' <- exprToCpp e
-        return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] (Just e')
+        let typ = mktype mn ty
+        return $ CppVariableIntroduction (name, typ) [] [CppStatic] (Just e')
     toCpp _ ((name, _), e) = return $ error $ (name ++ " :: " ++ show e ++ "\n")
 
     literalCpp :: String -> T.Type -> CI.Expr Ann -> m Cpp
@@ -855,7 +860,19 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
     go :: Cpp -> Bool
     go (CppFunction _ (_:_) _ _ _ _) = True
     go (CppVariableIntroduction _ (_:_) _ _) = True
-    go (CppComment _ cpp') = go cpp'
+    go _ = False
+
+  -- TODO: add type/template info to CppVar?
+  hasTemplates' :: Cpp -> Bool
+  hasTemplates' = everythingOnCpp (||) go
+    where
+    go :: Cpp -> Bool
+    go (CppAccessor (Just t) _ _) | everythingOnTypes (||) isTemplate t = True
+    go (CppData _ ts) | any (everythingOnTypes (||) isTemplate) ts = True
+    go (CppCast _ t) | everythingOnTypes (||) isTemplate t = True
+    go (CppPartialApp _ _ ts _) | any (everythingOnTypes (||) isTemplate) ts = True
+    go (CppInstance _ _ _ ps) | any (everythingOnTypes (||) isTemplate) $ catMaybes (snd <$> ps) = True
+    go (CppVar s) | '<' `elem` s = True
     go _ = False
 
   tmpltsReplFromRight :: [(String, Int)] -> [(String, Int)] -> [(String, Int)]
