@@ -561,8 +561,7 @@ templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))
   where
   go :: (String, Int) -> String
   go (name, 0) = "typename " ++ name
-  go t@(name, _) = let [(name', n)] = remTemplateDefaults [t] in
-                   templDecl (flip (,) 0 . (('_' : name') ++) . show <$> [1..n]) ++ " class " ++ name
+  go (name, n) = "typename" ++ parens (show n) ++ ' ' : name
 
 templDecl' :: Either [(String, Int)] [Type] -> String
 templDecl' (Left []) = []

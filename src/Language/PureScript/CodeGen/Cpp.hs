@@ -274,7 +274,7 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
                           (concatMap constraintParams constraints)
         classTemplParams = zip tmplts $ fromMaybe 0 . flip lookup fnTemplPs <$> tmplts
     cpps' <- mapM (toCpp tmplts) fns
-    let struct' = CppStruct (ctor, classTemplParams)
+    let struct' = CppStruct (ctor, classTemplParams ++ [("...", 0)])
                             []
                             (constraintStrings [] <$> constraints)
                             cpps'
