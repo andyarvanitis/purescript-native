@@ -45,7 +45,6 @@ import qualified Language.PureScript.Constants as C
 
 import Language.PureScript.CodeGen.Cpp.Optimizer.Common
 import Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
-import Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo
 import Language.PureScript.CodeGen.Cpp.Optimizer.TCO
 
 -- |
@@ -61,7 +60,6 @@ optimize' cpp = do
   opts <- ask
   return $ untilFixedPoint (applyAll
     [ tco opts
-    , magicDo opts
     , unThunk
     , etaConvert
     , evaluateIifes

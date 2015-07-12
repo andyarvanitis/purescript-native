@@ -151,7 +151,6 @@ library
                      Language.PureScript.CodeGen.Cpp.Optimizer
                      Language.PureScript.CodeGen.Cpp.Optimizer.Common
                      Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
-                     Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo
                      Language.PureScript.CodeGen.Cpp.Optimizer.TCO
                      Language.PureScript.CodeGen.Cpp.Types
                      Language.PureScript.Pretty.Cpp
