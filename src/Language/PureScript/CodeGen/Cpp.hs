@@ -902,10 +902,10 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
       let declType = (listToMaybe instArgs >>= instanceFnType fn) <|> tyFromExpr' f <|> findFnDeclType f
           exprType = fnTyFromApp' e
           allTemplates = fromMaybe [] $ templateMappings <$> (liftM2 (,) declType exprType)
-          templateChanges = filter (\(a,b) -> a /= b) allTemplates
+          templateChanges = onlyChanges allTemplates
           instArgs' = fixInstArg templateChanges <$> instArgs
-          instanceParams = concat $ catMaybes . map snd . getParams <$> instArgs'
-          tmplts = filter (`notElem` instanceParams) (snd <$> allTemplates)
+          instanceTmplts = concatMap paramTmplts instArgs
+          tmplts = snd <$> filter (flip notElem instanceTmplts . fst) allTemplates
       return $ flip (foldl (\fn' a -> CppApp fn' [a])) (instArgs' ++ normArgs) (asTemplate tmplts f')
     where
       instanceArg :: String -> Cpp -> Bool
@@ -923,7 +923,7 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
         | Just (Just typ) <- lookup (P.stripScope fname) fns = Just $ everywhereOnTypes go typ
         where
         go t@(Template name _) | Just (Just t') <- lookup name ps,
-                                   [(_,t2)] <- templateReplacements (t, t') = t2
+                                   [(_,t2)] <- onlyChanges $ templateMappings (t, t') = t2
         go t = t
       instanceFnType fname (CppApp i@CppInstance{} _) = instanceFnType fname i
       instanceFnType _ _ = Nothing
@@ -933,16 +933,23 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
         | (Just ty) <- findValue (fromMaybe mn mn') ident, typ@(Just _) <- mktype mn ty = typ
       findFnDeclType _ = Nothing
 
-      getParams :: Cpp -> [(String, Maybe Type)]
-      getParams (CppInstance _ _ _ ps) = ps
-      getParams _ = []
+      paramTmplts :: Cpp -> [Type]
+      paramTmplts (CppInstance _ _ _ ps) = concatMap templateVars (catMaybes $ snd <$> ps)
+      paramTmplts _ = []
 
       fixInstArg :: [(Type, Type)] -> Cpp -> Cpp
+      fixInstArg [] cpp = cpp
       fixInstArg mappings (CppInstance mn' cls iname ps) = CppInstance mn' cls iname (go <$> ps)
         where
         go :: (String, Maybe Type) -> (String, Maybe Type)
-        go (pn, Just pty) | Just pty' <- lookup pty mappings = (pn, Just pty')
+        go (pn, Just pty) = (pn, Just (replaceTypes pty))
         go p = p
+        replaceTypes :: Type -> Type
+        replaceTypes = everywhereOnTypes go'
+          where
+          go' :: Type -> Type
+          go' t@(Template {}) | Just t' <- lookup t mappings = t'
+          go' t = t
       fixInstArg mappings (CppApp i@CppInstance{} _) = fixInstArg mappings i
       fixInstArg _ cpp = cpp
 

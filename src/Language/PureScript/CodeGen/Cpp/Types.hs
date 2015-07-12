@@ -141,13 +141,14 @@ typeName _ = ""
 everywhereOnTypes :: (Type -> Type) -> Type -> Type
 everywhereOnTypes f = go
   where
+  go (Native s ts) = f (Native s (map go ts))
   go (Function t1 t2) = f (Function (go t1) (go t2))
   go (List t) = f (List (go t))
   go (Map ts) = f (Map (map (\(n,t) -> (n, go t)) ts))
   go (Template s ts) = f (Template s (map go ts))
+  go (TypeConstructor s t) = f (TypeConstructor s (go t))
   go (EffectFunction t) = f (EffectFunction (go t))
   go other = f other
-
 
 everythingOnTypes :: (r -> r -> r) -> (Type -> r) -> Type -> r
 everythingOnTypes (<>) f = go
@@ -157,6 +158,7 @@ everythingOnTypes (<>) f = go
   go t@(List ty) = f t <> go ty
   go t@(Map tys) = foldl (<>) (f t) (map (go . snd) tys)
   go t@(Template _ tys) = foldl (<>) (f t) (map go tys)
+  go t@(TypeConstructor _ ty) = f t <> go ty
   go t@(EffectFunction ty) = f t <> go ty
   go other = f other
 
@@ -404,11 +406,8 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
       -- | otherwise = error ("Type conflict! " ++ t ++ " ; " ++ t')
     go args (t1', t2') = trace ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2') args
 
-templateReplacements :: (Type, Type) -> [(Type, Type)]
-templateReplacements = filter (\(a,b) -> a /= b) . templateMappings
-
-templateSpecs :: Maybe Type -> Maybe Type -> [Type]
-templateSpecs tyDecl tyExpr = map snd $ maybe [] templateMappings (liftM2 (,) tyDecl tyExpr)
+onlyChanges :: Eq a => [(a, a)] -> [(a, a)]
+onlyChanges = filter $ \(a,b) -> a /= b
 
 templateFromKind :: (String, Maybe Kind) -> (String, Int)
 templateFromKind (name, Just Star) = (capitalize name, 0)
@@ -436,6 +435,7 @@ remTemplateDefaults = map remDefault
   remDefault (name, 0) = (takeWhile isAlphaNum name, 0)
   remDefault (name, n) = (takeWhile isAlphaNum name, n)
 
+-- TODO: do this more properly
 anytype :: Type
 anytype = Template [] []
 
