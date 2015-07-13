@@ -237,7 +237,7 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
         where
         replace (CppLambda cps [(argn, argt)] rett b) = CppLambda cps [(argn, applyChanges typs argt)] (applyChanges typs rett) b
         replace (CppInstance mn' cls iname ps) = CppInstance mn' cls iname (zip (fst <$> ps) (applyChanges typs . snd <$> ps))
-        replace (CppAccessor typ p e) = CppAccessor (applyChanges typs typ) p e
+        replace (CppAccessor typ' p e) = CppAccessor (applyChanges typs typ') p e
         replace other = other
 
       applyChanges :: [(Maybe Type, Maybe Type)] -> Maybe Type -> Maybe Type
