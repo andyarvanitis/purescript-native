@@ -211,11 +211,11 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
   -- C++ doesn't support nested functions, so use lambdas
   declToCpp InnerLevel (CI.Function (_, _, Just ty, _) ident [arg] body) = do
     block <- CppBlock <$> mapM statmentToCpp body
-    return $ CppVariableIntroduction (identToCpp ident, Nothing) [] [] (Just (asLambda block))
+    return $ CppVariableIntroduction (identToCpp ident, typ) [] [] (Just (asLambda block))
     where
+    typ = mktype mn ty
     asLambda block' =
-      let typ = mktype mn ty
-          tmplts = maybe [] (map Just . templateVars) typ
+      let tmplts = maybe [] (map Just . templateVars) typ
           argName = identToCpp arg
           argType = argtype typ
           retType = rettype typ
