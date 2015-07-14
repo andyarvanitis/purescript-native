@@ -61,12 +61,7 @@ using void4 = void;
 template <typename T1, typename T2, typename T3, typename T4, typename T5>
 using void5 = void;
 
-#define TYPENAME1 template <typename> class
-#define TYPENAME2 template <typename, typename> class
-#define TYPENAME3 template <typename, typename, typename> class
-#define TYPENAME4 template <typename, typename, typename, typename> class
-#define TYPENAME5 template <typename, typename, typename, typename, typename> class
-#define typename(n) TYPENAME ## n
+#define typename(...) template <__VA_ARGS__> class
 
 // Used for rank-N types
 template <typename T>

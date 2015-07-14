@@ -561,7 +561,7 @@ templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))
   where
   go :: (String, Int) -> String
   go (name, 0) = "typename " ++ name
-  go (name, n) = "typename" ++ parens (show n) ++ ' ' : name
+  go (name, n) = "typename" ++ parens (intercalate "," $ replicate n "typename") ++ ' ' : name
 
 templDecl' :: Either [(String, Int)] [Type] -> String
 templDecl' (Left []) = []
