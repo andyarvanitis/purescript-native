@@ -41,26 +41,50 @@ constexpr auto constructor(Args&&... args) ->
   return Private::Bind<sizeof...(CArgs) - sizeof...(Args)>::bind(construct<Ctor, CArgs...>, std::forward<Args>(args)...);
 }
 
-template <typename T, typename U>
-constexpr auto instance_of(const std::shared_ptr<U>& a) ->
-    typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value,T>::type {
-  return std::dynamic_pointer_cast<typename T::element_type>(a);
+namespace Private {
+  template <typename T, typename U>
+  constexpr auto instance_of(const std::shared_ptr<U>& a) ->
+      typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value,T>::type {
+    return std::dynamic_pointer_cast<typename T::element_type>(a);
+  }
+
+  template <typename T, typename U>
+  constexpr auto instance_of(const std::shared_ptr<U> a) ->
+    typename std::enable_if<!std::is_assignable<std::shared_ptr<void>,T>::value,std::shared_ptr<T>>::type {
+    return std::dynamic_pointer_cast<T>(a);
+  }
+
+  template <typename T, typename U>
+  constexpr auto get(const std::shared_ptr<U>& a) -> typename T::element_type {
+    return *std::dynamic_pointer_cast<typename T::element_type>(a);
+  }
+
+  template <typename U>
+  constexpr auto get(const std::shared_ptr<U>& a) -> U {
+    return *std::dynamic_pointer_cast<U>(a);
+  }
 }
 
-template <typename T, typename U>
-constexpr auto instance_of(const std::shared_ptr<U> a) ->
-  typename std::enable_if<!std::is_assignable<std::shared_ptr<void>,T>::value,std::shared_ptr<T>>::type {
-  return std::dynamic_pointer_cast<T>(a);
+template <typename B, typename A>
+constexpr auto instance_of(A a) {
+  return Private::instance_of<B>(a);
 }
 
-template <typename T, typename U>
-constexpr auto get(const std::shared_ptr<U>& a) -> typename T::element_type {
-  return *std::dynamic_pointer_cast<typename T::element_type>(a);
+template <typename B, typename A>
+constexpr auto get(A a) {
+  return Private::get<B>(a);
 }
 
-template <typename U>
-constexpr auto get(const std::shared_ptr<U>& a) -> U {
-  return *std::dynamic_pointer_cast<U>(a);
+// Note type transformation A<Args> -> B<...> -> B<Args>
+
+template <template <typename...> class B, template <typename...> class A, typename... Args>
+constexpr auto instance_of(const std::shared_ptr<A<Args...>> a) {
+  return Private::instance_of<B<Args...>>(a);
+}
+
+template <template <typename...> class B, template <typename...> class A, typename... Args>
+constexpr auto get(const std::shared_ptr<A<Args...>> a) {
+  return Private::get<B<Args...>>(a);
 }
 
 class unsafe_any {

@@ -458,7 +458,7 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
     CppIfElse <$> exprToCpp cond <*> pure thens' <*> pure Nothing
     where
     addTypes :: CI.Expr Ann -> Cpp -> m Cpp
-    addTypes (CI.IsTagOf (_, _, ty, _) ctor e) sts = do
+    addTypes (CI.IsTagOf _ ctor e) sts = do
       e' <- exprToCpp e
       return (typeAccessors e' sts)
       where
@@ -468,10 +468,8 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
         convert :: Cpp -> Cpp
         convert (CppAccessor Nothing prop cpp) | cpp == acc = CppAccessor qtyp prop cpp
         convert cpp = cpp
-        tmplts :: [Type]
-        tmplts = maybe [] templateVars (ty >>= mktype mn)
         qtyp :: Maybe Type
-        qtyp = Just (Native (qualifiedToStr' (Ident . runProperName) ctor) tmplts)
+        qtyp = Just (Native (qualifiedToStr' (Ident . runProperName) ctor) [])
     addTypes _ cpp = return cpp
   statmentToCpp (CI.Return _ expr) =
     CppReturn <$> exprToCpp expr
@@ -609,8 +607,7 @@ moduleToCpp env (Module _ mn imps exps foreigns decls) = do
     CppBinary op <$> exprToCpp lhs <*> exprToCpp rhs
   exprToCpp (CI.IsTagOf (_, _, ty, _) ctor expr) =
     let qname = qualifiedToStr' (Ident . runProperName) ctor
-        tmplts = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
-        val = CppData qname tmplts in
+        val = CppData qname [] in
     flip CppInstanceOf val <$> exprToCpp expr
 
   modDatasToCpps :: m [Cpp]
