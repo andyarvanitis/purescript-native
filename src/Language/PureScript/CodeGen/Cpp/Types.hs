@@ -34,7 +34,7 @@ import Debug.Trace
 
 data Type = Native String [Type]
           | Function Type Type
-          | List Type
+          | Array Type
           | Map [(String,Type)]
           | Template String [Type]
           | TypeConstructor String Type
@@ -46,7 +46,7 @@ data Type = Native String [Type]
 instance Eq Type where
   (Native t ts) == (Native t' ts') = t == t' && ts == ts'
   (Function a b) == (Function a' b') = a == a' && b == b'
-  (List a) == (List a') = a == a'
+  (Array a) == (Array a') = a == a'
   (Map ms) == (Map ms') = ms == ms'
   (Template t ts) == (Template t' ts') = capitalize t == capitalize t' && ts == ts'
   (TypeConstructor s a) == (TypeConstructor s' a') = a == a' && s == s'
@@ -119,7 +119,7 @@ runType tt@(Function (Template [] []) (Template [] [])) = typeName tt
 runType tt@(Function a b) = typeName tt ++ '<' : runType a ++ "," ++ runType b ++ ">"
 runType tt@(EffectFunction (Template [] [])) = typeName tt
 runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
-runType tt@(List t) | t'@(_:_) <- runType t = typeName tt ++ '<' : t' ++ ">"
+runType tt@(Array t) | t'@(_:_) <- runType t = typeName tt ++ '<' : t' ++ ">"
                     | otherwise = typeName tt
 runType tt@(Map _) = typeName tt
 runType tt@(TypeConstructor mn t) = mn ++ "::" ++ typeName tt ++ runType t ++ "::template _"
@@ -131,7 +131,7 @@ runType AutoType = "auto"
 typeName :: Type -> String
 typeName Function{} = "fn"
 typeName EffectFunction{} = "eff_fn"
-typeName List{} = "list"
+typeName Array{} = "array"
 typeName Map{} = "any_map"
 typeName TypeConstructor{} = "type::"
 typeName DeclType{} = "decltype"
@@ -143,7 +143,7 @@ everywhereOnTypes f = go
   where
   go (Native s ts) = f (Native s (map go ts))
   go (Function t1 t2) = f (Function (go t1) (go t2))
-  go (List t) = f (List (go t))
+  go (Array t) = f (Array (go t))
   go (Map ts) = f (Map (map (\(n,t) -> (n, go t)) ts))
   go (Template s ts) = f (Template s (map go ts))
   go (TypeConstructor s t) = f (TypeConstructor s (go t))
@@ -155,7 +155,7 @@ everythingOnTypes (<>) f = go
   where
   go t@(Native _ tys) = foldl (<>) (f t) (map go tys)
   go t@(Function t1 t2) = f t <> go t1 <> go t2
-  go t@(List ty) = f t <> go ty
+  go t@(Array ty) = f t <> go ty
   go t@(Map tys) = foldl (<>) (f t) (map (go . snd) tys)
   go t@(Template _ tys) = foldl (<>) (f t) (map go tys)
   go t@(TypeConstructor _ ty) = f t <> go ty
@@ -196,7 +196,7 @@ mktype m (T.TypeApp a
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array")))
-             a) = mktype m a >>= Just . List
+             a) = mktype m a >>= Just . Array
 
 mktype _ (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
@@ -263,7 +263,7 @@ mktype _ (T.TUnknown n) = Just $ Template ('T' : show n) []
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) =
   Just $ Native (typeName (Function (Template [] []) (Template [] []))) []
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) =
-  Just $ Native (typeName (List (Template [] []))) []
+  Just $ Native (typeName (Array (Template [] []))) []
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
                                                            ProperName "Monad",
                                                            ProperName "Eff"]))) (ProperName "Eff"))) =
@@ -387,22 +387,22 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
       args ++ [(Template t [], Function a b)]
     go args (Template t [b], EffectFunction b') =
       args ++ (Template t [], EffectFunction anytype) : (go [] (b, b'))
-    go args (Template t [a], List a') =
-      args ++ (Template t [], List anytype) : (go [] (a, a'))
+    go args (Template t [a], Array a') =
+      args ++ (Template t [], Array anytype) : (go [] (a, a'))
     go args (Template t ts, Native t' ts') | length ts == length ts' =
       args ++ (Template t [], Native t' []) : concatMap (go []) (zip ts ts')
     go args (Template t _, Native t' []) =
       args ++ [(Template t [], Native t' [])]
     go args (a@DeclType{}, a') = args ++ [(a, a')]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
-    go args (List t, List t') = go args (t, t')
+    go args (Array t, Array t') = go args (t, t')
     go args (Map ms, Map ms') = args ++ concatMap (go []) (zip (map snd ms) (map snd ms'))
     go args (EffectFunction b, EffectFunction b') = go args (b, b')
     go args (Native _ ts@(_:_), Native _ ts'@(_:_)) = args ++ concatMap (go []) (zip ts ts')
     go args (Native _ _, Native _ _) = args
     go args (Native _ ts, Map ts') | length ts == length ts' = args ++ concatMap (go []) (zip ts (map snd ts'))
     go args (a@(Native "eff_fn" []), EffectFunction a') = args ++ [(a,a')]
-    go args (a@(Native "list" []), List a') = args ++ [(a,a')]
+    go args (a@(Native "array" []), Array a') = args ++ [(a,a')]
     go args (AutoType, _) = args -- TODO: is it ok to silence all of these?
     go args (t1', t2') = trace ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2') args
 

@@ -80,6 +80,7 @@ nameIsCppReserved name =
               , "and"
               , "and_eq"
               , "any_map"
+              , "array"
               , "asm"
               , "auto"
               , "bind"

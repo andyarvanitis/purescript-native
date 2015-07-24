@@ -38,9 +38,10 @@ using string = std::string;
 using runtime_error = std::runtime_error;
 
 template <typename T>
-using list = shared_list<T>;
+using array = shared_list<T>; // for now, at least
 
-using list_index_type = list<void*>::size_type;
+template <typename T>
+using list = shared_list<T>;
 
 // Support for things like ((->) r)
 template <typename R>
