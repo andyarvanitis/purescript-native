@@ -49,7 +49,7 @@ namespace Private {
   }
 
   template <typename T, typename U>
-  constexpr auto instance_of(const std::shared_ptr<U> a) ->
+  constexpr auto instance_of(const std::shared_ptr<U>& a) ->
     typename std::enable_if<!std::is_assignable<std::shared_ptr<void>,T>::value,std::shared_ptr<T>>::type {
     return std::dynamic_pointer_cast<T>(a);
   }
@@ -78,12 +78,12 @@ constexpr auto get(A a) {
 // Note type transformation A<Args> -> B<...> -> B<Args>
 
 template <template <typename...> class B, template <typename...> class A, typename... Args>
-constexpr auto instance_of(const std::shared_ptr<A<Args...>> a) {
+constexpr auto instance_of(const std::shared_ptr<A<Args...>>& a) {
   return Private::instance_of<B<Args...>>(a);
 }
 
 template <template <typename...> class B, template <typename...> class A, typename... Args>
-constexpr auto get(const std::shared_ptr<A<Args...>> a) {
+constexpr auto get(const std::shared_ptr<A<Args...>>& a) {
   return Private::get<B<Args...>>(a);
 }
 

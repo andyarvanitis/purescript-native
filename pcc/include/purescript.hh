@@ -28,7 +28,10 @@
 namespace PureScript {
 
 template <typename A, typename B>
-using fn = std::function<B(A)>;
+using fn = std::function<B(const A)>;
+
+template <typename T>
+using param = typename std::conditional<std::is_fundamental<T>::value, const T, const T&>::type;
 
 template <typename B>
 using eff_fn = std::function<B()>;

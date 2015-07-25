@@ -1189,8 +1189,8 @@ isMain _ = False
 nativeMain :: Cpp
 nativeMain = CppFunction "main"
                []
-               [ ([], Just (Native "int" []))
-               , ([], Just (Native "char *[]" []))
+               [ ([], Just (Primitive "int"))
+               , ([], Just (Primitive "char *[]"))
                ]
                (Just (Native "int" []))
                []

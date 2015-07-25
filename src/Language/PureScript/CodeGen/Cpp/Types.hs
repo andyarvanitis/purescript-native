@@ -32,7 +32,8 @@ import qualified Language.PureScript.Types as T
 
 import Debug.Trace
 
-data Type = Native String [Type]
+data Type = Primitive String
+          | Native String [Type]
           | Function Type Type
           | Array Type
           | Map [(String,Type)]
@@ -44,6 +45,7 @@ data Type = Native String [Type]
           deriving (Show, Data, Typeable)
 
 instance Eq Type where
+  (Primitive t) == (Primitive t') = t == t'
   (Native t ts) == (Native t' ts') = t == t' && ts == ts'
   (Function a b) == (Function a' b') = a == a' && b == b'
   (Array a) == (Array a') = a == a'
@@ -110,6 +112,7 @@ data CppCaptureType
   deriving (Show, Eq, Data, Typeable)
 
 runType :: Type -> String
+runType (Primitive t) = t
 runType (Native t []) = t
 -- TODO: make this a separate type
 runType (Native "fn_" [t]) = "fn_<" ++ runType t ++ ">::template _"
@@ -164,11 +167,11 @@ everythingOnTypes (<>) f = go
 
 mktype :: ModuleName -> T.Type -> Maybe Type
 
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just $ Native "double" []
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Number")))  = Just $ Primitive "double"
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "String")))  = Just $ Native "string" []
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just $ Native "bool" []
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Int")))     = Just $ Native "int" []
-mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Char")))    = Just $ Native "char" []
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Boolean"))) = Just $ Primitive "bool"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Int")))     = Just $ Primitive "int"
+mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Char")))    = Just $ Primitive "char"
 
 mktype _ (T.TypeApp
             (T.TypeApp
@@ -403,6 +406,7 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
     go args (Native _ ts, Map ts') | length ts == length ts' = args ++ concatMap (go []) (zip ts (map snd ts'))
     go args (a@(Native "eff_fn" []), EffectFunction a') = args ++ [(a,a')]
     go args (a@(Native "array" []), Array a') = args ++ [(a,a')]
+    go args ((Primitive t), (Primitive t')) | t == t' = args
     go args (AutoType, _) = args -- TODO: is it ok to silence all of these?
     go args (t1', t2') = trace ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2') args
 

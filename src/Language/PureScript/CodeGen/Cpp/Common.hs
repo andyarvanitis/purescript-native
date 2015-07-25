@@ -147,6 +147,7 @@ nameIsCppReserved name =
               , "or"
               , "or_eq"
               , "override"
+              , "param"
               , "private"
               , "protected"
               , "public"
