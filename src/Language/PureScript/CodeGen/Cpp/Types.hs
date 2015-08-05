@@ -415,7 +415,7 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
     go args (Native _ _, Native _ _) = args
     go args (Native _ ts, Map ts') | length ts == length ts' = args ++ concatMap (go []) (zip ts (map snd ts'))
     go args (a@(Native "eff_fn" []), EffectFunction a') = args ++ [(a,a')]
-    go args (a@(Native "array" []), Array a') = args ++ [(a,a')]
+    go args ((Native "array" []), Array {}) = args
     go args ((Primitive t), (Primitive t')) | t == t' = args
     go args (AutoType, _) = args -- TODO: is it ok to silence all of these?
     go args (t1', t2') = trace ("Mismatched type structure! " ++ show t1' ++ " ; " ++ show t2') args
