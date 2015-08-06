@@ -121,6 +121,7 @@ data SimpleErrorMessage
   | ShadowedName Ident
   | WildcardInferredType Type
   | NotExhaustivePattern [[Binder]] Bool
+  | OverlappingPattern [[Binder]] Bool
   | ClassOperator ProperName Ident
   deriving (Show)
 
@@ -231,6 +232,7 @@ errorCode em = case unwrapErrorMessage em of
   (ShadowedName _)              -> "ShadowedName"
   (WildcardInferredType _)      -> "WildcardInferredType"
   (NotExhaustivePattern _ _)    -> "NotExhaustivePattern"
+  (OverlappingPattern _ _)      -> "OverlappingPattern"
   (ClassOperator _ _)           -> "ClassOperator"
 
 -- |
@@ -566,6 +568,11 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
               , line $ "The definition has the following uncovered cases:\n"
               , Box.hsep 1 Box.left (map (paras . map (line . prettyPrintBinderAtom)) (transpose bs))
               ] ++ if not b then [line "..."] else []
+    goSimple (OverlappingPattern bs b) =
+      indent $ paras $ [ line "Redundant cases have been detected."
+              , line $ "The definition has the following redundant cases:\n"
+              , Box.hsep 1 Box.left (map (paras . map (line . prettyPrintBinderAtom)) (transpose bs))
+              ] ++ if not b then [line "..."] else []
     go (NotYetDefined names err) =
       paras [ line $ "The following are not yet defined here: " ++ intercalate ", " (map show names) ++ ":"
             , indent $ go err
@@ -740,13 +747,13 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
 -- Pretty print multiple errors
 --
 prettyPrintMultipleErrors :: Bool -> MultipleErrors -> String
-prettyPrintMultipleErrors full = flip evalState M.empty . prettyPrintMultipleErrorsWith Error "Error:" "Multiple errors:" full
+prettyPrintMultipleErrors full = flip evalState M.empty . prettyPrintMultipleErrorsWith Error "Error found:" "Multiple errors found:" full
 
 -- |
 -- Pretty print multiple warnings
 --
 prettyPrintMultipleWarnings :: Bool -> MultipleErrors ->  String
-prettyPrintMultipleWarnings full = flip evalState M.empty . prettyPrintMultipleErrorsWith Warning "Warning:" "Multiple warnings:" full
+prettyPrintMultipleWarnings full = flip evalState M.empty . prettyPrintMultipleErrorsWith Warning "Warning found:" "Multiple warnings found:" full
 
 prettyPrintMultipleErrorsWith :: Level -> String -> String -> Bool -> MultipleErrors -> State UnknownMap String
 prettyPrintMultipleErrorsWith level intro _ full  (MultipleErrors [e]) = do

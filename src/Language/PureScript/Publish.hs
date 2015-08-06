@@ -5,8 +5,13 @@
 
 module Language.PureScript.Publish
   ( preparePackage
+  , preparePackage'
   , PrepareM()
   , runPrepareM
+  , PublishOptions(..)
+  , defaultPublishOptions
+  , getGitWorkingTreeStatus
+  , requireCleanWorkingTree
   , getVersionFromGitTag
   , getBowerInfo
   , getModulesAndBookmarks
@@ -31,14 +36,17 @@ import Control.Applicative
 import Control.Category ((>>>))
 import Control.Arrow ((***))
 import Control.Exception (catch, try)
+import Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import Control.Monad.Trans.Except
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.Writer
 
-import System.Directory (doesFileExist)
+import System.Directory (doesFileExist, findExecutable)
 import System.Process (readProcess)
 import System.Exit (exitFailure)
+import System.FilePath (pathSeparator)
 import qualified System.FilePath.Glob as Glob
+import qualified System.Info
 
 import Web.Bower.PackageMeta (PackageMeta(..), BowerError(..), PackageName,
                               runPackageName, parsePackageName, Repository(..))
@@ -49,11 +57,22 @@ import qualified Language.PureScript.Docs as D
 import Language.PureScript.Publish.Utils
 import Language.PureScript.Publish.ErrorsWarnings
 
+data PublishOptions = PublishOptions
+  { -- | How to obtain the version tag and version that the data being
+    -- generated will refer to.
+    publishGetVersion :: PrepareM (String, Version)
+  }
+
+defaultPublishOptions :: PublishOptions
+defaultPublishOptions = PublishOptions
+  { publishGetVersion = getVersionFromGitTag
+  }
+
 -- | Attempt to retrieve package metadata from the current directory.
 -- Calls exitFailure if no package metadata could be retrieved.
-preparePackage :: IO D.UploadedPackage
-preparePackage =
-  runPrepareM preparePackage'
+preparePackage :: PublishOptions -> IO D.UploadedPackage
+preparePackage opts =
+  runPrepareM (preparePackage' opts)
     >>= either (\e -> printError e >> exitFailure)
                handleWarnings
   where
@@ -93,14 +112,16 @@ otherError = throwError . OtherError
 catchLeft :: Applicative f => Either a b -> (a -> f b) -> f b
 catchLeft a f = either f pure a
 
-preparePackage' :: PrepareM D.UploadedPackage
-preparePackage' = do
+preparePackage' :: PublishOptions -> PrepareM D.UploadedPackage
+preparePackage' opts = do
   exists <- liftIO (doesFileExist "bower.json")
   unless exists (userError BowerJSONNotFound)
 
+  requireCleanWorkingTree
+
   pkgMeta <- liftIO (Bower.decodeFile "bower.json")
                     >>= flip catchLeft (userError . CouldntParseBowerJSON)
-  (pkgVersionTag, pkgVersion) <- getVersionFromGitTag
+  (pkgVersionTag, pkgVersion) <- publishGetVersion opts
   pkgGithub                   <- getBowerInfo pkgMeta
   (pkgBookmarks, pkgModules)  <- getModulesAndBookmarks
 
@@ -121,6 +142,22 @@ getModulesAndBookmarks = do
   where
   renderModules bookmarks modules =
     return (bookmarks, map D.convertModule modules)
+
+data TreeStatus = Clean | Dirty deriving (Show, Eq, Ord, Enum)
+
+getGitWorkingTreeStatus :: PrepareM TreeStatus
+getGitWorkingTreeStatus = do
+  out <- readProcess' "git" ["status", "--porcelain"] ""
+  return $
+    if null . filter (not . null) . lines $ out
+      then Clean
+      else Dirty
+
+requireCleanWorkingTree :: PrepareM ()
+requireCleanWorkingTree = do
+  status <- getGitWorkingTreeStatus
+  unless (status == Clean) $
+    userError DirtyWorkingTree
 
 getVersionFromGitTag :: PrepareM (String, Version)
 getVersionFromGitTag = do
@@ -204,7 +241,8 @@ data DependencyStatus
 -- appropriate to link to, and we should omit links.
 getResolvedDependencies :: [PackageName] -> PrepareM [(PackageName, Version)]
 getResolvedDependencies declaredDeps = do
-  depsBS <- fromString <$> readProcess' "bower" ["list", "--json", "--offline"] ""
+  bower <- findBowerExecutable
+  depsBS <- fromString <$> readProcess' bower ["list", "--json", "--offline"] ""
 
   -- Check for undeclared dependencies
   toplevels <- catchJSON (parse asToplevelDependencies depsBS)
@@ -215,6 +253,15 @@ getResolvedDependencies declaredDeps = do
 
   where
   catchJSON = flip catchLeft (internalError . JSONError FromBowerList)
+
+findBowerExecutable :: PrepareM String
+findBowerExecutable = do
+  mname <- liftIO . runMaybeT . msum . map (MaybeT . findExecutable) $ names
+  maybe (userError (BowerExecutableNotFound names)) return mname
+  where
+  names = case System.Info.os of
+    "mingw32" -> ["bower", "bower.cmd"]
+    _         -> ["bower"]
 
 -- | Extracts all dependencies and their versions from
 --   `bower list --json --offline`
@@ -306,7 +353,7 @@ withPackageName fp = (,fp) <$> getPackageName fp
 
 getPackageName :: FilePath -> Maybe PackageName
 getPackageName fp = do
-  let xs = splitOn "/" fp
+  let xs = splitOn [pathSeparator] fp
   ys <- stripPrefix ["bower_components"] xs
   y <- headMay ys
   case Bower.mkPackageName y of

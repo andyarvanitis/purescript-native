@@ -149,11 +149,11 @@ inlineCommonOperators = applyAll $
   , binary semigroupString (C.<>) Add
   , binary semigroupString (C.++) Add
 
-  , binary latticeBoolean (C.&&) And
-  , binary latticeBoolean (C.||) Or
-  , binaryFunction latticeBoolean C.inf And
-  , binaryFunction latticeBoolean C.sup Or
-  , unary complementedLatticeBoolean C.not CppNot
+  , binary booleanAlgebraBoolean (C.&&) And
+  , binary booleanAlgebraBoolean (C.||) Or
+  , binaryFunction booleanAlgebraBoolean C.conj And
+  , binaryFunction booleanAlgebraBoolean C.disj Or
+  , unary booleanAlgebraBoolean C.not CppNot
 
   , binary' C.dataIntBits (C..|.) BitwiseOr
   , binary' C.dataIntBits (C..&.) BitwiseAnd
@@ -312,11 +312,8 @@ semigroupString = (C.prelude, C.semigroupString)
 boundedBoolean :: (String, String)
 boundedBoolean = (C.prelude, C.boundedBoolean)
 
-latticeBoolean :: (String, String)
-latticeBoolean = (C.prelude, C.latticeBoolean)
-
-complementedLatticeBoolean :: (String, String)
-complementedLatticeBoolean = (C.prelude, C.complementedLatticeBoolean)
+booleanAlgebraBoolean :: (String, String)
+booleanAlgebraBoolean = (C.prelude, C.booleanAlgebraBoolean)
 
 -- semigroupoidArr :: (String, String)
 -- semigroupoidArr = (C.prelude, C.semigroupoidArr)

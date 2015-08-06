@@ -21,7 +21,7 @@
 module PSCi where
 
 import Data.Foldable (traverse_)
-import Data.List (intercalate, nub, sort, isPrefixOf)
+import Data.List (intercalate, nub, sort)
 import Data.Traversable (traverse)
 import Data.Tuple (swap)
 import Data.Version (showVersion)
@@ -222,12 +222,12 @@ createTemporaryModule exec PSCiState{psciImportedModules = imports, psciLetBindi
 -- Makes a volatile module to hold a non-qualified type synonym for a fully-qualified data type declaration.
 --
 createTemporaryModuleForKind :: PSCiState -> P.Type -> P.Module
-createTemporaryModuleForKind PSCiState{psciImportedModules = imports} typ =
+createTemporaryModuleForKind PSCiState{psciImportedModules = imports, psciLetBindings = lets} typ =
   let
     moduleName = P.ModuleName [P.ProperName "$PSCI"]
     itDecl = P.TypeSynonymDeclaration (P.ProperName "IT") [] typ
   in
-    P.Module [] moduleName ((importDecl `map` imports) ++ [itDecl]) Nothing
+    P.Module [] moduleName ((importDecl `map` imports) ++ lets ++ [itDecl]) Nothing
 
 -- |
 -- Makes a volatile module to execute the current imports.
@@ -259,11 +259,11 @@ makeIO f io = do
   either (throwError . P.singleError . f) return e
 
 make :: PSCiState -> [(Either P.RebuildPolicy FilePath, P.Module)] -> P.Make P.Environment
-make PSCiState{..} ms = P.make actions' (psciLoadedModules ++ ms)
+make PSCiState{..} ms = P.make actions' (map snd (psciLoadedModules ++ ms))
     where
     filePathMap = M.fromList $ (first P.getModuleName . swap) `map` (psciLoadedModules ++ ms)
     actions = P.buildMakeActions modulesDir filePathMap psciForeignFiles False
-    actions' = actions { P.progress = \s -> unless ("Compiling $PSCI" `isPrefixOf` s) $ liftIO . putStrLn $ s }
+    actions' = actions { P.progress = const (return ()) }
 
 -- |
 -- Takes a value declaration and evaluates it with the current state.
