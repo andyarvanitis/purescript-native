@@ -30,16 +30,16 @@ import Language.PureScript.Names
 import qualified Language.PureScript.Types as T
 
 -------------------------------------------------------------------------------------------------
-hasRankN :: Maybe T.Type -> Bool
+tyHasRankNs :: Maybe T.Type -> Bool
 -------------------------------------------------------------------------------------------------
-hasRankN Nothing = False
-hasRankN (Just (T.ForAll _ t' _)) = hasRankN (Just t')
-hasRankN (Just t) = T.everythingOnTypes (||) (not . T.isMonoType) t
+tyHasRankNs Nothing = False
+tyHasRankNs (Just (T.ForAll _ t' _)) = tyHasRankNs (Just t')
+tyHasRankNs (Just t) = T.everythingOnTypes (||) (not . T.isMonoType) t
 
 ---------------------------------------------------------------------------------------------------
-replaceRankNs :: ModuleName -> [(Qualified Ident, T.Type)] -> Expr Ann -> Expr Ann
+replaceRankNVals :: ModuleName -> [(Qualified Ident, T.Type)] -> Expr Ann -> Expr Ann
 ---------------------------------------------------------------------------------------------------
-replaceRankNs mn vs | (_, f, _) <- everywhereOnValues id go id = f
+replaceRankNVals mn vs | (_, f, _) <- everywhereOnValues id go id = f
   where
 
   go :: Expr Ann -> Expr Ann
@@ -73,9 +73,9 @@ replaceRankNs mn vs | (_, f, _) <- everywhereOnValues id go id = f
 -- TODO: what about shadowed names?
 --
 ---------------------------------------------------------------------------------------------------
-handleRankNCpps :: [Type] -> Cpp -> Cpp
+wrapRankNCpps :: [Type] -> Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
-handleRankNCpps tmplts cpp = everywhereOnCpp go cpp
+wrapRankNCpps tmplts cpp = everywhereOnCpp go cpp
   where
   go :: Cpp -> Cpp
   go cpp'@(CppPartialApp _ _ ts _)
@@ -100,9 +100,9 @@ rankNWrapper tmplts cpp = CppLambda []
 -- TODO: what about shadowed names?
 --
 ---------------------------------------------------------------------------------------------------
-getRankNs :: Expr Ann -> [(Qualified Ident, T.Type)]
+getRankNVals :: Expr Ann -> [(Qualified Ident, T.Type)]
 ---------------------------------------------------------------------------------------------------
-getRankNs | (_, f, _, _) <- everythingOnValues (++) (const []) go (const []) (const []) = f
+getRankNVals | (_, f, _, _) <- everythingOnValues (++) (const []) go (const []) (const []) = f
   where
   go :: Expr Ann -> [(Qualified Ident, T.Type)]
   go (Var (_, _, Just t, _) v)

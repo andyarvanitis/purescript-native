@@ -197,10 +197,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let typ = ty >>= mktype mn
         tmplts = tmpltsReplFromRight (templparams' typ) (filter isParameterized $ templparams' typ)
         tmplts' = filter (`notElem` encTmplts) tmplts
-        maybeDoRepl = if hasRankN ty then replaceRankNs mn (getRankNs body) else id
-    block <- asReturnBlock <$> valueToCpp (maybeDoRepl body)
-    let handleRankNs = maybe id (handleRankNCpps . templateVars) typ
-        block' = nestedFnsToLambdas (encTmplts ++ tmplts') $ handleRankNs block
+        maybeReplaceRankNVals = if tyHasRankNs ty then replaceRankNVals mn (getRankNVals body) else id
+    block <- asReturnBlock <$> valueToCpp (maybeReplaceRankNVals body)
+    let maybeWrapRankNCpps = maybe id (wrapRankNCpps . templateVars) typ
+        block' = nestedFnsToLambdas (encTmplts ++ tmplts') $ maybeWrapRankNCpps block
         atyp = argtype typ
         rtyp = rettype typ
         arg' = if null (runIdent arg) then [] else [(identToCpp arg, Just $ fromMaybe AutoType atyp)]
