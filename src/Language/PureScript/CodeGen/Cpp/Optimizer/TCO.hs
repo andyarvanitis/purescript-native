@@ -93,18 +93,22 @@ tco' = everywhereOnCpp convert
   toLoop :: String -> [(String, Maybe Type)] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
         map (\arg -> CppVariableIntroduction arg [] [CppMutable] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
-        [ CppLabel tcoLabel $ CppWhile (CppBooleanLiteral True) (CppBlock [ everywhereOnCpp loopify cpp ]) ]
+        [ CppLabel tcoLabel $ CppWhile (CppBooleanLiteral True) block ]
     where
+    block :: Cpp
+    block = case everywhereOnCpp loopify cpp of
+              CppBlock sts -> CppBlock sts
+              stmt -> CppBlock [stmt]
     loopify :: Cpp -> Cpp
     loopify (CppReturn ret) | isSelfCall ident ret =
       let
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
-        CppBlock $ zipWith (\val arg ->
-                    CppVariableIntroduction (tcoVar arg, Nothing) [] [CppMutable] (Just val)) allArgumentValues (map fst allArgs)
-                  ++ map (\arg ->
-                    CppAssignment (CppVar arg) (CppVar (tcoVar arg))) (map fst allArgs)
-                  ++ [ CppContinue tcoLabel ]
+        CppSequence $ zipWith (\val arg ->
+                      CppVariableIntroduction (tcoVar arg, Nothing) [] [CppMutable] (Just val)) allArgumentValues (map fst allArgs)
+                    ++ map (\arg ->
+                      CppAssignment (CppVar arg) (CppVar (tcoVar arg))) (map fst allArgs)
+                    ++ [ CppContinue tcoLabel ]
     loopify other = other
     collectSelfCallArgs :: [[Cpp]] -> Cpp -> [[Cpp]]
     collectSelfCallArgs allArgumentValues (CppApp fn args') = collectSelfCallArgs (args' : allArgumentValues) fn
