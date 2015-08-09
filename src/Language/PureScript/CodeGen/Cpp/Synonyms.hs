@@ -43,9 +43,10 @@ synonymsToCpp env mn
         tmplts = map templateFromKind . fst . snd <$> ds
         typs = catMaybes $ mktype mn . snd . snd <$> ds
         synonyms = zip3 names' tmplts typs
-        synonyms' = depSortSynonyms synonyms
+        synonyms' = depSortSynonyms $ filter isValid synonyms
         cpps = (\(n,tmps,t) -> CppTypeAlias (n, tmps) (runType t, []) []) <$> synonyms'
-    return cpps
+        rejected = (\(n,_,t) -> CppRaw ("// using " ++ n ++ " = auto;")) <$> filter (not . isValid) synonyms
+    return $ cpps ++ rejected
   | otherwise = return []
   where
   -- |
@@ -72,3 +73,6 @@ synonymsToCpp env mn
 
     vertexSyns' :: [((String, [(String,Int)], Type), G.Vertex)]
     vertexSyns' = swap <$> vertexSyns
+
+  isValid :: (String, a, Type) -> Bool
+  isValid (_, _, t) = everythingOnTypes (&&) (/= AutoType) t
