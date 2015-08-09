@@ -76,6 +76,9 @@ using void5 = void;
 template <typename T>
 const T typeval = T();
 
+template <class T>
+using remove_const = std::remove_const<T>;
+
 } // namespace PureScript
 
 #endif // PureScript_HH

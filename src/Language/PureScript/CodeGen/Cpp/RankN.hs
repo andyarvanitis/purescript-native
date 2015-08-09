@@ -27,6 +27,7 @@ import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CoreFn
 import Language.PureScript.Names
 
+import qualified Language.PureScript.Environment as E
 import qualified Language.PureScript.Types as T
 
 -------------------------------------------------------------------------------------------------
@@ -95,7 +96,9 @@ rankNWrapper tmplts cpp = CppLambda []
   tmplts' :: [String]
   tmplts' = nub . sort $ runType <$> tmplts
   typeAlias :: String -> Cpp
-  typeAlias t = CppTypeAlias (t, []) (runType (DeclType ('_' : t)), []) []
+  typeAlias t = CppTypeAlias (t, []) (removeConst . runType $ DeclType ('_' : t), []) []
+  removeConst :: String -> String
+  removeConst t = "typename remove_const<" ++ t ++ ">::type"
 
 -- TODO: what about shadowed names?
 --
@@ -107,4 +110,9 @@ getRankNVals | (_, f, _, _) <- everythingOnValues (++) (const []) go (const []) 
   go :: Expr Ann -> [(Qualified Ident, T.Type)]
   go (Var (_, _, Just t, _) v)
     | T.everythingOnTypes (||) (not . T.isMonoType) t = [(v, t)]
+  go (Abs (_, _, Just t, _) v _)
+    | T.everythingOnTypes (||) (not . T.isMonoType) t = [(Qualified Nothing v, argty t)]
+    where
+    argty (T.TypeApp (T.TypeApp ctor@(T.TypeConstructor _) a) b) | ctor == E.tyFunction = a
+    argty a = a
   go _ = []
