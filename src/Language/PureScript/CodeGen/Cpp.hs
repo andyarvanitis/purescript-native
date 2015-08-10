@@ -344,7 +344,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     | Just (Map pairs) <- typFromExpr val = do
       case lookup prop pairs of
         Just _ -> do
-          val' <- valueToCpp val
+          val' <- fnVarToCpp val
           return $ CppMapAccessor (CppStringLiteral prop) val'
         _ -> error $ "Bad record name: " ++ prop
 
@@ -369,9 +369,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp e@App{} = do
     let (f, args) = unApp e []
-    args' <- mapM valueToCpp args
+    args' <- mapM fnVarToCpp args
     case f of
-      Var (_, _, _, Just IsNewtype) _ -> return (head args')
+      Var (_, _, _, Just IsNewtype) _ ->
+        return (head args')
       Var (_, _, Just ty, Just (IsConstructor _ fields)) name ->
         let fieldCount = length fields
             argsNotApp = fieldCount - length args
@@ -382,13 +383,17 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           then let argTypes = maybe [] (init . fnTypesN fieldCount) (mktype mn ty) in
                return (CppPartialApp val args' argTypes argsNotApp)
           else return (CppApp val args')
-      Var (_, _, _, Just IsTypeClassConstructor) _ -> return CppNoOp
-      Var (_, _, Just _, _) (Qualified (Just _) _) -> mkFnApp e
-      Var (_, _, Nothing, _) ident -> (case findInstance ident of
-                                         Nothing -> mkFnApp e
-                                         _ -> valueToCpp f)
-      -- TODO: verify this
-      _ -> flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
+      Var (_, _, _, Just IsTypeClassConstructor) _ ->
+        return CppNoOp
+      Var (_, _, Just _, _) (Qualified (Just _) _) ->
+        fnApp e
+      Var (_, _, Nothing, _) ident ->
+        case findInstance ident of
+          Nothing -> fnApp e
+          _       -> valueToCpp f
+
+      _ -> -- TODO: verify this
+        flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
 
   valueToCpp (Case (maybeSpan, _, _, _) values binders) = do
     vals <- mapM valueToCpp values
@@ -727,12 +732,23 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   mkInstance ident _ = error ("Instance \"" ++ show ident ++ "\" not found")
 
   -------------------------------------------------------------------------------------------------
-  mkFnApp :: Expr Ann -> m Cpp
+  fnVarToCpp :: Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
-  mkFnApp e = do
+  fnVarToCpp (Var (_, _, Just ty, _) qid@(Qualified mn' ident))
+    | Just typ <- mktype mn ty,
+      Just vty <- findValue (fromMaybe mn mn') ident,
+      Just declType <- mktype mn vty,
+      tmplts@(_:_) <- snd <$> templateMappings (declType, typ) =
+      return $ asTemplate tmplts (varToCpp qid)
+  fnVarToCpp v = valueToCpp v
+
+  -------------------------------------------------------------------------------------------------
+  fnApp :: Expr Ann -> m Cpp
+  -------------------------------------------------------------------------------------------------
+  fnApp e = do
       let (f, args) = unApp e []
       f' <- valueToCpp f
-      args' <- mapM valueToCpp args
+      args' <- mapM fnVarToCpp args
       let fn = P.prettyPrintCpp [f']
           instArgs = filter (instanceArg fn) args'
           normArgs = filter normalArg args'
