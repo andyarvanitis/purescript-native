@@ -279,7 +279,6 @@ mktype _ (T.TypeConstructor (Qualified (Just (ModuleName ([ProperName "Control",
                                                            ProperName "Monad",
                                                            ProperName "Eff"]))) (ProperName "Eff"))) =
   Just $ Native (typeName (EffectFunction (Template [] []))) []
-mktype _ (T.TypeConstructor (Qualified Nothing (ProperName []))) = Just AutoType
 mktype m a@(T.TypeConstructor _) = Just $ Native (qualDataTypeName m a) []
 mktype m (T.ConstrainedType _ ty) = mktype m ty
 
@@ -289,7 +288,7 @@ mktype m r@(T.RCons _ _ _)
   rowPairs :: [(String, T.Type)] -> [(String, Type)]
   rowPairs rs = map (\(n, t) -> (n, fromJust t)) $ filter (isJust . snd) (map (\(n,t) -> (n, mktype m t)) rs)
 
-mktype _ T.REmpty = Nothing
+mktype _ T.REmpty = Just AutoType
 mktype _ b = error $ "Unknown type: " ++ show b
 
 mkTemplate :: String -> Type
@@ -303,11 +302,13 @@ typestr :: ModuleName -> T.Type -> String
 typestr m t = maybe [] runType (mktype m t)
 
 argtype :: Maybe Type -> Maybe Type
+argtype (Just (Function a _)) | everythingOnTypes (||) (== AutoType) a = Just AutoType
 argtype (Just (Function a _)) = Just a
 argtype (Just AutoType) = Just AutoType
 argtype _ = Nothing
 
 rettype :: Maybe Type -> Maybe Type
+rettype (Just (Function _ b)) | everythingOnTypes (||) (== AutoType) b = Just AutoType
 rettype (Just (Function _ b)) = Just b
 rettype (Just (EffectFunction b)) = Just b
 rettype (Just AutoType) = Just AutoType
@@ -463,7 +464,7 @@ forallsToAuto :: T.Type -> T.Type
 forallsToAuto = T.everywhereOnTypes go
   where
   go :: T.Type -> T.Type
-  go (T.ForAll _ _ _) = T.TypeConstructor (Qualified Nothing (ProperName []))
+  go (T.ForAll _ _ _) = T.REmpty
   go t = t
 
 typevals :: [(Type, Type)] -> Qualified Ident

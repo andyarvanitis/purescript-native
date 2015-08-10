@@ -197,7 +197,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let typ = ty >>= mktype mn
         tmplts = tmpltsReplFromRight (templparams' typ) (filter isParameterized $ templparams' typ)
         tmplts' = filter (`notElem` encTmplts) tmplts
-        maybeReplaceRankNVals = if tyHasRankNs ty then replaceRankNVals mn (getRankNVals body) else id
+        maybeReplaceRankNVals = if tyHasRankNs ty then replaceRankNVals mn ty (getRankNVals body) else id
     block <- asReturnBlock <$> valueToCpp (maybeReplaceRankNVals body)
     let maybeWrapRankNCpps = maybe id (wrapRankNCpps . templateVars) typ
         block' = nestedFnsToLambdas (encTmplts ++ tmplts') $ maybeWrapRankNCpps block
@@ -205,7 +205,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         rtyp = rettype typ
         arg' = if null (runIdent arg) then [] else [(identToCpp arg, Just $ fromMaybe AutoType atyp)]
         fn = CppFunction (identToCpp ident) tmplts' arg' rtyp qs block'
-        fn' | maybe False (everythingOnTypes (||) (== AutoType)) atyp = toLambda [] [] fn
+        fn' | atyp == Just AutoType = toLambda [] [] fn
             | otherwise = fn
     return (CppComment com fn')
 
@@ -246,8 +246,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     ftyp = do arg <- listToMaybe args
               atyp' <- snd arg
               rtyp' <- rtyp
-              let ftyp = Function atyp' rtyp'
-              return $ if everythingOnTypes (||) (== AutoType) ftyp then AutoType else ftyp
+              return $ if atyp' == AutoType || rtyp' == AutoType
+                         then AutoType
+                         else Function atyp' rtyp'
 
   toLambda cs encTmplts (CppComment com cpp) = CppComment com (toLambda cs encTmplts cpp)
   toLambda _ _ _ = error "Not a function!"

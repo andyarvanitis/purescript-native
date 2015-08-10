@@ -19,6 +19,7 @@ module Language.PureScript.CodeGen.Cpp.RankN where
 
 import Data.Char
 import Data.List
+import Data.Maybe
 
 import Control.Applicative
 
@@ -38,9 +39,9 @@ tyHasRankNs (Just (T.ForAll _ t' _)) = tyHasRankNs (Just t')
 tyHasRankNs (Just t) = T.everythingOnTypes (||) (not . T.isMonoType) t
 
 ---------------------------------------------------------------------------------------------------
-replaceRankNVals :: ModuleName -> [(Qualified Ident, T.Type)] -> Expr Ann -> Expr Ann
+replaceRankNVals :: ModuleName -> Maybe T.Type -> [(Qualified Ident, T.Type)] -> Expr Ann -> Expr Ann
 ---------------------------------------------------------------------------------------------------
-replaceRankNVals mn vs | (_, f, _) <- everywhereOnValues id go id = f
+replaceRankNVals mn ty vs | (_, f, _) <- everywhereOnValues id go id = f
   where
 
   go :: Expr Ann -> Expr Ann
@@ -59,6 +60,21 @@ replaceRankNVals mn vs | (_, f, _) <- everywhereOnValues id go id = f
       Just argTyp <- typFromExpr a',
       mappings@(_:_) <- templateMappings (rankNTyp, Function argTyp retTyp)
       = App ann (App nullAnn f' (Var nullAnn (typevals mappings))) a'
+
+  -- TODO: look for a better way to find these
+  --
+  go e@(Abs (ss, com, Just t, a) v body)
+   | Just ftyp <- mktype mn t,
+     Just typ <- ty >>= mktype mn,
+     ftmplts@(_:_) <- templateVars ftyp,
+     tmplts@(_:_) <- templateVars typ,
+     unknowns@(_:_) <- ftmplts \\ tmplts =
+     let replace t'
+           | T.Skolem {} <- t',
+             maybe False (`elem` unknowns) (mktype mn t') = T.REmpty
+           | otherwise = t'
+     in Abs (ss, com, Just (T.everywhereOnTypes replace t), a) v body
+
   go e = e
 
   cleanName :: Qualified Ident -> Qualified Ident
