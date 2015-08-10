@@ -83,6 +83,7 @@ nameIsCppReserved name =
               , "and_eq"
               , "array"
               , "asm"
+              , "assert"
               , "auto"
               , "bind"
               , "bitand"
