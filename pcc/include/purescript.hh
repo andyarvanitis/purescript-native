@@ -37,6 +37,9 @@ using param = typename std::conditional<std::is_fundamental<T>::value, const T, 
 template <typename B>
 using eff_fn = std::function<B()>;
 
+// The built-in "Unit" type
+using nullptr_t = std::nullptr_t;
+
 using string = std::string;
 using namespace std::literals::string_literals;
 

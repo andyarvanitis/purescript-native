@@ -129,6 +129,7 @@ runType tt@(EffectFunction (Template [] [])) = typeName tt
 runType tt@(EffectFunction b) = typeName tt ++ '<' : runType b ++ ">"
 runType tt@(Array t) | t'@(_:_) <- runType t = typeName tt ++ '<' : t' ++ ">"
                     | otherwise = typeName tt
+runType (Map []) = "nullptr_t"
 runType tt@(Map fields) = typeName tt ++ "<" ++ (intercalate ", " $ map runField fields) ++ ">"
   where
   runField :: (String, Type) -> String
