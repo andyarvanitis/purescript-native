@@ -387,7 +387,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         case findInstance ident of
           Nothing -> fnApp e
           _       -> valueToCpp f
-
+      Abs (_, _, Just _, _) _ body ->
+        fnApp body
       _ -> -- TODO: verify this
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
 
