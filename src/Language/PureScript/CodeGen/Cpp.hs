@@ -162,11 +162,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let typ = typFromExpr val
         tmplts = templparams' typ
     val' <- valueToCpp val
-             -- Remove any top-level lambda capture
-    let cpp  | CppApp (CppLambda _ args rtyp block) arg <- val' = CppApp (CppLambda [] args rtyp block) arg
-             | CppLambda _ args rtyp block <- val'              = CppLambda [] args rtyp block
-             | otherwise                                        = val'
-        cpp' = nestedFnsToLambdas tmplts cpp
+    let cpp' = nestedFnsToLambdas tmplts val'
     return $ CppVariableIntroduction (identToCpp ident, typFromExpr val) tmplts [] (Just cpp')
 
   -------------------------------------------------------------------------------------------------
@@ -205,7 +201,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         rtyp = rettype typ
         arg' = if null (runIdent arg) then [] else [(identToCpp arg, Just $ fromMaybe AutoType atyp)]
         fn = CppFunction (identToCpp ident) tmplts' arg' rtyp qs block'
-        fn' | atyp == Just AutoType = toLambda [] [] fn
+        fn' | atyp == Just AutoType = toLambda [CppCaptureAll] [] fn
             | otherwise = fn
     return (CppComment com fn')
 
@@ -518,7 +514,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       return (CppVariableIntroduction (argVar, Nothing)
                                       []
                                       []
-                                      (Just (CppAccessor Nothing (identToCpp field) (CppVar varName)))
+                                      (Just (CppAccessor Nothing (CppVar (identToCpp field)) (CppVar varName)))
               : cpp)
     addTypes :: Monad m => Cpp -> Cpp -> m Cpp
     addTypes cpp1 cpp2 = do
@@ -827,7 +823,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   qualifiedToCpp :: (a -> Ident) -> Qualified a -> Cpp
   qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = CppVar . runIdent $ f a
   qualifiedToCpp f (Qualified (Just mn') a)
-    | mn /= mn' = CppAccessor Nothing (identToCpp $ f a) (CppScope (moduleNameToCpp mn'))
+    | mn /= mn' = CppAccessor Nothing (CppVar . identToCpp $ f a) (CppScope (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
 
   qualifiedToStr' :: (a -> Ident) -> Qualified a -> String

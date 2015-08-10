@@ -168,7 +168,7 @@ data Cpp
   -- |
   -- An general property accessor expression (optional type, property, expr)
   --
-  | CppAccessor (Maybe Type) String Cpp
+  | CppAccessor (Maybe Type) Cpp Cpp
   -- |
   -- An map object property accessor expression
   --
@@ -334,7 +334,7 @@ everywhereOnCpp f = go
   go (CppArrayLiteral t cpp) = f (CppArrayLiteral t (map go cpp))
   go (CppIndexer j1 j2) = f (CppIndexer (go j1) (go j2))
   go (CppObjectLiteral cpp) = f (CppObjectLiteral (map (fmap go) cpp))
-  go (CppAccessor t prop j) = f (CppAccessor t prop (go j))
+  go (CppAccessor t prop j) = f (CppAccessor t (go prop) (go j))
   go (CppMapAccessor j1 j2) = f (CppMapAccessor (go j1) (go j2))
   go (CppFunction name tmps args rty qs j) = f (CppFunction name tmps args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
@@ -368,7 +368,7 @@ everywhereOnCppTopDown f = go . f
   go (CppArrayLiteral t cpp) = CppArrayLiteral t (map (go . f) cpp)
   go (CppIndexer j1 j2) = CppIndexer (go (f j1)) (go (f j2))
   go (CppObjectLiteral cpp) = CppObjectLiteral (map (fmap (go . f)) cpp)
-  go (CppAccessor t prop j) = CppAccessor t prop (go (f j))
+  go (CppAccessor t prop j) = CppAccessor t (go (f prop)) (go (f j))
   go (CppMapAccessor j1 j2) = CppMapAccessor (go (f j1)) (go (f j2))
   go (CppFunction name tmps args rty qs j) = CppFunction name tmps args rty qs (go (f j))
   go (CppLambda cps args rty j) = CppLambda cps args rty (go (f j))
@@ -401,7 +401,7 @@ everythingOnCpp (<>) f = go
   go j@(CppArrayLiteral _ cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppIndexer j1 j2) = f j <> go j1 <> go j2
   go j@(CppObjectLiteral cpp) = foldl (<>) (f j) (map (go . snd) cpp)
-  go j@(CppAccessor _ _ j1) = f j <> go j1
+  go j@(CppAccessor _ j1 j2) = f j <> go j1 <> go j2
   go j@(CppMapAccessor j1 j2) = f j <> go j1 <> go j2
   go j@(CppFunction _ _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1

@@ -64,6 +64,19 @@ toHeader = catMaybes . map go
   go (CppFunction name tmplts args rtyp qs _) =
     let args' = (\(_,t) -> ("", t)) <$> args in
     Just (CppFunction name tmplts args' rtyp qs CppNoOp)
+  --
+  -- Remove captures from top-level lambdas
+  --
+  go (CppVariableIntroduction name tmps qs (Just cpp)) =
+    Just (CppVariableIntroduction name tmps qs (Just (removeCaptures cpp)))
+    where
+    removeCaptures :: Cpp -> Cpp
+    removeCaptures (CppLambda _ args rtyp body) = CppLambda [] args rtyp body
+    removeCaptures (CppApp (CppLambda _ args rtyp body) b) = CppApp (CppLambda [] args rtyp body) b
+    removeCaptures (CppApp a@(CppAccessor {}) [CppLambda _ args rtyp body]) = CppApp a [CppLambda [] args rtyp body]
+    removeCaptures (CppApp a [b]) = CppApp (removeCaptures a) [removeCaptures b]
+    removeCaptures cpp' = cpp'
+  --
   go cpp@(CppVariableIntroduction{}) = Just cpp
   go (CppComment comms cpp')
     | Just cpp <- go cpp' = Just $ case cpp of CppFunction {} -> cpp
@@ -153,7 +166,7 @@ nativeMain = CppFunction "main"
                ]
                (Just (Native "int" []))
                []
-               (CppBlock [ CppApp (CppAccessor Nothing "main" (CppScope "Main")) []
+               (CppBlock [ CppApp (CppAccessor Nothing (CppVar "main") (CppScope "Main")) []
                          , CppRaw ";"
                          , CppReturn (CppNumericLiteral (Left 0))
                          ])

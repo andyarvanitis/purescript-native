@@ -351,7 +351,7 @@ accessor :: Pattern PrinterState Cpp ((Maybe Type, String), Cpp)
 accessor = mkPattern match
   where
   match (CppAccessor _ _ CppScope{}) = Nothing
-  match (CppAccessor typ prop val) = Just ((typ, prop), val)
+  match (CppAccessor typ prop val) = Just ((typ, prettyPrintCpp1 prop), val)
   match _ = Nothing
 
 mapAccessor :: Pattern PrinterState Cpp (String, Cpp)
@@ -363,10 +363,10 @@ mapAccessor = mkPattern match
 scope :: Pattern PrinterState Cpp ((Maybe Type, String), Cpp)
 scope = mkPattern match
   where
-  match (CppAccessor typ prop val@CppScope{}) = Just ((typ, prop), val)
+  match (CppAccessor typ prop val@CppScope{}) = Just ((typ, prettyPrintCpp1 prop), val)
   match (CppApp f [inst@CppInstance{}]) =
     let (typ', f') = case f of
-                      (CppAccessor typ v (CppScope _)) -> (typ, v)
+                      (CppAccessor typ v (CppScope _)) -> (typ, prettyPrintCpp1 v)
                       _ -> (Nothing, prettyPrintCpp1 f)
         inst' = CppScope (prettyPrintCpp1 inst)
     in Just ((typ', if '<' `elem` f' then "template " ++ f' else f'), inst')
@@ -394,8 +394,7 @@ app = mkPattern' match
   match (CppApp _ [CppInstance{}]) = mzero
   match (CppApp f (inst@CppInstance{} : args)) = do
     inst' <- prettyPrintCpp' inst
-    cpp <- prettyPrintCpp' f
-    let f' = (CppAccessor Nothing cpp (CppScope inst'))
+    let f' = (CppAccessor Nothing f (CppScope inst'))
     match (CppApp f' args)
 --   match (CppApp _ [CppVar name]) | "__dict_" `isPrefixOf` name = mzero -- TODO: ugly
   match (CppApp _ [CppNoOp]) = mzero
@@ -418,9 +417,8 @@ partapp = mkPattern' match
     cpps <- mapM prettyPrintCpp' (CppAccessor t val' (CppScope inst') : args)
     return ((intercalate ", " cpps, n), CppNoOp)
   match (CppPartialApp val (inst@CppInstance{} : args) _ n) = do
-    val' <- prettyPrintCpp' val
     inst' <- prettyPrintCpp' inst
-    cpps <- mapM prettyPrintCpp' (CppAccessor Nothing val' (CppScope inst') : args)
+    cpps <- mapM prettyPrintCpp' (CppAccessor Nothing val (CppScope inst') : args)
     return ((intercalate ", " cpps, n), CppNoOp)
   match (CppPartialApp val args _ n) = do
     cpps <- mapM prettyPrintCpp' (val : args)

@@ -112,7 +112,7 @@ inlineOperator (m, op) f = everywhereOnCpp convert
   convert :: Cpp -> Cpp
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
-  isOp (CppAccessor _ longForm (CppScope m')) = m == m' && longForm == identToCpp (Op op)
+  isOp (CppAccessor _ (CppVar longForm) (CppScope m')) = m == m' && longForm == identToCpp (Op op)
   isOp _ = False
 
 inlineCommonOperators :: Cpp -> Cpp
@@ -221,8 +221,8 @@ inlineCommonOperators = applyAll $
   isNFn :: String -> Int -> Cpp -> Bool
   isNFn prefix n (CppVar name) = name == (prefix ++ show n)
   isNFn prefix n (CppScope name) = name == (prefix ++ show n)
-  isNFn prefix n (CppAccessor _ name (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
-  isNFn prefix n (CppAccessor _ name (CppScope dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
+  isNFn prefix n (CppAccessor _ (CppVar name) (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
+  isNFn prefix n (CppAccessor _ (CppVar name) (CppScope dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
   isNFn _ _ _ = False
 
   runFn :: Int -> Cpp -> Cpp
@@ -258,16 +258,16 @@ isDict (moduleName, dictName) (CppInstance mn _ iname _) = iname == dictName && 
 isDict _ _ = False
 
 isFn :: (String, String) -> Cpp -> Bool
-isFn (_, fnName) (CppAccessor _ fnName' (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
-isFn (moduleName, fnName) (CppAccessor _ x (CppVar y)) = x == fnName && y == moduleName
+isFn (_, fnName) (CppAccessor _ (CppVar fnName') (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
+isFn (moduleName, fnName) (CppAccessor _ (CppVar x) (CppVar y)) = x == fnName && y == moduleName
 isFn (moduleName, fnName) (CppIndexer (CppStringLiteral x) (CppVar y)) = x == fnName && y == moduleName
 isFn _ _ = False
 
 isPreludeFn :: String -> Cpp -> Bool
 isPreludeFn fnName (CppInstance prelude _ fnName' _) = prelude == C.prelude && fnName' == fnName
-isPreludeFn fnName (CppAccessor _ fnName' (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
-isPreludeFn fnName (CppAccessor _ longForm (CppAccessor _ prelude (CppVar _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
-isPreludeFn fnName (CppAccessor _ longForm (CppAccessor _ prelude (CppScope _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
+isPreludeFn fnName (CppAccessor _ (CppVar fnName') (CppScope prelude)) = prelude == C.prelude && fnName' == fnName
+isPreludeFn fnName (CppAccessor _ (CppVar longForm) (CppAccessor _ (CppVar prelude) (CppVar _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
+isPreludeFn fnName (CppAccessor _ (CppVar longForm) (CppAccessor _ (CppVar prelude) (CppScope _))) = prelude == C.prelude && longForm == identToCpp (Op fnName)
 isPreludeFn _ _ = False
 
 semiringNumber :: (String, String)
