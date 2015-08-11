@@ -24,8 +24,8 @@ module Language.PureScript.Make
   (
   -- * Make API
     RebuildPolicy(..)
+  , ProgressMessage(..), renderProgressMessage
   , MakeActions(..)
-  , SupplyVar()
   , Externs()
   , make
   
@@ -43,12 +43,12 @@ import Control.Monad.Trans.Except
 import Control.Monad.Reader
 import Control.Monad.Writer
 import Control.Monad.Supply
-import Control.Monad.Supply.Class (fresh)
 
 import Data.Function (on)
 import Data.List (sortBy, groupBy)
 import Data.Maybe (fromMaybe)
 import Data.Time.Clock
+import Data.Foldable (for_)
 import Data.Traversable (traverse)
 import Data.Version (showVersion)
 import qualified Data.Map as M
@@ -79,8 +79,22 @@ import qualified Language.PureScript.CodeGen.JS as J
 import qualified Language.PureScript.CoreFn as CF
 import qualified Paths_purescript as Paths
 
--- |
--- Actions that require implementations when running in "make" mode.
+-- | Progress messages from the make process
+data ProgressMessage
+  = CompilingModule ModuleName
+  deriving (Show, Eq, Ord)
+
+-- | Render a progress message
+renderProgressMessage :: ProgressMessage -> String
+renderProgressMessage (CompilingModule mn) = "Compiling " ++ runModuleName mn
+
+-- | Actions that require implementations when running in "make" mode.
+--
+-- This type exists to make two things abstract:
+--
+-- * The particular backend being used (Javascript, C++11, etc.)
+-- 
+-- * The details of how files are read/written etc.
 --
 data MakeActions m = MakeActions {
   -- |
@@ -102,22 +116,17 @@ data MakeActions m = MakeActions {
   -- |
   -- Run the code generator for the module and write any required output files.
   --
-  , codegen :: CF.Module CF.Ann -> Environment -> SupplyVar -> Externs -> m ()
+  , codegen :: CF.Module CF.Ann -> Environment -> Externs -> SupplyT m ()
   -- |
   -- Respond to a progress update.
   --
-  , progress :: String -> m ()
+  , progress :: ProgressMessage -> m ()
   }
 
 -- |
 -- Generated code for an externs file.
 --
 type Externs = String
-
--- |
--- A value to be used in the Supply monad.
---
-type SupplyVar = Integer
 
 -- |
 -- Determines when to rebuild a module
@@ -140,7 +149,6 @@ make :: forall m. (Functor m, Applicative m, Monad m, MonadReader Options m, Mon
      -> m Environment
 make MakeActions{..} ms = do
   (sorted, graph) <- sortModules $ map importPrim ms
-  mapM_ lint sorted
   toRebuild <- foldM (\s (Module _ moduleName' _ _) -> do
     inputTimestamp <- getInputTimestamp moduleName'
     outputTimestamp <- getOutputTimestamp moduleName'
@@ -150,6 +158,7 @@ make MakeActions{..} ms = do
       _ -> S.insert moduleName' s) S.empty sorted
 
   marked <- rebuildIfNecessary (reverseDependencies graph) toRebuild sorted
+  for_ marked $ \(willRebuild, m) -> when willRebuild (lint m)
   (desugared, nextVar) <- runSupplyT 0 $ zip (map fst marked) <$> desugar (map snd marked)
   evalSupplyT nextVar $ go initEnvironment desugared
   where
@@ -160,7 +169,7 @@ make MakeActions{..} ms = do
     (_, env') <- lift . runCheck' env $ typeCheckModule Nothing m
     go env' ms'
   go env ((True, m@(Module coms moduleName' _ exps)) : ms') = do
-    lift $ progress $ "Compiling " ++ runModuleName moduleName'
+    lift . progress $ CompilingModule moduleName' 
     (checked@(Module _ _ elaborated _), env') <- lift . runCheck' env $ typeCheckModule Nothing m
     checkExhaustiveModule env' checked
     regrouped <- createBindingGroups moduleName' . collapseBindingGroups $ elaborated
@@ -168,8 +177,7 @@ make MakeActions{..} ms = do
         corefn = CF.moduleToCoreFn env' mod'
         [renamed] = renameInModules [corefn]
         exts = moduleToPs mod' env'
-    nextVar <- fresh
-    lift $ codegen renamed env' nextVar exts
+    codegen renamed env' exts
     go env' ms'
 
   rebuildIfNecessary :: M.Map ModuleName [ModuleName] -> S.Set ModuleName -> [Module] -> m [(Bool, Module)]
@@ -264,8 +272,8 @@ buildMakeActions outputDir filePathMap foreigns usePrefix =
     let path = outputDir </> runModuleName mn </> "externs.purs"
     (path, ) <$> readTextFile path
 
-  codegen :: CF.Module CF.Ann -> Environment -> SupplyVar -> Externs -> Make ()
-  codegen m _ nextVar exts = do
+  codegen :: CF.Module CF.Ann -> Environment -> Externs -> SupplyT Make ()
+  codegen m _ exts = do
     let mn = CF.moduleName m
     foreignInclude <- case mn `M.lookup` foreigns of
       Just (path, _)
@@ -275,18 +283,17 @@ buildMakeActions outputDir filePathMap foreigns usePrefix =
         | otherwise -> return $ Just $ J.JSApp (J.JSVar "require") [J.JSStringLiteral "./foreign"]
       Nothing | requiresForeign m -> throwError . errorMessage $ MissingFFIModule mn
               | otherwise -> return Nothing
-    pjs <- evalSupplyT nextVar $ prettyPrintJS <$> J.moduleToJs m foreignInclude
+    pjs <- prettyPrintJS <$> J.moduleToJs m foreignInclude
     let filePath = runModuleName mn
         jsFile = outputDir </> filePath </> "index.js"
         externsFile = outputDir </> filePath </> "externs.purs"
         foreignFile = outputDir </> filePath </> "foreign.js"
         prefix = ["Generated by psc version " ++ showVersion Paths.version | usePrefix]
         js = unlines $ map ("// " ++) prefix ++ [pjs]
-    verboseErrorsEnabled <- asks optionsVerboseErrors
-    when verboseErrorsEnabled $ progress $ "Writing " ++ jsFile
-    writeTextFile jsFile js
-    maybe (return ()) (writeTextFile foreignFile . snd) $ mn `M.lookup` foreigns
-    writeTextFile externsFile exts
+    lift $ do
+      writeTextFile jsFile js
+      maybe (return ()) (writeTextFile foreignFile . snd) $ mn `M.lookup` foreigns
+      writeTextFile externsFile exts
 
   requiresForeign :: CF.Module a -> Bool
   requiresForeign = not . null . CF.moduleForeign
@@ -307,5 +314,5 @@ buildMakeActions outputDir filePathMap foreigns usePrefix =
     mkdirp :: FilePath -> IO ()
     mkdirp = createDirectoryIfMissing True . takeDirectory
 
-  progress :: String -> Make ()
-  progress = liftIO . putStrLn
+  progress :: ProgressMessage -> Make ()
+  progress = liftIO . putStrLn . renderProgressMessage
