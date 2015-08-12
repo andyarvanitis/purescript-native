@@ -50,24 +50,21 @@ main = do
   let makefile = outputDir </> "Makefile"
   writeFile makefile makefileText
 
-  -- Prebuild the packages
-  --
-  setCurrentDirectory outputDir
-  callProcess "make" []
-
   let passingDir = baseDir </> "examples" </> "passing"
   passingTestCases <- sort . filter (".purs" `isSuffixOf`) <$> getDirectoryContents passingDir
 
+  let tests = filter (`notElem` skipped) passingTestCases
+
   -- Run the tests
   --
-  forM_ (filter (`notElem` exclusions) passingTestCases) $ \inputFile -> do
+  forM_ tests $ \inputFile -> do
     --
     -- Compile PureScript file
     --
     putStrLn $ "Compiling test " ++ inputFile ++ " ..."
     setCurrentDirectory outputDir
     copyFile (passingDir </> inputFile) (srcDir </> inputFile)
-    callProcess "make" []
+    callProcess "make" ["clean", "main"]
     --
     -- Build and run C++ files
     --
@@ -86,6 +83,9 @@ main = do
 
   setCurrentDirectory baseDir
   putStrLn "pcc-tests finished"
+  putStrLn $ "Total tests available: " ++ show (length passingTestCases)
+  putStrLn $ "Tests run: " ++ show (length tests)
+  putStrLn $ "Tests skipped: " ++ show (length skipped)
 
 -------------------------------------------------------------------------------
 repo :: String
@@ -133,11 +133,76 @@ makefileText = intercalate "\n" lines'
                  ]
 
 -------------------------------------------------------------------------------
-exclusions :: [String]
+skipped :: [String]
 -------------------------------------------------------------------------------
-exclusions =
+skipped =
   [ "652.purs"
   , "CaseInDo.purs"
   , "Church.purs"
   , "Collatz.purs"
+  , "DataAndType.purs"
+  , "Do.purs"
+  , "Dollar.purs"
+  , "Eff.purs"
+  , "EmptyDataDecls.purs"
+  , "EmptyRow.purs"
+  , "EmptyTypeClass.purs"
+  , "ExtendedInfixOperators.purs" -- uses package purescript-functions
+  , "Fib.purs" -- ST
+  , "FinalTagless.purs"
+  , "IfThenElseMaybe.purs"
+  , "IntAndChar.purs"
+  , "KindedType.purs"
+  , "Let.purs"
+  , "Let2.purs"
+  , "LetInInstance.purs"
+  , "LiberalTypeSynonyms.purs"
+  , "MPTCs.purs"
+  , "Monad.purs"
+  , "MonadState.purs"
+  , "MultiArgFunctions.purs" -- uses package purescript-functions
+  , "MutRec.purs"
+  , "MutRec2.purs"
+  , "MutRec3.purs"
+  , "Nested.purs"
+  , "Newtype.purs"
+  , "NewtypeEff.purs"
+  , "NewtypeWithRecordUpdate.purs" -- extend obj
+  , "NestedWhere.purs"
+  , "ObjectGetter.purs"
+  , "ObjectSynonym.purs"
+  , "ObjectUpdate.purs" -- extend obj
+  , "ObjectUpdate2.purs" -- extend obj
+  , "ObjectUpdater.purs" -- extend obj
+  , "ObjectWildcards.purs"
+  , "Objects.purs"
+  , "OperatorSections.purs"
+  , "Operators.purs"
+  , "PartialFunction.purs" -- assertThrows ?
+  , "Person.purs"
+  , "Rank2Data.purs"
+  , "Rank2Object.purs"
+  , "Rank2TypeSynonym.purs"
+  , "Rank2Types.purs" -- TCO issue
+  , "Patterns.purs"
+  , "RebindableSyntax.purs"
+  , "ReservedWords.purs" -- extend obj
+  , "RowConstructors.purs"
+  , "RowPolyInstanceContext.purs" -- extend obj
+  , "RuntimeScopeIssue.purs"
+  , "ScopedTypeVariables.purs"
+  , "Sequence.purs"
+  , "SequenceDesugared.purs"
+  , "Superclasses2.purs"
+  , "Superclasses3.purs"
+  , "TCOCase.purs"
+  , "TailCall.purs"
+  , "TopLevelCase.purs"
+  , "TypeClasses.purs"
+  , "TypeSynonymInData.purs"
+  , "TypeSynonyms.purs"
+  , "TypedWhere.purs"
+  , "UnderscoreIdent.purs"
+  , "UnknownInTypeClassLookup.purs"
+  , "Where.purs"
   ]
