@@ -127,6 +127,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   declToCpp ident (Abs ann@(_, _, _, Just IsTypeClassConstructor) _ _) =
     mkTypeClass ident ann
 
+  declToCpp ident (Literal ann@(_, _, _, Just IsTypeClassConstructor) (ObjectLiteral [])) =
+    mkTypeClass ident ann
+
   declToCpp ident (Abs ann@(_, _, _, Just IsNewtype) _ _) =
     return CppNoOp
 
@@ -645,6 +648,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let (_, fs) = case expr of
                     App{} -> unApp expr []
                     Abs _ _ e'@(App{}) -> unApp e' []
+                    Var (_, _, _, Just IsTypeClassConstructor) _ -> (expr, [])
                     _ -> error $ "Unknown expression type:\n" ++ show expr
         fs' = filter (isNormalFn) fs
         typs' = catMaybes typs
