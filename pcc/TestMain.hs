@@ -136,11 +136,9 @@ makefileText = intercalate "\n" lines'
 skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
-  [ "652.purs"
-  , "CaseInDo.purs"
-  , "Church.purs"
+  [ "Church.purs"
   , "Collatz.purs"
-  , "DataAndType.purs"
+  , "DataAndType.purs" -- dep sort needed
   , "Do.purs"
   , "Dollar.purs"
   , "Eff.purs"
@@ -176,6 +174,7 @@ skipped =
   , "ObjectUpdater.purs" -- extend obj
   , "ObjectWildcards.purs"
   , "Objects.purs"
+  , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OperatorSections.purs"
   , "Operators.purs"
   , "PartialFunction.purs" -- assertThrows ?
@@ -184,7 +183,6 @@ skipped =
   , "Rank2Object.purs"
   , "Rank2TypeSynonym.purs"
   , "Rank2Types.purs" -- TCO issue
-  , "Patterns.purs"
   , "RebindableSyntax.purs"
   , "ReservedWords.purs" -- extend obj
   , "RowConstructors.purs"
@@ -203,6 +201,5 @@ skipped =
   , "TypeSynonyms.purs"
   , "TypedWhere.purs"
   , "UnderscoreIdent.purs"
-  , "UnknownInTypeClassLookup.purs"
   , "Where.purs"
   ]
