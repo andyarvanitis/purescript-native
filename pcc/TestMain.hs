@@ -136,27 +136,29 @@ makefileText = intercalate "\n" lines'
 skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
-  [ "Church.purs"
-  , "Collatz.purs"
+  [ "Auto.purs"           -- rank-N
+  , "CheckTypeClass.purs" -- rank-N
+  , "Church.purs"         -- rank-N
+  , "Collatz.purs"        -- rank-N (runPure)
   , "DataAndType.purs" -- dep sort needed
   , "Do.purs"
   , "Dollar.purs"
-  , "Eff.purs"
+  , "Eff.purs" -- rank-N (runPure)
   , "EmptyDataDecls.purs"
   , "EmptyRow.purs"
   , "EmptyTypeClass.purs"
   , "ExtendedInfixOperators.purs" -- uses package purescript-functions
-  , "Fib.purs" -- ST
-  , "FinalTagless.purs"
+  , "Fib.purs" -- runST
+  , "FinalTagless.purs" -- rank-N
   , "IfThenElseMaybe.purs"
   , "IntAndChar.purs"
-  , "KindedType.purs"
+  , "KindedType.purs" -- KindedType
   , "Let.purs"
   , "Let2.purs"
   , "LetInInstance.purs"
-  , "LiberalTypeSynonyms.purs"
+  , "LiberalTypeSynonyms.purs" -- rank-N
   , "MPTCs.purs"
-  , "Monad.purs"
+  , "Monad.purs" -- rank-N
   , "MonadState.purs"
   , "MultiArgFunctions.purs" -- uses package purescript-functions
   , "MutRec.purs"
@@ -179,18 +181,18 @@ skipped =
   , "Operators.purs"
   , "PartialFunction.purs" -- assertThrows ?
   , "Person.purs"
-  , "Rank2Data.purs"
-  , "Rank2Object.purs"
-  , "Rank2TypeSynonym.purs"
-  , "Rank2Types.purs" -- TCO issue
+  , "Rank2Data.purs"        -- rank-N
+  , "Rank2Object.purs"      -- rank-N
+  , "Rank2TypeSynonym.purs" -- rank-N
+  , "Rank2Types.purs"       -- rank-N
   , "RebindableSyntax.purs"
   , "ReservedWords.purs" -- extend obj
   , "RowConstructors.purs"
   , "RowPolyInstanceContext.purs" -- extend obj
   , "RuntimeScopeIssue.purs"
-  , "ScopedTypeVariables.purs"
+  , "ScopedTypeVariables.purs" -- rank-N
   , "Sequence.purs"
-  , "SequenceDesugared.purs"
+  , "SequenceDesugared.purs" -- rank-N
   , "Superclasses2.purs"
   , "Superclasses3.purs"
   , "TCOCase.purs"
