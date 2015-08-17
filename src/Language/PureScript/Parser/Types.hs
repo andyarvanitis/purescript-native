@@ -16,6 +16,7 @@
 module Language.PureScript.Parser.Types (
     parseType,
     parsePolyType,
+    parsePolyType',
     noWildcards,
     parseTypeAtom
 ) where
@@ -69,17 +70,21 @@ parseForAll = mkForAll <$> (P.try (reserved "forall") *> P.many1 (indented *> id
 -- Parse a type as it appears in e.g. a data constructor
 --
 parseTypeAtom :: TokenParser Type
-parseTypeAtom = indented *> P.choice (map P.try
-            [ parseArray
-            , parseArrayOf
-            , parseFunction
-            , parseObject
-            , parseTypeWildcard
-            , parseTypeVariable
-            , parseTypeConstructor
-            , parseForAll
-            , parens parseRow
-            , parens parsePolyType ])
+parseTypeAtom = indented *> P.choice (map P.try typeParsers)
+
+parseTypeAtom' :: TokenParser Type
+parseTypeAtom' = indented *> P.choice (map P.try (parseForAll : typeParsers))
+
+typeParsers :: [TokenParser Type]
+typeParsers = [ parseArray
+              , parseArrayOf
+              , parseFunction
+              , parseObject
+              , parseTypeWildcard
+              , parseTypeVariable
+              , parseTypeConstructor
+              , parens parseRow
+              , parens parsePolyType ]
 
 parseConstrainedType :: TokenParser Type
 parseConstrainedType = do
@@ -95,8 +100,8 @@ parseConstrainedType = do
   ty <- parseType
   return $ maybe ty (flip ConstrainedType ty) constraints
 
-parseAnyType :: TokenParser Type
-parseAnyType = P.buildExpressionParser operators (buildPostfixParser postfixTable parseTypeAtom) P.<?> "type"
+parseAnyType :: TokenParser Type -> TokenParser Type
+parseAnyType pf = P.buildExpressionParser operators (buildPostfixParser postfixTable pf) P.<?> "type"
   where
   operators = [ [ P.Infix (return TypeApp) P.AssocLeft ]
               , [ P.Infix (rarrow >> return function) P.AssocRight ] ]
@@ -108,7 +113,7 @@ parseAnyType = P.buildExpressionParser operators (buildPostfixParser postfixTabl
 --
 parseType :: TokenParser Type
 parseType = do
-  ty <- parseAnyType
+  ty <- parseAnyType parseTypeAtom
   unless (isMonoType ty) $ P.unexpected "polymorphic type"
   return ty
 
@@ -116,7 +121,10 @@ parseType = do
 -- Parse a polytype
 --
 parsePolyType :: TokenParser Type
-parsePolyType = parseAnyType
+parsePolyType = parseAnyType parseTypeAtom
+
+parsePolyType' :: TokenParser Type
+parsePolyType' = parseAnyType parseTypeAtom'
 
 -- |
 -- Parse an atomic type with no wildcards

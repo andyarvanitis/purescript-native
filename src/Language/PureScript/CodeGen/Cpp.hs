@@ -44,7 +44,6 @@ import Language.PureScript.CodeGen.Cpp.Common as Common
 import Language.PureScript.CodeGen.Cpp.Data
 import Language.PureScript.CodeGen.Cpp.File
 import Language.PureScript.CodeGen.Cpp.Optimizer
-import Language.PureScript.CodeGen.Cpp.RankN
 import Language.PureScript.CodeGen.Cpp.Synonyms
 import Language.PureScript.CodeGen.Cpp.Templates
 import Language.PureScript.CodeGen.Cpp.Types
@@ -195,15 +194,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   mkFunction encTmplts ident ann@(_, com, ty, _) arg body qs = do
     let typ = ty >>= mktype mn
         tmplts = tmpltsReplFromRight (templparams' typ) (filter isParameterized $ templparams' typ)
-        tmplts' = filter (`notElem` encTmplts) tmplts
-        maybeReplaceRankNVals = if tyHasRankNs ty then replaceRankNVals mn ty (getRankNVals body) else id
-    block <- asReturnBlock <$> valueToCpp (maybeReplaceRankNVals body)
-    let maybeWrapRankNCpps = maybe id (wrapRankNCpps . templateVars) typ
-        block' = nestedFnsToLambdas (encTmplts ++ tmplts') $ maybeWrapRankNCpps block
+    block <- asReturnBlock <$> valueToCpp body
+    let block' = nestedFnsToLambdas (nub $ encTmplts ++ tmplts) block
         atyp = argtype typ
         rtyp = rettype typ
         arg' = if null (runIdent arg) then [] else [(identToCpp arg, Just $ fromMaybe AutoType atyp)]
-        fn = CppFunction (identToCpp ident) tmplts' arg' rtyp qs block'
+        fn = CppFunction (identToCpp ident) (tmplts \\ encTmplts) arg' rtyp qs block'
         fn' | atyp == Just AutoType = toLambda [CppCaptureAll] [] fn
             | otherwise = fn
     return (CppComment com fn')
@@ -233,12 +229,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   toLambda cs encTmplts (CppFunction name tmplts args rtyp qs body) =
     CppVariableIntroduction (name, ftyp)
-                            tmplts'
+                            (tmplts \\ encTmplts)
                             (filter (==CppStatic) qs)
                             (Just (CppLambda cs' args rtyp body))
     where
-    tmplts' = filter (`notElem` encTmplts) tmplts
-
     cs' | (not . null) (qs `intersect` [CppInline, CppStatic]) = []
         | otherwise = cs
 
@@ -697,7 +691,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                    vs@(_:_) <- templateVars typ',
                    not (valueHasTemplates e') = Just (asTemplate vs e')
                  | otherwise = Just e'
-        return $ CppVariableIntroduction (name, typ) (filter (`notElem` tmplts) tmplts') [CppStatic] cpp'
+        return $ CppVariableIntroduction (name, typ) (tmplts' \\ tmplts) [CppStatic] cpp'
     toCpp _ ((name, _), e)
       | Just ty <- tyFromExpr e = do
         e' <- valueToCpp e

@@ -20,6 +20,7 @@ A small strongly typed programming language with expressive types that compiles 
 
 #### Differences from PureScript:
 
+* No Rank-N types support (for now)
 * Foreign imports are C++14 instead of JavaScript
 * Compiler is `pcc` instead of `psc` or `psc-make`, and only supports `make` mode
   - Generates a simple CMake file for easy experimentation
@@ -35,7 +36,6 @@ A small strongly typed programming language with expressive types that compiles 
 
 #### TO-DO:
 
-* Fix remaining issues with Rank-N types
 * Get automated builds/tests up and running (some work already done)
 * Optimized `newtype` (some work already done, but disabled for now)
 * "Magic do" (similar work already done in inliner and TCO code)
