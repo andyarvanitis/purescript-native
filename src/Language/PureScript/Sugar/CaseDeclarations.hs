@@ -1,8 +1,8 @@
 -----------------------------------------------------------------------------
 --
 -- Module      :  Language.PureScript.CaseDeclarations
--- Copyright   :  (c) Phil Freeman 2013
--- License     :  MIT
+-- Copyright   :  (c) 2013-15 Phil Freeman, (c) 2014-15 Gary Burgess
+-- License     :  MIT (http://opensource.org/licenses/MIT)
 --
 -- Maintainer  :  Phil Freeman <paf31@cantab.net>
 -- Stability   :  experimental
@@ -45,9 +45,9 @@ isLeft (Right _) = False
 -- Replace all top-level binders in a module with case expressions.
 --
 desugarCasesModule :: (Functor m, Applicative m, MonadSupply m, MonadError MultipleErrors m) => [Module] -> m [Module]
-desugarCasesModule ms = forM ms $ \(Module coms name ds exps) ->
+desugarCasesModule ms = forM ms $ \(Module ss coms name ds exps) ->
   rethrow (onErrorMessages (ErrorInModule name)) $
-    Module coms name <$> (desugarCases <=< desugarAbs $ ds) <*> pure exps
+    Module ss coms name <$> (desugarCases <=< desugarAbs $ ds) <*> pure exps
 
 desugarAbs :: (Functor m, Applicative m, MonadSupply m, MonadError MultipleErrors m) => [Declaration] -> m [Declaration]
 desugarAbs = flip parU f
@@ -68,7 +68,7 @@ desugarCases = desugarRest <=< fmap join . flip parU toDecls . groupBy inSameGro
   where
     desugarRest :: (Functor m, Applicative m, MonadSupply m, MonadError MultipleErrors m) => [Declaration] -> m [Declaration]
     desugarRest (TypeInstanceDeclaration name constraints className tys ds : rest) =
-      (:) <$> (TypeInstanceDeclaration name constraints className tys <$> desugarCases ds) <*> desugarRest rest
+      (:) <$> (TypeInstanceDeclaration name constraints className tys <$> traverseTypeInstanceBody desugarCases ds) <*> desugarRest rest
     desugarRest (ValueDeclaration name nameKind bs result : rest) =
       let (_, f, _) = everywhereOnValuesTopDownM return go return
           f' (Left gs) = Left <$> mapM (pairM return f) gs

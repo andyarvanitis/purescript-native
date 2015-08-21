@@ -1,8 +1,8 @@
 -----------------------------------------------------------------------------
 --
 -- Module      :  Main
--- Copyright   :  (c) Phil Freeman 2013
--- License     :  MIT
+-- Copyright   :  (c) 2013-15 Phil Freeman, (c) 2014-15 Gary Burgess
+-- License     :  MIT (http://opensource.org/licenses/MIT)
 --
 -- Maintainer  :  Phil Freeman <paf31@cantab.net>
 -- Stability   :  experimental
@@ -52,12 +52,12 @@ data InputOptions = InputOptions
 
 compile :: PSCMakeOptions -> IO ()
 compile (PSCMakeOptions inputGlob inputForeignGlob outputDir opts usePrefix) = do
-  input <- concat <$> mapM glob inputGlob
+  input <- globWarningOnMisses warnFileTypeNotFound inputGlob
   when (null input) $ do
     hPutStrLn stderr "psc: No input files."
     exitFailure
   moduleFiles <- readInput (InputOptions input)
-  inputForeign <- concat <$> mapM glob inputForeignGlob
+  inputForeign <- globWarningOnMisses warnFileTypeNotFound inputForeignGlob
   foreignFiles <- forM inputForeign (\inFile -> (inFile,) <$> readFile inFile)
   case runWriterT (parseInputs moduleFiles foreignFiles) of
     Left errs -> do
@@ -66,7 +66,7 @@ compile (PSCMakeOptions inputGlob inputForeignGlob outputDir opts usePrefix) = d
     Right ((ms, foreigns), warnings) -> do
       when (P.nonEmpty warnings) $
         hPutStrLn stderr (P.prettyPrintMultipleWarnings (P.optionsVerboseErrors opts) warnings)
-      let filePathMap = M.fromList $ map (\(fp, P.Module _ mn _ _) -> (mn, fp)) ms
+      let filePathMap = M.fromList $ map (\(fp, P.Module _ _ mn _ _) -> (mn, fp)) ms
           makeActions = buildMakeActions outputDir filePathMap foreigns usePrefix
       e <- runMake opts $ P.make makeActions (map snd ms)
       case e of
@@ -78,13 +78,25 @@ compile (PSCMakeOptions inputGlob inputForeignGlob outputDir opts usePrefix) = d
             hPutStrLn stderr (P.prettyPrintMultipleWarnings (P.optionsVerboseErrors opts) warnings')
           exitSuccess
 
+warnFileTypeNotFound :: String -> IO ()
+warnFileTypeNotFound = hPutStrLn stderr . ((++) "psc: No files found using pattern: ")
+
+globWarningOnMisses :: (String -> IO ()) -> [FilePath] -> IO [FilePath]
+globWarningOnMisses warn = concatMapM globWithWarning
+  where
+  globWithWarning pattern = do
+    paths <- glob pattern
+    when (null paths) $ warn pattern
+    return paths
+  concatMapM f = liftM concat . mapM f
+
 readInput :: InputOptions -> IO [(Either P.RebuildPolicy FilePath, String)]
 readInput InputOptions{..} = forM ioInputFiles $ \inFile -> (Right inFile, ) <$> readFile inFile
 
 parseInputs :: (Functor m, Applicative m, MonadError P.MultipleErrors m, MonadWriter P.MultipleErrors m)
             => [(Either P.RebuildPolicy FilePath, String)]
             -> [(FilePath, P.ForeignJS)]
-            -> m ([(Either P.RebuildPolicy FilePath, P.Module)], M.Map P.ModuleName (FilePath, P.ForeignJS))
+            -> m ([(Either P.RebuildPolicy FilePath, P.Module)], M.Map P.ModuleName FilePath)
 parseInputs modules foreigns =
   (,) <$> P.parseModulesFromFiles (either (const "") id) modules
       <*> P.parseForeignModulesFromFiles foreigns
@@ -156,7 +168,7 @@ options = P.Options <$> noTco
                     <*> verboseErrors
                     <*> (not <$> comments)
                     <*> requirePath
-                    
+
 pscMakeOptions :: Parser PSCMakeOptions
 pscMakeOptions = PSCMakeOptions <$> many inputFile
                                 <*> many inputForeignFile

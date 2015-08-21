@@ -1,8 +1,8 @@
 -----------------------------------------------------------------------------
 --
 -- Module      :  Language.PureScript.AST.Declarations
--- Copyright   :  (c) 2013-14 Phil Freeman, (c) 2014 Gary Burgess, and other contributors
--- License     :  MIT
+-- Copyright   :  (c) 2013-15 Phil Freeman, (c) 2014-15 Gary Burgess
+-- License     :  MIT (http://opensource.org/licenses/MIT)
 --
 -- Maintainer  :  Phil Freeman <paf31@cantab.net>
 -- Stability   :  experimental
@@ -19,6 +19,10 @@ module Language.PureScript.AST.Declarations where
 import qualified Data.Data as D
 import qualified Data.Map as M
 
+import Control.Monad.Identity
+
+import Control.Applicative
+
 import Language.PureScript.AST.Binders
 import Language.PureScript.AST.Operators
 import Language.PureScript.AST.SourcePos
@@ -34,11 +38,11 @@ import Language.PureScript.Environment
 -- a list of declarations, and a list of the declarations that are
 -- explicitly exported. If the export list is Nothing, everything is exported.
 --
-data Module = Module [Comment] ModuleName [Declaration] (Maybe [DeclarationRef]) deriving (Show, D.Data, D.Typeable)
+data Module = Module SourceSpan [Comment] ModuleName [Declaration] (Maybe [DeclarationRef]) deriving (Show, D.Data, D.Typeable)
 
 -- | Return a module's name.
 getModuleName :: Module -> ModuleName
-getModuleName (Module _ name _ _) = name
+getModuleName (Module _ _ name _ _) = name
 
 -- |
 -- An item in a list of explicit imports or exports
@@ -154,12 +158,28 @@ data Declaration
   -- A type instance declaration (name, dependencies, class name, instance types, member
   -- declarations)
   --
-  | TypeInstanceDeclaration Ident [Constraint] (Qualified ProperName) [Type] [Declaration]
+  | TypeInstanceDeclaration Ident [Constraint] (Qualified ProperName) [Type] TypeInstanceBody
   -- |
   -- A declaration with source position information
   --
   | PositionedDeclaration SourceSpan [Comment] Declaration
   deriving (Show, D.Data, D.Typeable)
+
+-- | The members of a type class instance declaration
+data TypeInstanceBody
+  -- | This is a derived instance
+  = DerivedInstance
+  -- | This is a regular (explicit) instance
+  | ExplicitInstance [Declaration]
+  deriving (Show, D.Data, D.Typeable)
+
+mapTypeInstanceBody :: ([Declaration] -> [Declaration]) -> TypeInstanceBody -> TypeInstanceBody
+mapTypeInstanceBody f = runIdentity . traverseTypeInstanceBody (Identity . f)
+
+-- | A traversal for TypeInstanceBody
+traverseTypeInstanceBody :: (Applicative f) => ([Declaration] -> f [Declaration]) -> TypeInstanceBody -> f TypeInstanceBody
+traverseTypeInstanceBody _ DerivedInstance = pure DerivedInstance
+traverseTypeInstanceBody f (ExplicitInstance ds) = ExplicitInstance <$> f ds
 
 -- |
 -- Test if a declaration is a value declaration

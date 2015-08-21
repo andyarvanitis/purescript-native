@@ -1,8 +1,8 @@
 -----------------------------------------------------------------------------
 --
 -- Module      :  Make
--- Copyright   :  (c) 2013-14 Phil Freeman, (c) 2014 Gary Burgess, and other contributors
--- License     :  MIT
+-- Copyright   :  (c) 2013-15 Phil Freeman, (c) 2014-15 Gary Burgess
+-- License     :  MIT (http://opensource.org/licenses/MIT)
 --
 -- Maintainer  :  Phil Freeman <paf31@cantab.net>
 -- Stability   :  experimental
@@ -28,7 +28,7 @@ module Language.PureScript.Make
   , MakeActions(..)
   , Externs()
   , make
-  
+
   -- * Implementation of Make API using files on disk
   , Make(..)
   , runMake
@@ -58,7 +58,6 @@ import System.Directory
        (doesFileExist, getModificationTime, createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory)
 import System.IO.Error (tryIOError)
-
 
 import Language.PureScript.AST
 import Language.PureScript.CodeGen.Externs (moduleToPs)
@@ -93,7 +92,7 @@ renderProgressMessage (CompilingModule mn) = "Compiling " ++ runModuleName mn
 -- This type exists to make two things abstract:
 --
 -- * The particular backend being used (Javascript, C++11, etc.)
--- 
+--
 -- * The details of how files are read/written etc.
 --
 data MakeActions m = MakeActions {
@@ -149,7 +148,7 @@ make :: forall m. (Functor m, Applicative m, Monad m, MonadReader Options m, Mon
      -> m Environment
 make MakeActions{..} ms = do
   (sorted, graph) <- sortModules $ map importPrim ms
-  toRebuild <- foldM (\s (Module _ moduleName' _ _) -> do
+  toRebuild <- foldM (\s (Module _ _ moduleName' _ _) -> do
     inputTimestamp <- getInputTimestamp moduleName'
     outputTimestamp <- getOutputTimestamp moduleName'
     return $ case (inputTimestamp, outputTimestamp) of
@@ -168,12 +167,12 @@ make MakeActions{..} ms = do
   go env ((False, m) : ms') = do
     (_, env') <- lift . runCheck' env $ typeCheckModule Nothing m
     go env' ms'
-  go env ((True, m@(Module coms moduleName' _ exps)) : ms') = do
-    lift . progress $ CompilingModule moduleName' 
-    (checked@(Module _ _ elaborated _), env') <- lift . runCheck' env $ typeCheckModule Nothing m
+  go env ((True, m@(Module ss coms moduleName' _ exps)) : ms') = do
+    lift . progress $ CompilingModule moduleName'
+    (checked@(Module _ _ _ elaborated _), env') <- lift . runCheck' env $ typeCheckModule Nothing m
     checkExhaustiveModule env' checked
     regrouped <- createBindingGroups moduleName' . collapseBindingGroups $ elaborated
-    let mod' = Module coms moduleName' regrouped exps
+    let mod' = Module ss coms moduleName' regrouped exps
         corefn = CF.moduleToCoreFn env' mod'
         [renamed] = renameInModules [corefn]
         exts = moduleToPs mod' env'
@@ -182,15 +181,15 @@ make MakeActions{..} ms = do
 
   rebuildIfNecessary :: M.Map ModuleName [ModuleName] -> S.Set ModuleName -> [Module] -> m [(Bool, Module)]
   rebuildIfNecessary _ _ [] = return []
-  rebuildIfNecessary graph toRebuild (m@(Module _ moduleName' _ _) : ms') | moduleName' `S.member` toRebuild = do
+  rebuildIfNecessary graph toRebuild (m@(Module _ _ moduleName' _ _) : ms') | moduleName' `S.member` toRebuild = do
     let deps = fromMaybe [] $ moduleName' `M.lookup` graph
         toRebuild' = toRebuild `S.union` S.fromList deps
     (:) (True, m) <$> rebuildIfNecessary graph toRebuild' ms'
-  rebuildIfNecessary graph toRebuild (Module _ moduleName' _ _ : ms') = do
+  rebuildIfNecessary graph toRebuild (Module _ _ moduleName' _ _ : ms') = do
     (path, externs) <- readExterns moduleName'
     externsModules <- fmap (map snd) . alterErrors $ parseModulesFromFiles id [(path, externs)]
     case externsModules of
-      [m'@(Module _ moduleName'' _ _)] | moduleName'' == moduleName' -> (:) (False, m') <$> rebuildIfNecessary graph toRebuild ms'
+      [m'@(Module _ _ moduleName'' _ _)] | moduleName'' == moduleName' -> (:) (False, m') <$> rebuildIfNecessary graph toRebuild ms'
       _ -> throwError . errorMessage . InvalidExternsFile $ path
     where
     alterErrors = flip catchError $ \(MultipleErrors errs) ->
@@ -208,9 +207,9 @@ reverseDependencies g = combine [ (dep, mn) | (mn, deps) <- g, dep <- deps ]
 -- Add an import declaration for a module if it does not already explicitly import it.
 --
 addDefaultImport :: ModuleName -> Module -> Module
-addDefaultImport toImport m@(Module coms mn decls exps)  =
+addDefaultImport toImport m@(Module ss coms mn decls exps)  =
   if isExistingImport `any` decls || mn == toImport then m
-  else Module coms mn (ImportDeclaration toImport Implicit Nothing : decls) exps
+  else Module ss coms mn (ImportDeclaration toImport Implicit Nothing : decls) exps
   where
   isExistingImport (ImportDeclaration mn' _ _) | mn' == toImport = True
   isExistingImport (PositionedDeclaration _ _ d) = isExistingImport d
@@ -245,8 +244,8 @@ traverseEither f (Right y) = Right <$> f y
 -- A set of make actions that read and write modules from the given directory.
 --
 buildMakeActions :: FilePath -- ^ the output directory
-                 -> M.Map ModuleName (Either RebuildPolicy String) -- ^ a map between module names and paths to the file containing the PureScript module
-                 -> M.Map ModuleName (FilePath, ForeignJS) -- ^ a map between module name and the file containing the foreign javascript for the module
+                 -> M.Map ModuleName (Either RebuildPolicy FilePath) -- ^ a map between module names and paths to the file containing the PureScript module
+                 -> M.Map ModuleName FilePath -- ^ a map between module name and the file containing the foreign javascript for the module
                  -> Bool -- ^ Generate a prefix comment?
                  -> MakeActions Make
 buildMakeActions outputDir filePathMap foreigns usePrefix =
@@ -257,7 +256,7 @@ buildMakeActions outputDir filePathMap foreigns usePrefix =
   getInputTimestamp mn = do
     let path = fromMaybe (error "Module has no filename in 'make'") $ M.lookup mn filePathMap
     e1 <- traverseEither getTimestamp path
-    fPath <- maybe (return Nothing) (getTimestamp . fst) $ M.lookup mn foreigns
+    fPath <- maybe (return Nothing) getTimestamp $ M.lookup mn foreigns
     return $ fmap (max fPath) e1
 
   getOutputTimestamp :: ModuleName -> Make (Maybe UTCTime)
@@ -276,7 +275,7 @@ buildMakeActions outputDir filePathMap foreigns usePrefix =
   codegen m _ exts = do
     let mn = CF.moduleName m
     foreignInclude <- case mn `M.lookup` foreigns of
-      Just (path, _)
+      Just path
         | not $ requiresForeign m -> do
             tell $ errorMessage $ UnnecessaryFFIModule mn path
             return Nothing
@@ -292,7 +291,7 @@ buildMakeActions outputDir filePathMap foreigns usePrefix =
         js = unlines $ map ("// " ++) prefix ++ [pjs]
     lift $ do
       writeTextFile jsFile js
-      maybe (return ()) (writeTextFile foreignFile . snd) $ mn `M.lookup` foreigns
+      for_ (mn `M.lookup` foreigns) (readTextFile >=> writeTextFile foreignFile)
       writeTextFile externsFile exts
 
   requiresForeign :: CF.Module a -> Bool

@@ -11,6 +11,7 @@ import Control.Monad
 import Control.Applicative
 
 import Control.Monad.Trans.Except
+import Control.Monad.Writer (WriterT(), runWriterT)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 
@@ -103,9 +104,9 @@ fileInfoToString (Local fn) = fn
 fileInfoToString (FromDep _ fn) = fn
 
 addDefaultImport :: P.ModuleName -> P.Module -> P.Module
-addDefaultImport toImport m@(P.Module coms mn decls exps)  =
+addDefaultImport toImport m@(P.Module ss coms mn decls exps)  =
   if isExistingImport `any` decls || mn == toImport then m
-  else P.Module coms mn (P.ImportDeclaration toImport P.Implicit Nothing : decls) exps
+  else P.Module ss coms mn (P.ImportDeclaration toImport P.Implicit Nothing : decls) exps
   where
   isExistingImport (P.ImportDeclaration mn' _ _) | mn' == toImport = True
   isExistingImport (P.PositionedDeclaration _ _ d) = isExistingImport d
@@ -118,7 +119,8 @@ desugar :: [P.Module] -> Either P.MultipleErrors [P.Module]
 desugar = P.evalSupplyT 0 . desugar'
   where
   desugar' :: [P.Module] -> P.SupplyT (Either P.MultipleErrors) [P.Module]
-  desugar' = mapM P.desugarDoModule >=> P.desugarCasesModule >=> P.desugarImports
+  desugar' = mapM P.desugarDoModule >=> P.desugarCasesModule >=> ignoreWarnings . P.desugarImports
+  ignoreWarnings m = liftM fst (runWriterT m)
 
 parseFile :: FilePath -> IO (FilePath, String)
 parseFile input' = (,) input' <$> readFile input'

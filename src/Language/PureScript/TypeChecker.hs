@@ -1,8 +1,8 @@
 -----------------------------------------------------------------------------
 --
 -- Module      :  Language.PureScript.TypeChecker
--- Copyright   :  (c) Phil Freeman 2013
--- License     :  MIT
+-- Copyright   :  (c) 2013-15 Phil Freeman, (c) 2014-15 Gary Burgess
+-- License     :  MIT (http://opensource.org/licenses/MIT)
 --
 -- Maintainer  :  Phil Freeman <paf31@cantab.net>
 -- Stability   :  experimental
@@ -235,11 +235,25 @@ typeCheckAll mainModuleName moduleName exps ds = mapM go ds <* mapM_ checkOrphan
   goInstance d dictName deps className tys = do
     mapM_ (checkTypeClassInstance moduleName) tys
     forM_ deps $ mapM_ (checkTypeClassInstance moduleName) . snd
+    checkOrphanInstance moduleName className tys
     let dict = TypeClassDictionaryInScope (Qualified (Just moduleName) dictName) className tys (Just deps) TCDRegular isInstanceExported
     addTypeClassDictionaries (Just moduleName) . M.singleton className $ M.singleton (canonicalizeDictionary dict) dict
     return d
 
     where
+
+    checkOrphanInstance :: ModuleName -> Qualified ProperName -> [Type] -> Check ()
+    checkOrphanInstance mn (Qualified (Just mn') _) tys
+      | mn == mn' || any checkType tys = return ()
+      | otherwise = throwError . errorMessage $ OrphanInstance dictName className tys
+      where
+      checkType :: Type -> Bool
+      checkType (TypeVar _) = False
+      checkType (TypeConstructor (Qualified (Just mn'') _)) = mn == mn''
+      checkType (TypeConstructor (Qualified Nothing _)) = error "Unqualified type name in checkOrphanInstance"
+      checkType (TypeApp t1 _) = checkType t1
+      checkType _ = error "Invalid type in instance in checkOrphanInstance"
+    checkOrphanInstance _ _ _ = error "Unqualified class name in checkOrphanInstance"
 
     isInstanceExported :: Bool
     isInstanceExported = any exportsInstance exps
@@ -264,15 +278,15 @@ typeCheckAll mainModuleName moduleName exps ds = mapM go ds <* mapM_ checkOrphan
 -- required by exported members are also exported.
 --
 typeCheckModule :: Maybe ModuleName -> Module -> Check Module
-typeCheckModule _ (Module _ _ _ Nothing) = error "exports should have been elaborated"
-typeCheckModule mainModuleName (Module coms mn decls (Just exps)) = rethrow (onErrorMessages (ErrorInModule mn)) $ do
+typeCheckModule _ (Module _ _ _ _ Nothing) = error "exports should have been elaborated"
+typeCheckModule mainModuleName (Module ss coms mn decls (Just exps)) = rethrow (onErrorMessages (ErrorInModule mn)) $ do
   modify (\s -> s { checkCurrentModule = Just mn })
   decls' <- typeCheckAll mainModuleName mn exps decls
   forM_ exps $ \e -> do
     checkTypesAreExported e
     checkClassMembersAreExported e
     checkClassesAreExported e
-  return $ Module coms mn decls' (Just exps)
+  return $ Module ss coms mn decls' (Just exps)
   where
 
   checkMemberExport :: (Type -> [DeclarationRef]) -> DeclarationRef -> Check ()

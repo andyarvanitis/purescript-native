@@ -1,8 +1,8 @@
 -----------------------------------------------------------------------------
 --
 -- Module      :  Language.PureScript.Parser.Declarations
--- Copyright   :  (c) Phil Freeman 2013
--- License     :  MIT
+-- Copyright   :  (c) 2013-15 Phil Freeman, (c) 2014-15 Gary Burgess
+-- License     :  MIT (http://opensource.org/licenses/MIT)
 --
 -- Maintainer  :  Phil Freeman <paf31@cantab.net>
 -- Stability   :  experimental
@@ -229,7 +229,21 @@ parseTypeInstanceDeclaration = do
   members <- P.option [] . P.try $ do
     indented *> reserved "where"
     mark (P.many (same *> positioned parseValueDeclaration))
-  return $ TypeInstanceDeclaration name (fromMaybe [] deps) className ty members
+  return $ TypeInstanceDeclaration name (fromMaybe [] deps) className ty (ExplicitInstance members)
+
+parseDerivingInstanceDeclaration :: TokenParser Declaration
+parseDerivingInstanceDeclaration = do
+  reserved "derive"
+  reserved "instance"
+  name <- parseIdent <* indented <* doubleColon
+  deps <- P.optionMaybe $ do
+    deps <- parens (commaSep1 ((,) <$> parseQualified properName <*> P.many (noWildcards parseTypeAtom)))
+    indented
+    rfatArrow
+    return deps
+  className <- indented *> parseQualified properName
+  ty <- P.many (indented *> noWildcards parseTypeAtom)
+  return $ TypeInstanceDeclaration name (fromMaybe [] deps) className ty DerivedInstance
 
 positioned :: TokenParser Declaration -> TokenParser Declaration
 positioned = withSourceSpan PositionedDeclaration
@@ -248,6 +262,7 @@ parseDeclaration = positioned (P.choice
                    , parseImportDeclaration
                    , parseTypeClassDeclaration
                    , parseTypeInstanceDeclaration
+                   , parseDerivingInstanceDeclaration
                    ]) P.<?> "declaration"
 
 parseLocalDeclaration :: TokenParser Declaration
@@ -262,19 +277,24 @@ parseLocalDeclaration = positioned (P.choice
 parseModule :: TokenParser Module
 parseModule = do
   comments <- C.readComments
+  start <- P.getPosition
   reserved "module"
   indented
   name <- moduleName
   exports <- P.optionMaybe $ parens $ commaSep1 parseDeclarationRef
   reserved "where"
   decls <- mark (P.many (same *> parseDeclaration))
-  return $ Module comments name decls exports
+  end <- P.getPosition
+  let ss = SourceSpan (P.sourceName start) (toSourcePos start) (toSourcePos end)
+  return $ Module ss comments name decls exports
+  where
+  toSourcePos pos = SourcePos (P.sourceLine pos) (P.sourceColumn pos)
 
 -- |
 -- Parse a collection of modules
 --
 parseModulesFromFiles :: forall m k. (MonadError MultipleErrors m, Functor m) =>
-                                     (k -> String) -> [(k, String)] -> m [(k, Module)]
+                                     (k -> FilePath) -> [(k, String)] -> m [(k, Module)]
 parseModulesFromFiles toFilePath input = do
   modules <- parU input $ \(k, content) -> do
     let filename = toFilePath k
@@ -414,7 +434,7 @@ parseDo :: TokenParser Expr
 parseDo = do
   reserved "do"
   C.indented
-  Do <$> C.mark (P.many (C.same *> C.mark parseDoNotationElement))
+  Do <$> C.mark (P.many1 (C.same *> C.mark parseDoNotationElement))
 
 parseDoNotationLet :: TokenParser DoNotationElement
 parseDoNotationLet = DoNotationLet <$> (reserved "let" *> C.indented *> C.mark (P.many1 (C.same *> parseLocalDeclaration)))

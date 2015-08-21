@@ -59,7 +59,7 @@ compile (PCCOptions input _ outputDir opts usePrefix) = do
     Right ((ms, _), warnings) -> do
       when (P.nonEmpty warnings) $
         hPutStrLn stderr (P.prettyPrintMultipleWarnings (P.optionsVerboseErrors opts) warnings)
-      let filePathMap = M.fromList $ map (\(fp, P.Module _ mn _ _) -> (mn, fp)) ms
+      let filePathMap = M.fromList $ map (\(fp, P.Module _ _ mn _ _) -> (mn, fp)) ms
           makeActions = buildMakeActions outputDir filePathMap usePrefix
       e <- runMake opts $ P.make makeActions (map snd ms)
       case e of
@@ -77,7 +77,7 @@ readInput InputOptions{..} = forM ioInputFiles $ \inFile -> (Right inFile, ) <$>
 parseInputs :: (Functor m, Applicative m, MonadError P.MultipleErrors m, MonadWriter P.MultipleErrors m)
             => [(Either P.RebuildPolicy FilePath, String)]
             -> [(FilePath, P.ForeignJS)]
-            -> m ([(Either P.RebuildPolicy FilePath, P.Module)], M.Map P.ModuleName (FilePath, P.ForeignJS))
+            -> m ([(Either P.RebuildPolicy FilePath, P.Module)], M.Map P.ModuleName FilePath)
 parseInputs modules foreigns =
   (,) <$> P.parseModulesFromFiles (either (const "") id) modules
       <*> P.parseForeignModulesFromFiles foreigns

@@ -578,6 +578,7 @@ containsTypeSynonyms = everythingOnTypes (||) go where
   go (SaturatedTypeSynonym _ _) = True
   go _ = False
 
+
 -- |
 -- Check the type of a collection of named record fields
 --
