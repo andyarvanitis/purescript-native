@@ -140,7 +140,6 @@ skipped =
   , "CheckTypeClass.purs" -- rank-N
   , "Church.purs"         -- rank-N
   , "Collatz.purs"        -- rank-N (runPure)
-  , "DataAndType.purs" -- dep sort needed
   , "Do.purs"
   , "Dollar.purs"
   , "Eff.purs" -- rank-N (runPure)

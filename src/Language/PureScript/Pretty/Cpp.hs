@@ -168,13 +168,11 @@ literals = mkPattern' match
   match (CppUseNamespace name) = fmap concat $ sequence
     [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
     ]
-  match (CppTypeAlias (newName, newTyps) (name, typs) spec) =
-    let typs' = if null typs
-                  then []
-                  else angles (intercalate "," (fst <$> typs))
+  match (CppTypeAlias (newName, newTyps) typ spec) =
+    let typ' = runType typ
         (tmps, name') = if null newTyps
-                          then ([], name)
-                          else ([return (templDecl newTyps), return "\n", currentIndent], name ++ typs')
+                          then ([], typ')
+                          else ([return (templDecl newTyps), return "\n", currentIndent], typ')
     in fmap concat $ sequence $
     tmps ++
     [ return $ "using " ++ newName ++ " = " ++ if null spec then name' else spec ++ angles name'
@@ -188,14 +186,14 @@ literals = mkPattern' match
     ]
   match (CppStruct (name, []) typs@(_:_) [] [] []) = fmap concat $ sequence $
     [ return $ "EXTERN "
-    , return $ parens ("template struct " ++ classstr (name, runType <$> typs))
+    , return $ parens ("template struct " ++ classstr (name, typs))
     , return ";"
     ]
   match (CppStruct (name, params) typs supers cms ims) = fmap concat $ sequence $
     (if null params && null typs
       then []
       else [return (templDecl params), return "\n", currentIndent]) ++
-    [ return $ "struct " ++ classstr (name, runType <$> typs)
+    [ return $ "struct " ++ classstr (name, typs)
     , return $ if null supers
                  then []
                  else " : public " ++ intercalate ", public " (classstr <$> supers)
@@ -549,9 +547,9 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
 dotsTo :: Char -> String -> String
 dotsTo chr = map (\c -> if c == '.' then chr else c)
 
-classstr :: (String, [String]) -> String
+classstr :: (String, [Type]) -> String
 classstr (name, []) = name
-classstr (name, params) = name ++ angles (intercalate ", " params)
+classstr (name, params) = name ++ angles (intercalate ", " $ runType <$> params)
 
 argstr :: (String, Maybe Type) -> String
 argstr (name, Nothing) = argStr name AutoType

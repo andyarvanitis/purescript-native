@@ -65,11 +65,11 @@ datasToCpps env mn
       fromStruct _ (CppStruct _ _ _ _ [CppTypeAlias{}]) = CppNoOp
       fromStruct ns (CppStruct (name, tmplts) _ _ _ _) =
         let tmplts' = remTemplateDefaults tmplts in
-        CppTypeAlias (name, tmplts') (ns ++ "::" ++ name, tmplts') "managed"
+        CppTypeAlias (name, tmplts') (Native (ns ++ "::" ++ name) (mkTemplate . fst <$> tmplts')) "managed"
       fromStruct _ _ = CppNoOp
 
     dataTypes :: [(Qualified ProperName, E.TypeKind)] -> [Cpp]
-    dataTypes ds | cpps@(_:_) <- concatMap go ds = [CppNamespace "type" cpps]
+    dataTypes ds | cpps@(_:_) <- concatMap go ds = CppNamespace "type" . replicate 1 <$> cpps
                  | otherwise = []
       where
       go :: (Qualified ProperName, E.TypeKind) -> [Cpp]
@@ -104,7 +104,7 @@ datasToCpps env mn
         (CppStruct (name, applied)
                    (typeFromTemplate <$> applied)
                    [] []
-                   [CppTypeAlias ("_", notApplied) (name, applied ++ notApplied) []])
+                   [CppTypeAlias ("_", notApplied) (Native name (mkTemplate . fst <$> (applied ++ notApplied))) []])
       : dataTypePartialCtors name (applied ++ [p]) ps
       where
       typeFromTemplate :: TemplateInfo -> Type
@@ -113,7 +113,7 @@ datasToCpps env mn
 
     dataValueCtors :: [(Qualified ProperName, E.TypeKind)] -> ([Cpp], [Cpp])
     dataValueCtors ds | cpps@(_:_) <- concatMap (fst . go) ds,
-                   aliases <- catMaybes $ map (snd . go) ds = ([CppNamespace "value" cpps], aliases)
+                   aliases <- catMaybes $ map (snd . go) ds = (CppNamespace "value" . replicate 1 <$> cpps, aliases)
                  | otherwise = ([],[])
       where
       go :: (Qualified ProperName, E.TypeKind) -> ([Cpp], Maybe Cpp)
@@ -131,18 +131,18 @@ datasToCpps env mn
           where
           name :: String
           name = P.prettyPrintCpp [flip CppData [] $ runProperName ctor]
-          supers' :: [(String, [String])]
+          supers' :: [(String, [Type])]
           supers'
             | null fieldtypes = supers
             | otherwise = supers ++ [("tuple", fieldtypes)]
-          supers :: [(String, [String])]
-          supers = [(addNamespace "type" (qual typ), fst <$> tmplts)]
-          fieldtypes :: [String]
-          fieldtypes =  ("const " ++) . runType <$> (filter (/= Map []) . catMaybes $ mktype mn <$> fields)
+          supers :: [(String, [Type])]
+          supers = [(addNamespace "type" (qual typ), mkTemplate . fst <$> tmplts)]
+          fieldtypes :: [Type]
+          fieldtypes = filter (/= Map []) . catMaybes $ mktype mn <$> fields
           members :: [Cpp]
           members
             | null fieldtypes = []
-            | otherwise = [CppVar $ "using tuple<" ++ intercalate ", " fieldtypes ++ ">::tuple;"]
+            | otherwise = [CppVar $ "using tuple<" ++ intercalate ", " (runType <$> fieldtypes) ++ ">::tuple;"]
       go _ = ([], Nothing)
 
     templateParams :: [T.Type] -> [TemplateInfo]

@@ -112,7 +112,7 @@ rankNWrapper tmplts cpp = CppLambda []
   tmplts' :: [String]
   tmplts' = nub . sort $ runType <$> tmplts
   typeAlias :: String -> Cpp
-  typeAlias t = CppTypeAlias (t, []) (removeConst . runType $ DeclType ('_' : t), []) []
+  typeAlias t = CppTypeAlias (t, []) (DeclType ('_' : t)) []
   removeConst :: String -> String
   removeConst t = "typename remove_const<" ++ t ++ ">::type"
 

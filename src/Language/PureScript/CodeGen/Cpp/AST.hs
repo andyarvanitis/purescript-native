@@ -184,7 +184,7 @@ data Cpp
   -- |
   -- A C++ struct declaration (name with any template types, superclasses, class methods, instance methods)
   --
-  | CppStruct (String, [(String, Int)]) [Type] [(String, [String])] [Cpp] [Cpp]
+  | CppStruct (String, [(String, Int)]) [Type] [(String, [Type])] [Cpp] [Cpp]
   -- |
   -- 'data' constructor type (name, template types)
   --
@@ -238,9 +238,9 @@ data Cpp
   --
   | CppUseNamespace String
   -- |
-  -- Type alias, e.g. "using T = U" (new name and template types, original name and template types)
+  -- Type alias, e.g. "using T = U" (new name and template types, original type)
   --
-  | CppTypeAlias (String,[(String, Int)]) (String,[(String, Int)]) String
+  | CppTypeAlias (String,[(String, Int)]) Type String
   -- |
   -- A variable introduction and optional initialization
   --

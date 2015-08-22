@@ -86,8 +86,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                   ++ headerDefsBegin mn
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak
-                                                         ++ synonyms -- TODO: dependency sort these
-                                                         ++ datas    -- two groups (and maybe others)
+                                                         ++ (depSortSynonymsAndData $ synonyms ++ datas)
                                                          ++ toHeader optimized
                                                          ++ toHeaderFns optimized
                      ]
@@ -596,7 +595,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     cpps' <- mapM (toCpp tmplts) fns
     let struct' = CppStruct (ctor, classTemplParams ++ [("...", 0)])
                             []
-                            (constraintStrings [] <$> constraints)
+                            (constraintInfo [] <$> constraints)
                             cpps'
                             []
     return (CppComment comms struct')
@@ -662,7 +661,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         tymap = zip (mkTemplate <$> params) typs''
         struct = CppStruct (unqualClass, tmplts')
                            typs''
-                           (constraintStrings tymap <$> constraints)
+                           (constraintInfo tymap <$> constraints)
                            cpps
                            []
     return $ if classmn == mn
@@ -828,10 +827,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   qualifiedToStr' :: (a -> Ident) -> Qualified a -> String
   qualifiedToStr' = qualifiedToStr mn
 
-  constraintStrings :: [(Type, Type)] -> (Qualified ProperName, [T.Type]) -> (String, [String])
-  constraintStrings [] (name, tys) = (qualifiedToStr' (Ident . runProperName) name, typestr mn <$> tys)
-  constraintStrings tymap (name, tys) =
-    (qualifiedToStr' (Ident . runProperName) name, runType . replace <$> catMaybes (mktype mn <$> tys))
+  constraintInfo :: [(Type, Type)] -> (Qualified ProperName, [T.Type]) -> (String, [Type])
+  constraintInfo [] (name, tys) = (qualifiedToStr' (Ident . runProperName) name, catMaybes $ mktype mn <$> tys)
+  constraintInfo tymap (name, tys) =
+    (qualifiedToStr' (Ident . runProperName) name, replace <$> catMaybes (mktype mn <$> tys))
     where
     replace :: Type -> Type
     replace t | Just t' <- lookup t tymap = t'
