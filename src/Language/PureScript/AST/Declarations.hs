@@ -12,7 +12,9 @@
 --
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
 
 module Language.PureScript.AST.Declarations where
 
@@ -21,7 +23,9 @@ import qualified Data.Map as M
 
 import Control.Monad.Identity
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 
 import Language.PureScript.AST.Binders
 import Language.PureScript.AST.Operators
@@ -386,7 +390,7 @@ data Expr
   -- at superclass implementations when searching for a dictionary, the type class name and
   -- instance type, and the type class dictionaries in scope.
   --
-  | TypeClassDictionary Bool Constraint (M.Map (Maybe ModuleName) (M.Map (Qualified ProperName) (M.Map (Qualified Ident) TypeClassDictionaryInScope)))
+  | TypeClassDictionary Constraint (M.Map (Maybe ModuleName) (M.Map (Qualified ProperName) (M.Map (Qualified Ident) TypeClassDictionaryInScope)))
   -- |
   -- A typeclass dictionary accessor, the implementation is left unspecified until CoreFn desugaring.
   --

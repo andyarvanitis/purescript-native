@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards, TupleSections #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module Main where
 
@@ -24,8 +25,11 @@ import PSCi
 import Completion
 import Types
 
+import TestsSetup
+
 main :: IO ()
 main = do
+  fetchSupportCode
   Counts{..} <- runTestTT allTests
   when (errors + failures > 0) exitFailure
 

@@ -12,13 +12,21 @@
 --
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE CPP #-}
+
 module Language.PureScript.AST.Traversals where
 
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid (Monoid(..), mconcat)
+#endif
 import Data.Maybe (mapMaybe)
+#if __GLASGOW_HASKELL__ < 710
 import Data.Traversable (traverse)
+#endif
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Control.Monad
 import Control.Arrow ((***), (+++), second)
 
@@ -396,7 +404,7 @@ accumTypes f = everythingOnValues mappend forDecls forValues (const mempty) (con
   forDecls (TypeDeclaration _ ty) = f ty
   forDecls _ = mempty
 
-  forValues (TypeClassDictionary _ (_, cs) _) = mconcat (map f cs)
+  forValues (TypeClassDictionary (_, cs) _) = mconcat (map f cs)
   forValues (SuperClassDictionary _ tys) = mconcat (map f tys)
   forValues (TypedValue _ _ ty) = f ty
   forValues _ = mempty

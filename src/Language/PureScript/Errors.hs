@@ -15,14 +15,18 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE CPP #-}
 
 module Language.PureScript.Errors where
 
 import Data.Either (lefts, rights)
 import Data.List (intercalate, transpose)
 import Data.Function (on)
-import Data.Monoid
+#if __GLASGOW_HASKELL__ < 710
 import Data.Foldable (fold, foldMap)
+#else
+import Data.Foldable (fold)
+#endif
 
 import qualified Data.Map as M
 
@@ -30,7 +34,9 @@ import Control.Monad
 import Control.Monad.Unify
 import Control.Monad.Writer
 import Control.Monad.Error.Class (MonadError(..))
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>), Applicative, pure)
+#endif
 import Control.Monad.Trans.State.Lazy
 import Control.Arrow(first)
 
@@ -40,7 +46,6 @@ import Language.PureScript.Pretty
 import Language.PureScript.Types
 import Language.PureScript.Names
 import Language.PureScript.Kinds
-import Language.PureScript.TypeClassDictionaries
 
 import qualified Text.PrettyPrint.Boxes as Box
 
@@ -108,8 +113,9 @@ data SimpleErrorMessage
   | TypesDoNotUnify Type Type
   | KindsDoNotUnify Kind Kind
   | ConstrainedTypeUnified Type Type
-  | OverlappingInstances (Qualified ProperName) [Type] [DictionaryValue]
+  | OverlappingInstances (Qualified ProperName) [Type] [Qualified Ident]
   | NoInstanceFound (Qualified ProperName) [Type]
+  | PossiblyInfiniteInstance (Qualified ProperName) [Type]
   | CannotDerive (Qualified ProperName) [Type]
   | CannotFindDerivingType ProperName
   | DuplicateLabel String (Maybe Expr)
@@ -233,6 +239,7 @@ errorCode em = case unwrapErrorMessage em of
   ConstrainedTypeUnified{} -> "ConstrainedTypeUnified"
   OverlappingInstances{} -> "OverlappingInstances"
   NoInstanceFound{} -> "NoInstanceFound"
+  PossiblyInfiniteInstance{} -> "PossiblyInfiniteInstance"
   CannotDerive{} -> "CannotDerive"
   CannotFindDerivingType{} -> "CannotFindDerivingType"
   DuplicateLabel{} -> "DuplicateLabel"
@@ -544,10 +551,12 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
             ]
     goSimple (OverlappingInstances nm ts ds) =
       paras [ line $ "Overlapping instances found for " ++ show nm ++ " " ++ unwords (map prettyPrintTypeAtom ts) ++ ":"
-            , paras $ map prettyPrintDictionaryValue ds
+            , line $ intercalate ", " (map show ds)
             ]
     goSimple (NoInstanceFound nm ts) =
       line $ "No instance found for " ++ show nm ++ " " ++ unwords (map prettyPrintTypeAtom ts)
+    goSimple (PossiblyInfiniteInstance nm ts) =
+      line $ "Instance for " ++ show nm ++ " " ++ unwords (map prettyPrintTypeAtom ts) ++ " is possibly infinite."
     goSimple (CannotDerive nm ts) =
       line $ "Cannot derive " ++ show nm ++ " instance for " ++ unwords (map prettyPrintTypeAtom ts)
     goSimple (CannotFindDerivingType nm) =
@@ -735,19 +744,6 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
 
   indent :: Box.Box -> Box.Box
   indent = Box.moveRight 2
-
-  -- |
-  -- Render a DictionaryValue fit for human consumption in error messages
-  --
-  prettyPrintDictionaryValue :: DictionaryValue -> Box.Box
-  prettyPrintDictionaryValue (LocalDictionaryValue _)           = line "Dictionary in scope"
-  prettyPrintDictionaryValue (GlobalDictionaryValue nm)         = line (show nm)
-  prettyPrintDictionaryValue (DependentDictionaryValue nm args) = paras [ line $ (show nm) ++ " via"
-                                                                        , indent $ paras $ map prettyPrintDictionaryValue args
-                                                                        ]
-  prettyPrintDictionaryValue (SubclassDictionaryValue sup nm _) = paras [ line $ (show nm) ++ " via superclass"
-                                                                        , indent $ prettyPrintDictionaryValue sup
-                                                                        ]
 
   -- |
   -- Pretty print and export declaration

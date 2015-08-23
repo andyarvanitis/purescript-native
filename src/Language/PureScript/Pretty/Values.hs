@@ -13,6 +13,8 @@
 --
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE CPP #-}
+
 module Language.PureScript.Pretty.Values (
     prettyPrintValue,
     prettyPrintBinder,
@@ -25,7 +27,9 @@ import Data.List (intercalate)
 import Control.Arrow ((<+>), runKleisli, second)
 import Control.PatternArrows
 import Control.Monad.State
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 
 import Language.PureScript.AST
 import Language.PureScript.Names
@@ -74,7 +78,7 @@ literals = mkPattern' match
     ]
   match (OperatorSection op (Right val)) = return $ "(" ++ prettyPrintValue op ++ " " ++ prettyPrintValue val ++ ")"
   match (OperatorSection op (Left val)) = return $ "(" ++ prettyPrintValue val ++ " " ++ prettyPrintValue op ++ ")"
-  match (TypeClassDictionary _ (name, tys) _) = return $ "<<dict " ++ show name ++ " " ++ unwords (map prettyPrintTypeAtom tys) ++ ">>"
+  match (TypeClassDictionary (name, tys) _) = return $ "<<dict " ++ show name ++ " " ++ unwords (map prettyPrintTypeAtom tys) ++ ">>"
   match (SuperClassDictionary name _) = return $ "<<superclass dict " ++ show name ++ ">>"
   match (TypedValue _ val _) = prettyPrintValue' val
   match (PositionedValue _ _ val) = prettyPrintValue' val
