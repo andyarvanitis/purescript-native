@@ -36,7 +36,7 @@ A small strongly typed programming language with expressive types that compiles 
 
 #### TO-DO:
 
-* Get automated builds/tests up and running (some work already done)
+* Get automated builds/tests up and running [(some work already done)](https://github.com/andyarvanitis/pure14/blob/pure14-master/pcc/TestMain.hs)
 * Optimized `newtype` (some work already done, but disabled for now)
 * "Magic do" (similar work already done in inliner and TCO code)
 * Unicode (UTF-8) support for `String` (use code from my Idris backend)
