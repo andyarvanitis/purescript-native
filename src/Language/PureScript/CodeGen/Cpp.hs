@@ -226,11 +226,16 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   toLambda :: [CppCaptureType] -> [TemplateInfo] -> Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  toLambda cs encTmplts (CppFunction name tmplts args rtyp qs body) =
-    CppVariableIntroduction (name, ftyp)
-                            (tmplts \\ encTmplts)
-                            (filter (==CppStatic) qs)
-                            (Just (CppLambda cs' args rtyp body))
+  toLambda cs encTmplts cpp@(CppFunction name tmplts args rtyp qs body) =
+    let tmplts' = tmplts \\ encTmplts in
+    case (cs, tmplts') of
+      ((_:_), (_:_)) -> error $ "Rank-N types not supported in C++ backend (unknown line number, "
+                              ++ name ++ " :: forall "
+                              ++ intercalate " " ((\s -> toLower <$> s) . fst <$> tmplts) ++ ". ...)\n"
+      _ -> CppVariableIntroduction (name, ftyp)
+                                   tmplts'
+                                   (filter (==CppStatic) qs)
+                                   (Just (CppLambda cs' args rtyp body))
     where
     cs' | (not . null) (qs `intersect` [CppInline, CppStatic]) = []
         | otherwise = cs
