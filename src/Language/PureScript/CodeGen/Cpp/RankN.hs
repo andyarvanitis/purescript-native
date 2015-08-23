@@ -19,7 +19,6 @@ module Language.PureScript.CodeGen.Cpp.RankN where
 
 import Data.Char
 import Data.List
-import Data.Maybe
 
 import Control.Applicative
 
@@ -63,7 +62,7 @@ replaceRankNVals mn ty vs | (_, f, _) <- everywhereOnValues id go id = f
 
   -- TODO: look for a better way to find these
   --
-  go e@(Abs (ss, com, Just t, a) v body)
+  go (Abs (ss, com, Just t, a) v body)
    | Just ftyp <- mktype mn t,
      Just typ <- ty >>= mktype mn,
      ftmplts@(_:_) <- templateVars ftyp,
@@ -113,8 +112,6 @@ rankNWrapper tmplts cpp = CppLambda []
   tmplts' = nub . sort $ runType <$> tmplts
   typeAlias :: String -> Cpp
   typeAlias t = CppTypeAlias (t, []) (DeclType ('_' : t)) []
-  removeConst :: String -> String
-  removeConst t = "typename remove_const<" ++ t ++ ">::type"
 
 -- TODO: what about shadowed names?
 --
@@ -129,6 +126,6 @@ getRankNVals | (_, f, _, _) <- everythingOnValues (++) (const []) go (const []) 
   go (Abs (_, _, Just t, _) v _)
     | T.everythingOnTypes (||) (not . T.isMonoType) t = [(Qualified Nothing v, argty t)]
     where
-    argty (T.TypeApp (T.TypeApp ctor@(T.TypeConstructor _) a) b) | ctor == E.tyFunction = a
+    argty (T.TypeApp (T.TypeApp ctor@(T.TypeConstructor _) a) _) | ctor == E.tyFunction = a
     argty a = a
   go _ = []

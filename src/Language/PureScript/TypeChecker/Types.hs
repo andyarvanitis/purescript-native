@@ -453,7 +453,6 @@ check' val (ForAll ident ty _) = do
 check' val t@(ConstrainedType constraints ty) = do
   dictNames <- forM constraints $ \(Qualified mn' (ProperName className), _) -> do
     n <- liftCheck freshDictionaryName
-    return $ Ident $ "__dict_" ++ className ++ "_" ++ show n
     return $ Ident $ "__dict_" ++ (maybe "" ((++ ".") . runModuleName) mn') ++ className ++ "_" ++ show n
   dicts <- join <$> liftCheck (zipWithM (newDictionaries []) (map (Qualified Nothing) dictNames) constraints)
   val' <- withBindingGroupVisible $ withTypeClassDictionaries dicts $ check val ty

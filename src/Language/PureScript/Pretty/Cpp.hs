@@ -39,7 +39,7 @@ import Language.PureScript.Pretty.Common
 
 import Numeric
 
-import Debug.Trace
+-- import Debug.Trace
 
 literals :: Pattern PrinterState Cpp String
 literals = mkPattern' match

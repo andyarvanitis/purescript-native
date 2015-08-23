@@ -58,7 +58,7 @@ import qualified Language.PureScript.Pretty.Cpp as P
 import qualified Language.PureScript.TypeClassDictionaries as TCD
 import qualified Language.PureScript.Types as T
 
-import Debug.Trace
+-- import Debug.Trace
 
 -- |
 -- Generate code in the simplified C++14 intermediate representation for all declarations in a
@@ -128,7 +128,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   declToCpp ident (Literal ann@(_, _, _, Just IsTypeClassConstructor) (ObjectLiteral [])) =
     mkTypeClass ident ann
 
-  declToCpp ident (Abs ann@(_, _, _, Just IsNewtype) _ _) =
+  declToCpp _ (Abs (_, _, _, Just IsNewtype) _ _) =
     return CppNoOp
 
   -- Typeclass instance definitions
@@ -139,13 +139,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       _ -> mkInstance ident val
 
   -- TODO: fix when appropriate Meta info added
-  declToCpp ident (Abs _ (Ident "dict") (Accessor _ _ (Var _ (Qualified Nothing (Ident "dict"))))) =
+  declToCpp _ (Abs _ (Ident "dict") (Accessor _ _ (Var _ (Qualified Nothing (Ident "dict"))))) =
     return CppNoOp
 
   declToCpp ident (Abs ann arg body) =
     mkFunction [] ident ann arg body []
 
-  declToCpp ident (Constructor {}) =
+  declToCpp _ (Constructor {}) =
     return CppNoOp
 
   declToCpp ident val@(App ann@(_, _, Just ty, _) _ _) | Just EffectFunction {} <- mktype mn ty =
@@ -180,7 +180,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       asFunction encTmplts ident ann body qs
 
   -- This covers 'let' expressions
-  mkFunction _ ident ann@(_, com, Nothing, _) arg body qs = do
+  mkFunction _ ident (_, _, Nothing, _) arg body _ = do
     block <- asReturnBlock <$> valueToCpp body
     return $ CppVariableIntroduction (identToCpp ident, Nothing)
                                      []
@@ -190,7 +190,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                                       Nothing
                                                       block))
 
-  mkFunction encTmplts ident ann@(_, com, ty, _) arg body qs = do
+  mkFunction encTmplts ident (_, com, ty, _) arg body qs = do
     let typ = ty >>= mktype mn
         tmplts = tmpltsReplFromRight (templparams' typ) (filter isParameterized $ templparams' typ)
     block <- asReturnBlock <$> valueToCpp body
@@ -226,7 +226,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   toLambda :: [CppCaptureType] -> [TemplateInfo] -> Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  toLambda cs encTmplts cpp@(CppFunction name tmplts args rtyp qs body) =
+  toLambda cs encTmplts (CppFunction name tmplts args rtyp qs body) =
     let tmplts' = tmplts \\ encTmplts in
     case (cs, tmplts') of
       ((_:_), (_:_)) -> error $ "Rank-N types not supported in C++ backend (unknown line number, "
@@ -465,7 +465,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       go _ _ _ = error "Invalid arguments to bindersToCpp"
 
       failedPatternError :: [String] -> Cpp
-      failedPatternError names =
+      failedPatternError _ =
         CppThrow $ CppApp (CppVar "runtime_error") [CppStringLiteral errorMessage]
 
       errorMessage :: String
@@ -530,7 +530,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         convert cpp = cpp
         qtyp :: Maybe Type
         qtyp = Just (Native (qualifiedToStr' (Ident . runProperName) ctor) [])
-    addTypes _ cpp = return cpp
 
   binderToCpp _ _ b@(ConstructorBinder{}) =
     error $ "Invalid ConstructorBinder in binderToCpp: " ++ show b
@@ -636,6 +635,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         tmplts'@(_:_) <- filter ((`notElem` tmplts) . fst) $ templparams' typ = do
         return $ CppVariableIntroduction (name, typ) tmplts' [CppStatic] Nothing
     toCpp _ (name, ty) = return $ CppVariableIntroduction (name, mktype mn ty) [] [CppStatic] Nothing
+  mkTypeClass _ _ = return CppNoOp
 
   -------------------------------------------------------------------------------------------------
   mkInstance :: Ident -> Expr Ann -> m Cpp
@@ -674,16 +674,15 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                else CppNamespace ("::" ++ runModuleName classmn) [CppUseNamespace (runModuleName mn), struct]
     where
     toCpp :: [TemplateInfo] -> ((String, T.Type), Expr Ann) -> m Cpp
-    toCpp tmplts ((name, ty'), Abs ann'@(_, _, Just ty, _) a b) = do
+    toCpp tmplts ((name, ty'), Abs ann'@(_, _, Just _, _) a b) = do
       fn <- mkFunction tmplts (Ident name) ann' a b [CppStatic]
       return $ case mktype mn ty' of Just Function {} -> fn
                                      Just _ -> toLambda [] [] fn
                                      _ -> fn
 
-    toCpp tmplts ((name, _), e) -- convert these templated vars to inline functions
+    toCpp tmplts ((name, _), e) -- convert these vars to inline functions
       | Just ty <- tyFromExpr e,
-        typ@(Just Function{}) <- mktype mn ty,
-        tmplts' <- templparams' typ
+        Just Function {} <- mktype mn ty
         = asFunction tmplts (Ident name) (Nothing, [], Just ty, Nothing) e [CppInline, CppStatic]
 
     toCpp tmplts ((name, _), e)
