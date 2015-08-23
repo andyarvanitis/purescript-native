@@ -29,7 +29,7 @@ import Control.Monad
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.Trans.Except
 import Control.Monad.Reader
-import Control.Monad.Writer
+import Control.Monad.Writer.Strict
 
 import Data.FileEmbed (embedFile)
 import Data.List (intercalate)
