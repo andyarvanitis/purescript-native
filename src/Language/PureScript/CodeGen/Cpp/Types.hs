@@ -408,8 +408,8 @@ templateMappings = sortBy (compare `on` runType . fst) . nub . go []
       args ++ (Template t [], Array anytype) : (go [] (a, a'))
     go args (Template t ts, Native t' ts') | length ts == length ts' =
       args ++ (Template t [], Native t' []) : concatMap (go []) (zip ts ts')
-    go args (Template t _, Native t' []) =
-      args ++ [(Template t [], Native t' [])]
+    go args (Template t ts, Native t' []) =
+      args ++ [(Template t ts, Native t' ts)]
     go args (a@DeclType{}, a') = args ++ [(a, a')]
     go args (Function a b, Function a' b') = args ++ (go [] (a, a')) ++ (go [] (b, b'))
     go args (Array t, Array t') = go args (t, t')
