@@ -140,7 +140,7 @@ skipped =
   , "CheckTypeClass.purs" -- rank-N
   , "Church.purs"         -- rank-N
   , "Collatz.purs"        -- rank-N (runPure)
-  , "Do.purs"             -- rank-N
+  , "Do.purs"             -- rank-N, also mutually recursive lets
   , "Dollar.purs"
   , "Eff.purs" -- rank-N (runPure)
   , "EmptyDataDecls.purs"
@@ -152,8 +152,8 @@ skipped =
   , "IfThenElseMaybe.purs"
   , "IntAndChar.purs"
   , "KindedType.purs" -- KindedType
-  , "Let.purs"
-  , "Let2.purs"
+  , "Let.purs" -- rank-N
+  , "Let2.purs" -- mutually recursive lets
   , "LetInInstance.purs"
   , "LiberalTypeSynonyms.purs" -- rank-N
   , "MPTCs.purs"
@@ -167,7 +167,7 @@ skipped =
   , "Newtype.purs"
   , "NewtypeEff.purs"
   , "NewtypeWithRecordUpdate.purs" -- extend obj
-  , "NestedWhere.purs"
+  , "NestedWhere.purs" -- mutually recursive where
   , "ObjectGetter.purs"
   , "ObjectSynonym.purs"
   , "ObjectUpdate.purs" -- extend obj
@@ -200,7 +200,6 @@ skipped =
   , "TypeClasses.purs"
   , "TypeSynonymInData.purs"
   , "TypeSynonyms.purs"
-  , "TypedWhere.purs"
-  , "UnderscoreIdent.purs"
-  , "Where.purs"
+  , "TypedWhere.purs" -- rank-N
+  , "Where.purs" -- rank-N
   ]
