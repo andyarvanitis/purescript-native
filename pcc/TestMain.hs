@@ -172,7 +172,6 @@ skipped =
   , "ObjectUpdate.purs" -- extend obj
   , "ObjectUpdate2.purs" -- extend obj
   , "ObjectUpdater.purs" -- extend obj
-  , "ObjectWildcards.purs"
   , "Objects.purs"
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OperatorSections.purs"
@@ -191,7 +190,6 @@ skipped =
   , "ScopedTypeVariables.purs" -- rank-N
   , "Sequence.purs"
   , "SequenceDesugared.purs" -- rank-N
-  , "Superclasses2.purs"
   , "Superclasses3.purs"
   , "TCOCase.purs"
   , "TailCall.purs"

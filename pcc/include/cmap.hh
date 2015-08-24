@@ -144,16 +144,16 @@ namespace PureScript {
 #define make_cmap(...) MACRO_VARIANT(MAKE_CMAP, __VA_ARGS__)(__VA_ARGS__)
 
 //-----------------------------------------------------------------------------
-#define MAKE_CMAP_2(k, v) cmap<k, decltype(v)>(v)
+#define MAKE_CMAP_2(k, v) cmap<k, typename std::add_const<typename std::remove_reference<decltype(v)>::type>::type>(v)
 #define MAKE_CMAP_4(k0, v0, \
-                    k1, v1) cmap<k0, decltype(v0), \
-                                 k1, decltype(v1)> \
+                    k1, v1) cmap<k0, typename std::add_const<typename std::remove_reference<decltype(v0)>::type>::type, \
+                                 k1, typename std::add_const<typename std::remove_reference<decltype(v1)>::type>::type> \
                                 (v0, v1)
 #define MAKE_CMAP_6(k0, v0, \
                     k1, v1, \
-                    k2, v2) cmap<k0, decltype(v0), \
-                                 k1, decltype(v1), \
-                                 k2, decltype(v2)> \
-                                (v0, v1, v3)
+                    k2, v2) cmap<k0, typename std::add_const<typename std::remove_reference<decltype(v0)>::type>::type, \
+                                 k1, typename std::add_const<typename std::remove_reference<decltype(v1)>::type>::type, \
+                                 k2, typename std::add_const<typename std::remove_reference<decltype(v2)>::type>::type> \
+                                (v0, v1, v2)
 
 #endif // PureScript_cmap_HH
