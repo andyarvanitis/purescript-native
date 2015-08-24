@@ -160,9 +160,8 @@ skipped =
   , "Monad.purs" -- rank-N
   , "MonadState.purs"
   , "MultiArgFunctions.purs" -- uses package purescript-functions
-  , "MutRec.purs"
-  , "MutRec2.purs"
-  , "MutRec3.purs"
+  , "MutRec2.purs" -- incompatible test, uses foreign data (would pass otherwise)
+  , "MutRec3.purs" -- incompatible test, uses foreign data (would pass otherwise)
   , "Nested.purs"
   , "Newtype.purs"
   , "NewtypeEff.purs"
@@ -177,7 +176,6 @@ skipped =
   , "OperatorSections.purs"
   , "Operators.purs"
   , "PartialFunction.purs" -- assertThrows ?
-  , "Person.purs"
   , "Rank2Data.purs"        -- rank-N
   , "Rank2Object.purs"      -- rank-N
   , "Rank2TypeSynonym.purs" -- rank-N

@@ -501,7 +501,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let ctor' = qualifiedToStr' (Ident . runProperName) ctor
     cpps' <- forM cpps (addTypes (CppVar varName))
     return $ case ctorType of
-      ProductType -> cpps
+      ProductType -> cpps'
       SumType ->
         [ CppIfElse (CppInstanceOf (CppVar varName) (CppData ctor' []))
                     (CppBlock cpps')
