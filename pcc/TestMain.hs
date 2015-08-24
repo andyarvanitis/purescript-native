@@ -169,7 +169,6 @@ skipped =
   , "NewtypeWithRecordUpdate.purs" -- extend obj
   , "NestedWhere.purs" -- mutually recursive where
   , "ObjectGetter.purs"
-  , "ObjectSynonym.purs"
   , "ObjectUpdate.purs" -- extend obj
   , "ObjectUpdate2.purs" -- extend obj
   , "ObjectUpdater.purs" -- extend obj

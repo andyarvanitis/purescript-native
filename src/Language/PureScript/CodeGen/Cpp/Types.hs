@@ -133,7 +133,7 @@ runType (Map []) = "nullptr_t"
 runType tt@(Map fields) = typeName tt ++ "<" ++ (intercalate ", " $ map runField fields) ++ ">"
   where
   runField :: (String, Type) -> String
-  runField (name, typ) = show name ++ "_key" ++ ", " ++ runType typ
+  runField (name, typ) = show name ++ "_key" ++ ", const " ++ runType typ
 runType tt@(TypeConstructor mn t) = mn ++ "::" ++ typeName tt ++ runType t ++ "::template _"
 runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
 runType tt@(Template t []) = typeName tt ++ capitalize t
