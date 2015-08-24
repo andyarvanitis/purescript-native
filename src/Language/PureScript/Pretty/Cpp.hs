@@ -49,6 +49,7 @@ literals = mkPattern' match
   match CppEndOfHeader = return []
   match (CppNumericLiteral n) = return $ either show show n
   match (CppStringLiteral s) = return $ string s ++ "s"
+  match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
   match (CppArrayLiteral t xs) = fmap concat $ sequence

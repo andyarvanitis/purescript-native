@@ -142,6 +142,10 @@ data Cpp
   --
   | CppStringLiteral String
   -- |
+  -- A character literal
+  --
+  | CppCharLiteral Char
+  -- |
   -- A boolean literal
   --
   | CppBooleanLiteral Bool

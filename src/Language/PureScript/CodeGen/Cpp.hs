@@ -322,7 +322,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return (CppStringLiteral s)
 
   valueToCpp (Literal _ (CharLiteral c)) =
-    return (CppStringLiteral [c]) -- TODO: Create CppCharLiteral
+    return (CppCharLiteral c)
 
   valueToCpp (Literal _ (BooleanLiteral b)) =
     return (CppBooleanLiteral b)
@@ -545,7 +545,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return [CppIfElse (CppBinary Equal (CppVar varName) (CppNumericLiteral num)) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (CharLiteral c) =
-    return [CppIfElse (CppBinary Equal (CppVar varName) (CppStringLiteral [c])) (CppBlock done) Nothing]
+    return [CppIfElse (CppBinary Equal (CppVar varName) (CppCharLiteral c)) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (StringLiteral str) =
     return [CppIfElse (CppBinary Equal (CppVar varName) (CppStringLiteral str)) (CppBlock done) Nothing]

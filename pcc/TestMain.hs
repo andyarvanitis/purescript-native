@@ -150,7 +150,6 @@ skipped =
   , "Fib.purs" -- runST
   , "FinalTagless.purs" -- rank-N
   , "IfThenElseMaybe.purs"
-  , "IntAndChar.purs"
   , "KindedType.purs" -- KindedType
   , "Let.purs" -- rank-N
   , "Let2.purs" -- mutually recursive lets
