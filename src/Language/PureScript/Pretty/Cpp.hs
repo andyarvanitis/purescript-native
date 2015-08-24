@@ -186,7 +186,8 @@ literals = mkPattern' match
     ]
   match (CppStruct (name, []) typs@(_:_) [] [] []) = fmap concat $ sequence $
     [ return $ "EXTERN "
-    , return $ parens ("template struct " ++ classstr (name, typs))
+    , return . parens $ let s = "template struct " ++ classstr (name, typs) in
+                        if ',' `elem` s then parens s else s
     , return ";"
     ]
   match (CppStruct (name, params) typs supers cms ims) = fmap concat $ sequence $

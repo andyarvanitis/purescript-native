@@ -188,7 +188,6 @@ skipped =
   , "ScopedTypeVariables.purs" -- rank-N
   , "Sequence.purs"
   , "SequenceDesugared.purs" -- rank-N
-  , "Superclasses3.purs"
   , "TCOCase.purs"
   , "TailCall.purs"
   , "TopLevelCase.purs"
