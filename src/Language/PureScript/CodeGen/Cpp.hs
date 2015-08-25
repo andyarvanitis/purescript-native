@@ -755,8 +755,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           allTemplates = fromMaybe [] $ templateMappings <$> (liftM2 (,) declType exprType)
           templateChanges = onlyChanges allTemplates
           instArgs' = fixInstArg templateChanges <$> instArgs
-          instanceTmplts = concatMap paramTmplts instArgs
-          tmplts = snd <$> filter (\(t, _) -> t `notElem` instanceTmplts) allTemplates
+          instanceTmplts = concatMap paramTmplts instArgs'
+          tmplts = snd <$> filter (\(_, t) -> t `notElem` instanceTmplts) allTemplates
       return $ flip (foldl (\fn' a -> CppApp fn' [a])) (instArgs' ++ normArgs) (asTemplate tmplts f')
     where
       instanceArg :: String -> Cpp -> Bool

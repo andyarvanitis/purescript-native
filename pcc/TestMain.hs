@@ -185,7 +185,6 @@ skipped =
   , "RowPolyInstanceContext.purs" -- extend obj
   , "RuntimeScopeIssue.purs"
   , "ScopedTypeVariables.purs" -- rank-N
-  , "Sequence.purs"
   , "SequenceDesugared.purs" -- rank-N
   , "TCOCase.purs"
   , "TailCall.purs"
