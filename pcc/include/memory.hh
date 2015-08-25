@@ -16,7 +16,6 @@
 #define PS_memory_HH
 
 #include <memory>
-#include "bind.hh"
 
 namespace PureScript {
 
@@ -33,12 +32,6 @@ template <typename T, typename... ArgTypes>
 constexpr auto construct(ArgTypes... args) ->
     typename std::enable_if<!std::is_assignable<std::shared_ptr<void>,T>::value,std::shared_ptr<T>>::type {
   return std::make_shared<T>(args...);
-}
-
-template <typename Ctor, typename... CArgs, typename... Args>
-constexpr auto constructor(Args&&... args) ->
-    decltype(Private::Bind<sizeof...(CArgs) - sizeof...(Args)>::bind(construct<Ctor, CArgs...>,std::forward<Args>(args)...)) {
-  return Private::Bind<sizeof...(CArgs) - sizeof...(Args)>::bind(construct<Ctor, CArgs...>, std::forward<Args>(args)...);
 }
 
 namespace Private {
