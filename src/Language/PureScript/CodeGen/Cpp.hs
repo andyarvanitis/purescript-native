@@ -398,9 +398,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       _ -> -- TODO: verify this
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
 
-  valueToCpp (Case (maybeSpan, _, _, _) values binders) = do
+  valueToCpp (Case (maybeSpan, _, ty, _) values binders) = do
     vals <- mapM valueToCpp values
-    bindersToCpp maybeSpan binders vals
+    bindersToCpp maybeSpan ty binders vals
 
   valueToCpp (Let _ ds val) = do
     ds' <- concat <$> mapM bindToCpp ds
@@ -425,9 +425,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -- and guards.
   --
   -------------------------------------------------------------------------------------------------
-  bindersToCpp :: Maybe SourceSpan -> [CaseAlternative Ann] -> [Cpp] -> m Cpp
+  bindersToCpp :: Maybe SourceSpan -> Maybe T.Type -> [CaseAlternative Ann] -> [Cpp] -> m Cpp
   -------------------------------------------------------------------------------------------------
-  bindersToCpp maybeSpan binders vals = do
+  bindersToCpp maybeSpan ty binders vals = do
     valNames <- replicateM (length vals) freshName
     let assignments = zipWith mkVarDecl valNames (map Just vals)
     cpps <- forM binders $ \(CaseAlternative bs result) -> do
@@ -435,7 +435,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       go valNames ret bs
     return $ CppApp (CppLambda [CppCaptureAll]
                                []
-                               Nothing
+                               (ty >>= mktype mn)
                                (CppBlock (assignments ++ concat cpps ++ [failedPatternError valNames]))) []
     where
       mkVarDecl :: String -> Maybe Cpp -> Cpp
