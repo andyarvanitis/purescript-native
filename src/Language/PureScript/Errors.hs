@@ -50,6 +50,9 @@ import Language.PureScript.Kinds
 import qualified Text.PrettyPrint.Boxes as Box
 
 import qualified Text.Parsec as P
+import qualified Text.Parsec.Error as PE
+import Text.Parsec.Error (Message(..))
+import Data.List (nub)
 
 -- |
 -- A type of error messages
@@ -86,6 +89,7 @@ data SimpleErrorMessage
   | UnknownExportTypeClass ProperName
   | UnknownImportValue ModuleName Ident
   | UnknownExportValue Ident
+  | UnknownExportModule ModuleName
   | UnknownImportDataConstructor ModuleName ProperName ProperName
   | UnknownExportDataConstructor ProperName ProperName
   | ConflictingImport String ModuleName
@@ -141,6 +145,7 @@ data SimpleErrorMessage
   | OverlappingPattern [[Binder]] Bool
   | ClassOperator ProperName Ident
   | MisleadingEmptyTypeImport ModuleName ProperName
+  | ImportHidingModule ModuleName
   deriving (Show)
 
 -- |
@@ -210,6 +215,7 @@ errorCode em = case unwrapErrorMessage em of
   UnknownExportTypeClass{} -> "UnknownExportTypeClass"
   UnknownImportValue{} -> "UnknownImportValue"
   UnknownExportValue{} -> "UnknownExportValue"
+  UnknownExportModule{} -> "UnknownExportModule"
   UnknownImportDataConstructor{} -> "UnknownImportDataConstructor"
   UnknownExportDataConstructor{} -> "UnknownExportDataConstructor"
   ConflictingImport{} -> "ConflictingImport"
@@ -265,6 +271,7 @@ errorCode em = case unwrapErrorMessage em of
   OverlappingPattern{} -> "OverlappingPattern"
   ClassOperator{} -> "ClassOperator"
   MisleadingEmptyTypeImport{} -> "MisleadingEmptyTypeImport"
+  ImportHidingModule{} -> "ImportHidingModule"
 
 -- |
 -- A stack trace for an error
@@ -392,7 +399,7 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
   prettyPrintErrorMessage em =
     paras $
       go em:suggestions em ++
-      [line $ "See " ++ wikiUri ++ " for more information, or to contribute content related to this error."]
+      [line $ "See " ++ wikiUri ++ " for more information, or to contribute content related to this " ++ levelText ++ "."]
     where
     wikiUri :: String
     wikiUri = "https://github.com/purescript/purescript/wiki/Error-Code-" ++ errorCode e
@@ -412,7 +419,7 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
             ]
     goSimple (ErrorParsingExterns err) =
       paras [ lineWithLevel "parsing externs files: "
-            , indent . line . show $ err
+            , indent . prettyPrintParseError $ err
             ]
     goSimple (ErrorParsingFFIModule path) =
       paras [ line "Unable to parse module from FFI file: "
@@ -420,7 +427,7 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
             ]
     goSimple (ErrorParsingModule err) =
       paras [ line "Unable to parse module: "
-            , indent . line . show $ err
+            , indent . prettyPrintParseError $ err
             ]
     goSimple (MissingFFIModule mn) =
       line $ "Missing FFI implementations for module " ++ show mn
@@ -488,6 +495,8 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
       line $ "Module " ++ show mn ++ " does not export value " ++ show name
     goSimple (UnknownExportValue name) =
       line $ "Cannot export unknown value " ++ show name
+    goSimple (UnknownExportModule name) =
+      line $ "Cannot export unknown module " ++ show name ++ ", it either does not exist or has not been imported by the current module"
     goSimple (UnknownImportDataConstructor mn tcon dcon) =
       line $ "Module " ++ show mn ++ " does not export data constructor " ++ show dcon ++ " for type " ++ show tcon
     goSimple (UnknownExportDataConstructor tcon dcon) =
@@ -549,10 +558,11 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
             , line "with type"
             , indent $ line $ prettyPrintType t2
             ]
-    goSimple (OverlappingInstances nm ts ds) =
+    goSimple (OverlappingInstances nm ts (d : ds)) =
       paras [ line $ "Overlapping instances found for " ++ show nm ++ " " ++ unwords (map prettyPrintTypeAtom ts) ++ ":"
-            , line $ intercalate ", " (map show ds)
+            , indent $ paras (line (show d ++ " (chosen)") : map (line . show) ds)
             ]
+    goSimple OverlappingInstances{} = error "OverlappingInstances: empty instance list"
     goSimple (NoInstanceFound nm ts) =
       line $ "No instance found for " ++ show nm ++ " " ++ unwords (map prettyPrintTypeAtom ts)
     goSimple (PossiblyInfiniteInstance nm ts) =
@@ -619,6 +629,8 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
             ]
     goSimple (MisleadingEmptyTypeImport mn name) =
       line $ "Importing type " ++ show name ++ "(..) from " ++ show mn ++ " is misleading as it has no exported data constructors"
+    goSimple (ImportHidingModule name) =
+      line $ "Attempted to hide module " ++ show name ++ " in import expression, this is not permitted"
     goSimple (WildcardInferredType ty) =
       line $ "The wildcard type definition has the inferred type " ++ prettyPrintType ty
     goSimple (NotExhaustivePattern bs b) =
@@ -722,11 +734,13 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
             ]
     go (SimpleErrorWrapper sem) = goSimple sem
 
-  line :: String -> Box.Box
-  line = Box.text
-
   lineWithLevel :: String -> Box.Box
   lineWithLevel text = line $ show level ++ " " ++ text
+
+  levelText :: String
+  levelText = case level of
+    Error -> "error"
+    Warning -> "warning"
 
   suggestions :: ErrorMessage -> [Box.Box]
   suggestions = suggestions' . unwrapErrorMessage
@@ -741,9 +755,6 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
 
   paras :: [Box.Box] -> Box.Box
   paras = Box.vcat Box.left
-
-  indent :: Box.Box -> Box.Box
-  indent = Box.moveRight 2
 
   -- |
   -- Pretty print and export declaration
@@ -822,6 +833,60 @@ prettyPrintMultipleErrorsWith level _ intro full  (MultipleErrors es) = do
                       , Box.vsep 1 Box.left result
                       ]
 
+-- | Pretty print a Parsec ParseError as a Box
+prettyPrintParseError :: P.ParseError -> Box.Box
+prettyPrintParseError = (prettyPrintParseErrorMessages "or" "unknown parse error" "expecting" "unexpected" "end of input") . PE.errorMessages
+
+-- |
+-- Pretty print ParseError detail messages.
+--
+-- Adapted from 'Text.Parsec.Error.showErrorMessages', see <https://github.com/aslatter/parsec/blob/v3.1.9/Text/Parsec/Error.hs#L173>.
+--
+prettyPrintParseErrorMessages :: String -> String -> String -> String -> String -> [Message] -> Box.Box
+prettyPrintParseErrorMessages msgOr msgUnknown msgExpecting msgUnExpected msgEndOfInput msgs
+  | null msgs = Box.text msgUnknown
+  | otherwise = Box.vcat Box.left $ map Box.text $ clean [showSysUnExpect,showUnExpect,showExpect,showMessages]
+
+  where
+  (sysUnExpect,msgs1) = span ((SysUnExpect "") ==) msgs
+  (unExpect,msgs2)    = span ((UnExpect    "") ==) msgs1
+  (expect,messages)   = span ((Expect      "") ==) msgs2
+
+  showExpect      = showMany msgExpecting expect
+  showUnExpect    = showMany msgUnExpected unExpect
+  showSysUnExpect | not (null unExpect) ||
+                    null sysUnExpect = ""
+                  | null firstMsg    = msgUnExpected ++ " " ++ msgEndOfInput
+                  | otherwise        = msgUnExpected ++ " " ++ firstMsg
+    where
+    firstMsg  = PE.messageString (head sysUnExpect)
+
+  showMessages      = showMany "" messages
+
+  -- helpers
+  showMany pre msgs' = case clean (map PE.messageString msgs') of
+                         [] -> ""
+                         ms | null pre  -> commasOr ms
+                            | otherwise -> pre ++ " " ++ commasOr ms
+
+  commasOr []       = ""
+  commasOr [m]      = m
+  commasOr ms       = commaSep (init ms) ++ " " ++ msgOr ++ " " ++ last ms
+
+  commaSep          = separate ", " . clean
+
+  separate   _ []     = ""
+  separate   _ [m]    = m
+  separate sep (m:ms) = m ++ sep ++ separate sep ms
+
+  clean             = nub . filter (not . null)
+
+indent :: Box.Box -> Box.Box
+indent = Box.moveRight 2
+
+line :: String -> Box.Box
+line = Box.text
+
 renderBox :: Box.Box -> String
 renderBox = unlines . map trimEnd . lines . Box.render
   where
@@ -841,6 +906,9 @@ interpretMultipleErrorsAndWarnings (err, ws) = do
 rethrow :: (MonadError e m) => (e -> e) -> m a -> m a
 rethrow f = flip catchError $ \e -> throwError (f e)
 
+warnAndRethrow :: (MonadError e m, MonadWriter e m) => (e -> e) -> m a -> m a
+warnAndRethrow f = rethrow f . censor f
+
 -- |
 -- Rethrow an error with source position information
 --
@@ -849,6 +917,9 @@ rethrowWithPosition pos = rethrow (onErrorMessages (withPosition pos))
 
 warnWithPosition :: (MonadWriter MultipleErrors m) => SourceSpan -> m a -> m a
 warnWithPosition pos = censor (onErrorMessages (withPosition pos))
+
+warnAndRethrowWithPosition :: (MonadError MultipleErrors m, MonadWriter MultipleErrors m) => SourceSpan -> m a -> m a
+warnAndRethrowWithPosition pos = rethrowWithPosition pos . warnWithPosition pos
 
 withPosition :: SourceSpan -> ErrorMessage -> ErrorMessage
 withPosition _ (PositionedError pos err) = withPosition pos err
