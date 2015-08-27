@@ -188,7 +188,6 @@ skipped =
   , "SequenceDesugared.purs" -- rank-N
   , "TCOCase.purs"
   , "TailCall.purs"
-  , "TopLevelCase.purs"
   , "TypeClasses.purs"
   , "TypeSynonymInData.purs"
   , "TypeSynonyms.purs"
