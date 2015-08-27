@@ -348,10 +348,15 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Accessor _ prop val) =
     CppIndexer <$> pure (CppVar prop) <*> valueToCpp val
 
-  valueToCpp (ObjectUpdate _ obj ps) = do
+  valueToCpp (ObjectUpdate (_, _, Just ty, _) obj ps)
+    | Just (Map allKeys) <- mktype mn ty = do
     obj' <- valueToCpp obj
-    ps' <- mapM (sndM valueToCpp) ps
-    extendObj obj' ps'
+    updatedFields <- mapM (sndM valueToCpp) ps
+    let origKeys = (fst <$> allKeys) \\ (fst <$> updatedFields)
+        origFields = (\key -> (key, CppMapAccessor (CppStringLiteral key) obj')) <$> origKeys
+    return $ CppObjectLiteral . sortBy (compare `on` fst) $ origFields ++ updatedFields
+
+  valueToCpp (ObjectUpdate _ _ _) = error $ "Bad Type in object update!"
 
   valueToCpp e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
     error $ "** IsTypeClassConstructor **\n" ++ show e
@@ -404,28 +409,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp (Constructor {}) =
     return CppNoOp
-
-  -- |
-  -- Shallow copy an object.
-  --
-  -------------------------------------------------------------------------------------------------
-  extendObj :: Cpp -> [(String, Cpp)] -> m Cpp
-  -------------------------------------------------------------------------------------------------
-  extendObj = error "Extend obj TBD"
-  -- extendObj obj sts = do
-  --   newObj <- freshName
-  --   key <- freshName
-  --   let
-  --     cppKey = CppVar key
-  --     cppNewObj = CppVar newObj
-  --     block = CppBlock (objAssign:copy:extend ++ [CppReturn cppNewObj])
-  --     objAssign = CppVariableIntroduction newObj (Just $ CppObjectLiteral [])
-  --     copy = CppForIn key obj $ CppBlock [CppIfElse cond assign Nothing]
-  --     cond = CppApp (CppAccessor "hasOwnProperty" obj) [cppKey]
-  --     assign = CppBlock [CppAssignment (CppIndexer cppKey cppNewObj) (CppIndexer cppKey obj)]
-  --     stToAssign (s, cpp) = CppAssignment (CppAccessor s cppNewObj) cpp
-  --     extend = map stToAssign sts
-  --   return $ CppApp (CppFunction Nothing [] block) []
 
   -- |
   -- Generate code in the simplified C++14 intermediate representation for a reference to a

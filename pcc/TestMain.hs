@@ -167,7 +167,6 @@ skipped =
   , "NewtypeWithRecordUpdate.purs" -- extend obj
   , "NestedWhere.purs" -- mutually recursive where
   , "ObjectGetter.purs"
-  , "ObjectUpdate.purs" -- extend obj
   , "ObjectUpdate2.purs" -- extend obj
   , "ObjectUpdater.purs" -- extend obj
   , "Objects.purs"
@@ -180,7 +179,6 @@ skipped =
   , "Rank2TypeSynonym.purs" -- rank-N
   , "Rank2Types.purs"       -- rank-N
   , "RebindableSyntax.purs"
-  , "ReservedWords.purs" -- extend obj
   , "RowConstructors.purs"
   , "RowPolyInstanceContext.purs" -- extend obj
   , "RuntimeScopeIssue.purs"
