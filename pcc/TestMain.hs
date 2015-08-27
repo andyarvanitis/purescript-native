@@ -146,6 +146,7 @@ skipped =
   , "EmptyDataDecls.purs"
   , "EmptyRow.purs"
   , "EmptyTypeClass.purs"
+  , "ExplicitImportReExport.purs" -- Object
   , "ExtendedInfixOperators.purs" -- uses package purescript-functions
   , "Fib.purs" -- runST
   , "FinalTagless.purs" -- rank-N
@@ -173,6 +174,8 @@ skipped =
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OperatorSections.purs"
   , "Operators.purs"
+  , "OverlappingInstances.purs"  -- ok, should fail with C++
+  , "OverlappingInstances2.purs" -- ok, should fail with C++
   , "PartialFunction.purs" -- assertThrows ?
   , "Rank2Data.purs"        -- rank-N
   , "Rank2Object.purs"      -- rank-N
