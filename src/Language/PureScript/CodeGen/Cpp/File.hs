@@ -29,7 +29,6 @@ import Language.PureScript.Names
 import qualified Language.PureScript.Pretty.Cpp as P
 import qualified Language.PureScript.Pretty.Common as P
 
-
 ---------------------------------------------------------------------------------------------------
 toHeader :: [Cpp] -> [Cpp]
 ---------------------------------------------------------------------------------------------------
@@ -61,6 +60,8 @@ toHeader = catMaybes . map go
       CppVariableIntroduction (name, typ) tmps qs Nothing
     fromConst cpp = cpp
   go cpp@(CppStruct{}) = Just cpp
+  go (CppFunction _ _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just AutoType
+    = Just CppNoOp
   go (CppFunction name tmplts args rtyp qs _) =
     let args' = (\(_,t) -> ("", t)) <$> args in
     Just (CppFunction name tmplts args' rtyp qs CppNoOp)
@@ -75,6 +76,7 @@ toHeader = catMaybes . map go
     removeCaptures (CppApp (CppLambda _ args rtyp body) b) = CppApp (CppLambda [] args rtyp body) b
     removeCaptures (CppApp a@(CppAccessor {}) [CppLambda _ args rtyp body]) = CppApp a [CppLambda [] args rtyp body]
     removeCaptures (CppApp a [b]) = CppApp (removeCaptures a) [removeCaptures b]
+    removeCaptures (CppObjectLiteral fields) = CppObjectLiteral ((\(k, v) -> (k, removeCaptures v)) <$> fields)
     removeCaptures cpp' = cpp'
   --
   go cpp@(CppVariableIntroduction{}) = Just cpp
@@ -90,6 +92,9 @@ toHeaderFns = catMaybes . map go
   where
   go :: Cpp -> Maybe Cpp
   go (CppNamespace name cpps) = Just (CppNamespace name (toHeaderFns cpps))
+  go (CppFunction name tmps [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp cpp [_])]))
+    | atyp == Just AutoType
+    = Just (CppVariableIntroduction (name, Nothing) tmps [] (Just cpp))
   go cpp@(CppFunction _ (_:_) _ _ _ _) = Just cpp
   go (CppComment comms cpp') | Just cpp <- go cpp' = Just (CppComment comms cpp)
   go _ = Nothing

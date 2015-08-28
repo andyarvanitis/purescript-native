@@ -190,7 +190,6 @@ skipped =
   , "TailCall.purs"
   , "TypeClasses.purs"
   , "TypeSynonymInData.purs"
-  , "TypeSynonyms.purs"
   , "TypedWhere.purs" -- rank-N
   , "Where.purs" -- rank-N
   ]
