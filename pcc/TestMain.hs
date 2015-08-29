@@ -144,7 +144,7 @@ skipped =
   , "Dollar.purs"
   , "Eff.purs" -- rank-N (runPure)
   , "EmptyDataDecls.purs"
-  , "EmptyRow.purs"
+  , "EmptyRow.purs" -- Object
   , "EmptyTypeClass.purs"
   , "ExplicitImportReExport.purs" -- Object
   , "ExtendedInfixOperators.purs" -- uses package purescript-functions
@@ -171,7 +171,6 @@ skipped =
   , "ObjectUpdater.purs" -- extend obj
   , "Objects.purs"
   , "OperatorInlining.purs" -- excessive memory consumption bug
-  , "OperatorSections.purs"
   , "Operators.purs"
   , "OverlappingInstances.purs"  -- ok, should fail with C++
   , "OverlappingInstances2.purs" -- ok, should fail with C++
@@ -187,7 +186,6 @@ skipped =
   , "ScopedTypeVariables.purs" -- rank-N
   , "SequenceDesugared.purs" -- rank-N
   , "TCOCase.purs"
-  , "TailCall.purs"
   , "TypeClasses.purs"
   , "TypeSynonymInData.purs"
   , "TypedWhere.purs" -- rank-N
