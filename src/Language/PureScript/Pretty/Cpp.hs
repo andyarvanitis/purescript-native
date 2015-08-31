@@ -62,8 +62,11 @@ literals = mkPattern' match
   match (CppObjectLiteral ps) = fmap concat $ sequence
     [ return $ "make_cmap(\n"
     , withIndent $ do
-        cpps <- forM ps $ \(key, value) ->
-                            fmap ((++) (show key ++ "_key" ++ ", ")) . prettyPrintCpp' $ value
+        cpps <- forM ps $ \(key, value) -> do
+                            val <- prettyPrintCpp' value
+                            -- macro arguments => need parens sometimes
+                            let val' = if ',' `elem` val then parens val else val
+                            return $ show key ++ "_key" ++ ", " ++ val'
         indentString <- currentIndent
         return $ intercalate ", \n" $ map (indentString ++) cpps
     , return "\n"

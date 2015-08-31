@@ -135,6 +135,36 @@ namespace PureScript {
     }
   };
 
+  namespace Private {
+
+    template<typename T, typename = void>
+    struct is_callable : std::is_function<T> {};
+
+    template<typename T>
+    struct is_callable<T, typename std::enable_if<std::is_same<decltype(void(&T::operator())),void>::value>::type> : std::true_type {};
+
+    template<typename T>
+    struct as_function {
+      using type = T;
+    };
+
+    template<typename Ret, typename Class, typename Arg>
+    struct as_function<Ret(Class::*)(Arg) const> {
+      using type = std::function<Ret(typename std::remove_reference<Arg>::type)>;
+    };
+
+    template<typename T>
+    constexpr auto cmap_value(T callable) ->
+      typename std::enable_if<is_callable<T>::value, typename as_function<decltype(&T::operator())>::type>::type {
+      return callable;
+    }
+
+    template<typename T>
+    constexpr auto cmap_value(T non_callable) -> typename std::enable_if<!is_callable<T>::value, T>::type {
+      return non_callable;
+    }
+  }
+
 } // namespace PureScript
 
 //-----------------------------------------------------------------------------
@@ -144,16 +174,32 @@ namespace PureScript {
 #define make_cmap(...) MACRO_VARIANT(MAKE_CMAP, __VA_ARGS__)(__VA_ARGS__)
 
 //-----------------------------------------------------------------------------
-#define MAKE_CMAP_2(k, v) cmap<k, typename std::add_const<typename std::remove_reference<decltype(v)>::type>::type>(v)
-#define MAKE_CMAP_4(k0, v0, \
-                    k1, v1) cmap<k0, typename std::add_const<typename std::remove_reference<decltype(v0)>::type>::type, \
-                                 k1, typename std::add_const<typename std::remove_reference<decltype(v1)>::type>::type> \
-                                (v0, v1)
-#define MAKE_CMAP_6(k0, v0, \
-                    k1, v1, \
-                    k2, v2) cmap<k0, typename std::add_const<typename std::remove_reference<decltype(v0)>::type>::type, \
-                                 k1, typename std::add_const<typename std::remove_reference<decltype(v1)>::type>::type, \
-                                 k2, typename std::add_const<typename std::remove_reference<decltype(v2)>::type>::type> \
-                                (v0, v1, v2)
+// Note: the use of lambdas and helper functions is mostly for handling lambda
+// literal values. It would be simpler otherwise.
+//-----------------------------------------------------------------------------
+//
+#define MAKE_CMAP_2(k, v) \
+  [](auto v_) { \
+    auto val = Private::cmap_value(v_); \
+    return cmap<k, typename std::add_const<decltype(val)>::type>(val); \
+  }(v)
+
+#define MAKE_CMAP_4(k0, v0, k1, v1) \
+  [](auto v0_, auto v1_) { \
+    auto val0 = Private::cmap_value(v0_); \
+    auto val1 = Private::cmap_value(v1_); \
+    return cmap<k0, typename std::add_const<decltype(val0)>::type, \
+                k1, typename std::add_const<decltype(val1)>::type>(val0, val1); \
+  }(v0, v1)
+
+#define MAKE_CMAP_6(k0, v0, k1, v1, k2, v2) \
+  [](auto v0_, auto v1_, auto v2_) { \
+    auto val0 = Private::cmap_value(v0_); \
+    auto val1 = Private::cmap_value(v1_); \
+    auto val2 = Private::cmap_value(v2_); \
+    return cmap<k0, typename std::add_const<decltype(val0)>::type, \
+                k1, typename std::add_const<decltype(val1)>::type, \
+                k2, typename std::add_const<decltype(val2)>::type> (val0, val1, val2); \
+  }(v0, v1, v2)
 
 #endif // PureScript_cmap_HH
