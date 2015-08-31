@@ -169,7 +169,6 @@ skipped =
   , "ObjectGetter.purs"
   , "ObjectUpdate2.purs" -- extend obj
   , "ObjectUpdater.purs" -- extend obj
-  , "Objects.purs"
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "Operators.purs"
   , "OverlappingInstances.purs"  -- ok, should fail with C++

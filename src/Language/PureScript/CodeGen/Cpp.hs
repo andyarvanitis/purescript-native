@@ -163,8 +163,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let typ = typFromExpr val
         tmplts = templparams' typ
     val' <- valueToCpp val
-    let cpp' = nestedFnsToLambdas tmplts val'
-    return $ CppVariableIntroduction (identToCpp ident, typFromExpr val) tmplts [] (Just cpp')
+    return $ CppVariableIntroduction (identToCpp ident, typFromExpr val) tmplts [] (Just val')
 
   -------------------------------------------------------------------------------------------------
   mkFunction :: [TemplateInfo] -> Ident -> Ann -> Ident -> Expr Ann -> [CppQualifier] -> m Cpp
@@ -182,24 +181,25 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -- This covers 'let' expressions
   mkFunction _ ident (_, _, Nothing, _) arg body _ = do
     block <- asReturnBlock <$> valueToCpp body
+    let block' = convertNestedLambdas [] block
     return $ CppVariableIntroduction (identToCpp ident, Nothing)
                                      []
                                      []
-                                     (Just (CppLambda [CppCaptureAll]
+                                     (Just (CppLambda []
                                                       [(identToCpp arg, Just AutoType)]
                                                       Nothing
-                                                      block))
+                                                      block'))
 
   mkFunction encTmplts ident (_, com, ty, _) arg body qs = do
     let typ = ty >>= mktype mn
         tmplts = tmpltsReplFromRight (templparams' typ) (filter isParameterized $ templparams' typ)
     block <- asReturnBlock <$> valueToCpp body
-    let block' = nestedFnsToLambdas (nub $ encTmplts ++ tmplts) block
+    let block' = convertNestedLambdas (nub $ encTmplts ++ tmplts) block
         atyp = argtype typ
         rtyp = rettype typ
         arg' = if null (runIdent arg) then [] else [(identToCpp arg, Just $ fromMaybe AutoType atyp)]
         fn = CppFunction (identToCpp ident) (tmplts \\ encTmplts) arg' rtyp qs block'
-        fn' | atyp == Just AutoType = toLambda [CppCaptureAll] [] fn
+        fn' | atyp == Just AutoType = toLambda [] [] fn
             | otherwise = fn
     return (CppComment com fn')
 
@@ -256,12 +256,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   asReturnBlock cpp = CppBlock [CppReturn cpp]
 
   -------------------------------------------------------------------------------------------------
-  nestedFnsToLambdas :: [TemplateInfo] -> Cpp -> Cpp
+  convertNestedLambdas :: [TemplateInfo] -> Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  nestedFnsToLambdas encTmplts = everywhereOnCpp go
+  convertNestedLambdas encTmplts = everywhereOnCpp go
     where
     go :: Cpp -> Cpp
     go f@(CppFunction {}) = toLambda [CppCaptureAll] encTmplts f
+    go (CppLambda [] args rtyp body) = CppLambda [CppCaptureAll] args rtyp body
     go cpp = cpp
 
   -- |
@@ -363,8 +364,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp (Abs (_, _, ty, _) arg body) = do
     let typ = ty >>= mktype mn
+        tmplts = templparams' typ
     cpp <- valueToCpp body
-    return $ CppLambda [CppCaptureAll] [(identToCpp arg, argtype typ)] (rettype typ) (asReturnBlock cpp)
+    let cpp' = convertNestedLambdas tmplts cpp
+    return $ CppLambda [] [(identToCpp arg, argtype typ)] (rettype typ) (asReturnBlock cpp')
 
   valueToCpp (App _ e (Var _ (Qualified (Just (ModuleName [ProperName "Prim"])) (Ident "undefined")))) =
     valueToCpp e
@@ -403,7 +406,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Let _ ds val) = do
     ds' <- concat <$> mapM bindToCpp ds
     ret <- valueToCpp val
-    return $ CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock (ds' ++ [CppReturn ret]))) []
+    return $ CppApp (CppLambda [] [] Nothing (CppBlock (ds' ++ [CppReturn ret]))) []
 
   valueToCpp (Constructor {}) =
     return CppNoOp
@@ -431,7 +434,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     cpps <- forM binders $ \(CaseAlternative bs result) -> do
       ret <- guardsToCpp result
       go valNames ret bs
-    return $ CppApp (CppLambda [CppCaptureAll]
+    return $ CppApp (CppLambda []
                                []
                                (ty >>= mktype mn)
                                (CppBlock (assignments ++ concat cpps ++ [failedPatternError valNames]))) []
