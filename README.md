@@ -45,7 +45,7 @@ A small strongly typed programming language with expressive types that compiles 
 #### Future ideas:
 
 * Nice facilities (modules) for concurrency/parallelism, using `std::thread`, etc. under the hood
-* Compiler options for memory management
+* Compiler or lib options for other types of memory management — e.g. the Boehm (or other) GC
 * `BigInt` via GNU GMP
 * Stricter exports in C++ code
 * Use C++ operator overloading where supported
