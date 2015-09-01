@@ -170,7 +170,6 @@ skipped =
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OverlappingInstances.purs"  -- ok, should fail with C++
   , "OverlappingInstances2.purs" -- ok, should fail with C++
-  , "PartialFunction.purs" -- need to update pure14/purescript-assert (add assertThrows)
   , "Rank2Data.purs"        -- rank-N
   , "Rank2Object.purs"      -- rank-N
   , "Rank2TypeSynonym.purs" -- rank-N
