@@ -170,7 +170,6 @@ skipped =
   , "ObjectUpdate2.purs" -- extend obj
   , "ObjectUpdater.purs" -- extend obj
   , "OperatorInlining.purs" -- excessive memory consumption bug
-  , "Operators.purs"
   , "OverlappingInstances.purs"  -- ok, should fail with C++
   , "OverlappingInstances2.purs" -- ok, should fail with C++
   , "PartialFunction.purs" -- assertThrows ?
