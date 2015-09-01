@@ -140,6 +140,9 @@ runType tt@(Template t []) = typeName tt ++ capitalize t
 runType (Template t ts) = runType (Template t []) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
 runType AutoType = "auto"
 
+autoType ::T.Type
+autoType = T.TypeConstructor (Qualified Nothing (ProperName "auto"))
+
 typeName :: Type -> String
 typeName Function{} = "fn"
 typeName EffectFunction{} = "eff_fn"
@@ -216,6 +219,10 @@ mktype _ (T.TypeApp
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
+             T.TypeVar {}) = Just (Native (runType $ Map []) []) -- empty row type
+
+mktype m (T.TypeApp
+            (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
              t@(T.RCons _ _ _)) = mktype m t
 
 mktype m (T.TypeApp
@@ -289,7 +296,7 @@ mktype m r@(T.RCons _ _ _)
   rowPairs :: [(String, T.Type)] -> [(String, Type)]
   rowPairs rs = map (\(n, t) -> (n, fromJust t)) $ filter (isJust . snd) (map (\(n,t) -> (n, mktype m t)) rs)
 
-mktype _ T.REmpty = Just AutoType
+mktype _ T.REmpty = Just (Map [])
 mktype _ b = error $ "Unknown type: " ++ show b
 
 mkTemplate :: String -> Type
@@ -465,7 +472,7 @@ forallsToAuto :: T.Type -> T.Type
 forallsToAuto = T.everywhereOnTypes go
   where
   go :: T.Type -> T.Type
-  go (T.ForAll _ _ _) = T.REmpty
+  go (T.ForAll _ _ _) = autoType
   go t = t
 
 typevals :: [(Type, Type)] -> Qualified Ident

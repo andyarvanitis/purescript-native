@@ -26,7 +26,6 @@ import Data.Char (isLetter, isSpace)
 import Data.List
 import Data.Maybe (fromMaybe)
 
-import Control.Applicative
 import Control.Arrow ((<+>))
 import Control.Monad.State
 import Control.PatternArrows

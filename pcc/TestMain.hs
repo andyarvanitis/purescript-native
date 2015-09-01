@@ -144,9 +144,8 @@ skipped =
   , "Dollar.purs"
   , "Eff.purs" -- rank-N (runPure)
   , "EmptyDataDecls.purs"
-  , "EmptyRow.purs" -- Object
   , "EmptyTypeClass.purs"
-  , "ExplicitImportReExport.purs" -- Object
+  , "ExplicitImportReExport.purs" -- ok, test has no main (would pass otherwise)
   , "ExtendedInfixOperators.purs" -- uses package purescript-functions
   , "Fib.purs" -- runST
   , "FinalTagless.purs" -- rank-N
@@ -179,7 +178,7 @@ skipped =
   , "Rank2Types.purs"       -- rank-N
   , "RebindableSyntax.purs"
   , "RowConstructors.purs"
-  , "RowPolyInstanceContext.purs" -- extend obj
+  , "RowPolyInstanceContext.purs"
   , "RuntimeScopeIssue.purs"
   , "ScopedTypeVariables.purs" -- rank-N
   , "SequenceDesugared.purs" -- rank-N

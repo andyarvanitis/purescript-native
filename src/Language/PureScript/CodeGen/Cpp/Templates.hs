@@ -19,7 +19,6 @@ module Language.PureScript.CodeGen.Cpp.Templates where
 
 import Data.List
 import Data.Maybe
-import Control.Applicative
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types

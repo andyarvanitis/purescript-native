@@ -22,8 +22,6 @@ import Data.Maybe
 import Data.Tuple (swap)
 
 import qualified Data.Map as M
-
-import Control.Applicative
 import qualified Data.Graph as G
 
 import Language.PureScript.CodeGen.Cpp.AST

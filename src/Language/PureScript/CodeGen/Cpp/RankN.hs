@@ -70,7 +70,7 @@ replaceRankNVals mn ty vs | (_, f, _) <- everywhereOnValues id go id = f
      unknowns@(_:_) <- ftmplts \\ tmplts =
      let replace t'
            | T.Skolem {} <- t',
-             maybe False (`elem` unknowns) (mktype mn t') = T.REmpty
+             maybe False (`elem` unknowns) (mktype mn t') = autoType
            | otherwise = t'
      in Abs (ss, com, Just (T.everywhereOnTypes replace t), a) v body
 
