@@ -163,15 +163,14 @@ skipped =
   , "Nested.purs"
   , "Newtype.purs"
   , "NewtypeEff.purs"
-  , "NewtypeWithRecordUpdate.purs" -- extend obj
+  , "NewtypeWithRecordUpdate.purs"
   , "NestedWhere.purs" -- mutually recursive where
   , "ObjectGetter.purs"
-  , "ObjectUpdate2.purs" -- extend obj
-  , "ObjectUpdater.purs" -- extend obj
+  , "ObjectUpdate2.purs" -- KindedType
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OverlappingInstances.purs"  -- ok, should fail with C++
   , "OverlappingInstances2.purs" -- ok, should fail with C++
-  , "PartialFunction.purs" -- assertThrows ?
+  , "PartialFunction.purs" -- need to update pure14/purescript-assert (add assertThrows)
   , "Rank2Data.purs"        -- rank-N
   , "Rank2Object.purs"      -- rank-N
   , "Rank2TypeSynonym.purs" -- rank-N
