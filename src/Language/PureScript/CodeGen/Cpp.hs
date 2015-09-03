@@ -798,8 +798,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   typFromExpr expr = tyFromExpr expr >>= mktype mn
 
   fnTypFromApp :: Expr Ann -> Maybe Type
-  fnTypFromApp (App (_, _, Just ty, _) val a)
+  fnTypFromApp (App (ss, _, Just ty, _) val a)
     | Just nextTy <- fnTypFromApp val = Just nextTy
+    | Just aty' <- tyFromExpr a,
+      T.everythingOnTypes (||) (not . T.isMonoType) aty' =
+      error $ "Rank-N types not supported in C++ backend (type inferred)\n"
+             ++ "    " ++ maybe "unknown source information" displaySourceSpan ss ++ "\n"
+             ++ "    " ++ show aty' ++ "\n"
     | Just a' <- typFromExpr a,
       Just b' <- mktype mn ty = Just $ Function a' b'
     | Just t' <- mktype mn ty = Just t'

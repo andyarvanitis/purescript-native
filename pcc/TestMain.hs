@@ -141,13 +141,13 @@ skipped =
   , "Church.purs"         -- rank-N
   , "Collatz.purs"        -- rank-N (runPure)
   , "Do.purs"             -- rank-N, also mutually recursive lets
-  , "Dollar.purs"
+  , "Dollar.purs"         -- rank-N (inferred)
   , "Eff.purs" -- rank-N (runPure)
   , "EmptyDataDecls.purs"
   , "EmptyTypeClass.purs"
   , "ExplicitImportReExport.purs" -- ok, test has no main (would pass otherwise)
   , "ExtendedInfixOperators.purs" -- uses package purescript-functions
-  , "Fib.purs" -- runST
+  , "Fib.purs" -- rank-N (runST)
   , "FinalTagless.purs" -- rank-N
   , "KindedType.purs" -- KindedType
   , "Let.purs" -- rank-N
