@@ -151,7 +151,6 @@ skipped =
   , "KindedType.purs" -- KindedType
   , "Let.purs" -- rank-N
   , "Let2.purs" -- mutually recursive lets
-  , "LetInInstance.purs"
   , "LiberalTypeSynonyms.purs" -- rank-N
   , "MPTCs.purs"
   , "Monad.purs" -- rank-N

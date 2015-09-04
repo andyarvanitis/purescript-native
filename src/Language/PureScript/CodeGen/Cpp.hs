@@ -657,12 +657,18 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                then struct
                else CppNamespace ("::" ++ runModuleName classmn) [CppUseNamespace (runModuleName mn), struct]
     where
+    -----------------------------------------------------------------------------------------------
     toCpp :: [TemplateInfo] -> ((String, T.Type), Expr Ann) -> m Cpp
+    -----------------------------------------------------------------------------------------------
     toCpp tmplts ((name, ty'), Abs ann'@(_, _, Just _, _) a b) = do
       fn <- mkFunction tmplts (Ident name) ann' a b [CppStatic]
-      return $ case mktype mn ty' of Just Function {} -> fn
-                                     Just _ -> toLambda [] [] fn
-                                     _ -> fn
+      return $ case mktype mn ty' of
+                 Just Function {} -> fn
+                 Just _           -> toLambda [] [] fn
+                 _                -> fn
+
+    toCpp tmplts ((name, _), e@(Let (_, _, Just ty, _) _ _)) =
+      asFunction tmplts (Ident name) (Nothing, [], Just ty, Nothing) e [CppStatic]
 
     toCpp tmplts ((name, _), e) -- convert these vars to inline functions
       | Just ty <- tyFromExpr e,
@@ -679,11 +685,11 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                    not (valueHasTemplates e') = Just (asTemplate vs e')
                  | otherwise = Just e'
         return $ CppVariableIntroduction (name, typ) (tmplts' \\ tmplts) [CppStatic] cpp'
-    toCpp _ ((name, _), e)
-      | Just ty <- tyFromExpr e = do
+
+    toCpp _ ((name, _), e) = do
         e' <- valueToCpp e
-        let typ = mktype mn ty
-        return $ CppVariableIntroduction (name, typ) [] [CppStatic] (Just e')
+        return $ CppVariableIntroduction (name, tyFromExpr e >>= mktype mn) [] [CppStatic] (Just e')
+
     toCpp _ ((name, _), e) = return $ error $ (name ++ " :: " ++ show e ++ "\n")
 
     isDataTypeCtor :: [Type] -> Bool
