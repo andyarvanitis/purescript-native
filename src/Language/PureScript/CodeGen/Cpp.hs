@@ -575,7 +575,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   mkTypeClass :: Monad m => Ident -> Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
   mkTypeClass (Ident ctor) (_, comms, _, Just IsTypeClassConstructor)
-    | Just (params, constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) = do
+    | Just (params@(_:_), constraints, fns) <- findClass (Qualified (Just mn) (ProperName ctor)) = do
     let tmplts = runType . mkTemplate <$> params
         fnTemplPs = nub $ (concatMap (templparams' . mktype mn . snd) fns) ++
                           (concatMap constraintParams constraints)
@@ -625,7 +625,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   mkInstance :: Ident -> Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
   mkInstance ident expr
-    | Just (classname@(Qualified (Just classmn) (ProperName unqualClass)), typs) <- findInstance (Qualified (Just mn) ident),
+    | Just (classname@(Qualified (Just classmn) (ProperName unqualClass)), typs@(_:_)) <- findInstance (Qualified (Just mn) ident),
       Just (params, constraints, fns) <- findClass classname = do
     let (_, fs) = case expr of
                     App{} -> unApp expr []
@@ -711,7 +711,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     isNormalFn (Abs _ (Ident "__unused") e) | Nothing <- tyFromExpr e = False
     isNormalFn _ = True
 
-  mkInstance ident _ = error ("Instance \"" ++ show ident ++ "\" not found")
+  mkInstance ident _ = return CppNoOp
 
   -------------------------------------------------------------------------------------------------
   fnVarToCpp :: Expr Ann -> m Cpp

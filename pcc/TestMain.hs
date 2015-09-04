@@ -144,7 +144,6 @@ skipped =
   , "Dollar.purs"         -- rank-N (inferred)
   , "Eff.purs" -- rank-N (runPure)
   , "EmptyDataDecls.purs"
-  , "EmptyTypeClass.purs"
   , "ExplicitImportReExport.purs" -- ok, test has no main (would pass otherwise)
   , "ExtendedInfixOperators.purs" -- uses package purescript-functions
   , "Fib.purs" -- rank-N (runST)
