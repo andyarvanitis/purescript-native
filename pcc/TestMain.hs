@@ -101,7 +101,7 @@ packages =
   , "purescript-assert"
   , "purescript-st"
   , "purescript-console"
---  , "purescript-functions"
+  , "purescript-functions"
   ]
 
 -------------------------------------------------------------------------------
@@ -145,7 +145,6 @@ skipped =
   , "Eff.purs" -- rank-N (runPure)
   , "EmptyDataDecls.purs"
   , "ExplicitImportReExport.purs" -- ok, test has no main (would pass otherwise)
-  , "ExtendedInfixOperators.purs" -- uses package purescript-functions
   , "Fib.purs" -- rank-N (runST)
   , "FinalTagless.purs" -- rank-N
   , "KindedType.purs" -- KindedType
