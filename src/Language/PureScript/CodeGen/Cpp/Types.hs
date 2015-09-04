@@ -100,6 +100,10 @@ data CppQualifier
   --
   | CppConstExpr
   -- |
+  -- Extern value
+  --
+  | CppExtern
+  -- |
   -- Mutable expression
   --
   | CppMutable
@@ -390,6 +394,7 @@ runQualifier CppDestructor = "~"
 runQualifier CppDefault = ""
 runQualifier CppDelete = ""
 runQualifier CppConstExpr = "constexpr"
+runQualifier CppExtern = "extern"
 runQualifier CppMutable = ""
 runQualifier CppTemplSpec = "template <>"
 

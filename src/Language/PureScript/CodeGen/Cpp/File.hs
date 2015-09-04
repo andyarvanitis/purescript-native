@@ -17,6 +17,7 @@
 
 module Language.PureScript.CodeGen.Cpp.File where
 
+import Data.Char (isAlphaNum)
 import Data.List
 import Data.Maybe
 import Control.Applicative
@@ -65,6 +66,9 @@ toHeader = catMaybes . map go
   go (CppFunction name tmplts args rtyp qs _) =
     let args' = (\(_,t) -> ("", t)) <$> args in
     Just (CppFunction name tmplts args' rtyp qs CppNoOp)
+  go (CppVariableIntroduction v@(name, Just t) [] qs (Just _))
+    | t /= AutoType, all isAlphaNum name
+    = Just (CppVariableIntroduction v [] (CppExtern:qs) Nothing)
   go cpp@(CppVariableIntroduction{}) = Just cpp
   go (CppComment comms cpp')
     | Just cpp <- go cpp' = Just $ case cpp of CppFunction {} -> cpp
@@ -120,6 +124,9 @@ toBody = catMaybes . map go
     fromConst _ = Nothing
     fullname :: String -> String
     fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
+  go cpp@(CppVariableIntroduction (name, Just t) [] _ (Just _))
+    | t /= AutoType, all isAlphaNum name
+    = Just cpp
   go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
   go _ = Nothing
 
