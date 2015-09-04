@@ -92,7 +92,7 @@ namespace PureScript {
     cmap( const T0 value0, const T1 value1 ) : data(value0, value1) {}
 
     template <uint32_t _K, typename _T>
-    constexpr operator cmap<_K, _T>() {
+    constexpr operator cmap<_K, _T>() const {
       return cmap<_K, _T>( std::get<keyToIndex(_K)>(data) );
     }
   };
@@ -121,14 +121,14 @@ namespace PureScript {
       : data(value0, value1, value2) {}
 
     template <uint32_t _K, typename _T>
-    constexpr operator cmap<_K, _T>() {
+    constexpr operator cmap<_K, _T>() const {
       return cmap<_K, _T>( std::get<keyToIndex(_K)>(data) );
     }
 
     template <uint32_t _K0, typename _T0,
               uint32_t _K1, typename _T1>
     constexpr operator cmap<_K0, _T0,
-                            _K1, _T1>() {
+                            _K1, _T1>() const {
       return cmap<_K0, _T0,
                   _K1, _T1>( std::get<keyToIndex(_K0)>(data),
                              std::get<keyToIndex(_K1)>(data) );

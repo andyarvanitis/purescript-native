@@ -152,7 +152,6 @@ skipped =
   , "Let.purs" -- rank-N
   , "Let2.purs" -- mutually recursive lets
   , "LiberalTypeSynonyms.purs" -- rank-N
-  , "MPTCs.purs"
   , "Monad.purs" -- rank-N
   , "MonadState.purs"
   , "MultiArgFunctions.purs" -- uses package purescript-functions
@@ -163,7 +162,6 @@ skipped =
   , "NewtypeEff.purs"
   , "NewtypeWithRecordUpdate.purs"
   , "NestedWhere.purs" -- mutually recursive where
-  , "ObjectGetter.purs"
   , "ObjectUpdate2.purs" -- KindedType
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OverlappingInstances.purs"  -- ok, should fail with C++
