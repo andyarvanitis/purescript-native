@@ -495,7 +495,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   operators :: OperatorTable PrinterState Cpp String
   operators =
     OperatorTable [ [ Wrap accessor $ \(typ, prop) val ->
-                                        "get" ++ angles (dropWhile isLetter prop)
+                                        "get" ++ angles (dropWhile (\c -> isLetter c || c == '_') prop)
                                      ++ parens (maybe val
                                                       (  (++ parens val)
                                                        . ("cast" ++)

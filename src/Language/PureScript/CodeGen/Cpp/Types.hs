@@ -50,7 +50,7 @@ instance Eq Type where
   (Function a b) == (Function a' b') = a == a' && b == b'
   (Array a) == (Array a') = a == a'
   (Map ms) == (Map ms') = ms == ms'
-  (Template t ts) == (Template t' ts') = capitalize t == capitalize t' && ts == ts'
+  (Template t ts) == (Template t' ts') = makeUnique t == makeUnique t' && ts == ts'
   (TypeConstructor s a) == (TypeConstructor s' a') = a == a' && s == s'
   (DeclType e) == (DeclType e') = e == e'
   (EffectFunction b) == (EffectFunction b') = b == b'
@@ -136,7 +136,7 @@ runType tt@(Map fields) = typeName tt ++ "<" ++ (intercalate ", " $ map runField
   runField (name, typ) = show name ++ "_key" ++ ", const " ++ runType typ
 runType tt@(TypeConstructor mn t) = mn ++ "::" ++ typeName tt ++ runType t ++ "::template _"
 runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
-runType tt@(Template t []) = typeName tt ++ capitalize t
+runType tt@(Template t []) = typeName tt ++ makeUnique t
 runType (Template t ts) = runType (Template t []) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
 runType AutoType = "auto"
 
@@ -278,7 +278,7 @@ mktype m app@(T.TypeApp a b)
 mktype m (T.ForAll _ ty _) = mktype m ty
 mktype _ (T.Skolem name _ _) = Just $ Template (identToCpp $ Ident name) []
 mktype _ (T.TypeVar name) = Just $ Template (identToCpp $ Ident name) []
-mktype _ (T.TUnknown n) = Just $ Template ('T' : show n) []
+mktype _ (T.TUnknown n) = Just $ Template ('t' : show n) []
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Function"))) =
   Just $ Native (typeName (Function (Template [] []) (Template [] []))) []
 mktype _ (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Array"))) =
@@ -433,8 +433,8 @@ onlyChanges :: Eq a => [(a, a)] -> [(a, a)]
 onlyChanges = filter $ \(a,b) -> a /= b
 
 templateFromKind :: (String, Maybe Kind) -> TemplateInfo
-templateFromKind (name, Just Star) = (capitalize name, 0)
-templateFromKind (name, Just f@(FunKind _ _)) = (capitalize name, numFunKindArgs f)
+templateFromKind (name, Just Star) = (makeUnique name, 0)
+templateFromKind (name, Just f@(FunKind _ _)) = (makeUnique name, numFunKindArgs f)
   where
   numFunKindArgs :: Kind -> Int
   numFunKindArgs = everythingOnKinds (+) go
@@ -455,15 +455,17 @@ remTemplateDefaults :: [TemplateInfo] -> [TemplateInfo]
 remTemplateDefaults = map remDefault
   where
   remDefault ::  TemplateInfo -> TemplateInfo
-  remDefault (name, 0) = (takeWhile isAlphaNum name, 0)
-  remDefault (name, n) = (takeWhile isAlphaNum name, n)
+  remDefault (name, 0) = (takeWhile (\c -> isAlphaNum c || c == '_') name, 0)
+  remDefault (name, n) = (takeWhile (\c -> isAlphaNum c || c == '_') name, n)
 
 -- TODO: do this more properly
 anytype :: Type
 anytype = Template [] []
 
-capitalize :: String -> String
-capitalize = map toUpper
+makeUnique :: String -> String
+makeUnique [] = []
+makeUnique s@('_' : _) = s
+makeUnique s = '_' : s
 
 -- |
 -- Used for rank-N types
