@@ -14,6 +14,7 @@
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE CPP #-}
 
 module Language.PureScript.Pretty.Cpp (
     dotsTo,
@@ -26,6 +27,9 @@ import Data.Char (isLetter, isSpace)
 import Data.List
 import Data.Maybe (fromMaybe)
 
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
+#endif
 import Control.Arrow ((<+>))
 import Control.Monad.State
 import Control.PatternArrows

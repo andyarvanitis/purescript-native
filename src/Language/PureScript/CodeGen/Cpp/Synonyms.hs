@@ -14,9 +14,13 @@
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE CPP #-}
 
 module Language.PureScript.CodeGen.Cpp.Synonyms where
 
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
+#endif
 import Data.List
 import Data.Maybe
 import Data.Tuple (swap)
