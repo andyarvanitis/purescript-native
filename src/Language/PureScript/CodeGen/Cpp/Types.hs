@@ -223,7 +223,11 @@ mktype _ (T.TypeApp
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
-             T.TypeVar {}) = Just (Native (runType $ Map []) []) -- empty row type
+             (T.TypeVar r)) = Just (Template r []) -- empty row type
+
+mktype m (T.TypeApp
+            (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))
+             (T.Skolem r _ _)) = (Just AutoType) -- empty row type
 
 mktype m (T.TypeApp
             (T.TypeConstructor (Qualified (Just (ModuleName [ProperName "Prim"])) (ProperName "Object")))

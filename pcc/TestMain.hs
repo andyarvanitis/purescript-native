@@ -160,7 +160,6 @@ skipped =
   , "NewtypeEff.purs"
   , "NewtypeWithRecordUpdate.purs"
   , "NestedWhere.purs" -- mutually recursive where
-  , "ObjectUpdate2.purs"
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OverlappingInstances.purs"  -- ok, should fail with C++
   , "OverlappingInstances2.purs" -- ok, should fail with C++

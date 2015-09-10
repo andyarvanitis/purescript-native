@@ -32,7 +32,10 @@ template <typename A, typename B>
 using fn = std::function<B(const A)>;
 
 template <typename T>
-using param = typename std::conditional<std::is_fundamental<T>::value, const T, const T&>::type;
+using param = typename std::conditional<std::is_fundamental<T>::value,
+                                          typename std::add_const<T>::type,
+                                          typename std::add_lvalue_reference<typename std::add_const<T>::type>::type>
+                                       ::type;
 
 template <typename B>
 using eff_fn = std::function<B()>;
