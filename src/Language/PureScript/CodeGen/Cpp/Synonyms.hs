@@ -29,6 +29,7 @@ import qualified Data.Map as M
 import qualified Data.Graph as G
 
 import Language.PureScript.CodeGen.Cpp.AST
+import Language.PureScript.CodeGen.Cpp.Templates
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Names
 
@@ -47,13 +48,23 @@ synonymsToCpp env mn
         typs = catMaybes $ mktype mn . snd . snd <$> ds
         syns = zip3 names' tmplts typs
         (synonyms, invalidSynonyms) = partition isValid syns
-        cpps = (\(n,tmps,t) -> CppTypeAlias (n, tmps) t []) <$> synonyms
+        cpps = toTypeAlias <$> synonyms
         rejected = (\(n, _, _) -> CppRaw ("// using " ++ n ++ " = auto;")) <$> invalidSynonyms
     return $ cpps ++ rejected
   | otherwise = return []
   where
   isValid :: (String, a, Type) -> Bool
   isValid (_, _, t) = everythingOnTypes (&&) (/= AutoType) t
+  toTypeAlias :: (String, [TemplateInfo], Type) -> Cpp
+  toTypeAlias (n, tmps, Template t _) =
+    CppTypeAlias (n, tmps ++ ptmps) (Template t (templateToType <$> ptmps)) []
+    where
+    ptmps :: [TemplateInfo]
+    ptmps = concatMap go tmps
+      where
+      go :: TemplateInfo -> [TemplateInfo]
+      go (t, n) = (\p -> (t ++ show p, 0)) <$> [1 .. n]
+  toTypeAlias (n, tmps, t) = CppTypeAlias (n, tmps) t []
 
 -- |
 -- Dependency (topological) sorting of synonyms and data types

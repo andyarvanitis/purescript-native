@@ -301,10 +301,8 @@ mktype m r@(T.RCons _ _ _)
   rowPairs rs = map (\(n, t) -> (n, fromJust t)) $ filter (isJust . snd) (map (\(n,t) -> (n, mktype m t)) rs)
 
 mktype _ T.REmpty = Just (Map [])
+mktype m (T.KindedType t _)= mktype m t
 mktype _ b = error $ "Unknown type: " ++ show b
-
-mkTemplate :: String -> Type
-mkTemplate s = Template s []
 
 isTemplate :: Type -> Bool
 isTemplate Template{} = True
@@ -438,7 +436,6 @@ onlyChanges :: Eq a => [(a, a)] -> [(a, a)]
 onlyChanges = filter $ \(a,b) -> a /= b
 
 templateFromKind :: (String, Maybe Kind) -> TemplateInfo
-templateFromKind (name, Just Star) = (makeUnique name, 0)
 templateFromKind (name, Just f@(FunKind _ _)) = (makeUnique name, numFunKindArgs f)
   where
   numFunKindArgs :: Kind -> Int
@@ -447,6 +444,7 @@ templateFromKind (name, Just f@(FunKind _ _)) = (makeUnique name, numFunKindArgs
     go :: Kind -> Int
     go (FunKind _ _) = 1
     go _ = 0
+templateFromKind (name, _) = (makeUnique name, 0)
 templateFromKind k = error $ show "Unsupported kind! (" ++ show k ++ ")"
 
 addTemplateDefaults :: [TemplateInfo] -> [TemplateInfo]

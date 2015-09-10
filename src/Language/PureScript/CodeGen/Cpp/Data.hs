@@ -73,10 +73,9 @@ datasToCpps env mn
                  | otherwise = []
       where
       go :: (Qualified ProperName, E.TypeKind) -> [Cpp]
-      -- go (_, E.DataType _ [_]) = []
       go (typ, E.DataType ts cs) =
         let tmplts = tmpltsReplFromRight
-                       (flip (,) 0 . runType . mkTemplate . fst <$> ts)
+                       (templateFromKind <$> ts)
                        (concatMap templateParams (snd <$> cs))
         in dataTypeCtors (qual typ) tmplts
       go _ = []
@@ -123,7 +122,7 @@ datasToCpps env mn
         alias = Nothing
         tmplts :: [TemplateInfo]
         tmplts = tmpltsReplFromRight
-                   (flip (,) 0 . runType . mkTemplate . fst <$> ts)
+                   (templateFromKind <$> ts)
                    (concatMap templateParams (snd <$> cs))
         ctorStruct :: (ProperName, [T.Type]) -> Cpp
         ctorStruct (ctor, fields) =

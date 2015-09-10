@@ -147,7 +147,6 @@ skipped =
   , "ExplicitImportReExport.purs" -- ok, test has no main (would pass otherwise)
   , "Fib.purs" -- rank-N (runST)
   , "FinalTagless.purs" -- rank-N
-  , "KindedType.purs" -- KindedType
   , "Let.purs" -- rank-N
   , "Let2.purs" -- mutually recursive lets
   , "LiberalTypeSynonyms.purs" -- rank-N
@@ -161,7 +160,7 @@ skipped =
   , "NewtypeEff.purs"
   , "NewtypeWithRecordUpdate.purs"
   , "NestedWhere.purs" -- mutually recursive where
-  , "ObjectUpdate2.purs" -- KindedType
+  , "ObjectUpdate2.purs"
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OverlappingInstances.purs"  -- ok, should fail with C++
   , "OverlappingInstances2.purs" -- ok, should fail with C++

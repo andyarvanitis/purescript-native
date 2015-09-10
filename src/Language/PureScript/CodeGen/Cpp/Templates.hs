@@ -77,3 +77,9 @@ removeTemplates tmplts = everywhereOnCpp remove
     let ts' = filter (`notElem` tmplts) ts in CppVariableIntroduction name ts' qs val
   remove (CppComment comms cpp') = CppComment comms (remove cpp')
   remove other = other
+
+mkTemplate :: String -> Type
+mkTemplate s = Template s []
+
+templateToType :: TemplateInfo -> Type
+templateToType (t, n) = Template t (replicate n (Template "t" []))
