@@ -376,8 +376,11 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let (f, args) = unApp e []
     args' <- mapM fnVarToCpp args
     case f of
-      Var (_, _, _, Just IsNewtype) _ ->
-        return (head args')
+      Var (_, _, Just ty, Just IsNewtype) name ->
+        let qname = qualifiedToStr' id name
+            tmplts = maybe [] getDataTypeArgs (mktype mn ty >>= getDataType qname)
+            val = CppDataConstructor qname tmplts in
+        return (CppApp val args')
       Var (_, _, Just ty, Just (IsConstructor _ fields)) name ->
         let fieldCount = length fields
             argsNotApp = fieldCount - length args
@@ -477,8 +480,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   binderToCpp varName done (VarBinder (_, _, ty, _) ident) =
     return (CppVariableIntroduction (identToCpp ident, ty >>= mktype mn) [] [] (Just (CppVar varName)) : done)
 
-  binderToCpp varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
-    binderToCpp varName done b
+  binderToCpp varName done (ConstructorBinder (com, ss, ty, Just IsNewtype) c ctor bs) =
+    binderToCpp varName done (ConstructorBinder (com, ss, ty, Just (IsConstructor ProductType [Ident "0"])) c ctor bs)
 
   binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields)) _ ctor bs) = do
     cpps <- go (zip fields bs) done

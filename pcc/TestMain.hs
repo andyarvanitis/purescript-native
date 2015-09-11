@@ -156,9 +156,6 @@ skipped =
   , "MutRec2.purs" -- incompatible test, uses foreign data (would pass otherwise)
   , "MutRec3.purs" -- incompatible test, uses foreign data (would pass otherwise)
   , "Nested.purs"
-  , "Newtype.purs"
-  , "NewtypeEff.purs"
-  , "NewtypeWithRecordUpdate.purs"
   , "NestedWhere.purs" -- mutually recursive where
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OverlappingInstances.purs"  -- ok, should fail with C++
