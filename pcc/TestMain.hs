@@ -168,7 +168,6 @@ skipped =
   , "Rank2TypeSynonym.purs" -- rank-N
   , "Rank2Types.purs"       -- rank-N
   , "RebindableSyntax.purs"
-  , "RowConstructors.purs"
   , "RowPolyInstanceContext.purs"
   , "RuntimeScopeIssue.purs"
   , "ScopedTypeVariables.purs" -- rank-N

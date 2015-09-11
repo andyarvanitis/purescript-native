@@ -135,6 +135,137 @@ namespace PureScript {
     }
   };
 
+  //-----------------------------------------------------------------------------
+  template <uint32_t K0, typename T0,
+            uint32_t K1, typename T1,
+            uint32_t K2, typename T2,
+            uint32_t K3, typename T3>
+  struct cmap<K0, T0,
+              K1, T1,
+              K2, T2,
+              K3, T3> : Private::cmap_base<cmap<K0, T0,
+                                                K1, T1,
+                                                K2, T2,
+                                                K3, T3>> {
+    const std::tuple<const T0, const T1, const T2, const T3> data;
+
+    static constexpr auto keyToIndex(const uint32_t key) -> uint32_t {
+      switch (key) {
+        case K0: return 0;
+        case K1: return 1;
+        case K2: return 2;
+        case K3: return 3;
+      }
+      return UINT32_MAX;
+    }
+
+    cmap( const T0 value0, const T1 value1, const T2 value2, const T3 value3 )
+      : data(value0, value1, value2, value3) {}
+
+    template <uint32_t _K, typename _T>
+    constexpr operator cmap<_K, _T>() const {
+      return cmap<_K, _T>( std::get<keyToIndex(_K)>(data) );
+    }
+
+    template <uint32_t _K0, typename _T0,
+              uint32_t _K1, typename _T1>
+    constexpr operator cmap<_K0, _T0,
+                            _K1, _T1>() const {
+      return cmap<_K0, _T0,
+                  _K1, _T1>( std::get<keyToIndex(_K0)>(data),
+                             std::get<keyToIndex(_K1)>(data) );
+    }
+
+    template <uint32_t _K0, typename _T0,
+              uint32_t _K1, typename _T1,
+              uint32_t _K2, typename _T2>
+    constexpr operator cmap<_K0, _T0,
+                            _K1, _T1,
+                            _K2, _T2>() const {
+      return cmap<_K0, _T0,
+                  _K1, _T1,
+                  _K2, _T2>( std::get<keyToIndex(_K0)>(data),
+                             std::get<keyToIndex(_K1)>(data),
+                             std::get<keyToIndex(_K2)>(data) );
+    }
+  };
+
+  //-----------------------------------------------------------------------------
+  template <uint32_t K0, typename T0,
+            uint32_t K1, typename T1,
+            uint32_t K2, typename T2,
+            uint32_t K3, typename T3,
+            uint32_t K4, typename T4>
+  struct cmap<K0, T0,
+              K1, T1,
+              K2, T2,
+              K3, T3,
+              K4, T4> : Private::cmap_base<cmap<K0, T0,
+                                                K1, T1,
+                                                K2, T2,
+                                                K3, T3,
+                                                K4, T4>> {
+    const std::tuple<const T0, const T1, const T2, const T3, const T4> data;
+
+    static constexpr auto keyToIndex(const uint32_t key) -> uint32_t {
+      switch (key) {
+        case K0: return 0;
+        case K1: return 1;
+        case K2: return 2;
+        case K3: return 3;
+        case K4: return 4;
+      }
+      return UINT32_MAX;
+    }
+
+    cmap( const T0 value0, const T1 value1, const T2 value2, const T3 value3, const T4 value4 )
+      : data(value0, value1, value2, value3, value4) {}
+
+    template <uint32_t _K, typename _T>
+    constexpr operator cmap<_K, _T>() const {
+      return cmap<_K, _T>( std::get<keyToIndex(_K)>(data) );
+    }
+
+    template <uint32_t _K0, typename _T0,
+              uint32_t _K1, typename _T1>
+    constexpr operator cmap<_K0, _T0,
+                            _K1, _T1>() const {
+      return cmap<_K0, _T0,
+                  _K1, _T1>( std::get<keyToIndex(_K0)>(data),
+                             std::get<keyToIndex(_K1)>(data) );
+    }
+
+    template <uint32_t _K0, typename _T0,
+              uint32_t _K1, typename _T1,
+              uint32_t _K2, typename _T2>
+    constexpr operator cmap<_K0, _T0,
+                            _K1, _T1,
+                            _K2, _T2>() const {
+      return cmap<_K0, _T0,
+                  _K1, _T1,
+                  _K2, _T2>( std::get<keyToIndex(_K0)>(data),
+                             std::get<keyToIndex(_K1)>(data),
+                             std::get<keyToIndex(_K2)>(data) );
+    }
+
+    template <uint32_t _K0, typename _T0,
+              uint32_t _K1, typename _T1,
+              uint32_t _K2, typename _T2,
+              uint32_t _K3, typename _T3>
+    constexpr operator cmap<_K0, _T0,
+                            _K1, _T1,
+                            _K2, _T2,
+                            _K3, _T3>() const {
+      return cmap<_K0, _T0,
+                  _K1, _T1,
+                  _K2, _T2,
+                  _K3, _T3>( std::get<keyToIndex(_K0)>(data),
+                             std::get<keyToIndex(_K1)>(data),
+                             std::get<keyToIndex(_K2)>(data),
+                             std::get<keyToIndex(_K3)>(data) );
+    }
+  };
+
   namespace Private {
 
     template<typename T, typename = void>
@@ -201,5 +332,31 @@ namespace PureScript {
                 k1, typename std::add_const<decltype(val1)>::type, \
                 k2, typename std::add_const<decltype(val2)>::type> (val0, val1, val2); \
   }(v0, v1, v2)
+
+#define MAKE_CMAP_8(k0, v0, k1, v1, k2, v2, k3, v3) \
+  [](auto v0_, auto v1_, auto v2_, auto v3_) { \
+    auto val0 = Private::cmap_value(v0_); \
+    auto val1 = Private::cmap_value(v1_); \
+    auto val2 = Private::cmap_value(v2_); \
+    auto val3 = Private::cmap_value(v3_); \
+    return cmap<k0, typename std::add_const<decltype(val0)>::type, \
+                k1, typename std::add_const<decltype(val1)>::type, \
+                k2, typename std::add_const<decltype(val2)>::type, \
+                k3, typename std::add_const<decltype(val3)>::type> (val0, val1, val2, val3); \
+  }(v0, v1, v2, v3)
+
+#define MAKE_CMAP_10(k0, v0, k1, v1, k2, v2, k3, v3, k4, v4) \
+  [](auto v0_, auto v1_, auto v2_, auto v3_, auto v4_) { \
+    auto val0 = Private::cmap_value(v0_); \
+    auto val1 = Private::cmap_value(v1_); \
+    auto val2 = Private::cmap_value(v2_); \
+    auto val3 = Private::cmap_value(v3_); \
+    auto val4 = Private::cmap_value(v4_); \
+    return cmap<k0, typename std::add_const<decltype(val0)>::type, \
+                k1, typename std::add_const<decltype(val1)>::type, \
+                k2, typename std::add_const<decltype(val2)>::type, \
+                k3, typename std::add_const<decltype(val3)>::type, \
+                k4, typename std::add_const<decltype(val4)>::type> (val0, val1, val2, val3, val4); \
+  }(v0, v1, v2, v3, v4)
 
 #endif // PureScript_cmap_HH
