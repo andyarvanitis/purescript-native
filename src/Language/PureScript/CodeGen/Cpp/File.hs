@@ -90,6 +90,29 @@ toHeaderFns = catMaybes . map go
   go _ = Nothing
 
 ---------------------------------------------------------------------------------------------------
+toBodyDecl :: [Cpp] -> [Cpp]
+---------------------------------------------------------------------------------------------------
+toBodyDecl = catMaybes . map go
+  where
+  go :: Cpp -> Maybe Cpp
+  go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) _)
+    | all (not . declHasTemplates) ms,
+      ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
+    where
+    fromConst :: Cpp -> Maybe Cpp
+    fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs _)
+      | CppStatic `elem` qs =
+        Just $ CppVariableIntroduction (fullname name, typ) tmps (CppTemplSpec : (delete CppStatic qs)) Nothing
+    fromConst (CppFunction name tmplts args rtyp qs _) =
+      Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) CppNoOp
+    fromConst (CppComment _ cpp) = fromConst cpp
+    fromConst _ = Nothing
+    fullname :: String -> String
+    fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
+  go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
+  go _ = Nothing
+
+---------------------------------------------------------------------------------------------------
 toBody :: [Cpp] -> [Cpp]
 ---------------------------------------------------------------------------------------------------
 toBody = catMaybes . map go

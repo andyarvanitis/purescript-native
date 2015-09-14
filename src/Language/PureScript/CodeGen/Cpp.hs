@@ -94,7 +94,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                   ++ headerDefsEnd
                   ++ P.linebreak
                   ++ fileEnd mn "HH"
-  let bodyCpps = toBody optimized
+  let bodyCpps = toBodyDecl optimized ++ toBody optimized
       moduleBody = fileBegin mn "CC"
                 ++ P.linebreak
                 ++ CppInclude (runModuleName mn) (runModuleName mn) : P.linebreak

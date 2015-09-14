@@ -166,7 +166,6 @@ skipped =
   , "Rank2Types.purs"       -- rank-N
   , "RebindableSyntax.purs"
   , "RowPolyInstanceContext.purs"
-  , "RuntimeScopeIssue.purs"
   , "ScopedTypeVariables.purs" -- rank-N
   , "SequenceDesugared.purs" -- rank-N
   , "TCOCase.purs"
