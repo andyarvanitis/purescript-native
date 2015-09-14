@@ -39,7 +39,7 @@ import Language.PureScript.Traversals
 -- |
 -- An identifier for the scope of a skolem variable
 --
-newtype SkolemScope = SkolemScope { runSkolemScope :: Int } deriving (Show, Eq, Ord, Data, Typeable, A.ToJSON, A.FromJSON)
+newtype SkolemScope = SkolemScope { runSkolemScope :: Int } deriving (Show, Read, Eq, Ord, Data, Typeable, A.ToJSON, A.FromJSON)
 
 -- |
 -- The type of types
@@ -105,7 +105,7 @@ data Type
   -- |
   -- A placeholder used in pretty printing
   --
-  | PrettyPrintForAll [String] Type deriving (Show, Eq, Ord, Data, Typeable)
+  | PrettyPrintForAll [String] Type deriving (Show, Read,Eq, Ord, Data, Typeable)
 
 -- |
 -- A typeclass constraint
@@ -312,3 +312,18 @@ everythingOnTypes (<>) f = go
   go t@(PrettyPrintObject t1) = f t <> go t1
   go t@(PrettyPrintForAll _ t1) = f t <> go t1
   go other = f other
+
+everythingWithContextOnTypes :: s -> r -> (r -> r -> r) -> (s -> Type -> (s, r)) -> Type -> r
+everythingWithContextOnTypes s0 r0 (<>) f = go' s0
+  where
+  go' s t = let (s', r) = f s t in r <> go s' t
+  go s (TypeApp t1 t2) = go' s t1 <> go' s t2
+  go s (SaturatedTypeSynonym _ tys) = foldl (<>) r0 (map (go' s) tys)
+  go s (ForAll _ ty _) = go' s ty
+  go s (ConstrainedType cs ty) = foldl (<>) r0 (map (go' s) $ concatMap snd cs) <> go' s ty
+  go s (RCons _ ty rest) = go' s ty <> go' s rest
+  go s (KindedType ty _) = go' s ty
+  go s (PrettyPrintFunction t1 t2) = go' s t1 <> go' s t2
+  go s (PrettyPrintObject t1) = go' s t1
+  go s (PrettyPrintForAll _ t1) = go' s t1
+  go _ _ = r0

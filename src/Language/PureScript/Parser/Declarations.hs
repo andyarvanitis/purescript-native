@@ -82,7 +82,7 @@ parseDataDeclaration = do
 parseTypeDeclaration :: TokenParser Declaration
 parseTypeDeclaration =
   TypeDeclaration <$> P.try (parseIdent <* indented <* doubleColon)
-                  <*> parsePolyType'
+                  <*> parsePolyType
 
 parseTypeSynonymDeclaration :: TokenParser Declaration
 parseTypeSynonymDeclaration =
@@ -129,7 +129,7 @@ parseExternDeclaration = P.try (reserved "foreign") *> indented *> reserved "imp
            -- TODO: add a wiki page link with migration info
            -- TODO: remove this deprecation warning in 0.8
            _ <- P.optional $ stringLiteral *> featureWasRemoved "Inline foreign string literals are no longer supported."
-           ty <- indented *> doubleColon *> noWildcards parsePolyType'
+           ty <- indented *> doubleColon *> noWildcards parsePolyType
            return $ ExternDeclaration ident ty))
 
 parseAssociativity :: TokenParser Associativity

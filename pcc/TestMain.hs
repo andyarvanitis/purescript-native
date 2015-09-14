@@ -136,7 +136,8 @@ makefileText = intercalate "\n" lines'
 skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
-  [ "Auto.purs"           -- rank-N
+  [ "862.purs"
+  , "Auto.purs"           -- rank-N
   , "CheckTypeClass.purs" -- rank-N
   , "Church.purs"         -- rank-N
   , "Collatz.purs"        -- rank-N (runPure)
