@@ -137,7 +137,7 @@ datasToCpps env mn
           supers :: [(String, [Type])]
           supers = [(addNamespace "type" (qual typ), mkTemplate . fst <$> tmplts)]
           fieldtypes :: [Type]
-          fieldtypes = catMaybes $ mktype mn <$> fields
+          fieldtypes = catMaybes $ mktype (ModuleName []) <$> fields
           members :: [Cpp]
           members
             | null fieldtypes = []
