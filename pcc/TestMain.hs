@@ -143,14 +143,14 @@ skipped =
   , "Collatz.purs"        -- rank-N (runPure)
   , "Do.purs"             -- rank-N, also mutually recursive lets
   , "Dollar.purs"         -- rank-N (inferred)
-  , "Eff.purs" -- rank-N (runPure)
+  , "Eff.purs"            -- rank-N (runPure)
   , "EmptyDataDecls.purs"
   , "ExplicitImportReExport.purs" -- ok, test has no main (would pass otherwise)
-  , "Fib.purs" -- rank-N (runST)
-  , "FinalTagless.purs" -- rank-N
-  , "Let.purs" -- rank-N
+  , "Fib.purs"                 -- rank-N (runST)
+  , "FinalTagless.purs"        -- rank-N
+  , "Let.purs"                 -- rank-N
   , "LiberalTypeSynonyms.purs" -- rank-N
-  , "Monad.purs" -- rank-N
+  , "Monad.purs"               -- rank-N
   , "MonadState.purs"
   , "MultiArgFunctions.purs" -- uses package purescript-functions
   , "MutRec2.purs" -- incompatible test, uses foreign data (would pass otherwise)
@@ -166,9 +166,9 @@ skipped =
   , "RebindableSyntax.purs"
   , "RowPolyInstanceContext.purs"
   , "ScopedTypeVariables.purs" -- rank-N
-  , "SequenceDesugared.purs" -- rank-N
+  , "SequenceDesugared.purs"   -- rank-N
   , "TCOCase.purs" -- recursive lambda
   , "TypeClasses.purs"
   , "TypedWhere.purs" -- rank-N
-  , "Where.purs" -- rank-N
+  , "Where.purs"      -- rank-N
   ]
