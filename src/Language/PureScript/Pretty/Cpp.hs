@@ -25,7 +25,7 @@ module Language.PureScript.Pretty.Cpp (
 
 import Data.Char (isLetter, isSpace)
 import Data.List
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, catMaybes)
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
@@ -114,11 +114,31 @@ literals = mkPattern' match
     ]
   match (CppBlock sts) = fmap concat $ sequence
     [ return "{\n"
-    , withIndent $ prettyStatements sts
+    , withIndent $ prettyStatements (lambdaDecls ++ (convertLambdaVar <$> sts))
     , return $ if null sts then "" else "\n"
     , currentIndent
     , return "}"
     ]
+    where
+    lambdaDecls :: [Cpp]
+    lambdaDecls = catMaybes $ lambdaDecl <$> sts
+
+    lambdaDecl :: Cpp -> Maybe Cpp
+    lambdaDecl (CppVariableIntroduction (ident, Just typ) [] _ (Just CppLambda {})) =
+      Just $ CppVariableIntroduction (ident, Just typ) [] [CppMutable] Nothing
+    lambdaDecl (CppComment _ cpp) = lambdaDecl cpp
+    lambdaDecl _ = Nothing
+
+    varname :: Cpp -> String
+    varname (CppVariableIntroduction (ident, _) _ _ _) = ident
+    varname _ = []
+
+    convertLambdaVar :: Cpp -> Cpp
+    convertLambdaVar (CppVariableIntroduction (ident, Just _) [] _ (Just lam@(CppLambda {})))
+      | ident `elem` (varname <$> lambdaDecls) = CppAssignment (CppVar ident) lam
+    convertLambdaVar (CppComment com cpp) = CppComment com (convertLambdaVar cpp)
+    convertLambdaVar cpp = cpp
+
   match (CppNamespace _ []) = return []
   match (CppNamespace (':':':':name) sts) = fmap concat $ sequence $
     [ return "\n"
