@@ -149,6 +149,7 @@ skipped =
   , "Fib.purs"                 -- rank-N (runST)
   , "FinalTagless.purs"        -- rank-N
   , "Let.purs"                 -- rank-N
+  , "Let2.purs" -- mutually recursive lets
   , "LiberalTypeSynonyms.purs" -- rank-N
   , "Monad.purs"               -- rank-N
   , "MonadState.purs"
@@ -156,6 +157,7 @@ skipped =
   , "MutRec2.purs" -- incompatible test, uses foreign data (would pass otherwise)
   , "MutRec3.purs" -- incompatible test, uses foreign data (would pass otherwise)
   , "Nested.purs"
+  , "NestedWhere.purs" -- mutually recursive where
   , "OperatorInlining.purs" -- excessive memory consumption bug
   , "OverlappingInstances.purs"  -- ok, should fail with C++
   , "OverlappingInstances2.purs" -- ok, should fail with C++

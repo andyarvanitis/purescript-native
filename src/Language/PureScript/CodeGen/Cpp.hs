@@ -406,13 +406,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     vals <- mapM valueToCpp values
     bindersToCpp maybeSpan ty binders vals
 
-  valueToCpp (Let (_, _, ty, _) ds val) = do
+  valueToCpp (Let _ ds val) = do
     ds' <- concat <$> mapM bindToCpp ds
     ret <- valueToCpp val
-    let typ = ty >>= mktype mn
-        tmplts = templparams' typ
-        ds'' = convertNestedLambdas tmplts <$> ds'
-    return $ CppApp (CppLambda [] [] Nothing (CppBlock (ds'' ++ [CppReturn ret]))) []
+    return $ CppApp (CppLambda [] [] Nothing (CppBlock (ds' ++ [CppReturn ret]))) []
 
   valueToCpp (Constructor {}) =
     return CppNoOp
