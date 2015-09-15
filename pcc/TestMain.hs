@@ -167,7 +167,6 @@ skipped =
   , "RowPolyInstanceContext.purs"
   , "ScopedTypeVariables.purs" -- rank-N
   , "SequenceDesugared.purs"   -- rank-N
-  , "TCOCase.purs" -- recursive lambda
   , "TypeClasses.purs"
   , "TypedWhere.purs" -- rank-N
   , "Where.purs"      -- rank-N

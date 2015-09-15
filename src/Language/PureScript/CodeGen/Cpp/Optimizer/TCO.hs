@@ -15,6 +15,9 @@
 
 module Language.PureScript.CodeGen.Cpp.Optimizer.TCO (tco) where
 
+import Data.List
+import Data.Monoid
+
 import Language.PureScript.Options
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CodeGen.Cpp.AST
@@ -77,19 +80,27 @@ tco' = everywhereOnCpp convert
       numSelfCalls = everythingOnCpp (+) countSelfCalls cpp
       numSelfCallsInTailPosition = everythingOnCpp (+) countSelfCallsInTailPosition cpp
       numSelfCallsUnderFunctions = everythingOnCpp (+) countSelfCallsUnderFunctions cpp
+      numSelfCallWithFnArgs = everythingOnCpp (+) countSelfCallsWithFnArgs cpp
     in
       numSelfCalls > 0
       && numSelfCalls == numSelfCallsInTailPosition
       && numSelfCallsUnderFunctions == 0
+      && numSelfCallWithFnArgs == 0
     where
     countSelfCalls :: Cpp -> Int
     countSelfCalls (CppApp (CppVar ident') _) | ident == ident' = 1
     countSelfCalls _ = 0
+
     countSelfCallsInTailPosition :: Cpp -> Int
     countSelfCallsInTailPosition (CppReturn ret) | isSelfCall ident ret = 1
     countSelfCallsInTailPosition _ = 0
+
     countSelfCallsUnderFunctions (CppFunction _ _ _ _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
     countSelfCallsUnderFunctions _ = 0
+
+    countSelfCallsWithFnArgs :: Cpp -> Int
+    countSelfCallsWithFnArgs ret = if isSelfCallWithFnArgs ident ret [] then 1 else 0
+
   toLoop :: String -> [(String, Maybe Type)] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
         map (\arg -> CppVariableIntroduction arg [] [CppMutable] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
@@ -97,7 +108,7 @@ tco' = everywhereOnCpp convert
     where
     block :: Cpp
     block = case everywhereOnCpp loopify cpp of
-              CppBlock sts -> CppBlock sts
+              CppBlock sts -> CppBlock $ nub sts -- nub added to eliminate duplicate var introductions
               stmt -> CppBlock [stmt]
     loopify :: Cpp -> Cpp
     loopify (CppReturn ret) | isSelfCall ident ret =
@@ -113,15 +124,26 @@ tco' = everywhereOnCpp convert
     collectSelfCallArgs :: [[Cpp]] -> Cpp -> [[Cpp]]
     collectSelfCallArgs allArgumentValues (CppApp fn args') = collectSelfCallArgs (args' : allArgumentValues) fn
     collectSelfCallArgs allArgumentValues _ = allArgumentValues
+
   isSelfCall :: String -> Cpp -> Bool
   isSelfCall ident (CppApp (CppVar ident') args)
     | ident == ident' && not (any isFunction args)
                       && not (all isInstanceDict args) = True
   isSelfCall ident (CppApp fn args) | not (any isFunction args) = isSelfCall ident fn
   isSelfCall _ _ = False
+
   isFunction :: Cpp -> Bool
   isFunction (CppFunction _ _ _ _ _ _) = True
   isFunction _ = False
+
+  isSelfCallWithFnArgs :: String -> Cpp -> [Cpp] -> Bool
+  isSelfCallWithFnArgs ident (CppVar ident') args | ident == ident' && any hasFunction args = True
+  isSelfCallWithFnArgs ident (CppApp fn args) acc = isSelfCallWithFnArgs ident fn (args ++ acc)
+  isSelfCallWithFnArgs _ _ _ = False
+
+  hasFunction :: Cpp -> Bool
+  hasFunction = getAny . everythingOnCpp mappend (Any . isFunction)
+
   isInstanceDict :: Cpp -> Bool
   isInstanceDict (CppInstance {}) = True
   isInstanceDict _ = False

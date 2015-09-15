@@ -60,8 +60,8 @@ optimize' :: (Monad m, MonadReader Options m) => Cpp -> m Cpp
 optimize' cpp = do
   opts <- ask
   return $ untilFixedPoint (applyAll
-    [ -- tco opts -- disabled, for now
-      removeCodeAfterReturnStatements
+    [ tco opts
+    , removeCodeAfterReturnStatements
     , removeUnusedArg
     , removeUndefinedApp
     , unThunk
