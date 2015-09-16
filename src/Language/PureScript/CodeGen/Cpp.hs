@@ -651,7 +651,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                            (templatesFromKinds typs')
                     else tmplts
         typs'' = if isDataTypeCtor'
-                   then (TypeConstructor (P.dotsTo '_' $ runModuleName mn)) <$> typs'
+                   then tycon tmplts <$> typs'
                    else typs'
         tymap = zip (mkTemplate <$> params) typs''
         struct = CppStruct (unqualClass, tmplts')
@@ -663,6 +663,11 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                then struct
                else CppNamespace ("::" ++ runModuleName classmn) [CppUseNamespace (runModuleName mn), struct]
     where
+    -----------------------------------------------------------------------------------------------
+    tycon :: [TemplateInfo] -> Type -> Type
+    -----------------------------------------------------------------------------------------------
+    tycon tmps t | t `elem` (templateToType <$> tmps) = TypeConstructor [] t
+    tycon _ t = TypeConstructor (P.dotsTo '_' $ runModuleName mn) t
     -----------------------------------------------------------------------------------------------
     toCpp :: [TemplateInfo] -> ((String, T.Type), Expr Ann) -> m Cpp
     -----------------------------------------------------------------------------------------------

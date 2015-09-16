@@ -138,7 +138,9 @@ runType tt@(Map fields) = typeName tt ++ "<" ++ (intercalate ", " $ map runField
   where
   runField :: (String, Type) -> String
   runField (name, typ) = show name ++ "_key" ++ ", const " ++ runType typ
+runType (TypeConstructor [] t) = "typename " ++ runType t ++ "::_"
 runType tt@(TypeConstructor mn t) = mn ++ "::" ++ typeName tt ++ runType t ++ "::template _"
+
 runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
 runType tt@(Template t []) = typeName tt ++ makeUnique t
 runType (Template t ts) = runType (Template t []) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
