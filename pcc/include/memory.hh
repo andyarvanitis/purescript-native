@@ -20,6 +20,8 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
+#include <cassert>
+#include <stdexcept>
 
 namespace PureScript {
 
@@ -84,17 +86,25 @@ constexpr auto cast(const std::shared_ptr<A<Args...>>& a) {
   return Private::cast<B<Args...>>(a);
 }
 
-class unsafe_any {
+class any {
+
+  public:
+  enum class Type : std::int8_t { Unknown = 0, Ptr, Int, Double, Char, String, Fn, EffFn };
+
+  const Type type = Type::Unknown;
+
   private:
+  using fn     = std::function<any(const any&)>;
+  using eff_fn = std::function<any()>;
+
   union {
-    std::shared_ptr<void> ptr;
-    int i;
-    long l;
-    double d;
-    char c;
-    // std::string s;
-    std::function<unsafe_any(const unsafe_any&)> f;
-    std::function<unsafe_any()> ef;
+    const std::shared_ptr<void> p;
+    const long i;
+    const double d;
+    const char c;
+    const std::string s;
+    const fn f;
+    const eff_fn e;
   };
 
   template <typename T, typename Enable = void>
@@ -102,7 +112,7 @@ class unsafe_any {
 
   // This specialization handles cases where type T is already a (shared) pointer
   template <typename T>
-  struct Helper <T, typename std::enable_if<std::is_assignable<decltype(ptr),T>::value>::type> {
+  struct Helper <T, typename std::enable_if<std::is_assignable<decltype(p),T>::value>::type> {
     static inline auto getPtr(const T& val) -> std::shared_ptr<void> {
       return val;
     }
@@ -113,7 +123,7 @@ class unsafe_any {
 
   // This specialization handles cases where type T is NOT a pointer
   template <typename T>
-  struct Helper <T, typename std::enable_if<!std::is_assignable<decltype(ptr),T>::value && !std::is_arithmetic<T>::value>::type> {
+  struct Helper <T, typename std::enable_if<!std::is_assignable<decltype(p),T>::value && !std::is_arithmetic<T>::value>::type> {
     static inline auto getPtr(const T& val) -> std::shared_ptr<void> {
       return std::make_shared<T>(val);
     }
@@ -125,79 +135,168 @@ class unsafe_any {
   public:
 
   constexpr
-  unsafe_any(const int& val) : i(val) {}
+  any(const int val) : type(Type::Int), i(val) {}
+
   constexpr
-  unsafe_any(const long& val) : l(val) {}
+  any(const long val) : type(Type::Int), i(val) {}
+
   constexpr
-  unsafe_any(const double& val) : d(val) {}
+  any(const double val) : type(Type::Double), d(val) {}
+
   constexpr
-  unsafe_any(const char& val) : c(val) {}
+  any(const char val) : type(Type::Char), c(val) {}
+
+  any(const std::string& val) : type(Type::String), s(val) {}
+  any(const char* const val) : type(Type::String), s(val) {}
+
+  any(const fn& val) : type(Type::Fn), f(val) {}
+  any(const eff_fn& val) : type(Type::EffFn), e(val) {}
 
   template <typename T>
-  unsafe_any(const T& val) : ptr(Helper<T>::getPtr(val)) {}
+  any(const T& val) : p(Helper<T>::getPtr(val)) {}
 
-  // unsafe_any(const char * val) : ptr(Helper<std::string>::getPtr(val)) {}
+  // any(const char * val) : p(Helper<std::string>::getPtr(val)) {}
 
-  unsafe_any(const unsafe_any& val) { ptr = val.ptr; }
+  any(const any& val) {
+    assert("copy constructor called");
+  }
 
-  unsafe_any() = default;
-  ~unsafe_any() {};
+  any() = default;
+  ~any() {};
 
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, int>::value, T>::type {
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type {
+    assert(type == Type::Int);
     return i;
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, double>::value, T>::type {
+    assert(type == Type::Double);
     return d;
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<!std::is_arithmetic<T>::value, T>::type {
-    return Helper<T>::castPtr(ptr);
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, char>::value, T>::type {
+    assert(type == Type::Char);
+    return c;
   }
 
-  unsafe_any operator()(unsafe_any arg) const {
+  template <typename T>
+  constexpr auto cast() const -> typename std::enable_if<!std::is_arithmetic<T>::value, T>::type {
+    assert(type == Type::Ptr);
+    return Helper<T>::castPtr(p);
+  }
+
+  any operator()(any arg) const {
+    assert(type == Type::Fn);
     return f(arg);
   }
 
-  unsafe_any operator()() const {
-    return ef();
+  any operator()() const {
+    assert(type == Type::EffFn);
+    return e();
   }
 
-  // TODO: long?
-  //
-  operator int() const {
-    return i;
+  // operator int() const {
+  //   return i;
+  // }
+
+  inline auto operator[](const std::string&) const -> any;
+
+  inline auto operator[](const size_t) const -> any;
+
+  inline auto operator==(const any& rhs) const -> bool {
+    switch (type) {
+      case Type::Int:     return i == rhs.i;
+      case Type::Double:  return d == rhs.d;
+      case Type::Char:    return c == rhs.c;
+      case Type::String:  return s == rhs.s;
+      case Type::Ptr:     return p == rhs.p;
+      default: throw std::runtime_error("unsupported type");
+    }
   }
 
-  inline auto operator[](const std::string&) const -> unsafe_any;
+  inline auto operator<(const any& rhs) const -> bool {
+    switch (type) {
+      case Type::Int:     return i < rhs.i;
+      case Type::Double:  return d < rhs.d;
+      case Type::Char:    return c < rhs.c;
+      case Type::String:  return s < rhs.s;
+      default: throw std::runtime_error("unsupported type");
+    }
+  }
 
-  inline auto operator[](const size_t) const -> unsafe_any;
+  inline auto operator>(const any& rhs) const -> bool {
+    switch (type) {
+      case Type::Int:     return i > rhs.i;
+      case Type::Double:  return d > rhs.d;
+      case Type::Char:    return c > rhs.c;
+      case Type::String:  return s > rhs.s;
+      default: throw std::runtime_error("unsupported type");
+    }
+  }
+
+  inline auto operator+(const any& rhs) const -> any {
+    switch (type) {
+      case Type::Int:     return i + rhs.i;
+      case Type::Double:  return d + rhs.d;
+      case Type::Char:    return c + rhs.c;
+      case Type::String:  return s + rhs.s;
+      default: throw std::runtime_error("unsupported type");
+    }
+  }
+
+  inline auto operator-(const any& rhs) const -> any {
+    switch (type) {
+      case Type::Int:     return i - rhs.i;
+      case Type::Double:  return d - rhs.d;
+      case Type::Char:    return c - rhs.c;
+      default: throw std::runtime_error("unsupported type");
+    }
+  }
+
+  inline auto operator*(const any& rhs) const -> any {
+    switch (type) {
+      case Type::Int:     return i * rhs.i;
+      case Type::Double:  return d * rhs.d;
+      default: throw std::runtime_error("unsupported type");
+    }
+  }
+
+  inline auto operator/(const any& rhs) const -> any {
+    switch (type) {
+      case Type::Int:     return i / rhs.i;
+      case Type::Double:  return d / rhs.d;
+      default: throw std::runtime_error("unsupported type");
+    }
+  }
+
+  inline auto operator%(const any& rhs) const -> any {
+    switch (type) {
+      case Type::Int:     return i % rhs.i;
+      default: throw std::runtime_error("unsupported type");
+    }
+  }
 
 };
 
-using any_map = std::unordered_map<std::string, const unsafe_any>;
+using any_map = std::unordered_map<std::string, const any>;
 
 #define make_map(...) std::make_shared<any_map>(__VA_ARGS__)
 
-inline auto unsafe_any::operator[](const std::string& rhs) const -> unsafe_any {
+inline auto any::operator[](const std::string& rhs) const -> any {
   return this->cast<any_map>().at(rhs);
 }
 
-using vector = std::vector<unsafe_any>;
+using vector = std::vector<any>;
 
 // TODO: list/array
 //
-inline auto unsafe_any::operator[](const size_t rhs) const -> unsafe_any {
+inline auto any::operator[](const size_t rhs) const -> any {
   return this->cast<vector>()[rhs];
 }
-
-// TODO: use this instead?
-//
-using any = unsafe_any;
 
 
 } // namespace PureScript
