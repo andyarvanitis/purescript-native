@@ -359,7 +359,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     | Just (Map pairs) <- typFromExpr val = do
       case lookup prop pairs of
         Just _ -> do
-          val' <- fnVarToCpp val
+          val' <- valueToCpp val
           return $ CppMapAccessor (CppStringLiteral prop) val'
         _ -> error $ "Bad record name: " ++ prop
 
@@ -391,7 +391,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp e@App{} = do
     let (f, args) = unApp e []
-    args' <- mapM fnVarToCpp args
+    args' <- mapM valueToCpp args
     case f of
 
       Var (_, _, Just ty, Just IsNewtype) name ->
@@ -755,16 +755,16 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   --
   -- mkInstance ident _ = return CppNoOp
 
-  -------------------------------------------------------------------------------------------------
-  fnVarToCpp :: Expr Ann -> m Cpp
-  -------------------------------------------------------------------------------------------------
-  fnVarToCpp (Var (_, _, Just ty, _) qid@(Qualified mn' ident))
-    | Just typ <- mktype mn ty,
-      Just vty <- findValue (fromMaybe mn mn') ident,
-      Just declType <- mktype mn vty,
-      tmplts@(_:_) <- snd <$> templateMappings (declType, typ) =
-      return $ asTemplate tmplts (varToCpp qid)
-  fnVarToCpp v = valueToCpp v
+  -- -------------------------------------------------------------------------------------------------
+  -- fnVarToCpp :: Expr Ann -> m Cpp
+  -- -------------------------------------------------------------------------------------------------
+  -- fnVarToCpp (Var (_, _, Just ty, _) qid@(Qualified mn' ident))
+  --   | Just typ <- mktype mn ty,
+  --     Just vty <- findValue (fromMaybe mn mn') ident,
+  --     Just declType <- mktype mn vty,
+  --     tmplts@(_:_) <- snd <$> templateMappings (declType, typ) =
+  --     return $ asTemplate tmplts (varToCpp qid)
+  -- fnVarToCpp v = valueToCpp v
 
   -- -------------------------------------------------------------------------------------------------
   -- fnApp :: Expr Ann -> m Cpp

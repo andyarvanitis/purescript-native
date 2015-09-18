@@ -159,11 +159,11 @@ class unsafe_any {
     return Helper<T>::castPtr(ptr);
   }
 
-  unsafe_any operator()(unsafe_any arg) {
+  unsafe_any operator()(unsafe_any arg) const {
     return f(arg);
   }
 
-  unsafe_any operator()() {
+  unsafe_any operator()() const {
     return ef();
   }
 
