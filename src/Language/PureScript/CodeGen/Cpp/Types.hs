@@ -42,6 +42,7 @@ data Type = Primitive String
           | DeclType String
           | EffectFunction Type
           | AutoType
+          | AnyType
           deriving (Show, Data, Typeable)
 
 instance Eq Type where
@@ -55,6 +56,7 @@ instance Eq Type where
   (DeclType e) == (DeclType e') = e == e'
   (EffectFunction b) == (EffectFunction b') = b == b'
   AutoType == AutoType = True
+  AnyType == AnyType = True
   _ == _ = False
   a /= b = not (a == b)
 
@@ -145,6 +147,7 @@ runType tt@(DeclType s) = typeName tt ++ '(' : s ++ ")"
 runType tt@(Template t []) = typeName tt ++ makeUnique t
 runType (Template t ts) = runType (Template t []) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
 runType AutoType = "auto"
+runType AnyType = "any"
 
 autoType ::T.Type
 autoType = T.TypeConstructor (Qualified Nothing (ProperName "auto"))
@@ -157,6 +160,7 @@ typeName Map{} = "cmap"
 typeName TypeConstructor{} = "type::"
 typeName DeclType{} = "decltype"
 typeName AutoType = ""
+typeName AnyType = ""
 typeName _ = ""
 
 everywhereOnTypes :: (Type -> Type) -> Type -> Type

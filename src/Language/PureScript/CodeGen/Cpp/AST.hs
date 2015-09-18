@@ -14,12 +14,19 @@
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE CPP #-}
 
 module Language.PureScript.CodeGen.Cpp.AST where
 
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative, (<$>), (<*>))
+import Data.Traversable (traverse)
+#endif
+import Control.Monad.Identity
 import Data.Data
 import Language.PureScript.Comments
 import Language.PureScript.CodeGen.Cpp.Types
+import Language.PureScript.Traversals
 
 -- |
 -- Built-in unary operators
@@ -208,7 +215,7 @@ data Cpp
   -- |
   -- Partial function application (fn, args, arg types, num of parameters not applied)
   --
-  | CppPartialApp Cpp [Cpp] [Type] Int
+  | CppPartialApp [Type] Int Cpp [Cpp]
   -- |
   -- Variable
   --
@@ -344,7 +351,7 @@ everywhereOnCpp f = go
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
   go (CppStruct name typs supers cms ims) = f (CppStruct name typs supers (map go cms) (map go ims))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
-  go (CppPartialApp j cpp typs n) = f (CppPartialApp (go j) (map go cpp) typs n)
+  go (CppPartialApp typs n j cpp) = f (CppPartialApp typs n (go j) (map go cpp))
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
@@ -364,37 +371,40 @@ everywhereOnCpp f = go
   go other = f other
 
 everywhereOnCppTopDown :: (Cpp -> Cpp) -> Cpp -> Cpp
-everywhereOnCppTopDown f = go . f
+everywhereOnCppTopDown f = runIdentity . everywhereOnCppTopDownM (Identity . f)
+
+everywhereOnCppTopDownM :: (Applicative m, Monad m) => (Cpp -> m Cpp) -> Cpp -> m Cpp
+everywhereOnCppTopDownM f = f >=> go
   where
-  go :: Cpp -> Cpp
-  go (CppUnary op j) = CppUnary op (go (f j))
-  go (CppBinary op j1 j2) = CppBinary op (go (f j1)) (go (f j2))
-  go (CppArrayLiteral t cpp) = CppArrayLiteral t (map (go . f) cpp)
-  go (CppIndexer j1 j2) = CppIndexer (go (f j1)) (go (f j2))
-  go (CppObjectLiteral cpp) = CppObjectLiteral (map (fmap (go . f)) cpp)
-  go (CppAccessor t prop j) = CppAccessor t (go (f prop)) (go (f j))
-  go (CppMapAccessor j1 j2) = CppMapAccessor (go (f j1)) (go (f j2))
-  go (CppFunction name tmps args rty qs j) = CppFunction name tmps args rty qs (go (f j))
-  go (CppLambda cps args rty j) = CppLambda cps args rty (go (f j))
-  go (CppStruct name typs supers cms ims) = CppStruct name typs supers (map (go . f) cms) (map (go . f) ims)
-  go (CppApp j cpp) = CppApp (go (f j)) (map (go . f) cpp)
-  go (CppPartialApp j cpps typs n) = CppPartialApp (go (f j)) (map (go . f) cpps) typs n
-  go (CppConditional j1 j2 j3) = CppConditional (go (f j1)) (go (f j2)) (go (f j3))
-  go (CppBlock cpp) = CppBlock (map (go . f) cpp)
-  go (CppNamespace name cpp) = CppNamespace name (map (go . f) cpp)
-  go (CppVariableIntroduction name tmps qs j) = CppVariableIntroduction name tmps qs (fmap (go . f) j)
-  go (CppAssignment j1 j2) = CppAssignment (go (f j1)) (go (f j2))
-  go (CppWhile j1 j2) = CppWhile (go (f j1)) (go (f j2))
-  go (CppFor name j1 j2 j3) = CppFor name (go (f j1)) (go (f j2)) (go (f j3))
-  go (CppForIn name j1 j2) = CppForIn name (go (f j1)) (go (f j2))
-  go (CppIfElse j1 j2 j3) = CppIfElse (go (f j1)) (go (f j2)) (fmap (go . f) j3)
-  go (CppReturn j) = CppReturn (go (f j))
-  go (CppThrow j) = CppThrow (go (f j))
-  go (CppTypeOf j) = CppTypeOf (go (f j))
-  go (CppLabel name j) = CppLabel name (go (f j))
-  go (CppInstanceOf j1 j2) = CppInstanceOf (go (f j1)) (go (f j2))
-  go (CppSequence cpp) = CppSequence (map (go . f) cpp)
-  go (CppComment com j) = CppComment com (go (f j))
+  f' = f >=> go
+  go (CppUnary op j) = CppUnary op <$> f' j
+  go (CppBinary op j1 j2) = CppBinary op <$> f' j1 <*> f' j2
+  go (CppArrayLiteral t cpp) = CppArrayLiteral t <$> traverse f' cpp
+  go (CppIndexer j1 j2) = CppIndexer <$> f' j1 <*> f' j2
+  go (CppObjectLiteral cpp) = CppObjectLiteral <$> traverse (sndM f') cpp
+  go (CppAccessor t prop j) = CppAccessor t prop <$> f' j
+  go (CppMapAccessor j1 j2) = CppMapAccessor <$> f' j1 <*> f' j2
+  go (CppFunction name tmps args rty qs j) = CppFunction name tmps args rty qs <$> f' j
+  go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
+  go (CppStruct name typs supers cms ims) = CppStruct name typs supers <$> traverse f' cms <*> traverse f' ims
+  go (CppApp j cpp) = CppApp <$> f' j <*> traverse f' cpp
+  go (CppPartialApp typs n j cpps) = CppPartialApp typs n <$> f' j <*> traverse f' cpps
+  go (CppConditional j1 j2 j3) = CppConditional <$> f' j1 <*> f' j2 <*> f' j3
+  go (CppBlock cpp) = CppBlock <$> traverse f' cpp
+  go (CppNamespace name cpp) = CppNamespace name <$> traverse f' cpp
+  go (CppSequence cpp) = CppSequence <$> traverse f' cpp
+  go (CppVariableIntroduction name tmps qs j) = CppVariableIntroduction name tmps qs <$> traverse f' j
+  go (CppAssignment j1 j2) = CppAssignment <$> f' j1 <*> f' j2
+  go (CppWhile j1 j2) = CppWhile <$> f' j1 <*> f' j2
+  go (CppFor name j1 j2 j3) = CppFor name <$> f' j1 <*> f' j2 <*> f' j3
+  go (CppForIn name j1 j2) = CppForIn name <$> f' j1 <*> f' j2
+  go (CppIfElse j1 j2 j3) = CppIfElse <$> f' j1 <*> f' j2 <*> traverse f' j3
+  go (CppReturn j) = CppReturn <$> f' j
+  go (CppThrow j) = CppThrow <$> f' j
+  go (CppTypeOf j) = CppTypeOf <$> f' j
+  go (CppLabel name j) = CppLabel name <$> f' j
+  go (CppInstanceOf j1 j2) = CppInstanceOf <$> f' j1 <*> f' j2
+  go (CppComment com j) = CppComment com <$> f' j
   go other = f other
 
 everythingOnCpp :: (r -> r -> r) -> (Cpp -> r) -> Cpp -> r
@@ -411,7 +421,7 @@ everythingOnCpp (<>) f = go
   go j@(CppLambda _ _ _ j1) = f j <> go j1
   go j@(CppStruct _ _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
-  go j@(CppPartialApp j1 cpp _ _) = foldl (<>) (f j <> go j1) (map go cpp)
+  go j@(CppPartialApp _ _ j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)

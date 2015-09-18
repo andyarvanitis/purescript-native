@@ -51,7 +51,7 @@ literals = mkPattern' match
   match CppNoOp = return []
   match CppEndOfHeader = return []
   match (CppNumericLiteral n) = return $ either show show n
-  match (CppStringLiteral s) = return $ string s ++ "s"
+  match (CppStringLiteral s) = return $ string s
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
@@ -407,7 +407,7 @@ app = mkPattern' match
   match (CppApp val args) = do
     cpps <- mapM prettyPrintCpp' args
     return (intercalate ", " cpps, val)
-  match (CppPartialApp (CppDataConstructor name ttyps) args atyps _) = do
+  match (CppPartialApp atyps _ (CppDataConstructor name ttyps) args) = do
     args' <- mapM prettyPrintCpp' args
     dtmps <- prettyPrintCpp' (CppData name ttyps)
     let fn = "constructor" ++ angles (dtmps ++ concatMap ((", " ++) . runType) atyps)
@@ -417,16 +417,16 @@ app = mkPattern' match
 partapp :: Pattern PrinterState Cpp ((String, Int), Cpp)
 partapp = mkPattern' match
   where
-  match (CppPartialApp (CppDataConstructor{}) _ _ _) = mzero
-  match (CppPartialApp (CppAccessor t val' _) (inst@CppInstance{} : args) _ n) = do
+  match (CppPartialApp _ _ (CppDataConstructor{}) _) = mzero
+  match (CppPartialApp _ n (CppAccessor t val' _) (inst@CppInstance{} : args)) = do
     inst' <- prettyPrintCpp' inst
     cpps <- mapM prettyPrintCpp' (CppAccessor t val' (CppScope inst') : args)
     return ((intercalate ", " cpps, n), CppNoOp)
-  match (CppPartialApp val (inst@CppInstance{} : args) _ n) = do
+  match (CppPartialApp _ n val (inst@CppInstance{} : args)) = do
     inst' <- prettyPrintCpp' inst
     cpps <- mapM prettyPrintCpp' (CppAccessor Nothing val (CppScope inst') : args)
     return ((intercalate ", " cpps, n), CppNoOp)
-  match (CppPartialApp val args _ n) = do
+  match (CppPartialApp _ n val args) = do
     cpps <- mapM prettyPrintCpp' (val : args)
     return ((intercalate ", " cpps, n), CppNoOp)
   match _ = mzero
@@ -568,6 +568,7 @@ argstr (name, Just typ@(Array {})) = argRefStr name typ
 argstr (name, Just typ@(Map {})) = argRefStr name typ
 argstr (name, Just typ@(Function {})) = argRefStr name typ
 argstr (name, Just typ@(EffectFunction {})) = argRefStr name typ
+argstr (name, Just typ@AnyType) = argRefStr name typ
 argstr (name, Just typ) = argStr name typ
 
 argStr :: String -> Type -> String

@@ -32,12 +32,17 @@
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE CPP #-}
 
 module Language.PureScript.CodeGen.Cpp.Optimizer (
     optimize
 ) where
 
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative)
+#endif
 import Control.Monad.Reader (MonadReader, ask, asks)
+import Control.Monad.Supply.Class (MonadSupply)
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.Options
@@ -51,17 +56,17 @@ import Language.PureScript.CodeGen.Cpp.Optimizer.Unused
 -- |
 -- Apply a series of optimizer passes to simplified C++11 code
 --
-optimize :: (Monad m, MonadReader Options m) => Cpp -> m Cpp
+optimize :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => Cpp -> m Cpp
 optimize cpp = do
   noOpt <- asks optionsNoOptimizations
   if noOpt then return cpp else optimize' cpp
 
-optimize' :: (Monad m, MonadReader Options m) => Cpp -> m Cpp
+optimize' :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => Cpp -> m Cpp
 optimize' cpp = do
   opts <- ask
-  return $ untilFixedPoint (applyAll
-    [ tco opts
-    , removeCodeAfterReturnStatements
+  untilFixedPoint (inlineFnComposition . applyAll
+    [ {- tco opts -}
+      removeCodeAfterReturnStatements
     , removeUnusedArg
     , removeUndefinedApp
     , unThunk
@@ -74,8 +79,9 @@ optimize' cpp = do
     , inlineOperator (C.dataArrayUnsafe, C.unsafeIndex) $ flip CppIndexer
     , inlineCommonOperators ]) cpp
 
-untilFixedPoint :: (Eq a) => (a -> a) -> a -> a
+untilFixedPoint :: (Monad m, Eq a) => (a -> m a) -> a -> m a
 untilFixedPoint f = go
   where
-  go a = let a' = f a in
-          if a' == a then a' else go a'
+  go a = do
+   a' <- f a
+   if a' == a then return a' else go a'

@@ -63,7 +63,7 @@ synonymsToCpp env mn
     ptmps = concatMap go tmps
       where
       go :: TemplateInfo -> [TemplateInfo]
-      go (t, n) = (\p -> (t ++ show p, 0)) <$> [1 .. n]
+      go (t', n') = (\p -> (t' ++ show p, 0)) <$> [1 .. n']
   toTypeAlias (n, tmps, t) = CppTypeAlias (n, tmps) t []
 
 -- |

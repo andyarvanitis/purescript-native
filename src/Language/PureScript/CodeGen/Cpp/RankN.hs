@@ -94,7 +94,7 @@ wrapRankNCpps :: [Type] -> Cpp -> Cpp
 wrapRankNCpps tmplts cpp = everywhereOnCpp go cpp
   where
   go :: Cpp -> Cpp
-  go cpp'@(CppPartialApp _ _ ts _)
+  go cpp'@(CppPartialApp ts _ _ _)
     | rns@(_:_) <- (nub $ concatMap templateVars ts) \\ tmplts = rankNWrapper rns cpp'
   go cpp'@(CppApp (CppDataConstructor _ ts) _)
     | rns@(_:_) <- (nub $ concatMap templateVars ts) \\ tmplts = rankNWrapper rns cpp'
