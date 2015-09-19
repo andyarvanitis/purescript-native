@@ -367,13 +367,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -- valueToCpp (Accessor _ prop val)
   --   | "__superclass_" `isPrefixOf` prop = valueToCpp val
 
-  valueToCpp (Accessor _ prop val)
-    | Just (Map pairs) <- typFromExpr val = do
-      case lookup prop pairs of
-        Just _ -> do
-          val' <- valueToCpp val
-          return $ CppMapAccessor (CppStringLiteral prop) val'
-        _ -> error $ "Bad record name: " ++ prop
+  -- valueToCpp (Accessor _ prop val)
+  --   | Just (Map pairs) <- typFromExpr val = do
+  --     case lookup prop pairs of
+  --       Just _ -> do
+  --         val' <- valueToCpp val
+  --         return $ CppMapAccessor (CppStringLiteral prop) val'
+  --       _ -> error $ "Bad record name: " ++ prop
 
   valueToCpp (Accessor _ prop val) =
     CppIndexer <$> pure (CppStringLiteral prop) <*> valueToCpp val
@@ -383,7 +383,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     obj' <- valueToCpp obj
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (fst <$> allKeys) \\ (fst <$> updatedFields)
-        origFields = (\key -> (key, CppMapAccessor (CppStringLiteral key) obj')) <$> origKeys
+        origFields = (\key -> (key, CppAccessor Nothing (CppStringLiteral key) obj')) <$> origKeys
     return $ CppObjectLiteral . sortBy (compare `on` fst) $ origFields ++ updatedFields
 
   valueToCpp (ObjectUpdate _ _ _) = error $ "Bad Type in object update!"
@@ -427,10 +427,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (params, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
-        return $ CppArrayLiteral (Just $ Native "any::map" [])
-                                 (zipWith (\a b -> CppArrayLiteral Nothing [CppStringLiteral a, b])
-                                          ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
-                                          args')
+        return . CppObjectLiteral $ zip ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns)) args'
 
       -- Var (_, _, Just _, _) (Qualified (Just _) _) ->
       --   fnApp e
@@ -598,7 +595,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       return (CppVariableIntroduction (propVar, Nothing)
                                       []
                                       []
-                                      (Just (CppMapAccessor (CppStringLiteral prop) (CppVar varName)))
+                                      (Just (CppAccessor Nothing (CppStringLiteral prop) (CppVar varName)))
               : cpp)
 
   literalToBinderCpp varName done (ArrayLiteral bs) = do

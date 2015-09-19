@@ -63,18 +63,16 @@ literals = mkPattern' match
     ]
   match (CppObjectLiteral []) = return "nullptr"
   match (CppObjectLiteral ps) = fmap concat $ sequence
-    [ return $ "make_cmap(\n"
+    [ return $ "any::map{\n"
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
                             val <- prettyPrintCpp' value
-                            -- macro arguments => need parens sometimes
-                            let val' = if ',' `elem` val then parens val else val
-                            return $ show key ++ "_key" ++ ", " ++ val'
+                            return $ "{ " ++ show key ++ ", " ++ val ++ " }"
         indentString <- currentIndent
         return $ intercalate ", \n" $ map (indentString ++) cpps
     , return "\n"
     , currentIndent
-    , return ")"
+    , return "}"
     ]
   match (CppFunction name tmps args rty qs ret) =
     let qs' = delete CppTemplSpec qs in
