@@ -46,7 +46,7 @@ valueHasTemplates = everythingOnCpp (||) go
   go :: Cpp -> Bool
   go (CppAccessor (Just t) _ _) | everythingOnTypes (||) isTemplate t = True
   go (CppData _ ts) | any (everythingOnTypes (||) isTemplate) ts = True
-  go (CppCast _ t) | everythingOnTypes (||) isTemplate t = True
+  go (CppCast t _) | everythingOnTypes (||) isTemplate t = True
   go (CppPartialApp ts _ _ _) | any (everythingOnTypes (||) isTemplate) ts = True
   go (CppInstance _ _ _ ps) | any (everythingOnTypes (||) isTemplate) $ catMaybes (snd <$> ps) = True
   go (CppVar s) | '<' `elem` s = True

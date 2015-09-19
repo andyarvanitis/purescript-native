@@ -218,8 +218,8 @@ literals = mkPattern' match
     return (prettyPrintCpp1 (CppData name []) ++ angles (intercalate "," $ runType <$> typs))
   match (CppDataConstructor name typs) =
     return ("construct" ++ angles (prettyPrintCpp1 (CppData name typs)))
-  match (CppCast val typ) =
-    return ("cast" ++ angles (runType typ) ++ parens (prettyPrintCpp1 val))
+  match (CppCast typ val) =
+    return (prettyPrintCpp1 val ++ ".cast" ++ angles (runType typ) ++ parens [])
   match (CppVar ident) = return ident
   match (CppInstance [] (cls:_, _) _ params) =
     return $ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
@@ -541,7 +541,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                     , binary    LessThanOrEqual      " <= "
                     , binary    GreaterThan          " > "
                     , binary    GreaterThanOrEqual   " >= "
-                    , AssocR instanceOf $ \v1 v2 -> "instance_of" ++ angles v2 ++ parens v1 ]
+                    , AssocR instanceOf $ \v1 v2 -> v1 ++ ".instance_of" ++ angles v2 ++ parens [] ]
                   , [ binary    Equal                " == "
                     , binary    NotEqual             " != " ]
                   , [ binary    BitwiseAnd           " & " ]

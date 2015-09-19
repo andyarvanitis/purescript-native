@@ -63,9 +63,11 @@ datasToCpps env mn
       fromStruct :: String -> Cpp -> Cpp
       fromStruct _ (CppStruct (_, (_:_)) [] [] [] []) = CppNoOp
       fromStruct _ (CppStruct _ _ _ _ [CppTypeAlias{}]) = CppNoOp
-      fromStruct ns (CppStruct (name, tmplts) _ _ _ _) =
-        let tmplts' = remTemplateDefaults tmplts in
-        CppTypeAlias (name, tmplts') (Native (ns ++ "::" ++ name) (mkTemplate . fst <$> tmplts')) "managed"
+      fromStruct ns (CppStruct (name, _) _ _ _ _) =
+      -- fromStruct ns (CppStruct (name, tmplts) _ _ _ _) =
+        -- let tmplts' = remTemplateDefaults tmplts in
+        -- CppTypeAlias (name, tmplts') (Native (ns ++ "::" ++ name) (mkTemplate . fst <$> tmplts')) "managed"
+        CppTypeAlias (name, []) (Native (ns ++ "::" ++ name) []) "managed"
       fromStruct _ _ = CppNoOp
 
     dataTypes :: [(Qualified ProperName, E.TypeKind)] -> [Cpp]
@@ -74,10 +76,10 @@ datasToCpps env mn
       where
       go :: (Qualified ProperName, E.TypeKind) -> [Cpp]
       go (typ, E.DataType ts cs) =
-        let tmplts = tmpltsReplFromRight
-                       (templateFromKind <$> ts)
-                       (concatMap templateParams (snd <$> cs))
-        in dataTypeCtors (qual typ) tmplts
+        -- let tmplts = tmpltsReplFromRight
+        --                (templateFromKind <$> ts)
+        --                (concatMap templateParams (snd <$> cs))
+        dataTypeCtors (qual typ) []
       go _ = []
 
     dataTypeCtors :: String -> [TemplateInfo] -> [Cpp]
@@ -91,24 +93,25 @@ datasToCpps env mn
       ]
     dataTypeCtors name params@(p:ps) = [
         -- The template declaration
-        CppStruct (name, addTemplateDefaults params) [] [] [] []
+        -- CppStruct (name, addTemplateDefaults params) [] [] [] []
+        CppStruct (name, []) [] [] [] []
         -- The fully applied type constructor
       , CppStruct (name, params)
                   [] [] []
                   [CppFunction name [] [] Nothing [CppVirtual, CppDestructor, CppDefault] CppNoOp]
-      ] ++ dataTypePartialCtors name [p] ps
+      ] {- ++ dataTypePartialCtors name [p] ps -}
 
-    dataTypePartialCtors :: String -> [TemplateInfo] -> [TemplateInfo] -> [Cpp]
-    dataTypePartialCtors name applied notApplied@(p:ps) =
-        (CppStruct (name, applied)
-                   (typeFromTemplate <$> applied)
-                   [] []
-                   [CppTypeAlias ("_", notApplied) (Native name (mkTemplate . fst <$> (applied ++ notApplied))) []])
-      : dataTypePartialCtors name (applied ++ [p]) ps
-      where
-      typeFromTemplate :: TemplateInfo -> Type
-      typeFromTemplate (name', _) = Template name' []
-    dataTypePartialCtors _ _ _ = []
+    -- dataTypePartialCtors :: String -> [TemplateInfo] -> [TemplateInfo] -> [Cpp]
+    -- dataTypePartialCtors name applied notApplied@(p:ps) =
+    --     (CppStruct (name, applied)
+    --                (typeFromTemplate <$> applied)
+    --                [] []
+    --                [CppTypeAlias ("_", notApplied) (Native name (mkTemplate . fst <$> (applied ++ notApplied))) []])
+    --   : dataTypePartialCtors name (applied ++ [p]) ps
+    --   where
+    --   typeFromTemplate :: TemplateInfo -> Type
+    --   typeFromTemplate (name', _) = Template name' []
+    -- dataTypePartialCtors _ _ _ = []
 
     dataValueCtors :: [(Qualified ProperName, E.TypeKind)] -> ([Cpp], [Cpp])
     dataValueCtors ds | cpps@(_:_) <- concatMap (fst . go) ds,
@@ -120,13 +123,13 @@ datasToCpps env mn
         where
         alias :: Maybe Cpp
         alias = Nothing
-        tmplts :: [TemplateInfo]
-        tmplts = tmpltsReplFromRight
-                   (templateFromKind <$> ts)
-                   (concatMap templateParams (snd <$> cs))
+        -- tmplts :: [TemplateInfo]
+        -- tmplts = tmpltsReplFromRight
+        --            (templateFromKind <$> ts)
+        --            (concatMap templateParams (snd <$> cs))
         ctorStruct :: (ProperName, [T.Type]) -> Cpp
         ctorStruct (ctor, fields) =
-          CppStruct (name, tmplts) [] supers' [] members
+          CppStruct (name, []) [] supers' [] members
           where
           name :: String
           name = P.prettyPrintCpp [flip CppData [] $ runProperName ctor]
@@ -135,17 +138,19 @@ datasToCpps env mn
             | null fieldtypes = supers
             | otherwise = supers ++ [("tuple", fieldtypes)]
           supers :: [(String, [Type])]
-          supers = [(addNamespace "type" (qual typ), mkTemplate . fst <$> tmplts)]
+          supers = [(addNamespace "type" (qual typ), [])]
+          -- supers = [(addNamespace "type" (qual typ), mkTemplate . fst <$> tmplts)]
           fieldtypes :: [Type]
-          fieldtypes = catMaybes $ mktype (ModuleName []) <$> fields
+          -- fieldtypes = catMaybes $ mktype (ModuleName []) <$> fields
+          fieldtypes = replicate (length fields) AnyType
           members :: [Cpp]
           members
             | null fieldtypes = []
             | otherwise = [CppVar $ "using tuple<" ++ intercalate ", " (runType <$> fieldtypes) ++ ">::tuple;"]
       go _ = ([], Nothing)
 
-    templateParams :: [T.Type] -> [TemplateInfo]
-    templateParams = nub . concatMap (templparams' . mktype mn)
+    -- templateParams :: [T.Type] -> [TemplateInfo]
+    -- templateParams = nub . concatMap (templparams' . mktype mn)
 
     qual :: Qualified ProperName -> String
     qual name = qualifiedToStr mn (Ident . runProperName) name

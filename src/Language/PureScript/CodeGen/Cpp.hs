@@ -317,18 +317,21 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp (Var (_, _, ty, Just (IsConstructor _ fields)) ident) =
     let qname = qualifiedToStr' id ident
-        tmplts = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
+        -- tmplts = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
         fieldCount = length fields in
     return $ if fieldCount == 0
-               then CppApp (CppDataConstructor (qualifiedToStr' id ident) tmplts) []
-               else let argTypes = maybe [] (init . fnTypesN fieldCount) (ty >>= mktype mn) in
-                    CppPartialApp argTypes fieldCount (CppDataConstructor (qualifiedToStr' id ident) tmplts) []
+               then CppApp (CppDataConstructor (qualifiedToStr' id ident) []) []
+               else let argTypes = maybe [] (init . fnTypesN fieldCount) (ty >>= mktype mn)
+                        argTypes' = replicate (length argTypes) AnyType
+                    in
+                    CppPartialApp argTypes' fieldCount (CppDataConstructor (qualifiedToStr' id ident) []) []
 
   valueToCpp (Var (_, _, ty, Just IsNewtype) ident) =
     let qname = qualifiedToStr' id ident
-        tmplts = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
+        -- tmplts = maybe [] getDataTypeArgs (ty >>= mktype mn >>= getDataType qname)
         argTypes = maybe [] (init . fnTypesN 1) (ty >>= mktype mn)
-    in return (CppPartialApp argTypes 1 (CppDataConstructor (qualifiedToStr' id ident) tmplts) [])
+        argTypes' = replicate (length argTypes) AnyType
+    in return (CppPartialApp argTypes' 1 (CppDataConstructor (qualifiedToStr' id ident) []) [])
 
   valueToCpp (Var _ ident) =
     return $ varToCpp ident
@@ -396,24 +399,26 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
       Var (_, _, Just ty, Just IsNewtype) name ->
         let qname = qualifiedToStr' id name
-            tmplts = maybe [] getDataTypeArgs (mktype mn ty >>= getDataType qname)
-            val = CppDataConstructor qname tmplts in
+            -- tmplts = maybe [] getDataTypeArgs (mktype mn ty >>= getDataType qname)
+            val = CppDataConstructor qname [] in
         return (CppApp val args')
 
       Var (_, _, Just ty, Just (IsConstructor _ fields)) name ->
         let fieldCount = length fields
             argsNotApp = fieldCount - length args
             qname = qualifiedToStr' id name
-            tmplts = maybe [] getDataTypeArgs (mktype mn ty >>= getDataType qname)
-            val = CppDataConstructor qname tmplts in
+            -- tmplts = maybe [] getDataTypeArgs (mktype mn ty >>= getDataType qname)
+            val = CppDataConstructor qname [] in
         if argsNotApp > 0
-          then let argTypes = maybe [] (init . fnTypesN fieldCount) (mktype mn ty) in
-               return (CppPartialApp argTypes argsNotApp val args')
+          then let argTypes = maybe [] (init . fnTypesN fieldCount) (mktype mn ty)
+                   argTypes' = replicate (length argTypes) AnyType
+               in
+               return (CppPartialApp argTypes' argsNotApp val args')
           else return (CppApp val args')
 
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (params, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
-        return $ CppArrayLiteral (Just $ Native "any_map" [])
+        return $ CppArrayLiteral (Just $ Native "any::map" [])
                                  (zipWith (\a b -> CppArrayLiteral Nothing [CppStringLiteral $ fst a, b]) fns args')
 
       -- Var (_, _, Just _, _) (Qualified (Just _) _) ->
@@ -566,10 +571,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return [CppIfElse (CppBinary Equal (CppVar varName) (CppStringLiteral str)) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (BooleanLiteral True) =
-    return [CppIfElse (CppVar varName) (CppBlock done) Nothing]
+    return [CppIfElse (CppCast (fromJust $ mktype mn E.tyBoolean) (CppVar varName)) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (BooleanLiteral False) =
-    return [CppIfElse (CppUnary CppNot (CppVar varName)) (CppBlock done) Nothing]
+    return [CppIfElse (CppUnary CppNot (CppCast (fromJust $ mktype mn E.tyBoolean) (CppVar varName))) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (ObjectLiteral bs) = go done bs
     where

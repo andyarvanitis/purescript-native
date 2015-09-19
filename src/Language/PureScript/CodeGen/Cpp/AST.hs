@@ -207,7 +207,7 @@ data Cpp
   -- |
   -- Value type cast
   --
-  | CppCast Cpp Type
+  | CppCast Type Cpp
   -- |
   -- Function application
   --
@@ -350,6 +350,7 @@ everywhereOnCpp f = go
   go (CppFunction name tmps args rty qs j) = f (CppFunction name tmps args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
   go (CppStruct name typs supers cms ims) = f (CppStruct name typs supers (map go cms) (map go ims))
+  go (CppCast t cpp) = f (CppCast t (go cpp))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
   go (CppPartialApp typs n j cpp) = f (CppPartialApp typs n (go j) (map go cpp))
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
@@ -387,6 +388,7 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppFunction name tmps args rty qs j) = CppFunction name tmps args rty qs <$> f' j
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
   go (CppStruct name typs supers cms ims) = CppStruct name typs supers <$> traverse f' cms <*> traverse f' ims
+  go (CppCast t cpp) = CppCast t <$> f' cpp
   go (CppApp j cpp) = CppApp <$> f' j <*> traverse f' cpp
   go (CppPartialApp typs n j cpps) = CppPartialApp typs n <$> f' j <*> traverse f' cpps
   go (CppConditional j1 j2 j3) = CppConditional <$> f' j1 <*> f' j2 <*> f' j3
@@ -420,6 +422,7 @@ everythingOnCpp (<>) f = go
   go j@(CppFunction _ _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1
   go j@(CppStruct _ _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)
+  go j@(CppCast t cpp) = f j <> go cpp
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppPartialApp _ _ j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3

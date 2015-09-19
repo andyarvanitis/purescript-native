@@ -44,27 +44,30 @@ synonymsToCpp env mn
                . M.filterWithKey (\k@(Qualified mn' _) _ -> mn' == Just mn && M.lookup k tcs == Nothing)
                $ E.typeSynonyms env = do
     let names' = qualifiedToStr mn (Ident . runProperName) . fst <$> ds
-        tmplts = map templateFromKind . fst . snd <$> ds
-        typs = catMaybes $ mktype mn . snd . snd <$> ds
-        syns = zip3 names' tmplts typs
+        -- tmplts = map templateFromKind . fst . snd <$> ds
+        -- typs = catMaybes $ mktype mn . snd . snd <$> ds
+        typs = replicate (length ds) AnyType
+        syns = zip names' typs
         (synonyms, invalidSynonyms) = partition isValid syns
         cpps = toTypeAlias <$> synonyms
-        rejected = (\(n, _, _) -> CppRaw ("// using " ++ n ++ " = auto;")) <$> invalidSynonyms
+        rejected = (\(n, _) -> CppRaw ("// using " ++ n ++ " = auto;")) <$> invalidSynonyms
     return $ cpps ++ rejected
   | otherwise = return []
   where
-  isValid :: (String, a, Type) -> Bool
-  isValid (_, _, t) = everythingOnTypes (&&) (/= AutoType) t
-  toTypeAlias :: (String, [TemplateInfo], Type) -> Cpp
-  toTypeAlias (n, tmps, Template t _) =
-    CppTypeAlias (n, tmps ++ ptmps) (Template t (templateToType <$> ptmps)) []
-    where
-    ptmps :: [TemplateInfo]
-    ptmps = concatMap go tmps
-      where
-      go :: TemplateInfo -> [TemplateInfo]
-      go (t', n') = (\p -> (t' ++ show p, 0)) <$> [1 .. n']
-  toTypeAlias (n, tmps, t) = CppTypeAlias (n, tmps) t []
+  isValid :: (String, Type) -> Bool
+  isValid (_, t) = everythingOnTypes (&&) (/= AutoType) t
+  -- toTypeAlias :: (String, [TemplateInfo], Type) -> Cpp
+  toTypeAlias :: (String, Type) -> Cpp
+  -- toTypeAlias (n, tmps, Template t _) =
+  --   CppTypeAlias (n, tmps ++ ptmps) (Template t (templateToType <$> ptmps)) []
+  --   where
+  --   ptmps :: [TemplateInfo]
+  --   ptmps = concatMap go tmps
+  --     where
+  --     go :: TemplateInfo -> [TemplateInfo]
+  --     go (t', n') = (\p -> (t' ++ show p, 0)) <$> [1 .. n']
+  -- toTypeAlias (n, tmps, t) = CppTypeAlias (n, tmps) t []
+  toTypeAlias (n, t) = CppTypeAlias (n, []) t []
 
 -- |
 -- Dependency (topological) sorting of synonyms and data types

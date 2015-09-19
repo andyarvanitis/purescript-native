@@ -20,14 +20,23 @@
 namespace PureScript {
 
   namespace Private {
-    template <typename CtorType>
-    struct CtorHelper {
+    template <typename CtorType, int N = 100, typename = void>
+    struct CtorHelper;
+
+    template <typename CtorType, int N>
+    struct CtorHelper<CtorType, N> {
       template <typename ParamType, typename ...ParamTypes, typename ...ArgTypes>
       static constexpr auto curry(ArgTypes ...args) {
         return [=](ParamType param) {
-          return curry<ParamTypes...>(args..., param);
+          return CtorHelper<CtorType,
+                            sizeof...(ParamTypes) - sizeof...(args)
+                            >::template curry<ParamTypes...>(args..., param);
         };
       }
+    };
+
+    template <typename CtorType>
+    struct CtorHelper<CtorType, 0> {
       template <typename ...ArgTypes>
       static constexpr auto curry(ArgTypes ...args) {
         return construct<CtorType>(args...);
@@ -37,7 +46,9 @@ namespace PureScript {
 
   template <typename CtorType, typename ...ParamTypes, typename ...ArgTypes>
   constexpr auto constructor(ArgTypes ...args) {
-    return Private::CtorHelper<CtorType>::template curry<ParamTypes...>(args...);
+    return Private::CtorHelper<CtorType,
+                               sizeof...(ParamTypes) - sizeof...(args)
+                               >::template curry<ParamTypes...>(args...);
   }
 
   template <typename CtorType>

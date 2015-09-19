@@ -28,17 +28,17 @@
 
 namespace PureScript {
 
-template <typename A, typename B>
-using fn = std::function<B(const A)>;
-
-template <typename T>
-using param = typename std::conditional<std::is_fundamental<T>::value,
-                                          typename std::add_const<T>::type,
-                                          typename std::add_lvalue_reference<typename std::add_const<T>::type>::type>
-                                       ::type;
-
-template <typename B>
-using eff_fn = std::function<B()>;
+// template <typename A, typename B>
+// using fn = std::function<B(const A)>;
+//
+// template <typename T>
+// using param = typename std::conditional<std::is_fundamental<T>::value,
+//                                           typename std::add_const<T>::type,
+//                                           typename std::add_lvalue_reference<typename std::add_const<T>::type>::type>
+//                                        ::type;
+//
+// template <typename B>
+// using eff_fn = std::function<B()>;
 
 // The built-in "Unit" type
 using nullptr_t = std::nullptr_t;
@@ -51,18 +51,18 @@ using tuple = std::tuple<Types...>;
 
 using runtime_error = std::runtime_error;
 
-template <typename T>
-using array = shared_list<T>; // for now, at least
+// template <typename T>
+// using array = shared_list<T>; // for now, at least
+//
+// template <typename T>
+// using list = shared_list<T>;
 
-template <typename T>
-using list = shared_list<T>;
-
-// Support for things like ((->) r)
-template <typename R>
-struct fn_ {
-  template <typename T>
-  using _ = fn<R,T>;
-};
+// // Support for things like ((->) r)
+// template <typename R>
+// struct fn_ {
+//   template <typename T>
+//   using _ = fn<R,T>;
+// };
 
 // Used by type constructor templates
 template <typename T>
@@ -78,9 +78,9 @@ using void5 = void;
 
 #define typename(...) template <__VA_ARGS__> class
 
-// Used for rank-N types
-template <typename T>
-const T typeval = T();
+// // Used for rank-N types
+// template <typename T>
+// const T typeval = T();
 
 template <class T>
 using remove_const = std::remove_const<T>;
