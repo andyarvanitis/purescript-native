@@ -41,6 +41,7 @@ constexpr auto construct(ArgTypes... args) ->
   return std::make_shared<T>(args...);
 }
 
+
 namespace Private {
   template <typename T, typename U>
   constexpr auto instance_of(const std::shared_ptr<U>& a) ->
@@ -54,15 +55,15 @@ namespace Private {
     return std::dynamic_pointer_cast<T>(a);
   }
 
-  template <typename T, typename U>
-  constexpr auto cast(const std::shared_ptr<U>& a) -> typename T::element_type {
-    return *std::dynamic_pointer_cast<typename T::element_type>(a);
-  }
-
-  template <typename U>
-  constexpr auto cast(const std::shared_ptr<U>& a) -> U {
-    return *std::dynamic_pointer_cast<U>(a);
-  }
+  // template <typename T, typename U>
+  // constexpr auto cast(const std::shared_ptr<U>& a) -> typename T::element_type {
+  //   return *std::dynamic_pointer_cast<typename T::element_type>(a);
+  // }
+  //
+  // template <typename U>
+  // constexpr auto cast(const std::shared_ptr<U>& a) -> U {
+  //   return *std::dynamic_pointer_cast<U>(a);
+  // }
 }
 
 // template <typename B, typename A>
@@ -70,10 +71,10 @@ namespace Private {
 //   return Private::instance_of<B>(a);
 // }
 
-template <typename B, typename A>
-constexpr auto cast(A a) {
-  return Private::cast<B>(a);
-}
+// template <typename B, typename A>
+// constexpr auto cast(A a) {
+//   return Private::cast<B>(a);
+// }
 
 // Note type transformation A<Args> -> B<...> -> B<Args>
 
@@ -82,10 +83,10 @@ constexpr auto cast(A a) {
 //   return Private::instance_of<B<Args...>>(a);
 // }
 
-template <template <typename...> class B, template <typename...> class A, typename... Args>
-constexpr auto cast(const std::shared_ptr<A<Args...>>& a) {
-  return Private::cast<B<Args...>>(a);
-}
+// template <template <typename...> class B, template <typename...> class A, typename... Args>
+// constexpr auto cast(const std::shared_ptr<A<Args...>>& a) {
+//   return Private::cast<B<Args...>>(a);
+// }
 
 class any {
 
@@ -377,8 +378,12 @@ class any {
       default: throw std::runtime_error("unsupported type for '%' operator");
     }
   }
-
 };
+
+template <typename T>
+constexpr auto cast(const any& a) {
+  return *(a.cast<T>());
+}
 
 } // namespace PureScript
 
