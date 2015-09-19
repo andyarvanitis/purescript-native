@@ -37,7 +37,6 @@ import Control.Applicative
 import Control.Monad (forM, liftM2, replicateM, when)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.Supply.Class
-
 import Language.PureScript.AST.SourcePos
 import Language.PureScript.CodeGen.Cpp.AST as AST
 import Language.PureScript.CodeGen.Cpp.Common as Common
@@ -50,6 +49,7 @@ import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CoreFn
 import Language.PureScript.Names
 import Language.PureScript.Options
+import Language.PureScript.Sugar.TypeClasses (superClassDictionaryNames)
 import Language.PureScript.Traversals (sndM)
 
 import qualified Language.PureScript.Constants as C
@@ -428,7 +428,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (params, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return $ CppArrayLiteral (Just $ Native "any::map" [])
-                                 (zipWith (\a b -> CppArrayLiteral Nothing [CppStringLiteral $ fst a, b]) fns args')
+                                 (zipWith (\a b -> CppArrayLiteral Nothing [CppStringLiteral a, b])
+                                          ((superClassDictionaryNames constraints) ++ (fst <$> fns))
+                                          args')
 
       -- Var (_, _, Just _, _) (Qualified (Just _) _) ->
       --   fnApp e
