@@ -115,16 +115,16 @@ class any {
 
   private:
   union {
-    const managed<void> p;
-    const long   i;
-    const double d;
-    const char   c;
-    const bool   b;
-    const string s;
-    const map    m;
-    const vector v;
-    const fn     f;
-    const eff_fn e;
+    mutable managed<void> p;
+    mutable long   i;
+    mutable double d;
+    mutable char   c;
+    mutable bool   b;
+    mutable string s;
+    mutable map    m;
+    mutable vector v;
+    mutable fn     f;
+    mutable eff_fn e;
   };
 
   template <typename T, typename Enable = void>
@@ -188,35 +188,48 @@ class any {
   any(const T& val, typename std::enable_if<std::is_assignable<managed<void>,T>::value>::type* = 0)
     : type(Type::Pointer), p(Helper<T>::getPtr(val)) {}
 
-  private:
-  inline auto copy(const any& val) const {
-    const_cast<Type&>(type) = val.type;
+  const any& operator=(const any& val) const {
+    assert(false);
+    *this = val;
+    return *this;
+  }
+
+  any(const any& val) : type(val.type) {
+    std::cout << "copy" << std::endl;
     switch (type) {
-      case Type::Integer:        const_cast<long&>(i)          = val.i;  break;
-      case Type::Double:         const_cast<double&>(d)        = val.d;  break;
-      case Type::Character:      const_cast<char&>(c)          = val.c;  break;
-      case Type::Boolean:        const_cast<bool&>(b)          = val.b;  break;
-      case Type::String:         const_cast<string&>(s)        = val.s;  break;
-      case Type::Map:            const_cast<map&>(m)           = val.m;  break;
-      case Type::Vector:         const_cast<vector&>(v)        = val.v;  break;
-      case Type::Function:       const_cast<fn&>(f)            = val.f;  break;
-      case Type::EffectFunction: const_cast<eff_fn&>(e)        = val.e;  break;
-      case Type::Pointer:        const_cast<managed<void>&>(p) = val.p;  break;
+      case Type::Integer:        i = val.i;  break;
+      case Type::Double:         d = val.d;  break;
+      case Type::Character:      c = val.c;  break;
+      case Type::Boolean:        d = val.b;  break;
+      case Type::String:         s = val.s;  break;
+      case Type::Map:            m = val.m;  break;
+      case Type::Vector:         v = val.v;  break;
+      case Type::Function:       f = val.f;  break;
+      case Type::EffectFunction: e = val.e;  break;
+      case Type::Pointer:        p = val.p;  break;
       default: throw std::runtime_error("unsupported type in copy ctor");
     }
   }
 
-  public:
-  inline const any& operator=(const any& val) const {
-    copy(val);
-    return *this;
+  any(any&& val) : type(val.type) {
+    std::cout << "move " << std::endl;
+    switch (type) {
+      case Type::Integer:        i = std::move(val.i);  break;
+      case Type::Double:         d = std::move(val.d);  break;
+      case Type::Character:      c = std::move(val.c);  break;
+      case Type::Boolean:        d = std::move(val.b);  break;
+      case Type::String:         s = std::move(val.s);  break;
+      case Type::Map:            m = std::move(val.m);  break;
+      case Type::Vector:         v = std::move(val.v);  break;
+      case Type::Function:       f = std::move(val.f);  break;
+      case Type::EffectFunction: e = std::move(val.e);  break;
+      case Type::Pointer:        p = std::move(val.p);  break;
+      default: throw std::runtime_error("unsupported type in move ctor");
+    }
   }
-  any(const any& val) {
-    copy(val);
-  }
+
   any() = delete;
   ~any() {};
-
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type {
@@ -243,19 +256,19 @@ class any {
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, T>::type {
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
     assert(type == Type::Map);
     return m;
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, T>::type {
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
     assert(type == Type::Vector);
     return v;
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, T>::type {
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
     std::cout << int(type) << std::endl;
     assert(type == Type::String);
     return s;
@@ -263,17 +276,17 @@ class any {
 
   template <typename T>
   constexpr auto cast() const ->
-      typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value, T>::type {
+      typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value, const T>::type {
     assert(type == Type::Pointer);
     return Helper<T>::castPtr(p);
   }
 
-  any operator()(any arg) const {
+  auto operator()(const any arg) const -> any {
     assert(type == Type::Function);
     return f(arg);
   }
 
-  any operator()() const {
+  auto operator()() const -> any {
     assert(type == Type::EffectFunction);
     return e();
   }
@@ -295,12 +308,12 @@ class any {
     return Private::instance_of<T>(p);
   }
 
-  inline auto operator[](const string& rhs) const -> any {
+  inline auto operator[](const string& rhs) const -> const any& {
     assert(type == Type::Map);
     return m.at(rhs);
   }
 
-  inline auto operator[](const size_t rhs) const -> any {
+  inline auto operator[](const size_t rhs) const -> const any& {
     assert(type == Type::Vector);
     return v[rhs];
   }

@@ -148,6 +148,15 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -- declToCpp ident (Abs ann arg body) =
   --   mkFunction [] ident ann arg body []
 
+  declToCpp ident (Abs _ arg@(Ident "dict") body@(Accessor _ _ (Var _ (Qualified Nothing (Ident "dict"))))) = do
+    block <- asReturnBlock <$> valueToCpp body
+    return $ CppFunction (identToCpp ident)
+                         []
+                         [(identToCpp arg, Just AnyType)]
+                         (Just $ Native ("const " ++ runType AnyType ++ "&") [])
+                         [CppInline]
+                         block
+
   declToCpp ident (Abs (_, com, _, _) arg body) = do
     block <- asReturnBlock <$> valueToCpp body
     let block' = convertNestedLambdas [] block
