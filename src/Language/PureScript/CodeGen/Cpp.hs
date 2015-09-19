@@ -429,7 +429,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         let Just (params, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return $ CppArrayLiteral (Just $ Native "any::map" [])
                                  (zipWith (\a b -> CppArrayLiteral Nothing [CppStringLiteral a, b])
-                                          ((superClassDictionaryNames constraints) ++ (fst <$> fns))
+                                          ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
                                           args')
 
       -- Var (_, _, Just _, _) (Qualified (Just _) _) ->
