@@ -27,7 +27,7 @@ import Control.Applicative
 -- import Control.Monad (when, liftM2)
 
 import Language.PureScript.CodeGen.Cpp.AST
-import Language.PureScript.CodeGen.Cpp.Templates
+-- import Language.PureScript.CodeGen.Cpp.Templates
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Names
 

@@ -29,7 +29,7 @@ import qualified Data.Map as M
 import qualified Data.Graph as G
 
 import Language.PureScript.CodeGen.Cpp.AST
-import Language.PureScript.CodeGen.Cpp.Templates
+-- import Language.PureScript.CodeGen.Cpp.Templates
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Names
 

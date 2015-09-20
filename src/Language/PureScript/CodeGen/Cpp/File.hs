@@ -23,7 +23,7 @@ import Data.Maybe
 import Control.Applicative
 
 import Language.PureScript.CodeGen.Cpp.AST
-import Language.PureScript.CodeGen.Cpp.Templates
+-- import Language.PureScript.CodeGen.Cpp.Templates
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Names
 
@@ -38,21 +38,21 @@ toHeader = catMaybes . map go
   go :: Cpp -> Maybe Cpp
   go (CppNamespace name cpps) = Just (CppNamespace name (toHeader cpps))
   go cpp@(CppUseNamespace{}) = Just cpp
-  go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) [])
-    | all (not . declHasTemplates) ms = Just (CppStruct (s, []) ts [] [] [])
-  go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) [])
-    | ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
-    where
-    fromConst :: Cpp -> Maybe Cpp
-    fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs cpp)
-      | CppStatic `elem` qs =
-        Just $ CppVariableIntroduction (fullname name, typ) tmps [CppTemplSpec] cpp
-    fromConst (CppFunction name tmplts args rtyp qs body) =
-      Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
-    fromConst (CppComment comms cpp) | Just cpp' <- fromConst cpp = Just (CppComment comms cpp')
-    fromConst _ = Nothing
-    fullname :: String -> String
-    fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
+  -- go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) [])
+  --   | all (not . declHasTemplates) ms = Just (CppStruct (s, []) ts [] [] [])
+  -- go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) [])
+  --   | ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
+  --   where
+  --   fromConst :: Cpp -> Maybe Cpp
+  --   fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs cpp)
+  --     | CppStatic `elem` qs =
+  --       Just $ CppVariableIntroduction (fullname name, typ) tmps [CppTemplSpec] cpp
+  --   fromConst (CppFunction name tmplts args rtyp qs body) =
+  --     Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
+  --   fromConst (CppComment comms cpp) | Just cpp' <- fromConst cpp = Just (CppComment comms cpp')
+  --   fromConst _ = Nothing
+  --   fullname :: String -> String
+  --   fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
   go (CppStruct (s, []) ts supers ms@(_:_) [])
     | ms'@(_:_) <- fromConst <$> ms = Just (CppStruct (s, []) ts supers ms' [])
     where
@@ -95,20 +95,20 @@ toBodyDecl :: [Cpp] -> [Cpp]
 toBodyDecl = catMaybes . map go
   where
   go :: Cpp -> Maybe Cpp
-  go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) _)
-    | all (not . declHasTemplates) ms,
-      ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
-    where
-    fromConst :: Cpp -> Maybe Cpp
-    fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs _)
-      | CppStatic `elem` qs =
-        Just $ CppVariableIntroduction (fullname name, typ) tmps (CppTemplSpec : (delete CppStatic qs)) Nothing
-    fromConst (CppFunction name tmplts args rtyp qs _) =
-      Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) CppNoOp
-    fromConst (CppComment _ cpp) = fromConst cpp
-    fromConst _ = Nothing
-    fullname :: String -> String
-    fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
+  -- go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) _)
+  --   | all (not . declHasTemplates) ms,
+  --     ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
+  --   where
+  --   fromConst :: Cpp -> Maybe Cpp
+  --   fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs _)
+  --     | CppStatic `elem` qs =
+  --       Just $ CppVariableIntroduction (fullname name, typ) tmps (CppTemplSpec : (delete CppStatic qs)) Nothing
+  --   fromConst (CppFunction name tmplts args rtyp qs _) =
+  --     Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) CppNoOp
+  --   fromConst (CppComment _ cpp) = fromConst cpp
+  --   fromConst _ = Nothing
+  --   fullname :: String -> String
+  --   fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
   go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
   go _ = Nothing
 
@@ -133,20 +133,20 @@ toBody = catMaybes . map go
     isNoOp _ = False
   go cpp@(CppUseNamespace{}) = Just cpp
   go cpp@(CppFunction _ [] _ _ _ _) = Just cpp
-  go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) _)
-    | all (not . declHasTemplates) ms,
-      ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
-    where
-    fromConst :: Cpp -> Maybe Cpp
-    fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs cpp)
-      | CppStatic `elem` qs =
-        Just $ CppVariableIntroduction (fullname name, typ) tmps (CppTemplSpec:(delete CppStatic qs)) cpp
-    fromConst (CppFunction name tmplts args rtyp qs body) =
-      Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
-    fromConst (CppComment comms cpp) | Just cpp' <- fromConst cpp = Just (CppComment comms cpp')
-    fromConst _ = Nothing
-    fullname :: String -> String
-    fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
+  -- go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) _)
+  --   | all (not . declHasTemplates) ms,
+  --     ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
+  --   where
+  --   fromConst :: Cpp -> Maybe Cpp
+  --   fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs cpp)
+  --     | CppStatic `elem` qs =
+  --       Just $ CppVariableIntroduction (fullname name, typ) tmps (CppTemplSpec:(delete CppStatic qs)) cpp
+  --   fromConst (CppFunction name tmplts args rtyp qs body) =
+  --     Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
+  --   fromConst (CppComment comms cpp) | Just cpp' <- fromConst cpp = Just (CppComment comms cpp')
+  --   fromConst _ = Nothing
+  --   fullname :: String -> String
+  --   fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
   go cpp@(CppVariableIntroduction (name, Just t) [] _ (Just _))
     | t /= AutoType, all isAlphaNum name
     = Just cpp

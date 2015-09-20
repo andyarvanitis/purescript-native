@@ -44,7 +44,6 @@ import Language.PureScript.CodeGen.Cpp.Data
 import Language.PureScript.CodeGen.Cpp.File
 import Language.PureScript.CodeGen.Cpp.Optimizer
 import Language.PureScript.CodeGen.Cpp.Synonyms
-import Language.PureScript.CodeGen.Cpp.Templates
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CoreFn
 import Language.PureScript.Names

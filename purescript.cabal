@@ -93,9 +93,7 @@ library
                      Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
                      Language.PureScript.CodeGen.Cpp.Optimizer.TCO
                      Language.PureScript.CodeGen.Cpp.Optimizer.Unused
-                     Language.PureScript.CodeGen.Cpp.RankN
                      Language.PureScript.CodeGen.Cpp.Synonyms
-                     Language.PureScript.CodeGen.Cpp.Templates
                      Language.PureScript.CodeGen.Cpp.Types
                      Language.PureScript.Pretty.Cpp
 
