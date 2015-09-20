@@ -358,11 +358,11 @@ accessor = mkPattern match
   match (CppAccessor typ prop val) = Just ((typ, prettyPrintCpp1 prop), val)
   match _ = Nothing
 
-mapAccessor :: Pattern PrinterState Cpp (String, Cpp)
-mapAccessor = mkPattern match
-  where
-  match (CppMapAccessor (CppStringLiteral prop) val) = Just (prop, val)
-  match _ = Nothing
+-- mapAccessor :: Pattern PrinterState Cpp (String, Cpp)
+-- mapAccessor = mkPattern match
+--   where
+--   match (CppMapAccessor (CppStringLiteral prop) val) = Just (prop, val)
+--   match _ = Nothing
 
 scope :: Pattern PrinterState Cpp ((Maybe Type, String), Cpp)
 scope = mkPattern match
@@ -506,7 +506,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                                                        . break (=='<')
                                                        . runType)
                                                       typ) ]
-                  , [ Wrap mapAccessor $ \prop val -> "get" ++ angles (show prop ++ "_key") ++ parens val ]
+                  -- , [ Wrap mapAccessor $ \prop val -> "get" ++ angles (show prop ++ "_key") ++ parens val ]
                   , [ Wrap scope $ \(typ, prop) val ->
                                      let prop' = if typ /= Nothing && '<' `elem` val
                                                    then "template " ++ prop

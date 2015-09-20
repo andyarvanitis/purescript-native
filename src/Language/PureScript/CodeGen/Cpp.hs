@@ -228,12 +228,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Accessor _ prop val) =
     CppIndexer <$> pure (CppStringLiteral prop) <*> valueToCpp val
 
+  -- TODO: use a more efficient way of copying/updating the map
   valueToCpp (ObjectUpdate (_, _, Just ty, _) obj ps)
     | Just (Map allKeys) <- mktype mn ty = do
     obj' <- valueToCpp obj
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (fst <$> allKeys) \\ (fst <$> updatedFields)
-        origFields = (\key -> (key, CppAccessor Nothing (CppStringLiteral key) obj')) <$> origKeys
+        origFields = (\key -> (key, CppIndexer (CppStringLiteral key) obj')) <$> origKeys
     return $ CppObjectLiteral . sortBy (compare `on` fst) $ origFields ++ updatedFields
 
   valueToCpp (ObjectUpdate _ _ _) = error $ "Bad Type in object update!"
