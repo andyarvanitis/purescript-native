@@ -256,6 +256,13 @@ class any {
   }
 
   template <typename T>
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
+    std::cout << int(type) << std::endl;
+    assert(type == Type::String);
+    return s;
+  }
+
+  template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
     assert(type == Type::Map);
     return m;
@@ -265,13 +272,6 @@ class any {
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
     assert(type == Type::Vector);
     return v;
-  }
-
-  template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
-    std::cout << int(type) << std::endl;
-    assert(type == Type::String);
-    return s;
   }
 
   template <typename T>
@@ -303,6 +303,18 @@ class any {
   //   return b;
   // }
 
+  operator string&() const {
+    return s;
+  }
+
+  operator map&() const {
+    return m;
+  }
+
+  operator vector&() const {
+    return v;
+  }
+
   template <typename T>
   inline auto instance_of() const -> bool {
     return Private::instance_of<T>(p);
@@ -327,6 +339,18 @@ class any {
       case Type::String:    return s == rhs.s;
       case Type::Pointer:   return p == rhs.p;
       default: throw std::runtime_error("unsupported type for '==' operator");
+    }
+  }
+
+  inline auto operator!=(const any& rhs) const -> bool {
+    switch (type) {
+      case Type::Integer:   return i != rhs.i;
+      case Type::Double:    return d != rhs.d;
+      case Type::Character: return c != rhs.c;
+      case Type::Boolean:   return b != rhs.b;
+      case Type::String:    return s != rhs.s;
+      case Type::Pointer:   return p != rhs.p;
+      default: throw std::runtime_error("unsupported type for '!=' operator");
     }
   }
 
