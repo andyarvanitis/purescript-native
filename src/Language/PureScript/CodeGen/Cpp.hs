@@ -134,7 +134,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                          []
                          [(identToCpp arg, Just AnyType)]
                          (Just $ Native ("const " ++ runType AnyType ++ "&") [])
-                         [CppInline]
+                         []
                          block
 
   declToCpp ident (Abs (_, com, _, _) arg body) = do

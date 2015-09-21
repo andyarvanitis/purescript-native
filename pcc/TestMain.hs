@@ -93,15 +93,15 @@ repo :: String
 repo = "git://github.com/pure14/"
 
 -------------------------------------------------------------------------------
-packages :: [String]
+packages :: [(String, String)]
 -------------------------------------------------------------------------------
 packages =
-  [ "purescript-eff"
-  , "purescript-prelude"
-  , "purescript-assert"
-  , "purescript-st"
-  , "purescript-console"
-  , "purescript-functions"
+  [ ("purescript-eff",       [])
+  , ("purescript-prelude",   "pure14-dictionary")
+  , ("purescript-assert",    [])
+  , ("purescript-st",        [])
+  , ("purescript-console",   [])
+  , ("purescript-functions", [])
   ]
 
 -------------------------------------------------------------------------------
@@ -112,8 +112,8 @@ fetchPackages = do
   let packageDir = outputDir </> "packages"
   createDirectory packageDir
   setCurrentDirectory packageDir
-  forM_ packages $ \package ->
-    callProcess "git" ["clone", repo ++ package ++ ".git"]
+  forM_ packages $ \package -> let branch = snd package in
+    callProcess "git" $ ["clone"] ++ (if null branch then [] else ["--branch", branch]) ++ [repo ++ (fst package) ++ ".git"]
   setCurrentDirectory baseDir
 
 -------------------------------------------------------------------------------

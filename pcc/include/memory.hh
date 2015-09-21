@@ -265,15 +265,15 @@ class any {
   //   return b;
   // }
 
-  operator string&() const {
+  operator const string&() const {
     return s;
   }
 
-  operator map&() const {
+  operator const map&() const {
     return m;
   }
 
-  operator vector&() const {
+  operator const vector&() const {
     return v;
   }
 
