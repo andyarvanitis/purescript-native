@@ -386,10 +386,10 @@ lam :: Pattern PrinterState Cpp ((String, [(String, Maybe Type)], Maybe Type), C
 lam = mkPattern match
   where
   match (CppLambda caps args rty ret) =
-    let rty' | Just r' <- rty, everythingOnTypes (||) (== AutoType) r' = Nothing
-             | otherwise = rty
-    in
-    Just ((concatMap runCaptureType caps, args, rty'), ret)
+    -- let rty' | Just r' <- rty, everythingOnTypes (||) (== AutoType) r' = Nothing
+    --          | otherwise = rty
+    -- in
+    Just ((concatMap runCaptureType caps, args, rty), ret)
   match _ = Nothing
 
 app :: Pattern PrinterState Cpp (String, Cpp)
@@ -517,7 +517,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap partapp $ \(args, n) _ -> "bind" ++ angles (show n) ++ parens args ]
                   , [ unary CppNew "new " ]
                   , [ Wrap lam $ \(caps, args, rty) ret -> '[' : caps ++ "]"
-                        ++ let args' = argstr <$> args in
+                        ++ let args' = argstr <$> (filter ((/= "__unused") . fst) args) in
                            parens (intercalate ", " args')
                         ++ maybe "" ((" -> " ++) . runType) rty
                         ++ " "

@@ -61,8 +61,8 @@ datasToCpps env mn
       go _ = []
       -- TODO: this feels too fragile
       fromStruct :: String -> Cpp -> Cpp
-      fromStruct _ (CppStruct (_, (_:_)) [] [] [] []) = CppNoOp
-      fromStruct _ (CppStruct _ _ _ _ [CppTypeAlias{}]) = CppNoOp
+      -- fromStruct _ (CppStruct (_, (_:_)) [] [] [] []) = CppNoOp
+      fromStruct _ (CppStruct _ _ _ _ [_, CppTypeAlias{}]) = CppNoOp
       fromStruct ns (CppStruct (name, _) _ _ _ _) =
       -- fromStruct ns (CppStruct (name, tmplts) _ _ _ _) =
         -- let tmplts' = remTemplateDefaults tmplts in
@@ -129,24 +129,32 @@ datasToCpps env mn
         --            (concatMap templateParams (snd <$> cs))
         ctorStruct :: (ProperName, [T.Type]) -> Cpp
         ctorStruct (ctor, fields) =
-          CppStruct (name, []) [] supers' [] members
+          CppStruct (name, []) [] supers' [] (baseAlias : members)
           where
           name :: String
           name = P.prettyPrintCpp [flip CppData [] $ runProperName ctor]
+
+          baseAlias :: Cpp
+          baseAlias = CppTypeAlias ("base_type", []) (Native (fst $ head supers) []) []
+
           supers' :: [(String, [Type])]
           supers'
             | null fieldtypes = supers
             | otherwise = supers ++ [("tuple", fieldtypes)]
+
           supers :: [(String, [Type])]
           supers = [(addNamespace "type" (qual typ), [])]
           -- supers = [(addNamespace "type" (qual typ), mkTemplate . fst <$> tmplts)]
+
           fieldtypes :: [Type]
           -- fieldtypes = catMaybes $ mktype (ModuleName []) <$> fields
           fieldtypes = replicate (length fields) AnyType
+
           members :: [Cpp]
           members
             | null fieldtypes = []
             | otherwise = [CppVar $ "using tuple<" ++ intercalate ", " (runType <$> fieldtypes) ++ ">::tuple;"]
+
       go _ = ([], Nothing)
 
     -- templateParams :: [T.Type] -> [TemplateInfo]
