@@ -235,23 +235,23 @@ class any {
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T>::type {
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
     returnValue(Type::String, s,)
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T>::type {
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
     returnValue(Type::Map, m,)
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T>::type {
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
     returnValue(Type::Vector, v,)
   }
 
   template <typename T>
   constexpr auto cast() const ->
-      typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value, const T>::type {
+      typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value, const T&>::type {
     returnValue(Type::Pointer, p, std::static_pointer_cast<typename T::element_type>)
   }
 
@@ -290,15 +290,15 @@ class any {
   //   return b;
   // }
 
-  operator const string() const {
+  operator const string&() const {
     returnValue(Type::String, s,)
   }
 
-  operator const map() const {
+  operator const map&() const {
     returnValue(Type::Map, m,)
   }
 
-  operator const vector() const {
+  operator const vector&() const {
     returnValue(Type::Vector, v,)
   }
 
@@ -323,15 +323,15 @@ class any {
     return ptr ? dynamic_cast<T*>(static_cast<base_type*>(ptr)) != nullptr : false;
   }
 
-  inline auto operator[](const string& rhs) const -> const any {
+  inline auto operator[](const string& rhs) const -> const any& {
     returnValue(Type::Map, m.at(rhs),)
   }
 
-  inline auto operator[](const size_t rhs) const -> const any {
+  inline auto operator[](const size_t rhs) const -> const any& {
     returnValue(Type::Vector, v[rhs],)
   }
 
-  inline static auto extractValue(const any& a) -> const any {
+  inline static auto extractValue(const any& a) -> const any& {
     if (a.type != Type::Thunk) {
       return a;
     } else {
