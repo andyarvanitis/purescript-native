@@ -79,7 +79,7 @@ toHeader = catMaybes . map go
     Nothing
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ _ (Just cpp)) =
-    Just $ CppFunction name [] [("", Just (Primitive "bool")),("", Just (Primitive "bool"))] (Just AnyTypeRef) [] CppNoOp
+    Just $ CppFunction name [] [("", Just (Native "as_thunk" []))] (Just AnyTypeRef) [] CppNoOp
 
   go (CppComment comms cpp')
     | Just cpp <- go cpp' = Just $ case cpp of CppFunction {} -> cpp
@@ -176,7 +176,7 @@ toBody = catMaybes . map go
 
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ _ (Just cpp)) =
-    Just $ CppFunction name [] [("", Just (Primitive "bool")),("", Just (Primitive "bool"))] (Just AnyTypeRef) [] block
+    Just $ CppFunction name [] [("", Just (Native "as_thunk" []))] (Just AnyTypeRef) [] block
     where
     val = CppVariableIntroduction ("_value_", Just AnyType) [] [CppStatic] (Just cpp)
     block = CppBlock [val, CppReturn (CppVar "_value_")]
@@ -222,7 +222,9 @@ nativeMain = CppFunction "main"
                ]
                (Just (Native "int" []))
                []
-               (CppBlock [ CppApp (CppAccessor Nothing (CppVar "main") (CppScope "Main")) []
+               (CppBlock [ CppApp (CppApp (CppAccessor Nothing (CppVar "main") (CppScope "Main"))
+                                          [CppVar "PureScript::unthunk"])
+                                  []
                          , CppRaw ";"
                          , CppReturn (CppNumericLiteral (Left 0))
                          ])

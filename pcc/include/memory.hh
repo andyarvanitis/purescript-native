@@ -41,6 +41,10 @@ constexpr auto construct(ArgTypes... args) ->
   return std::make_shared<T>(args...);
 }
 
+struct as_thunk {
+};
+const as_thunk unthunk = as_thunk();
+
 class any {
 
   public:
@@ -66,7 +70,7 @@ class any {
   using vector = std::vector<any>;
   using fn     = std::function<any(const any&)>;
   using eff_fn = std::function<any()>;
-  using thunk  = std::function<const any& (bool, bool)>;
+  using thunk  = std::function<const any& (const as_thunk)>;
 
   private:
   union {
@@ -205,7 +209,7 @@ class any {
     } else { \
       if (type != Type::Thunk) std::cout << int(type) << std::endl; \
       assert(type == Type::Thunk); \
-      const any& value = t(false,false); \
+      const any& value = t(unthunk); \
       assert(value.type == T); \
       return F(value.V); \
     }
@@ -269,7 +273,7 @@ class any {
       return call(*this);
     } else {
       assert(type == Type::Thunk);
-      const any& value = t(false,false);
+      const any& value = t(unthunk);
       return call(value);
     }
   }
@@ -332,7 +336,7 @@ class any {
       return a;
     } else {
       assert(a.type == Type::Thunk);
-      return a.t(false,false);
+      return a.t(unthunk);
     }
   }
 
