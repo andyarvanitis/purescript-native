@@ -133,7 +133,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return $ CppFunction (identToCpp ident)
                          []
                          [(identToCpp arg, Just AnyType)]
-                         (Just $ Native ("const " ++ runType AnyType ++ "&") [])
+                         (Just AnyType)
                          []
                          block
 
@@ -286,7 +286,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return $ CppApp (CppLambda [] [] Nothing (CppBlock (ds'' ++ [CppReturn ret]))) []
 
   valueToCpp (Constructor {}) =
-    return CppNoOp
+    return $ CppVar "0x00"
 
   -- |
   -- Generate code in the simplified C++14 intermediate representation for a reference to a
@@ -469,7 +469,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   findClass :: Qualified ProperName -> Maybe ([String], [T.Constraint], [(String, T.Type)])
   findClass name
     | Just (params, fns, constraints) <- M.lookup name (E.typeClasses env),
-      fns' <- (\(i,t) -> (identToCpp i, t)) <$> fns
+      fns' <- (\(i,t) -> (runIdent i, t)) <$> fns
       = Just (fst <$> params, (sortBy (compare `on` fst) constraints), (sortBy (compare `on` normalizedName . fst) fns'))
   findClass _ = Nothing
 

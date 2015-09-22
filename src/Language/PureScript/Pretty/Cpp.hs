@@ -51,7 +51,7 @@ literals = mkPattern' match
   match CppNoOp = return []
   match CppEndOfHeader = return []
   match (CppNumericLiteral n) = return $ either show show n
-  match (CppStringLiteral s) = return $ string s
+  match (CppStringLiteral s) = return $ string s ++ "s"
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
@@ -219,10 +219,10 @@ literals = mkPattern' match
   match (CppCast typ val) =
     return (prettyPrintCpp1 val ++ ".cast" ++ angles (runType typ) ++ parens [])
   match (CppVar ident) = return ident
-  match (CppInstance [] (cls:_, _) _ params) =
-    return $ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
-  match (CppInstance mn (cls:_, _) _ params) =
-    return $ (dotsTo '_' mn) ++ "::" ++ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
+  -- match (CppInstance [] (cls:_, _) _ params) =
+  --   return $ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
+  -- match (CppInstance mn (cls:_, _) _ params) =
+  --   return $ (dotsTo '_' mn) ++ "::" ++ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
   match (CppScope ident) = return ident
 --   match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
@@ -368,12 +368,12 @@ scope :: Pattern PrinterState Cpp ((Maybe Type, String), Cpp)
 scope = mkPattern match
   where
   match (CppAccessor typ prop val@CppScope{}) = Just ((typ, prettyPrintCpp1 prop), val)
-  match (CppApp f [inst@CppInstance{}]) =
-    let (typ', f') = case f of
-                      (CppAccessor typ v (CppScope _)) -> (typ, prettyPrintCpp1 v)
-                      _ -> (Nothing, prettyPrintCpp1 f)
-        inst' = CppScope (prettyPrintCpp1 inst)
-    in Just ((typ', if '<' `elem` f' then "template " ++ f' else f'), inst')
+  -- match (CppApp f [inst@CppInstance{}]) =
+  --   let (typ', f') = case f of
+  --                     (CppAccessor typ v (CppScope _)) -> (typ, prettyPrintCpp1 v)
+  --                     _ -> (Nothing, prettyPrintCpp1 f)
+  --       inst' = CppScope (prettyPrintCpp1 inst)
+  --   in Just ((typ', if '<' `elem` f' then "template " ++ f' else f'), inst')
   match _ = Nothing
 
 indexer :: Pattern PrinterState Cpp (String, Cpp)
@@ -395,11 +395,11 @@ lam = mkPattern match
 app :: Pattern PrinterState Cpp (String, Cpp)
 app = mkPattern' match
   where
-  match (CppApp _ [CppInstance{}]) = mzero
-  match (CppApp f (inst@CppInstance{} : args)) = do
-    inst' <- prettyPrintCpp' inst
-    let f' = (CppAccessor Nothing f (CppScope inst'))
-    match (CppApp f' args)
+  -- match (CppApp _ [CppInstance{}]) = mzero
+  -- match (CppApp f (inst@CppInstance{} : args)) = do
+  --   inst' <- prettyPrintCpp' inst
+  --   let f' = (CppAccessor Nothing f (CppScope inst'))
+  --   match (CppApp f' args)
 --   match (CppApp _ [CppVar name]) | "__dict_" `isPrefixOf` name = mzero -- TODO: ugly
   match (CppApp _ [CppNoOp]) = mzero
   match (CppApp val args) = do
@@ -416,14 +416,14 @@ partapp :: Pattern PrinterState Cpp ((String, Int), Cpp)
 partapp = mkPattern' match
   where
   match (CppPartialApp _ _ (CppDataConstructor{}) _) = mzero
-  match (CppPartialApp _ n (CppAccessor t val' _) (inst@CppInstance{} : args)) = do
-    inst' <- prettyPrintCpp' inst
-    cpps <- mapM prettyPrintCpp' (CppAccessor t val' (CppScope inst') : args)
-    return ((intercalate ", " cpps, n), CppNoOp)
-  match (CppPartialApp _ n val (inst@CppInstance{} : args)) = do
-    inst' <- prettyPrintCpp' inst
-    cpps <- mapM prettyPrintCpp' (CppAccessor Nothing val (CppScope inst') : args)
-    return ((intercalate ", " cpps, n), CppNoOp)
+  -- match (CppPartialApp _ n (CppAccessor t val' _) (inst@CppInstance{} : args)) = do
+  --   inst' <- prettyPrintCpp' inst
+  --   cpps <- mapM prettyPrintCpp' (CppAccessor t val' (CppScope inst') : args)
+  --   return ((intercalate ", " cpps, n), CppNoOp)
+  -- match (CppPartialApp _ n val (inst@CppInstance{} : args)) = do
+  --   inst' <- prettyPrintCpp' inst
+  --   cpps <- mapM prettyPrintCpp' (CppAccessor Nothing val (CppScope inst') : args)
+  --   return ((intercalate ", " cpps, n), CppNoOp)
   match (CppPartialApp _ n val args) = do
     cpps <- mapM prettyPrintCpp' (val : args)
     return ((intercalate ", " cpps, n), CppNoOp)
@@ -517,7 +517,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ Wrap partapp $ \(args, n) _ -> "bind" ++ angles (show n) ++ parens args ]
                   , [ unary CppNew "new " ]
                   , [ Wrap lam $ \(caps, args, rty) ret -> '[' : caps ++ "]"
-                        ++ let args' = argstr <$> (filter ((/= "__unused") . fst) args) in
+                        ++ let args' = argstr <$> args in
                            parens (intercalate ", " args')
                         ++ maybe "" ((" -> " ++) . runType) rty
                         ++ " "
@@ -566,6 +566,7 @@ argstr (name, Just typ@(Array {})) = argRefStr name typ
 argstr (name, Just typ@(Map {})) = argRefStr name typ
 argstr (name, Just typ@(Function {})) = argRefStr name typ
 argstr (name, Just typ@(EffectFunction {})) = argRefStr name typ
+argstr ("__unused", Just typ@AnyType) = argRefStr [] typ
 argstr (name, Just typ@AnyType) = argRefStr name typ
 argstr (name, Just typ) = argStr name typ
 

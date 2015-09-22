@@ -55,16 +55,18 @@ class any {
     Map,
     Vector,
     Function,
-    EffectFunction
+    EffFunction,
+    Thunk
   };
 
   const Type type = Type::Unknown;
 
   using string = std::string;
-  using fn     = std::function<any(const any&)>;
-  using eff_fn = std::function<any()>;
   using map    = std::unordered_map<string, const any>;
   using vector = std::vector<any>;
+  using fn     = std::function<any(const any&)>;
+  using eff_fn = std::function<any()>;
+  using thunk  = std::function<const any& (bool, bool)>;
 
   private:
   union {
@@ -78,6 +80,7 @@ class any {
     mutable vector v;
     mutable fn     f;
     mutable eff_fn e;
+    mutable thunk  t;
   };
 
   public:
@@ -116,11 +119,11 @@ class any {
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
-    : type(Type::EffectFunction), e(val) {}
+    : type(Type::EffFunction), e(val) {}
 
-  // template <typename T>
-  // any(T&& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
-  //   : type(Type::EffectFunction), e(std::move(val)) {}
+  template <typename T>
+  any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
+    : type(Type::Thunk), t(val) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value>::type* = 0)
@@ -141,16 +144,17 @@ class any {
   any(const any& val) : type(val.type) {
     // std::cout << "copy" << std::endl;
     switch (type) {
-      case Type::Integer:        i = val.i;                       break;
-      case Type::Double:         d = val.d;                       break;
-      case Type::Character:      c = val.c;                       break;
-      case Type::Boolean:        d = val.b;                       break;
-      case Type::String:         new (&s) string        (val.s);  break;
-      case Type::Map:            new (&m) map           (val.m);  break;
-      case Type::Vector:         new (&v) vector        (val.v);  break;
-      case Type::Function:       new (&f) fn            (val.f);  break;
-      case Type::EffectFunction: new (&e) eff_fn        (val.e);  break;
-      case Type::Pointer:        new (&p) std::shared_ptr<void> (val.p);  break;
+      case Type::Integer:         i = val.i;                       break;
+      case Type::Double:          d = val.d;                       break;
+      case Type::Character:       c = val.c;                       break;
+      case Type::Boolean:         d = val.b;                       break;
+      case Type::String:          new (&s) string        (val.s);  break;
+      case Type::Map:             new (&m) map           (val.m);  break;
+      case Type::Vector:          new (&v) vector        (val.v);  break;
+      case Type::Function:        new (&f) fn            (val.f);  break;
+      case Type::EffFunction:     new (&e) eff_fn        (val.e);  break;
+      case Type::Thunk:           new (&t) thunk         (val.t);  break;
+      case Type::Pointer:         new (&p) std::shared_ptr<void> (val.p);  break;
 
       default: throw std::runtime_error("unsupported type in copy ctor");
     }
@@ -159,16 +163,17 @@ class any {
   any(any&& val) : type(val.type) {
     // std::cout << "move" << std::endl;
     switch (type) {
-      case Type::Integer:        i = val.i;                                  break;
-      case Type::Double:         d = val.d;                                  break;
-      case Type::Character:      c = val.c;                                  break;
-      case Type::Boolean:        d = val.b;                                  break;
-      case Type::String:         new (&s) string        (std::move(val.s));  break;
-      case Type::Map:            new (&m) map           (std::move(val.m));  break;
-      case Type::Vector:         new (&v) vector        (std::move(val.v));  break;
-      case Type::Function:       new (&f) fn            (std::move(val.f));  break;
-      case Type::EffectFunction: new (&e) eff_fn        (std::move(val.e));  break;
-      case Type::Pointer:        new (&p) std::shared_ptr<void> (std::move(val.p));  break;
+      case Type::Integer:         i = val.i;                                  break;
+      case Type::Double:          d = val.d;                                  break;
+      case Type::Character:       c = val.c;                                  break;
+      case Type::Boolean:         d = val.b;                                  break;
+      case Type::String:          new (&s) string        (std::move(val.s));  break;
+      case Type::Map:             new (&m) map           (std::move(val.m));  break;
+      case Type::Vector:          new (&v) vector        (std::move(val.v));  break;
+      case Type::Function:        new (&f) fn            (std::move(val.f));  break;
+      case Type::EffFunction:     new (&e) eff_fn        (std::move(val.e));  break;
+      case Type::Thunk:           new (&t) thunk         (std::move(val.t));  break;
+      case Type::Pointer:         new (&p) std::shared_ptr<void> (std::move(val.p));  break;
 
       default: throw std::runtime_error("unsupported type in move ctor");
     }
@@ -178,79 +183,95 @@ class any {
   ~any() {
     // std::cout << "destroy" << std::endl;
     switch (type) {
-      case Type::Integer:        ;                    break;
-      case Type::Double:         ;                    break;
-      case Type::Character:      ;                    break;
-      case Type::Boolean:        ;                    break;
-      case Type::String:         s.~string();         break;
-      case Type::Map:            m.~map();            break;
-      case Type::Vector:         v.~vector();         break;
-      case Type::Function:       f.~fn();             break;
-      case Type::EffectFunction: e.~eff_fn();         break;
-      case Type::Pointer:        p.~managed<void>();  break;
+      case Type::Integer:         ;                    break;
+      case Type::Double:          ;                    break;
+      case Type::Character:       ;                    break;
+      case Type::Boolean:         ;                    break;
+      case Type::String:          s.~string();         break;
+      case Type::Map:             m.~map();            break;
+      case Type::Vector:          v.~vector();         break;
+      case Type::Function:        f.~fn();             break;
+      case Type::EffFunction:     e.~eff_fn();         break;
+      case Type::Thunk:           t.~thunk();          break;
+      case Type::Pointer:         p.~managed<void>();  break;
 
       default: throw std::runtime_error("unsupported type in destructor");
     }
   };
 
+  #define returnValue(T, V, F) \
+    if (type == T) { \
+      return F(V); \
+    } else { \
+      if (type != Type::Thunk) std::cout << int(type) << std::endl; \
+      assert(type == Type::Thunk); \
+      const any& value = t(false,false); \
+      assert(value.type == T); \
+      return F(value.V); \
+    }
+
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type {
-    assert(type == Type::Integer);
-    return i;
+    returnValue(Type::Integer, i,)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, double>::value, T>::type {
-    assert(type == Type::Double);
-    return d;
+    returnValue(Type::Double, d,)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, char>::value, T>::type {
-    assert(type == Type::Character);
-    return c;
+    returnValue(Type::Character, c,)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, bool>::value, T>::type {
-    assert(type == Type::Boolean);
-    return b;
+    returnValue(Type::Boolean, b,)
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
-    std::cout << int(type) << std::endl;
-    assert(type == Type::String);
-    return s;
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T>::type {
+    returnValue(Type::String, s,)
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
-    assert(type == Type::Map);
-    return m;
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T>::type {
+    returnValue(Type::Map, m,)
   }
 
   template <typename T>
-  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
-    assert(type == Type::Vector);
-    return v;
+  constexpr auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T>::type {
+    returnValue(Type::Vector, v,)
   }
 
   template <typename T>
   constexpr auto cast() const ->
       typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value, const T>::type {
-    assert(type == Type::Pointer);
-    return std::static_pointer_cast<typename T::element_type>(p);
+    returnValue(Type::Pointer, p, std::static_pointer_cast<typename T::element_type>)
   }
 
   auto operator()(const any arg) const -> any {
-    assert(type == Type::Function);
-    return f(arg);
+    returnValue(Type::Function, f(arg),)
+  }
+
+  inline static auto call(const any& a) -> any {
+    assert(a.type == Type::EffFunction || a.type == Type::Function);
+    if (a.type == Type::EffFunction) {
+      return a.e();
+    } else {
+      return a.f(false);
+    }
   }
 
   auto operator()() const -> any {
-    assert(type == Type::EffectFunction);
-    return e();
+    if (type == Type::EffFunction || type == Type::Function) {
+      return call(*this);
+    } else {
+      assert(type == Type::Thunk);
+      const any& value = t(false,false);
+      return call(value);
+    }
   }
 
   // operator long() const {
@@ -265,130 +286,170 @@ class any {
   //   return b;
   // }
 
-  operator const string&() const {
-    return s;
+  operator const string() const {
+    returnValue(Type::String, s,)
   }
 
-  operator const map&() const {
-    return m;
+  operator const map() const {
+    returnValue(Type::Map, m,)
   }
 
-  operator const vector&() const {
-    return v;
+  operator const vector() const {
+    returnValue(Type::Vector, v,)
+  }
+
+  auto extractPointer() const -> const void* {
+    returnValue(Type::Pointer, p.get(),)
   }
 
   template <typename T>
-  constexpr auto instance_of() const ->
+  auto instance_of() const ->
       typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value, bool>::type {
-    using elem_type = typename T::element_type;
-    using base_type = typename elem_type::base_type;
-    const auto& ptr = p.get();
+    using elem_type = const typename T::element_type;
+    using base_type = const typename elem_type::base_type;
+    const auto ptr = extractPointer();
     return ptr ? dynamic_cast<elem_type*>(static_cast<base_type*>(ptr)) != nullptr : false;
   }
 
   template <typename T>
-  constexpr auto instance_of() const ->
+  auto instance_of() const ->
       typename std::enable_if<!std::is_assignable<std::shared_ptr<void>,T>::value, bool>::type {
-    using base_type = typename T::base_type;
-    const auto& ptr = p.get();
+    using base_type = const typename T::base_type;
+    const auto ptr = extractPointer();
     return ptr ? dynamic_cast<T*>(static_cast<base_type*>(ptr)) != nullptr : false;
   }
 
-  inline auto operator[](const string& rhs) const -> const any& {
-    assert(type == Type::Map);
-    return m.at(rhs);
+  inline auto operator[](const string& rhs) const -> const any {
+    returnValue(Type::Map, m.at(rhs),)
   }
 
-  inline auto operator[](const size_t rhs) const -> const any& {
-    assert(type == Type::Vector);
-    return v[rhs];
+  inline auto operator[](const size_t rhs) const -> const any {
+    returnValue(Type::Vector, v[rhs],)
   }
 
-  inline auto operator==(const any& rhs) const -> bool {
-    switch (type) {
-      case Type::Integer:   return i == rhs.i;
-      case Type::Double:    return d == rhs.d;
-      case Type::Character: return c == rhs.c;
-      case Type::Boolean:   return b == rhs.b;
-      case Type::String:    return s == rhs.s;
-      case Type::Pointer:   return p == rhs.p;
+  inline static auto extractValue(const any& a) -> const any {
+    if (a.type != Type::Thunk) {
+      return a;
+    } else {
+      assert(a.type == Type::Thunk);
+      return a.t(false,false);
+    }
+  }
+
+  inline auto operator==(const any& rhs_) const -> bool {
+    auto& lhs = extractValue(*this);
+    auto& rhs = extractValue(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer:   return lhs.i == rhs.i;
+      case Type::Double:    return lhs.d == rhs.d;
+      case Type::Character: return lhs.c == rhs.c;
+      case Type::Boolean:   return lhs.b == rhs.b;
+      case Type::String:    return lhs.s == rhs.s;
+      case Type::Pointer:   return lhs.p == rhs.p;
       default: throw std::runtime_error("unsupported type for '==' operator");
     }
   }
 
-  inline auto operator!=(const any& rhs) const -> bool {
-    switch (type) {
-      case Type::Integer:   return i != rhs.i;
-      case Type::Double:    return d != rhs.d;
-      case Type::Character: return c != rhs.c;
-      case Type::Boolean:   return b != rhs.b;
-      case Type::String:    return s != rhs.s;
-      case Type::Pointer:   return p != rhs.p;
+  inline auto operator!=(const any& rhs_) const -> bool {
+    auto& lhs = extractValue(*this);
+    auto& rhs = extractValue(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer:   return lhs.i != rhs.i;
+      case Type::Double:    return lhs.d != rhs.d;
+      case Type::Character: return lhs.c != rhs.c;
+      case Type::Boolean:   return lhs.b != rhs.b;
+      case Type::String:    return lhs.s != rhs.s;
+      case Type::Pointer:   return lhs.p != rhs.p;
       default: throw std::runtime_error("unsupported type for '!=' operator");
     }
   }
 
-  inline auto operator<(const any& rhs) const -> bool {
-    switch (type) {
-      case Type::Integer:   return i < rhs.i;
-      case Type::Double:    return d < rhs.d;
-      case Type::Character: return c < rhs.c;
-      case Type::String:    return s < rhs.s;
+  inline auto operator<(const any& rhs_) const -> bool {
+    auto& lhs = extractValue(*this);
+    auto& rhs = extractValue(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer:   return lhs.i < rhs.i;
+      case Type::Double:    return lhs.d < rhs.d;
+      case Type::Character: return lhs.c < rhs.c;
+      case Type::String:    return lhs.s < rhs.s;
       default: throw std::runtime_error("unsupported type for '<' operator");
     }
   }
 
-  inline auto operator>(const any& rhs) const -> bool {
-    switch (type) {
-      case Type::Integer:   return i > rhs.i;
-      case Type::Double:    return d > rhs.d;
-      case Type::Character: return c > rhs.c;
-      case Type::String:    return s > rhs.s;
+  inline auto operator>(const any& rhs_) const -> bool {
+    auto& lhs = extractValue(*this);
+    auto& rhs = extractValue(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer:   return lhs.i > rhs.i;
+      case Type::Double:    return lhs.d > rhs.d;
+      case Type::Character: return lhs.c > rhs.c;
+      case Type::String:    return lhs.s > rhs.s;
       default: throw std::runtime_error("unsupported type for '>' operator");
     }
   }
 
-  inline auto operator+(const any& rhs) const -> any {
-    switch (type) {
-      case Type::Integer:   return i + rhs.i;
-      case Type::Double:    return d + rhs.d;
-      case Type::Character: return c + rhs.c;
-      case Type::String:    return s + rhs.s;
+  inline auto operator+(const any& rhs_) const -> any {
+    auto& lhs = extractValue(*this);
+    auto& rhs = extractValue(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer:   return lhs.i + rhs.i;
+      case Type::Double:    return lhs.d + rhs.d;
+      case Type::Character: return lhs.c + rhs.c;
+      case Type::String:    return lhs.s + rhs.s;
       default: throw std::runtime_error("unsupported for '+' operator");
     }
   }
 
-  inline auto operator-(const any& rhs) const -> any {
-    switch (type) {
-      case Type::Integer:   return i - rhs.i;
-      case Type::Double:    return d - rhs.d;
-      case Type::Character: return c - rhs.c;
+  inline auto operator-(const any& rhs_) const -> any {
+    auto& lhs = extractValue(*this);
+    auto& rhs = extractValue(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer:   return lhs.i - rhs.i;
+      case Type::Double:    return lhs.d - rhs.d;
+      case Type::Character: return lhs.c - rhs.c;
       default: throw std::runtime_error("unsupported type for '-' binary operator");
     }
   }
 
-  inline auto operator*(const any& rhs) const -> any {
-    switch (type) {
-      case Type::Integer: return i * rhs.i;
-      case Type::Double:  return d * rhs.d;
+  inline auto operator*(const any& rhs_) const -> any {
+    auto& lhs = extractValue(*this);
+    auto& rhs = extractValue(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer: return lhs.i * rhs.i;
+      case Type::Double:  return lhs.d * rhs.d;
       default: throw std::runtime_error("unsupported type for '*' operator");
     }
   }
 
-  inline auto operator/(const any& rhs) const -> any {
-    switch (type) {
-      case Type::Integer: return i / rhs.i;
-      case Type::Double:  return d / rhs.d;
+  inline auto operator/(const any& rhs_) const -> any {
+    auto& lhs = extractValue(*this);
+    auto& rhs = extractValue(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer: return lhs.i / rhs.i;
+      case Type::Double:  return lhs.d / rhs.d;
       default: throw std::runtime_error("unsupported type for '/' operator");
     }
   }
 
-  inline auto operator%(const any& rhs) const -> any {
-    switch (type) {
-      case Type::Integer: return i % rhs.i;
+  inline auto operator%(const any& rhs_) const -> any {
+    auto& lhs = extractValue(*this);
+    auto& rhs = extractValue(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer: return lhs.i % rhs.i;
       default: throw std::runtime_error("unsupported type for '%' operator");
     }
   }
+
+  #undef returnValue
 };
 
 template <typename T>

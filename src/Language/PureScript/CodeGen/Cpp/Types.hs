@@ -43,6 +43,7 @@ data Type = Primitive String
           | EffectFunction Type
           | AutoType
           | AnyType
+          | AnyTypeRef
           deriving (Show, Data, Typeable)
 
 instance Eq Type where
@@ -57,6 +58,7 @@ instance Eq Type where
   (EffectFunction b) == (EffectFunction b') = b == b'
   AutoType == AutoType = True
   AnyType == AnyType = True
+  AnyTypeRef == AnyTypeRef = True
   _ == _ = False
   a /= b = not (a == b)
 
@@ -148,6 +150,7 @@ runType tt@(Template t []) = typeName tt ++ makeUnique t
 runType (Template t ts) = runType (Template t []) ++ '<' : (intercalate "," $ map runType ts) ++ ">"
 runType AutoType = "auto"
 runType AnyType = "any"
+runType AnyTypeRef = "const " ++ runType AnyType ++ "&"
 
 autoType ::T.Type
 autoType = T.TypeConstructor (Qualified Nothing (ProperName "auto"))
@@ -161,6 +164,7 @@ typeName TypeConstructor{} = "type::"
 typeName DeclType{} = "decltype"
 typeName AutoType = ""
 typeName AnyType = ""
+typeName AnyTypeRef = ""
 typeName _ = ""
 
 everywhereOnTypes :: (Type -> Type) -> Type -> Type

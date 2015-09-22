@@ -66,10 +66,21 @@ toHeader = catMaybes . map go
   go (CppFunction name tmplts args rtyp qs _) =
     let args' = (\(_,t) -> ("", t)) <$> args in
     Just (CppFunction name tmplts args' rtyp qs CppNoOp)
-  go (CppVariableIntroduction v@(name, Just t) [] qs (Just _))
-    | t /= AutoType, all isAlphaNum name
-    = Just (CppVariableIntroduction v [] (CppExtern:qs) Nothing)
-  go cpp@(CppVariableIntroduction{}) = Just cpp
+  -- go (CppVariableIntroduction v@(name, Just t) [] qs (Just _))
+  --   | t /= AutoType, all isAlphaNum name
+  --   = Just (CppVariableIntroduction v [] (CppExtern:qs) Nothing)
+  -- go cpp@(CppVariableIntroduction{}) = Just cpp
+
+  go (CppVariableIntroduction _ [] _ (Just CppNumericLiteral {})) =
+    Nothing
+  go (CppVariableIntroduction _ [] _ (Just CppStringLiteral {})) =
+    Nothing
+  go (CppVariableIntroduction _ [] _ (Just CppBooleanLiteral {})) =
+    Nothing
+  -- Generate thunks for top-level values
+  go (CppVariableIntroduction (name, _) _ _ (Just cpp)) =
+    Just $ CppFunction name [] [("", Just (Primitive "bool")),("", Just (Primitive "bool"))] (Just AnyTypeRef) [] CppNoOp
+
   go (CppComment comms cpp')
     | Just cpp <- go cpp' = Just $ case cpp of CppFunction {} -> cpp
                                                _ -> CppComment comms cpp
@@ -86,6 +97,14 @@ toHeaderFns = catMaybes . map go
     | atyp == Just AutoType
     = Just (CppVariableIntroduction (name, Nothing) tmps [] (Just cpp))
   go cpp@(CppFunction _ (_:_) _ _ _ _) = Just cpp
+
+  go cpp@(CppVariableIntroduction v [] qs (Just CppNumericLiteral {})) =
+    Just cpp
+  go cpp@(CppVariableIntroduction v [] qs (Just CppStringLiteral {})) =
+    Just cpp
+  go cpp@(CppVariableIntroduction v [] qs (Just CppBooleanLiteral {})) =
+    Just cpp
+
   go (CppComment comms cpp') | Just cpp <- go cpp' = Just (CppComment comms cpp)
   go _ = Nothing
 
@@ -147,9 +166,25 @@ toBody = catMaybes . map go
   --   fromConst _ = Nothing
   --   fullname :: String -> String
   --   fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
-  go cpp@(CppVariableIntroduction (name, Just t) [] _ (Just _))
-    | t /= AutoType, all isAlphaNum name
-    = Just cpp
+
+  go (CppVariableIntroduction _ [] _ (Just CppNumericLiteral {})) =
+    Nothing
+  go (CppVariableIntroduction _ [] _ (Just CppStringLiteral {})) =
+    Nothing
+  go (CppVariableIntroduction _ [] _ (Just CppBooleanLiteral {})) =
+    Nothing
+
+  -- Generate thunks for top-level values
+  go (CppVariableIntroduction (name, _) _ _ (Just cpp)) =
+    Just $ CppFunction name [] [("", Just (Primitive "bool")),("", Just (Primitive "bool"))] (Just AnyTypeRef) [] block
+    where
+    val = CppVariableIntroduction ("_value_", Just AnyType) [] [CppStatic] (Just cpp)
+    block = CppBlock [val, CppReturn (CppVar "_value_")]
+
+  -- go cpp@(CppVariableIntroduction (name, Just t) [] _ (Just _))
+  --   | t /= AutoType, all isAlphaNum name
+  --   = Just cpp
+
   go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
   go _ = Nothing
 
