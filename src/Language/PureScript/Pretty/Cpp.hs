@@ -559,13 +559,6 @@ classstr (name, params) = name ++ angles (intercalate ", " $ runType <$> params)
 
 argstr :: (String, Maybe Type) -> String
 argstr (name, Nothing) = argStr name AutoType
-argstr (name, Just typ@(Template _ [])) = argParamStr name typ
-argstr (name, Just typ@(Template _ (_:_))) = argRefStr name typ
-argstr (name, Just typ@(Native {})) = argRefStr name typ
-argstr (name, Just typ@(Array {})) = argRefStr name typ
-argstr (name, Just typ@(Map {})) = argRefStr name typ
-argstr (name, Just typ@(Function {})) = argRefStr name typ
-argstr (name, Just typ@(EffectFunction {})) = argRefStr name typ
 argstr ("__unused", Just typ@AnyType) = argRefStr [] typ
 argstr (name, Just typ@AnyType) = argRefStr name typ
 argstr (name, Just typ) = argStr name typ
@@ -573,8 +566,8 @@ argstr (name, Just typ) = argStr name typ
 argStr :: String -> Type -> String
 argStr name typ = argTypStr typ ++ if null name then [] else " " ++ name
 
-argParamStr :: String -> Type -> String
-argParamStr name typ = "param" ++ angles (runType typ) ++ if null name then [] else " " ++ name
+-- argParamStr :: String -> Type -> String
+-- argParamStr name typ = "param" ++ angles (runType typ) ++ if null name then [] else " " ++ name
 
 argRefStr :: String -> Type -> String
 argRefStr name typ = argTypStr typ ++ "&" ++ if null name then [] else " " ++ name
