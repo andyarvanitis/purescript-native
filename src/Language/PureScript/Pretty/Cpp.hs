@@ -67,7 +67,7 @@ literals = mkPattern' match
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
                             val <- prettyPrintCpp' value
-                            return $ "{ " ++ show key ++ ", " ++ val ++ " }"
+                            return $ "{ " ++ show key ++ "s, " ++ val ++ " }"
         indentString <- currentIndent
         return $ intercalate ", \n" $ map (indentString ++) cpps
     , return "\n"

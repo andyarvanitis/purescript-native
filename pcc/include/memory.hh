@@ -151,7 +151,7 @@ class any {
       case Type::Integer:         i = val.i;                       break;
       case Type::Double:          d = val.d;                       break;
       case Type::Character:       c = val.c;                       break;
-      case Type::Boolean:         d = val.b;                       break;
+      case Type::Boolean:         b = val.b;                       break;
       case Type::String:          new (&s) string        (val.s);  break;
       case Type::Map:             new (&m) map           (val.m);  break;
       case Type::Vector:          new (&v) vector        (val.v);  break;
@@ -170,7 +170,7 @@ class any {
       case Type::Integer:         i = val.i;                                  break;
       case Type::Double:          d = val.d;                                  break;
       case Type::Character:       c = val.c;                                  break;
-      case Type::Boolean:         d = val.b;                                  break;
+      case Type::Boolean:         b = val.b;                                  break;
       case Type::String:          new (&s) string        (std::move(val.s));  break;
       case Type::Map:             new (&m) map           (std::move(val.m));  break;
       case Type::Vector:          new (&v) vector        (std::move(val.v));  break;

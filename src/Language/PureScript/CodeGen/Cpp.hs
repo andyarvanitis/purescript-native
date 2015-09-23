@@ -128,14 +128,29 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   declToCpp _ (Abs (_, _, _, Just IsNewtype) _ _) =
     return CppNoOp
 
-  declToCpp ident (Abs _ arg@(Ident "dict") body@(Accessor _ _ (Var _ (Qualified Nothing (Ident "dict"))))) = do
+  declToCpp ident (Abs _ arg@(Ident "dict")
+                         body@(Accessor _ _ (Var _ (Qualified Nothing arg'))))
+    | arg' == arg = do
     block <- asReturnBlock <$> valueToCpp body
-    return $ CppFunction (identToCpp ident)
-                         []
-                         [(identToCpp arg, Just AnyType)]
-                         (Just AnyType)
-                         []
-                         block
+    let fn' = CppFunction (identToCpp ident)
+                          []
+                          [(identToCpp arg, Just AnyType)]
+                          (Just AnyTypeRef)
+                          []
+                          block
+    return fn'
+
+  declToCpp ident (Abs (_, com, _, _) arg@(Ident dict)
+                                      body@(App _ _ (Var _ (Qualified Nothing arg'))))
+    | "__dict_" `isPrefixOf` dict && arg' == arg = do
+    block <- asReturnBlock <$> valueToCpp body
+    let fn' = CppFunction (identToCpp ident)
+                          []
+                          [(identToCpp arg, Just AnyType)]
+                          (Just AnyTypeRef)
+                          []
+                          block
+    return (CppComment com fn')
 
   declToCpp ident (Abs (_, com, _, _) arg body) = do
     block <- asReturnBlock <$> valueToCpp body
