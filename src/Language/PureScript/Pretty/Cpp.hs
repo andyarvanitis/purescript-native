@@ -23,7 +23,7 @@ module Language.PureScript.Pretty.Cpp (
     stripScope
 ) where
 
-import Data.Char (isLetter, isSpace)
+import Data.Char
 import Data.List
 import Data.Maybe (fromMaybe)
 
@@ -216,8 +216,17 @@ literals = mkPattern' match
     return (prettyPrintCpp1 (CppData name []) ++ angles (intercalate "," $ runType <$> typs))
   match (CppDataConstructor name typs) =
     return ("construct" ++ angles (prettyPrintCpp1 (CppData name typs)))
-  match (CppCast typ val) =
-    return (prettyPrintCpp1 val ++ ".cast" ++ angles (runType typ) ++ parens [])
+  match (CppCast typ val) = return $
+    case val of
+      CppNumericLiteral {} -> vstr
+      CppStringLiteral {}  -> vstr
+      CppBooleanLiteral {} -> vstr
+      _ -> val' ++ ".cast" ++ angles (runType typ) ++ parens []
+    where
+    vstr = prettyPrintCpp1 val
+    val' | '(' `elem` vstr || '[' `elem` vstr = parens vstr
+         | otherwise = vstr
+
   match (CppVar ident) = return ident
   -- match (CppInstance [] (cls:_, _) _ params) =
   --   return $ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
