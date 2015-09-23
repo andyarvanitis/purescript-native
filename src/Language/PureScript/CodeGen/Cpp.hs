@@ -453,7 +453,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       return (CppVariableIntroduction (propVar, Nothing)
                                       []
                                       []
-                                      (Just (CppAccessor Nothing (CppStringLiteral prop) (CppVar varName)))
+                                      (Just (CppIndexer (CppStringLiteral prop) (CppVar varName)))
               : cpp)
 
   literalToBinderCpp varName done (ArrayLiteral bs) = do
