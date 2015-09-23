@@ -55,8 +55,8 @@ literals = mkPattern' match
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
-  match (CppArrayLiteral t xs) = fmap concat $ sequence
-    [ return $ maybe "" runType t
+  match (CppArrayLiteral _ xs) = fmap concat $ sequence
+    [ return "any::vector"
     , return "{ "
     , fmap (intercalate ", ") $ forM xs prettyPrintCpp'
     , return " }"

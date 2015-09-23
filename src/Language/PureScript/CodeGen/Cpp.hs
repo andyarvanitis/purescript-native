@@ -435,7 +435,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     cpp <- go done 0 bs
     let cond = case length bs of
                  0 -> CppBinary Dot (CppVar varName) (CppApp (CppVar "empty") [])
-                 n -> CppBinary Equal (CppBinary Dot (CppVar varName) (CppApp (CppVar "size") []))
+                 n -> let var = CppCast (Native "any::vector" []) (CppVar varName) in
+                      CppBinary Equal (CppBinary Dot var (CppApp (CppVar "size") []))
                                       (CppNumericLiteral (Left (fromIntegral n)))
     return [ CppIfElse cond (CppBlock cpp) Nothing ]
     where
