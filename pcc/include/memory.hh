@@ -259,6 +259,11 @@ class any {
     returnValue(Type::Function, f(arg),)
   }
 
+  auto operator()(const as_thunk) const -> const any& {
+    assert(type == Type::Thunk);
+    return t(unthunk);
+  }
+
   inline static auto call(const any& a) -> any {
     assert(a.type == Type::EffFunction || a.type == Type::Function);
     if (a.type == Type::EffFunction) {

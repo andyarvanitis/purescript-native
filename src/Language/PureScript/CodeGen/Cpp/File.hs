@@ -79,8 +79,7 @@ toHeader = catMaybes . map go
     Nothing
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ _ (Just cpp)) =
-    Just $ CppFunction name [] [("", Just (Native "as_thunk" []))] (Just AnyTypeRef) [] CppNoOp
-
+    Just $ CppVariableIntroduction (name, Just AnyType) [] [CppExtern] Nothing
   go (CppComment comms cpp')
     | Just cpp <- go cpp' = Just $ case cpp of CppFunction {} -> cpp
                                                _ -> CppComment comms cpp
@@ -176,10 +175,11 @@ toBody = catMaybes . map go
 
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ _ (Just cpp)) =
-    Just $ CppFunction name [] [("", Just (Native "as_thunk" []))] (Just AnyTypeRef) [] block
+    Just $ CppVariableIntroduction (name, Just AnyType) [] [] (Just lambda)
     where
     val = CppVariableIntroduction ("_value_", Just AnyType) [] [CppStatic] (Just cpp)
     block = CppBlock [val, CppReturn (CppVar "_value_")]
+    lambda = CppLambda [] [("", Just (Native "as_thunk" []))] (Just AnyTypeRef) block
 
   -- go cpp@(CppVariableIntroduction (name, Just t) [] _ (Just _))
   --   | t /= AutoType, all isAlphaNum name
