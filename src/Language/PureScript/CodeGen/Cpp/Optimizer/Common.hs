@@ -42,7 +42,6 @@ isReassigned var1 = everythingOnCpp (||) check
   check (CppVariableIntroduction arg _ _) | var1 == fst arg = True
   check (CppAssignment (CppVar arg) _) | var1 == arg = True
   check (CppFor arg _ _ _) | var1 == arg = True
-  check (CppForIn arg _ _) | var1 == arg = True
   check _ = False
 
 isRebound :: Cpp -> Cpp -> Bool

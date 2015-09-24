@@ -35,14 +35,6 @@ toHeader = catMaybes . map go
   go :: Cpp -> Maybe Cpp
   go (CppNamespace name cpps) = Just (CppNamespace name (toHeader cpps))
   go cpp@(CppUseNamespace{}) = Just cpp
-  go (CppStruct (s, []) ts supers ms@(_:_) [])
-    | ms'@(_:_) <- fromConst <$> ms = Just (CppStruct (s, []) ts supers ms' [])
-    where
-    fromConst :: Cpp -> Cpp
-    fromConst (CppVariableIntroduction (name, typ@(Just _)) qs _) =
-      CppVariableIntroduction (name, typ) qs Nothing
-    fromConst cpp = cpp
-  go cpp@(CppStruct{}) = Just cpp
   go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just AutoType
     = Just CppNoOp
   go (CppFunction name args rtyp qs _) =
@@ -94,20 +86,6 @@ toBodyDecl :: [Cpp] -> [Cpp]
 toBodyDecl = catMaybes . map go
   where
   go :: Cpp -> Maybe Cpp
-  -- go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) _)
-  --   | all (not . declHasTemplates) ms,
-  --     ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
-  --   where
-  --   fromConst :: Cpp -> Maybe Cpp
-  --   fromConst (CppVariableIntroduction (name, typ@(Just _)) qs _)
-  --     | CppStatic `elem` qs =
-  --       Just $ CppVariableIntroduction (fullname name, typ) (CppTemplSpec : (delete CppStatic qs)) Nothing
-  --   fromConst (CppFunction name tmplts args rtyp qs _) =
-  --     Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) CppNoOp
-  --   fromConst (CppComment _ cpp) = fromConst cpp
-  --   fromConst _ = Nothing
-  --   fullname :: String -> String
-  --   fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
   go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
   go _ = Nothing
 
@@ -132,28 +110,12 @@ toBody = catMaybes . map go
     isNoOp _ = False
   go cpp@(CppUseNamespace{}) = Just cpp
   go cpp@(CppFunction {}) = Just cpp
-  -- go (CppStruct (s, []) ts@(_:_) _ ms@(_:_) _)
-  --   | all (not . declHasTemplates) ms,
-  --     ms'@(_:_) <- catMaybes (fromConst <$> ms) = Just (CppSequence ms')
-  --   where
-  --   fromConst :: Cpp -> Maybe Cpp
-  --   fromConst (CppVariableIntroduction (name, typ@(Just _)) tmps qs cpp)
-  --     | CppStatic `elem` qs =
-  --       Just $ CppVariableIntroduction (fullname name, typ) tmps (CppTemplSpec:(delete CppStatic qs)) cpp
-  --   fromConst (CppFunction name tmplts args rtyp qs body) =
-  --     Just $ CppFunction (fullname name) tmplts args rtyp (CppTemplSpec : (qs \\ [CppInline, CppStatic])) body
-  --   fromConst (CppComment comms cpp) | Just cpp' <- fromConst cpp = Just (CppComment comms cpp')
-  --   fromConst _ = Nothing
-  --   fullname :: String -> String
-  --   fullname name = s ++ '<' : intercalate "," (runType <$> ts) ++ ">::" ++ name
-
   go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
     Nothing
   go (CppVariableIntroduction _ _ (Just CppStringLiteral {})) =
     Nothing
   go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
     Nothing
-
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     Just $ CppVariableIntroduction (name, Just AnyType) [] (Just lambda)

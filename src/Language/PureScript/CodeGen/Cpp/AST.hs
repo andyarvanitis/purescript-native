@@ -189,18 +189,6 @@ data Cpp
   --
   | CppLambda [CppCaptureType] [(String, Maybe Type)] (Maybe Type) Cpp
   -- |
-  -- A C++ struct declaration (name with any template types, superclasses, class methods, instance methods)
-  --
-  | CppStruct (String, [(String, Int)]) [Type] [(String, [Type])] [Cpp] [Cpp]
-  -- |
-  -- 'data' constructor type (name, template types)
-  --
-  | CppData String [Type]
-  -- |
-  -- 'data' constructor function (name, template types)
-  --
-  | CppDataConstructor String [Type]
-  -- |
   -- Value type cast
   --
   | CppCast Type Cpp
@@ -209,17 +197,9 @@ data Cpp
   --
   | CppApp Cpp [Cpp]
   -- |
-  -- Partial function application (fn, args, arg types, num of parameters not applied)
-  --
-  | CppPartialApp [Type] Int Cpp [Cpp]
-  -- |
   -- Variable
   --
   | CppVar String
-  -- |
-  -- Typeclass instance (module, classname(s) and fns, instance name, parameters [names, types])
-  --
-  | CppInstance String ([String], [(String, Maybe Type)]) String [(String, Maybe Type)]
   -- |
   -- Conditional expression
   --
@@ -261,10 +241,6 @@ data Cpp
   --
   | CppFor String Cpp Cpp Cpp
   -- |
-  -- ForIn loop
-  --
-  | CppForIn String Cpp Cpp
-  -- |
   -- If-then-else statement
   --
   | CppIfElse Cpp Cpp (Maybe Cpp)
@@ -276,14 +252,6 @@ data Cpp
   -- Throw statement
   --
   | CppThrow Cpp
-  -- |
-  -- Type-Of operator
-  --
-  | CppTypeOf Cpp
-  -- |
-  -- InstanceOf test
-  --
-  | CppInstanceOf Cpp Cpp
   -- |
   -- Labelled statement
   --
@@ -340,10 +308,8 @@ everywhereOnCpp f = go
   go (CppAccessor prop j) = f (CppAccessor (go prop) (go j))
   go (CppFunction name args rty qs j) = f (CppFunction name args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
-  go (CppStruct name typs supers cms ims) = f (CppStruct name typs supers (map go cms) (map go ims))
   go (CppCast t cpp) = f (CppCast t (go cpp))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
-  go (CppPartialApp typs n j cpp) = f (CppPartialApp typs n (go j) (map go cpp))
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
@@ -351,13 +317,10 @@ everywhereOnCpp f = go
   go (CppAssignment j1 j2) = f (CppAssignment (go j1) (go j2))
   go (CppWhile j1 j2) = f (CppWhile (go j1) (go j2))
   go (CppFor name j1 j2 j3) = f (CppFor name (go j1) (go j2) (go j3))
-  go (CppForIn name j1 j2) = f (CppForIn name (go j1) (go j2))
   go (CppIfElse j1 j2 j3) = f (CppIfElse (go j1) (go j2) (fmap go j3))
   go (CppReturn cpp) = f (CppReturn (go cpp))
   go (CppThrow cpp) = f (CppThrow (go cpp))
-  go (CppTypeOf cpp) = f (CppTypeOf (go cpp))
   go (CppLabel name cpp) = f (CppLabel name (go cpp))
-  go (CppInstanceOf j1 j2) = f (CppInstanceOf (go j1) (go j2))
   go (CppSequence cpp) = f (CppSequence (map go cpp))
   go (CppComment com j) = f (CppComment com (go j))
   go other = f other
@@ -377,10 +340,8 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppAccessor prop j) = CppAccessor prop <$> f' j
   go (CppFunction name args rty qs j) = CppFunction name args rty qs <$> f' j
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
-  go (CppStruct name typs supers cms ims) = CppStruct name typs supers <$> traverse f' cms <*> traverse f' ims
   go (CppCast t cpp) = CppCast t <$> f' cpp
   go (CppApp j cpp) = CppApp <$> f' j <*> traverse f' cpp
-  go (CppPartialApp typs n j cpps) = CppPartialApp typs n <$> f' j <*> traverse f' cpps
   go (CppConditional j1 j2 j3) = CppConditional <$> f' j1 <*> f' j2 <*> f' j3
   go (CppBlock cpp) = CppBlock <$> traverse f' cpp
   go (CppNamespace name cpp) = CppNamespace name <$> traverse f' cpp
@@ -389,13 +350,10 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppAssignment j1 j2) = CppAssignment <$> f' j1 <*> f' j2
   go (CppWhile j1 j2) = CppWhile <$> f' j1 <*> f' j2
   go (CppFor name j1 j2 j3) = CppFor name <$> f' j1 <*> f' j2 <*> f' j3
-  go (CppForIn name j1 j2) = CppForIn name <$> f' j1 <*> f' j2
   go (CppIfElse j1 j2 j3) = CppIfElse <$> f' j1 <*> f' j2 <*> traverse f' j3
   go (CppReturn j) = CppReturn <$> f' j
   go (CppThrow j) = CppThrow <$> f' j
-  go (CppTypeOf j) = CppTypeOf <$> f' j
   go (CppLabel name j) = CppLabel name <$> f' j
-  go (CppInstanceOf j1 j2) = CppInstanceOf <$> f' j1 <*> f' j2
   go (CppComment com j) = CppComment com <$> f' j
   go other = f other
 
@@ -410,10 +368,8 @@ everythingOnCpp (<>) f = go
   go j@(CppAccessor j1 j2) = f j <> go j1 <> go j2
   go j@(CppFunction _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1
-  go j@(CppStruct _ _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)
   go j@(CppCast _ cpp) = f j <> go cpp
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
-  go j@(CppPartialApp _ _ j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)
@@ -421,14 +377,11 @@ everythingOnCpp (<>) f = go
   go j@(CppAssignment j1 j2) = f j <> go j1 <> go j2
   go j@(CppWhile j1 j2) = f j <> go j1 <> go j2
   go j@(CppFor _ j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
-  go j@(CppForIn _ j1 j2) = f j <> go j1 <> go j2
   go j@(CppIfElse j1 j2 Nothing) = f j <> go j1 <> go j2
   go j@(CppIfElse j1 j2 (Just j3)) = f j <> go j1 <> go j2 <> go j3
   go j@(CppReturn j1) = f j <> go j1
   go j@(CppThrow j1) = f j <> go j1
-  go j@(CppTypeOf j1) = f j <> go j1
   go j@(CppLabel _ j1) = f j <> go j1
-  go j@(CppInstanceOf j1 j2) = f j <> go j1 <> go j2
   go j@(CppSequence cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppComment _ j1) = f j <> go j1
   go other = f other

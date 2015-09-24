@@ -80,10 +80,6 @@ depSortSynonymsAndData allCpps = consolidateNamespaces . reverse $
   findEdges :: Cpp -> [G.Edge]
   findEdges cpp@(CppTypeAlias _ typ _)
     | Just thisVertex <- lookup cpp vertexCpps' = everythingOnTypes (++) (go thisVertex) typ
-  findEdges cpp@(CppStruct _ _ supers _ _)
-    | Just thisVertex <- lookup cpp vertexCpps',
-      typs@(_:_) <- concatMap snd supers
-      = concatMap (everythingOnTypes (++) (go thisVertex)) typs
   findEdges _ = []
 
   go :: G.Vertex -> Type -> [G.Edge]
@@ -102,7 +98,6 @@ depSortSynonymsAndData allCpps = consolidateNamespaces . reverse $
 
   getName :: Cpp -> String
   getName (CppTypeAlias (name, _) _ _) = name
-  getName (CppStruct (name, _) _ _ _ _) = name
   getName (CppNamespace ns [cpp]) = ns ++ "::" ++ getName cpp
   getName cpp = error $ "Wrong kind of Cpp value! " ++ show cpp
 

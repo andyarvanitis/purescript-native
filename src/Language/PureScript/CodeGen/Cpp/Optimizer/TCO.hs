@@ -127,8 +127,7 @@ tco' = everywhereOnCpp convert
 
   isSelfCall :: String -> Cpp -> Bool
   isSelfCall ident (CppApp (CppVar ident') args)
-    | ident == ident' && not (any isFunction args)
-                      && not (all isInstanceDict args) = True
+    | ident == ident' && not (any isFunction args) = True
   isSelfCall ident (CppApp fn args) | not (any isFunction args) = isSelfCall ident fn
   isSelfCall _ _ = False
 
@@ -143,7 +142,3 @@ tco' = everywhereOnCpp convert
 
   hasFunction :: Cpp -> Bool
   hasFunction = getAny . everythingOnCpp mappend (Any . isFunction)
-
-  isInstanceDict :: Cpp -> Bool
-  isInstanceDict (CppInstance {}) = True
-  isInstanceDict _ = False

@@ -181,39 +181,6 @@ literals = mkPattern' match
     [ return $ "using " ++ newName ++ " = " ++ if null spec then name' else spec ++ angles name'
     , return ";"
     ]
-  match (CppStruct (name, ps@(_:_)) [] [] [] []) = fmap concat $ sequence $
-    [ return (templDecl ps), return "\n"
-    , currentIndent
-    , return ("struct " ++ name)
-    , return ";"
-    ]
-  match (CppStruct (name, []) typs@(_:_) [] [] []) = fmap concat $ sequence $
-    [ return $ "EXTERN "
-    , return . parens $ let s = "template struct " ++ classstr (name, typs) in
-                        if ',' `elem` s then parens s else s
-    , return ";"
-    ]
-  match (CppStruct (name, params) typs supers cms ims) = fmap concat $ sequence $
-    (if null params && null typs
-      then []
-      else [return (templDecl params), return "\n", currentIndent]) ++
-    [ return $ "struct " ++ classstr (name, typs)
-    , return $ if null supers
-                 then []
-                 else " : public " ++ intercalate ", public " (classstr <$> supers)
-    , return " {\n"
-    , withIndent $ prettyStatements cms
-    , return $ if null cms then [] else "\n"
-    , withIndent $ prettyStatements ims
-    , return $ if null ims then [] else "\n"
-    , currentIndent
-    , return "};"
-    ]
-  match (CppData name []) = return (name ++ "_")
-  match (CppData name typs) =
-    return (prettyPrintCpp1 (CppData name []) ++ angles (intercalate "," $ runType <$> typs))
-  match (CppDataConstructor name typs) =
-    return ("construct" ++ angles (prettyPrintCpp1 (CppData name typs)))
   match (CppCast typ val) = return $
     case val of
       CppNumericLiteral {} -> vstr
@@ -226,11 +193,6 @@ literals = mkPattern' match
          | otherwise = vstr
 
   match (CppVar ident) = return ident
-  -- match (CppInstance [] (cls:_, _) _ params) =
-  --   return $ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
-  -- match (CppInstance mn (cls:_, _) _ params) =
-  --   return $ (dotsTo '_' mn) ++ "::" ++ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
---   match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction (ident, typ) qs value) =
     let qs' = delete CppTemplSpec qs in
@@ -263,12 +225,6 @@ literals = mkPattern' match
     , return $ "; " ++ ident ++ " < "
     , prettyPrintCpp' end
     , return $ "; " ++ ident ++ "++) "
-    , prettyPrintCpp' sts
-    ]
-  match (CppForIn ident obj sts) = fmap concat $ sequence
-    [ return $ "for (auto " ++ ident ++ " : "
-    , prettyPrintCpp' obj
-    , return ") "
     , prettyPrintCpp' sts
     ]
   match (CppIfElse cond thens elses) = fmap concat $ sequence
@@ -383,18 +339,6 @@ app = mkPattern' match
     return (intercalate ", " cpps, val)
   match _ = mzero
 
-typeOf :: Pattern PrinterState Cpp ((), Cpp)
-typeOf = mkPattern match
-  where
-  match (CppTypeOf val) = Just ((), val)
-  match _ = Nothing
-
-instanceOf :: Pattern PrinterState Cpp (Cpp, Cpp)
-instanceOf = mkPattern match
-  where
-  match (CppInstanceOf val ty) = Just (val, ty)
-  match _ = Nothing
-
 unary' :: CppUnaryOp -> (Cpp -> String) -> Operator PrinterState Cpp String
 unary' op mkStr = Wrap match (++)
   where
@@ -460,7 +404,6 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                         ++ maybe "" ((" -> " ++) . runType) rty
                         ++ " "
                         ++ ret ]
-                  , [ Wrap typeOf $ \_ s -> "typeof " ++ s ]
                   , [ unary     CppNot                "!"
                     , unary     CppBitwiseNot         "~"
                     , unary     CppPositive           "+"
@@ -477,8 +420,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                     , binary    LessThanOrEqual      " <= "
                     , binary    GreaterThan          " > "
                     , binary    GreaterThanOrEqual   " >= "
-                    , AssocR instanceOf $ \v1 v2 -> v1 ++ ".instance_of" ++ angles v2 ++ parens [] ]
-                  , [ binary    Equal                " == "
+                    , binary    Equal                " == "
                     , binary    NotEqual             " != " ]
                   , [ binary    BitwiseAnd           " & " ]
                   , [ binary    BitwiseXor           " ^ " ]
@@ -490,10 +432,6 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
 
 dotsTo :: Char -> String -> String
 dotsTo chr' = map (\c -> if c == '.' then chr' else c)
-
-classstr :: (String, [Type]) -> String
-classstr (name, []) = name
-classstr (name, params) = name ++ angles (intercalate ", " $ runType <$> params)
 
 argstr :: (String, Maybe Type) -> String
 argstr (name, Nothing) = argStr name AutoType
