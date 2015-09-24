@@ -248,7 +248,7 @@ literals = mkPattern' match
           return (templDecl' (Left tmps) ++ "\n" ++ indentString)
     , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs'
     , return $ if CppMutable `notElem` qs then "const " else ""
-    , return (maybe "auto" runType typ ++ " ")
+    , return (maybe "any" runType typ ++ " ")
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
     , return ";"
