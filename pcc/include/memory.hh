@@ -458,6 +458,15 @@ class any {
     }
   }
 
+  inline auto operator-() const -> any {
+    auto& lhs = extractValue(*this);
+    switch (lhs.type) {
+      case Type::Integer: return (- lhs.i);
+      case Type::Double:  return (- lhs.d);
+      default: throw std::runtime_error("unsupported type for unary '-' operator");
+    }
+  }
+
   #undef returnValue
 };
 
