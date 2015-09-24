@@ -266,7 +266,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (params, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
-        return . CppObjectLiteral $ zip (superClassDictionaryNames constraints ++ (fst <$> fns)) args'
+        return . CppObjectLiteral $ zip ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns)) args'
       _ -> -- TODO: verify this
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
 
@@ -462,7 +462,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   findClass name
     | Just (params, fns, constraints) <- M.lookup name (E.typeClasses env),
       fns' <- (\(i,t) -> (runIdent i, t)) <$> fns
-      = Just (fst <$> params, (sortBy (compare `on` fst) constraints), (sortBy (compare `on` normalizedName . fst) fns'))
+      = Just (fst <$> params, constraints, (sortBy (compare `on` normalizedName . fst) fns'))
   findClass _ = Nothing
 
   -- |
