@@ -223,8 +223,8 @@ inlineCommonOperators = applyAll $
         Nothing -> orig
     convert other = other
     collectArgs :: Int -> [(String, Maybe Type)] -> Cpp -> Maybe ([(String, Maybe Type)], [Cpp])
-    collectArgs 1 acc (CppLambda _ [oneArg] Nothing (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
-    collectArgs m acc (CppLambda _ [oneArg] Nothing (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
+    collectArgs 1 acc (CppLambda _ [oneArg] _ (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
+    collectArgs m acc (CppLambda _ [oneArg] _ (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
     collectArgs _ _   _ = Nothing
 
   isNFn :: String -> Int -> Cpp -> Bool

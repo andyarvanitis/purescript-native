@@ -26,14 +26,12 @@ replaceIdent :: String -> Cpp -> Cpp -> Cpp
 replaceIdent var1 cpp = everywhereOnCpp replace
   where
   replace (CppVar var2) | var1 == var2 = cpp
-  replace (CppScope var2) | var1 == var2 = cpp
   replace other = other
 
 replaceIdents :: [(String, Cpp)] -> Cpp -> Cpp
 replaceIdents vars = everywhereOnCpp replace
   where
   replace v@(CppVar var) = fromMaybe v $ lookup var vars
-  replace v@(CppScope var) = fromMaybe v $ lookup var vars
   replace other = other
 
 isReassigned :: String -> Cpp -> Bool
@@ -63,7 +61,6 @@ isUsed var1 = everythingOnCpp (||) check
 
 targetVariable :: Cpp -> String
 targetVariable (CppVar var) = var
-targetVariable (CppScope var) = var
 targetVariable (CppAccessor _ _ tgt) = targetVariable tgt
 targetVariable (CppIndexer _ tgt) = targetVariable tgt
 targetVariable _ = error "Invalid argument to targetVariable"

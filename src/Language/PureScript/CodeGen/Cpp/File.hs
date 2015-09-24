@@ -222,7 +222,7 @@ nativeMain = CppFunction "main"
                ]
                (Just (Native "int" []))
                []
-               (CppBlock [ CppApp (CppApp (CppAccessor Nothing (CppVar "main") (CppScope "Main"))
+               (CppBlock [ CppApp (CppApp (CppAccessor Nothing (CppVar "main") (CppVar "Main"))
                                           [CppVar "PureScript::unthunk"])
                                   []
                          , CppRaw ";"

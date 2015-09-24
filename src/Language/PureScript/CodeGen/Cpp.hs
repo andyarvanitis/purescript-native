@@ -449,7 +449,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   qualifiedToCpp :: (a -> Ident) -> Qualified a -> Cpp
   qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = CppVar . runIdent $ f a
   qualifiedToCpp f (Qualified (Just mn') a)
-    | mn /= mn' = CppAccessor Nothing (CppVar . identToCpp $ f a) (CppScope (moduleNameToCpp mn'))
+    | mn /= mn' = CppAccessor Nothing (CppVar . identToCpp $ f a) (CppVar (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
 
   qualifiedToStr' :: (a -> Ident) -> Qualified a -> String

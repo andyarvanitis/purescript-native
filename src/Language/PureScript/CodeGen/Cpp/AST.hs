@@ -225,10 +225,6 @@ data Cpp
   --
   | CppInstance String ([String], [(String, Maybe Type)]) String [(String, Maybe Type)]
   -- |
-  -- Scope (e.g., namespace, class static member, etc.)
-  --
-  | CppScope String
-  -- |
   -- Conditional expression
   --
   | CppConditional Cpp Cpp Cpp
