@@ -55,7 +55,7 @@ literals = mkPattern' match
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
-  match (CppArrayLiteral _ xs) = fmap concat $ sequence
+  match (CppArrayLiteral xs) = fmap concat $ sequence
     [ return "any::vector"
     , return "{ "
     , fmap (intercalate ", ") $ forM xs prettyPrintCpp'
@@ -74,17 +74,12 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
-  match (CppFunction name tmps args rty qs ret) =
+  match (CppFunction name args rty qs ret) =
     let qs' = delete CppTemplSpec qs in
     fmap concat $ sequence
     [ do
       indentString <- currentIndent
       return $ maybe [] ((++ "\n" ++ indentString) . runQualifier) (find (== CppTemplSpec) qs)
-    , if null tmps
-        then return []
-        else do
-          indentString <- currentIndent
-          return (templDecl' (Left tmps) ++ "\n" ++ indentString)
     , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs'
     , return $ if CppConstructor `elem` qs || CppDestructor `elem` qs
                  then []
@@ -237,17 +232,12 @@ literals = mkPattern' match
   --   return $ (dotsTo '_' mn) ++ "::" ++ cls ++ angles (intercalate "," (maybe "" runType . snd <$> params))
 --   match (CppApp v [CppVar name]) | "__dict_" `isPrefixOf` name = return (prettyPrintCpp1 v) -- TODO: ugly
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
-  match (CppVariableIntroduction (ident, typ) tmps qs value) =
+  match (CppVariableIntroduction (ident, typ) qs value) =
     let qs' = delete CppTemplSpec qs in
     fmap concat $ sequence
     [ do
       indentString <- currentIndent
       return $ maybe [] ((++ "\n" ++ indentString) . runQualifier) (find (== CppTemplSpec) qs)
-    , if null tmps
-        then return []
-        else do
-          indentString <- currentIndent
-          return (templDecl' (Left tmps) ++ "\n" ++ indentString)
     , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs'
     , return $ if CppMutable `notElem` qs then "const " else ""
     , return (maybe "any" runType typ ++ " ")
@@ -362,10 +352,10 @@ conditional = mkPattern match
   match (CppConditional cond th el) = Just ((th, el), cond)
   match _ = Nothing
 
-accessor :: Pattern PrinterState Cpp ((Maybe Type, String), Cpp)
+accessor :: Pattern PrinterState Cpp (String, Cpp)
 accessor = mkPattern match
   where
-  match (CppAccessor typ prop val) = Just ((typ, prettyPrintCpp1 prop), val)
+  match (CppAccessor prop val) = Just (prettyPrintCpp1 prop, val)
   match _ = Nothing
 
 indexer :: Pattern PrinterState Cpp (String, Cpp)
@@ -460,7 +450,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   matchValue = buildPrettyPrinter operators (literals <+> fmap parens matchValue)
   operators :: OperatorTable PrinterState Cpp String
   operators =
-    OperatorTable [ [ Wrap accessor $ \(_, prop) val -> val ++ "::" ++ prop ]
+    OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ parens args ]
                   , [ unary CppNew "new " ]
@@ -529,12 +519,6 @@ templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))
   go :: TemplateInfo -> String
   go (name, 0) = "typename " ++ name
   go (name, n) = "typename" ++ parens (intercalate "," $ replicate n "typename") ++ ' ' : name
-
-templDecl' :: Either [TemplateInfo] [Type] -> String
-templDecl' (Left []) = []
-templDecl' (Left params) = templDecl params
-templDecl' (Right []) = []
-templDecl' (Right _) = templDecl []
 
 isNestedNamespace :: Cpp -> Bool
 isNestedNamespace (CppNamespace (':':':':_) _) = True

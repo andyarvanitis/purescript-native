@@ -167,7 +167,7 @@ data Cpp
   -- |
   -- An array literal
   --
-  | CppArrayLiteral (Maybe Type) [Cpp]
+  | CppArrayLiteral [Cpp]
   -- |
   -- An array indexer expression
   --
@@ -179,15 +179,11 @@ data Cpp
   -- |
   -- An general property accessor expression (optional type, property, expr)
   --
-  | CppAccessor (Maybe Type) Cpp Cpp
+  | CppAccessor Cpp Cpp
   -- |
-  -- An map object property accessor expression
+  -- A function introduction (name, arguments, return type, qualifiers, body)
   --
-  | CppMapAccessor Cpp Cpp
-  -- |
-  -- A function introduction (name, template types, arguments, return type, qualifiers, body)
-  --
-  | CppFunction String [(String, Int)] [(String, Maybe Type)] (Maybe Type) [CppQualifier] Cpp
+  | CppFunction String [(String, Maybe Type)] (Maybe Type) [CppQualifier] Cpp
   -- |
   -- A lambda introduction (arguments, return type, body)
   --
@@ -251,7 +247,7 @@ data Cpp
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction (String, Maybe Type) [(String, Int)] [CppQualifier] (Maybe Cpp)
+  | CppVariableIntroduction (String, Maybe Type) [CppQualifier] (Maybe Cpp)
   -- |
   -- A variable assignment
   --
@@ -338,12 +334,11 @@ everywhereOnCpp f = go
   go :: Cpp -> Cpp
   go (CppUnary op j) = f (CppUnary op (go j))
   go (CppBinary op j1 j2) = f (CppBinary op (go j1) (go j2))
-  go (CppArrayLiteral t cpp) = f (CppArrayLiteral t (map go cpp))
+  go (CppArrayLiteral cpp) = f (CppArrayLiteral (map go cpp))
   go (CppIndexer j1 j2) = f (CppIndexer (go j1) (go j2))
   go (CppObjectLiteral cpp) = f (CppObjectLiteral (map (fmap go) cpp))
-  go (CppAccessor t prop j) = f (CppAccessor t (go prop) (go j))
-  go (CppMapAccessor j1 j2) = f (CppMapAccessor (go j1) (go j2))
-  go (CppFunction name tmps args rty qs j) = f (CppFunction name tmps args rty qs (go j))
+  go (CppAccessor prop j) = f (CppAccessor (go prop) (go j))
+  go (CppFunction name args rty qs j) = f (CppFunction name args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
   go (CppStruct name typs supers cms ims) = f (CppStruct name typs supers (map go cms) (map go ims))
   go (CppCast t cpp) = f (CppCast t (go cpp))
@@ -352,7 +347,7 @@ everywhereOnCpp f = go
   go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
-  go (CppVariableIntroduction name tmps qs j) = f (CppVariableIntroduction name tmps qs (fmap go j))
+  go (CppVariableIntroduction name qs j) = f (CppVariableIntroduction name qs (fmap go j))
   go (CppAssignment j1 j2) = f (CppAssignment (go j1) (go j2))
   go (CppWhile j1 j2) = f (CppWhile (go j1) (go j2))
   go (CppFor name j1 j2 j3) = f (CppFor name (go j1) (go j2) (go j3))
@@ -376,12 +371,11 @@ everywhereOnCppTopDownM f = f >=> go
   f' = f >=> go
   go (CppUnary op j) = CppUnary op <$> f' j
   go (CppBinary op j1 j2) = CppBinary op <$> f' j1 <*> f' j2
-  go (CppArrayLiteral t cpp) = CppArrayLiteral t <$> traverse f' cpp
+  go (CppArrayLiteral cpp) = CppArrayLiteral <$> traverse f' cpp
   go (CppIndexer j1 j2) = CppIndexer <$> f' j1 <*> f' j2
   go (CppObjectLiteral cpp) = CppObjectLiteral <$> traverse (sndM f') cpp
-  go (CppAccessor t prop j) = CppAccessor t prop <$> f' j
-  go (CppMapAccessor j1 j2) = CppMapAccessor <$> f' j1 <*> f' j2
-  go (CppFunction name tmps args rty qs j) = CppFunction name tmps args rty qs <$> f' j
+  go (CppAccessor prop j) = CppAccessor prop <$> f' j
+  go (CppFunction name args rty qs j) = CppFunction name args rty qs <$> f' j
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
   go (CppStruct name typs supers cms ims) = CppStruct name typs supers <$> traverse f' cms <*> traverse f' ims
   go (CppCast t cpp) = CppCast t <$> f' cpp
@@ -391,7 +385,7 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppBlock cpp) = CppBlock <$> traverse f' cpp
   go (CppNamespace name cpp) = CppNamespace name <$> traverse f' cpp
   go (CppSequence cpp) = CppSequence <$> traverse f' cpp
-  go (CppVariableIntroduction name tmps qs j) = CppVariableIntroduction name tmps qs <$> traverse f' j
+  go (CppVariableIntroduction name qs j) = CppVariableIntroduction name qs <$> traverse f' j
   go (CppAssignment j1 j2) = CppAssignment <$> f' j1 <*> f' j2
   go (CppWhile j1 j2) = CppWhile <$> f' j1 <*> f' j2
   go (CppFor name j1 j2 j3) = CppFor name <$> f' j1 <*> f' j2 <*> f' j3
@@ -410,21 +404,20 @@ everythingOnCpp (<>) f = go
   where
   go j@(CppUnary _ j1) = f j <> go j1
   go j@(CppBinary _ j1 j2) = f j <> go j1 <> go j2
-  go j@(CppArrayLiteral _ cpp) = foldl (<>) (f j) (map go cpp)
+  go j@(CppArrayLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppIndexer j1 j2) = f j <> go j1 <> go j2
   go j@(CppObjectLiteral cpp) = foldl (<>) (f j) (map (go . snd) cpp)
-  go j@(CppAccessor _ j1 j2) = f j <> go j1 <> go j2
-  go j@(CppMapAccessor j1 j2) = f j <> go j1 <> go j2
-  go j@(CppFunction _ _ _ _ _ j1) = f j <> go j1
+  go j@(CppAccessor j1 j2) = f j <> go j1 <> go j2
+  go j@(CppFunction _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1
   go j@(CppStruct _ _ _ cpp1 cpp2) = foldl (<>) (f j) (map go cpp1) <> foldl (<>) (f j) (map go cpp2)
-  go j@(CppCast t cpp) = f j <> go cpp
+  go j@(CppCast _ cpp) = f j <> go cpp
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppPartialApp _ _ j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)
-  go j@(CppVariableIntroduction _ _ _ (Just j1)) = f j <> go j1
+  go j@(CppVariableIntroduction _ _ (Just j1)) = f j <> go j1
   go j@(CppAssignment j1 j2) = f j <> go j1 <> go j2
   go j@(CppWhile j1 j2) = f j <> go j1 <> go j2
   go j@(CppFor _ j1 j2 j3) = f j <> go j1 <> go j2 <> go j3

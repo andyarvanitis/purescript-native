@@ -38,8 +38,8 @@ isReassigned :: String -> Cpp -> Bool
 isReassigned var1 = everythingOnCpp (||) check
   where
   check :: Cpp -> Bool
-  check (CppFunction _ _ args _ _ _) | var1 `elem` (map fst args) = True
-  check (CppVariableIntroduction arg _ _ _) | var1 == fst arg = True
+  check (CppFunction _ args _ _ _) | var1 `elem` (map fst args) = True
+  check (CppVariableIntroduction arg _ _) | var1 == fst arg = True
   check (CppAssignment (CppVar arg) _) | var1 == arg = True
   check (CppFor arg _ _ _) | var1 == arg = True
   check (CppForIn arg _ _) | var1 == arg = True
@@ -61,7 +61,7 @@ isUsed var1 = everythingOnCpp (||) check
 
 targetVariable :: Cpp -> String
 targetVariable (CppVar var) = var
-targetVariable (CppAccessor _ _ tgt) = targetVariable tgt
+targetVariable (CppAccessor _ tgt) = targetVariable tgt
 targetVariable (CppIndexer _ tgt) = targetVariable tgt
 targetVariable _ = error "Invalid argument to targetVariable"
 

@@ -39,7 +39,7 @@ tco' = everywhereOnCpp convert
   copyVar :: (String, Maybe Type) -> (String, Maybe Type)
   copyVar (nm, ty) = ("__copy_" ++ nm, ty)
   convert :: Cpp -> Cpp
-  convert cpp@(CppFunction name _ _ _ _ _) =
+  convert cpp@(CppFunction name _ _ _ _) =
     let
       (argss, body', replace) = collectAllFunctionArgs [] id cpp
     in case () of
@@ -49,7 +49,7 @@ tco' = everywhereOnCpp convert
             in
               replace (toLoop name allArgs body')
         | otherwise -> cpp
-  convert cpp@(CppVariableIntroduction (name, typ) tmps qs (Just fn@CppLambda{})) =
+  convert cpp@(CppVariableIntroduction (name, typ) qs (Just fn@CppLambda{})) =
     let
       (argss, body', replace) = collectAllFunctionArgs [] id fn
     in case () of
@@ -57,14 +57,14 @@ tco' = everywhereOnCpp convert
             let
               allArgs = concat $ reverse argss
             in
-              CppVariableIntroduction (name, typ) tmps qs (Just (replace (toLoop name allArgs body')))
+              CppVariableIntroduction (name, typ) qs (Just (replace (toLoop name allArgs body')))
         | otherwise -> cpp
   convert cpp = cpp
   collectAllFunctionArgs :: [[(String, Maybe Type)]] -> (Cpp -> Cpp) -> Cpp -> ([[(String, Maybe Type)]], Cpp, Cpp -> Cpp)
-  collectAllFunctionArgs allArgs f (CppFunction ident tmps args rty qs (CppBlock (body@(CppReturn _):_))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident tmps (map copyVar args) rty qs (CppBlock [b]))) body
-  collectAllFunctionArgs allArgs f (CppFunction ident tmps args rty qs body@(CppBlock _)) =
-    (args : allArgs, body, f . CppFunction ident tmps (map copyVar args) rty qs)
+  collectAllFunctionArgs allArgs f (CppFunction ident args rty qs (CppBlock (body@(CppReturn _):_))) =
+    collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident (map copyVar args) rty qs (CppBlock [b]))) body
+  collectAllFunctionArgs allArgs f (CppFunction ident args rty qs body@(CppBlock _)) =
+    (args : allArgs, body, f . CppFunction ident (map copyVar args) rty qs)
   collectAllFunctionArgs allArgs f (CppLambda cps args rty (CppBlock (body@(CppReturn _):_))) =
     collectAllFunctionArgs (args : allArgs) (\b -> f (CppLambda cps (map copyVar args) rty (CppBlock [b]))) body
   collectAllFunctionArgs allArgs f (CppLambda cps args rty body@(CppBlock _)) =
@@ -95,7 +95,7 @@ tco' = everywhereOnCpp convert
     countSelfCallsInTailPosition (CppReturn ret) | isSelfCall ident ret = 1
     countSelfCallsInTailPosition _ = 0
 
-    countSelfCallsUnderFunctions (CppFunction _ _ _ _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
+    countSelfCallsUnderFunctions (CppFunction _ _ _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
     countSelfCallsUnderFunctions _ = 0
 
     countSelfCallsWithFnArgs :: Cpp -> Int
@@ -103,7 +103,7 @@ tco' = everywhereOnCpp convert
 
   toLoop :: String -> [(String, Maybe Type)] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
-        map (\arg -> CppVariableIntroduction arg [] [CppMutable] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
+        map (\arg -> CppVariableIntroduction arg [CppMutable] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
         [ CppLabel tcoLabel $ CppWhile (CppBooleanLiteral True) block ]
     where
     block :: Cpp
@@ -116,7 +116,7 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppSequence $ zipWith (\val arg ->
-                      CppVariableIntroduction (tcoVar arg, Nothing) [] [CppMutable] (Just val)) allArgumentValues (map fst allArgs)
+                      CppVariableIntroduction (tcoVar arg, Nothing) [CppMutable] (Just val)) allArgumentValues (map fst allArgs)
                     ++ map (\arg ->
                       CppAssignment (CppVar arg) (CppVar (tcoVar arg))) (map fst allArgs)
                     ++ [ CppContinue tcoLabel ]
@@ -133,7 +133,7 @@ tco' = everywhereOnCpp convert
   isSelfCall _ _ = False
 
   isFunction :: Cpp -> Bool
-  isFunction (CppFunction _ _ _ _ _ _) = True
+  isFunction (CppFunction _ _ _ _ _) = True
   isFunction _ = False
 
   isSelfCallWithFnArgs :: String -> Cpp -> [Cpp] -> Bool

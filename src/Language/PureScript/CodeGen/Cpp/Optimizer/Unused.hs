@@ -32,8 +32,8 @@ removeCodeAfterReturnStatements = everywhereOnCpp (removeFromBlock go)
 removeUnusedArg :: Cpp -> Cpp
 removeUnusedArg = everywhereOnCpp convert
   where
-  convert (CppFunction name ts [(arg,atyp)] rtyp qs body)
-    | arg == C.__unused = CppFunction name ts [("",atyp)] rtyp qs body
+  convert (CppFunction name [(arg,atyp)] rtyp qs body)
+    | arg == C.__unused = CppFunction name [("",atyp)] rtyp qs body
   convert cpp = cpp
 
 removeUndefinedApp :: Cpp -> Cpp

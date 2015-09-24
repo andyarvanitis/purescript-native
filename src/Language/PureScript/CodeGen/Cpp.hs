@@ -129,7 +129,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     | arg' == arg = do
     block <- asReturnBlock <$> valueToCpp body
     let fn' = CppFunction (identToCpp ident)
-                          []
                           [(identToCpp arg, Just AnyType)]
                           (Just AnyTypeRef)
                           []
@@ -139,14 +138,14 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   declToCpp ident (Abs (_, com, _, _) arg body) = do
     block <- asReturnBlock <$> valueToCpp body
     let block' = convertNestedLambdas [] block
-        fn' = CppFunction (identToCpp ident) [] [(identToCpp arg, Just AnyType)] (Just AnyType) [] block'
+        fn' = CppFunction (identToCpp ident) [(identToCpp arg, Just AnyType)] (Just AnyType) [] block'
     return (CppComment com fn')
 
   declToCpp ident (Constructor _ _ (ProperName ctor) fields) = return $
-    CppFunction (identToCpp ident) [] (farg <$> f)
-                                      (Just AnyType)
-                                      []
-                                      (CppBlock (fieldLambdas fs))
+    CppFunction (identToCpp ident) (farg <$> f)
+                                   (Just AnyType)
+                                   []
+                                   (CppBlock (fieldLambdas fs))
     where
     name = qualifiedToStr (ModuleName []) id (Qualified (Just mn) ident)
     fields' = identToCpp <$> fields
@@ -161,14 +160,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   declToCpp ident val = do
     val' <- valueToCpp val
-    return $ CppVariableIntroduction (identToCpp ident, Just AnyType) [] [] (Just val')
+    return $ CppVariableIntroduction (identToCpp ident, Just AnyType) [] (Just val')
 
   -------------------------------------------------------------------------------------------------
   toLambda :: [CppCaptureType] -> [TemplateInfo] -> Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  toLambda cs encTmplts (CppFunction name _ args rtyp qs body) =
+  toLambda cs encTmplts (CppFunction name args rtyp qs body) =
     CppVariableIntroduction (name, Just AnyType)
-                            []
                             (filter (==CppStatic) qs)
                             (Just (CppLambda cs' args (Just AnyType) body))
     where
@@ -220,7 +218,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return (CppBooleanLiteral b)
 
   valueToCpp (Literal (_, _, ty, _) (ArrayLiteral xs)) =
-    CppArrayLiteral Nothing <$> mapM valueToCpp xs
+    CppArrayLiteral <$> mapM valueToCpp xs
 
   valueToCpp (Literal _ (ObjectLiteral ps)) =
     CppObjectLiteral <$> sortBy (compare `on` fst) <$> mapM (sndM valueToCpp) ps
@@ -301,7 +299,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                (CppBlock (assignments ++ concat cpps ++ [failedPatternError valNames]))) []
     where
       mkVarDecl :: String -> Maybe Cpp -> Cpp
-      mkVarDecl name = CppVariableIntroduction (name, Nothing) [] []
+      mkVarDecl name = CppVariableIntroduction (name, Nothing) []
       go :: [String] -> [Cpp] -> [Binder Ann] -> m [Cpp]
       go _ done [] = return done
       go (v:vs) done' (b:bs) = do
@@ -336,7 +334,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     literalToBinderCpp varName done l
 
   binderToCpp varName done (VarBinder (_, _, ty, _) ident) =
-    return (CppVariableIntroduction (identToCpp ident, Just AnyType) [] [] (Just (CppVar varName)) : done)
+    return (CppVariableIntroduction (identToCpp ident, Just AnyType) [] (Just (CppVar varName)) : done)
 
   binderToCpp varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
     binderToCpp varName done b
@@ -360,7 +358,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       cpps <- binderToCpp argVar done'' binder
       return (CppVariableIntroduction (argVar, Nothing)
                                       []
-                                      []
                                       (Just (CppIndexer (CppStringLiteral $ identToCpp field) (CppVar varName)))
               : cpps)
 
@@ -369,7 +366,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   binderToCpp varName done (NamedBinder (_, _, ty, _) ident binder) = do
     cpp <- binderToCpp varName done binder
-    return (CppVariableIntroduction (identToCpp ident, Just AnyType) [] [] (Just (CppVar varName)) : cpp)
+    return (CppVariableIntroduction (identToCpp ident, Just AnyType) [] (Just (CppVar varName)) : cpp)
 
   -------------------------------------------------------------------------------------------------
   literalToBinderCpp :: String -> [Cpp] -> Literal (Binder Ann) -> m [Cpp]
@@ -409,7 +406,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       cpp <- binderToCpp propVar done'' binder
       return (CppVariableIntroduction (propVar, Nothing)
                                       []
-                                      []
                                       (Just (CppIndexer (CppStringLiteral prop) (CppVar varName)))
               : cpp)
 
@@ -429,7 +425,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       elVar <- freshName
       done'' <- go done' (index + 1) bs'
       cpp <- binderToCpp elVar done'' binder
-      return (CppVariableIntroduction (elVar, Nothing) [] []
+      return (CppVariableIntroduction (elVar, Nothing) []
                                       (Just (CppIndexer (CppNumericLiteral (Left index)) (CppVar varName))) : cpp)
 
   -------------------------------------------------------------------------------------------------
@@ -441,7 +437,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   qualifiedToCpp :: (a -> Ident) -> Qualified a -> Cpp
   qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = CppVar . runIdent $ f a
   qualifiedToCpp f (Qualified (Just mn') a)
-    | mn /= mn' = CppAccessor Nothing (CppVar . identToCpp $ f a) (CppVar (moduleNameToCpp mn'))
+    | mn /= mn' = CppAccessor (CppVar . identToCpp $ f a) (CppVar (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
 
   qualifiedToStr' :: (a -> Ident) -> Qualified a -> String

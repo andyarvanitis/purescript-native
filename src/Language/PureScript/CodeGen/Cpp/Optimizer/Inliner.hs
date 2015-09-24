@@ -48,7 +48,7 @@ shouldInline (CppVar _) = True
 shouldInline (CppNumericLiteral _) = True
 shouldInline (CppStringLiteral _) = True
 shouldInline (CppBooleanLiteral _) = True
-shouldInline (CppAccessor _ _ val) = shouldInline val
+shouldInline (CppAccessor _ val) = shouldInline val
 shouldInline (CppIndexer index val) = shouldInline index && shouldInline val
 shouldInline _ = False
 
@@ -87,7 +87,7 @@ inlineVariables = everywhereOnCpp $ removeFromBlock go
   where
   go :: [Cpp] -> [Cpp]
   go [] = []
-  go (CppVariableIntroduction (var, _) _ _ (Just cpp) : sts)
+  go (CppVariableIntroduction (var, _) _ (Just cpp) : sts)
     | shouldInline cpp && not (any (isReassigned var) sts) && not (any (isRebound cpp) sts) && not (any (isUpdated var) sts) =
       go (map (replaceIdent var cpp) sts)
   go (s:sts) = s : go sts
@@ -123,7 +123,7 @@ inlineOperator (m, op) f = everywhereOnCpp convert
   convert :: Cpp -> Cpp
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
-  isOp (CppAccessor _ (CppVar longForm) (CppVar m')) = m == m' && longForm == identToCpp (Op op)
+  isOp (CppAccessor (CppVar longForm) (CppVar m')) = m == m' && longForm == identToCpp (Op op)
   isOp (CppIndexer (CppStringLiteral op') (CppVar m')) = m == m' && op == op'
   isOp _ = False
 
@@ -229,7 +229,7 @@ inlineCommonOperators = applyAll $
 
   isNFn :: String -> Int -> Cpp -> Bool
   isNFn prefix n (CppVar name) = name == (prefix ++ show n)
-  isNFn prefix n (CppAccessor _ (CppVar name) (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
+  isNFn prefix n (CppAccessor (CppVar name) (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
   isNFn _ _ _ = False
 
   runFn :: Int -> Cpp -> Cpp
@@ -259,11 +259,11 @@ inlineFnComposition = everywhereOnCppTopDownM convert
   isFnCompose dict' fn = isDict semigroupoidFn dict' && (isPreludeFn (C.<<<) fn || isPreludeFn (C.compose) fn)
 
 isDict :: (String, String) -> Cpp -> Bool
-isDict (moduleName, dictName) (CppAccessor _ (CppVar x) (CppVar y)) = x == dictName && y == moduleName
+isDict (moduleName, dictName) (CppAccessor (CppVar x) (CppVar y)) = x == dictName && y == moduleName
 isDict _ _ = False
 
 isFn :: (String, String) -> Cpp -> Bool
-isFn (moduleName, fnName) (CppAccessor _ (CppVar x) (CppVar y)) = x == fnName && y == moduleName
+isFn (moduleName, fnName) (CppAccessor (CppVar x) (CppVar y)) = x == fnName && y == moduleName
 isFn (moduleName, fnName) (CppIndexer (CppStringLiteral x) (CppVar y)) = x == fnName && y == moduleName
 isFn _ _ = False
 
