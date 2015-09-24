@@ -92,7 +92,10 @@ literals = mkPattern' match
     , return name
     , return $ parens (intercalate ", " $ argstr <$> args)
     , if CppConstructor `elem` qs && (not . null) args
-        then let cpps = ": " ++ intercalate ", " ((\(a, _) -> a ++ parens a) <$> args) in
+        then let cpps = ": " ++ intercalate ", " (
+                                  ("data{" ++ show name ++ "_h}") :
+                                  ((\(a, _) -> a ++ parens a) <$> args)
+                                ) in
           if length args > 2
             then do
               indentString <- withIndent currentIndent
@@ -505,17 +508,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   matchValue = buildPrettyPrinter operators (literals <+> fmap parens matchValue)
   operators :: OperatorTable PrinterState Cpp String
   operators =
-    OperatorTable [ [ Wrap accessor $ \(typ, prop) val ->
-                                        "get" ++ angles (dropWhile (\c -> isLetter c || c == '_') prop)
-                                     ++ parens (maybe val
-                                                      (  (++ parens val)
-                                                       . ("cast" ++)
-                                                       . angles
-                                                       . (\(a,b) -> a ++ '_' : b)
-                                                       . break (=='<')
-                                                       . runType)
-                                                      typ) ]
-                  -- , [ Wrap mapAccessor $ \prop val -> "get" ++ angles (show prop ++ "_key") ++ parens val ]
+    OperatorTable [ [ Wrap accessor $ \(typ, prop) val -> val ++ ".cast<" ++ maybe "" runType typ ++ ">()." ++ prop ]
                   , [ Wrap scope $ \(typ, prop) val ->
                                      let prop' = if typ /= Nothing && '<' `elem` val
                                                    then "template " ++ prop

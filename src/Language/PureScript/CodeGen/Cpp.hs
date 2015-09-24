@@ -40,7 +40,6 @@ import Control.Monad.Supply.Class
 import Language.PureScript.AST.SourcePos
 import Language.PureScript.CodeGen.Cpp.AST as AST
 import Language.PureScript.CodeGen.Cpp.Common as Common
-import Language.PureScript.CodeGen.Cpp.Data
 import Language.PureScript.CodeGen.Cpp.File
 import Language.PureScript.CodeGen.Cpp.Optimizer
 import Language.PureScript.CodeGen.Cpp.Synonyms
@@ -72,7 +71,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   let cppImports' = "PureScript" : cppImports
   cppDecls <- concat <$> mapM bindToCpp decls
   optimized <- traverse optimize (concatMap expandSeq cppDecls)
-  datas <- datasToCpps env mn
+  -- datas <- datasToCpps env mn
   synonyms <- synonymsToCpp env mn
   let moduleHeader = fileBegin mn "HH"
                   ++ P.linebreak
@@ -85,7 +84,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                   ++ headerDefsBegin mn
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak
-                                                         ++ (depSortSynonymsAndData $ synonyms ++ datas)
+                                                         ++ (depSortSynonymsAndData $ synonyms)
                                                          ++ toHeader optimized
                                                          ++ toHeaderFns optimized
                      ]
@@ -125,9 +124,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   declToCpp ident (Abs ann@(_, _, _, Just IsTypeClassConstructor) _ _) =
     return CppNoOp
 
-  declToCpp _ (Abs (_, _, _, Just IsNewtype) _ _) =
-    return CppNoOp
-
   declToCpp ident (Abs _ arg@(Ident "dict")
                          body@(Accessor _ _ (Var _ (Qualified Nothing arg'))))
     | arg' == arg = do
@@ -158,11 +154,22 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         fn' = CppFunction (identToCpp ident) [] [(identToCpp arg, Just AnyType)] (Just AnyType) [] block'
     return (CppComment com fn')
 
-  declToCpp _ (Constructor {}) =
-    return CppNoOp
-
-  -- declToCpp ident val@(App ann@(_, _, Just ty, _) _ _) | Just EffectFunction {} <- mktype mn ty =
-  --   mkFunction [] ident ann (Ident "") (App nullAnn val (Var nullAnn (Qualified Nothing (Ident "")))) []
+  declToCpp ident (Constructor _ _ (ProperName ctor) fields) = return $
+    CppFunction (identToCpp ident) [] (farg <$> f)
+                                      (Just AnyType)
+                                      []
+                                      (CppBlock (fieldLambdas fs))
+    where
+    name = qualifiedToStr (ModuleName []) id (Qualified (Just mn) ident)
+    fields' = identToCpp <$> fields
+    (f, fs) | (f' : fs') <- fields' = ([f'], fs')
+            | otherwise = ([], [])
+    farg = \x -> (x, Just AnyType)
+    fieldLambdas flds
+      | (f' : fs') <- flds = [CppReturn $ CppLambda [CppCaptureAll] (farg <$> [f'])
+                                                                    (Just AnyType)
+                                                                    (CppBlock $ fieldLambdas fs')]
+      | otherwise = [CppReturn (CppObjectLiteral (("type", CppStringLiteral name) : zip fields' (CppVar <$> fields')))]
 
   declToCpp ident val = do
     val' <- valueToCpp val
@@ -203,21 +210,17 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   valueToCpp :: Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
-  valueToCpp (Var (_, _, ty, Just (IsConstructor _ fields)) ident) =
-    let qname = qualifiedToStr' id ident
-        fieldCount = length fields in
-    return $ if fieldCount == 0
-               then CppApp (CppDataConstructor (qualifiedToStr' id ident) []) []
-               else let argTypes = maybe [] (init . fnTypesN fieldCount) (ty >>= mktype mn)
-                        argTypes' = replicate (length argTypes) AnyType
-                    in
-                    CppPartialApp argTypes' fieldCount (CppDataConstructor (qualifiedToStr' id ident) []) []
+  -- valueToCpp (Var (_, _, _, Just (IsConstructor _ _)) ident) =
+  --   return . CppVar $ qualifiedToStr' id ident
+  --
+  -- valueToCpp (Var (_, _, _, Just IsNewtype) ident) =
+  --   return . CppVar $ qualifiedToStr' id ident
 
-  valueToCpp (Var (_, _, ty, Just IsNewtype) ident) =
-    let qname = qualifiedToStr' id ident
-        argTypes = maybe [] (init . fnTypesN 1) (ty >>= mktype mn)
-        argTypes' = replicate (length argTypes) AnyType
-    in return (CppPartialApp argTypes' 1 (CppDataConstructor (qualifiedToStr' id ident) []) [])
+  -- valueToCpp (Var (_, _, ty, Just IsNewtype) ident) =
+  --   let qname = qualifiedToStr' id ident
+  --       argTypes = maybe [] (init . fnTypesN 1) (ty >>= mktype mn)
+  --       argTypes' = replicate (length argTypes) AnyType
+  --   in return (CppPartialApp argTypes' 1 (CppDataConstructor (qualifiedToStr' id ident) []) [])
 
   valueToCpp (Var _ ident) =
     return $ varToCpp ident
@@ -266,27 +269,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let (f, args) = unApp e []
     args' <- mapM valueToCpp args
     case f of
-      Var (_, _, Just ty, Just IsNewtype) name ->
-        let qname = qualifiedToStr' id name
-            val = CppDataConstructor qname [] in
-        return (CppApp val args')
-
-      Var (_, _, Just ty, Just (IsConstructor _ fields)) name ->
-        let fieldCount = length fields
-            argsNotApp = fieldCount - length args
-            qname = qualifiedToStr' id name
-            val = CppDataConstructor qname [] in
-        if argsNotApp > 0
-          then let argTypes = maybe [] (init . fnTypesN fieldCount) (mktype mn ty)
-                   argTypes' = replicate (length argTypes) AnyType
-               in
-               return (CppPartialApp argTypes' argsNotApp val args')
-          else return (CppApp val args')
-
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (params, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return . CppObjectLiteral $ zip (superClassDictionaryNames constraints ++ (fst <$> fns)) args'
-
       _ -> -- TODO: verify this
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
 
@@ -299,9 +284,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     ret <- valueToCpp val
     let ds'' = convertNestedLambdas [] <$> ds'
     return $ CppApp (CppLambda [] [] Nothing (CppBlock (ds'' ++ [CppReturn ret]))) []
-
-  valueToCpp (Constructor {}) =
-    return $ CppVar "0x00"
 
   -- |
   -- Generate code in the simplified C++14 intermediate representation for a reference to a
@@ -370,17 +352,17 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return (CppVariableIntroduction (identToCpp ident, Just AnyType) [] [] (Just (CppVar varName)) : done)
 
   binderToCpp varName done (ConstructorBinder (com, ss, ty, Just IsNewtype) c ctor bs) =
-    binderToCpp varName done (ConstructorBinder (com, ss, ty, Just (IsConstructor ProductType [Ident "0"])) c ctor bs)
+    binderToCpp varName done (ConstructorBinder (com, ss, ty, Just (IsConstructor ProductType [Ident "value0"])) c ctor bs)
 
   binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields)) _ ctor bs) = do
     cpps <- go (zip fields bs) done
-    let ctor' = qualifiedToStr' (Ident . runProperName) ctor
-    cpps' <- forM cpps (addTypes (CppVar varName))
+    let ctor' = qualifiedToStr (ModuleName []) (Ident . runProperName) ctor
     return $ case ctorType of
-      ProductType -> cpps'
+      ProductType -> cpps
       SumType ->
-        [ CppIfElse (CppInstanceOf (CppVar varName) (CppData ctor' []))
-                    (CppBlock cpps')
+        [ CppIfElse (CppBinary Equal (CppIndexer (CppStringLiteral "type") (CppVar varName))
+                                     (CppStringLiteral ctor'))
+                    (CppBlock cpps)
                     Nothing ]
     where
     go :: [(Ident, Binder Ann)] -> [Cpp] -> m [Cpp]
@@ -388,24 +370,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     go ((field, binder) : remain) done' = do
       argVar <- freshName
       done'' <- go remain done'
-      cpp <- binderToCpp argVar done'' binder
+      cpps <- binderToCpp argVar done'' binder
       return (CppVariableIntroduction (argVar, Nothing)
                                       []
                                       []
-                                      (Just (CppAccessor Nothing (CppVar (identToCpp field)) (CppVar varName)))
-              : cpp)
-    addTypes :: Monad m => Cpp -> Cpp -> m Cpp
-    addTypes cpp1 cpp2 = do
-      return (typeAccessors cpp1 cpp2)
-      where
-      typeAccessors :: Cpp -> Cpp -> Cpp
-      typeAccessors acc = everywhereOnCpp convert
-        where
-        convert :: Cpp -> Cpp
-        convert (CppAccessor Nothing prop cpp) | cpp == acc = CppAccessor qtyp prop cpp
-        convert cpp = cpp
-        qtyp :: Maybe Type
-        qtyp = Just (Native (qualifiedToStr' (Ident . runProperName) ctor) [])
+                                      (Just (CppIndexer (CppStringLiteral $ identToCpp field) (CppVar varName)))
+              : cpps)
 
   binderToCpp _ _ b@(ConstructorBinder{}) =
     error $ "Invalid ConstructorBinder in binderToCpp: " ++ show b
