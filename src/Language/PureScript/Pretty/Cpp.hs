@@ -63,7 +63,7 @@ literals = mkPattern' match
     ]
   match (CppObjectLiteral []) = return "nullptr"
   match (CppObjectLiteral ps) = fmap concat $ sequence
-    [ return $ "any::map{\n"
+    [ return $ runType mapType ++ "{\n"
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
                             val <- prettyPrintCpp' value
@@ -75,33 +75,12 @@ literals = mkPattern' match
     , return "}"
     ]
   match (CppFunction name args rty qs ret) =
-    let qs' = delete CppTemplSpec qs in
     fmap concat $ sequence
-    [ do
-      indentString <- currentIndent
-      return $ maybe [] ((++ "\n" ++ indentString) . runQualifier) (find (== CppTemplSpec) qs)
-    , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs'
-    , return $ if CppConstructor `elem` qs || CppDestructor `elem` qs
-                 then []
-                 else "auto "
+    [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
+    , return "auto "
     , return name
     , return $ parens (intercalate ", " $ argstr <$> args)
-    , if CppConstructor `elem` qs && (not . null) args
-        then let cpps = ": " ++ intercalate ", " (
-                                  ("data{" ++ show name ++ "_h}") :
-                                  ((\(a, _) -> a ++ parens a) <$> args)
-                                ) in
-          if length args > 2
-            then do
-              indentString <- withIndent currentIndent
-              return ('\n' : indentString ++ cpps)
-            else return (' ' : cpps)
-        else return []
-    , let rty' | Just r' <- rty, everythingOnTypes (||) (== AutoType) r' = Nothing
-               | otherwise = rty
-      in return (maybe "" ((" -> " ++) . runType) rty')
-    , return $ if CppDefault `elem` qs then " = default" else []
-    , return $ if CppDelete `elem` qs then " = delete" else []
+    , return (maybe "" ((" -> " ++) . runType) rty)
     , if ret == CppNoOp
         then return ";"
         else do
@@ -195,13 +174,8 @@ literals = mkPattern' match
   match (CppVar ident) = return ident
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction (ident, typ) qs value) =
-    let qs' = delete CppTemplSpec qs in
     fmap concat $ sequence
-    [ do
-      indentString <- currentIndent
-      return $ maybe [] ((++ "\n" ++ indentString) . runQualifier) (find (== CppTemplSpec) qs)
-    , return . concatMap (++ " ") . filter (not . null) $ runQualifier <$> qs'
-    , return $ if CppMutable `notElem` qs then "const " else ""
+    [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
     , return (maybe "any" runType typ ++ " ")
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
@@ -320,13 +294,10 @@ indexer = mkPattern' match
   match (CppIndexer index val) = (,) <$> prettyPrintCpp' index <*> pure val
   match _ = mzero
 
-lam :: Pattern PrinterState Cpp ((String, [(String, Maybe Type)], Maybe Type), Cpp)
+lam :: Pattern PrinterState Cpp ((String, [(String, Maybe CppType)], Maybe CppType), Cpp)
 lam = mkPattern match
   where
   match (CppLambda caps args rty ret) =
-    -- let rty' | Just r' <- rty, everythingOnTypes (||) (== AutoType) r' = Nothing
-    --          | otherwise = rty
-    -- in
     Just ((concatMap runCaptureType caps, args, rty), ret)
   match _ = Nothing
 
@@ -433,28 +404,18 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
 dotsTo :: Char -> String -> String
 dotsTo chr' = map (\c -> if c == '.' then chr' else c)
 
-argstr :: (String, Maybe Type) -> String
-argstr (name, Nothing) = argStr name AutoType
-argstr ("__unused", Just typ@AnyType) = argRefStr [] typ
-argstr (name, Just typ@AnyType) = argRefStr name typ
+argstr :: (String, Maybe CppType) -> String
+argstr (name, Nothing) = argStr name CppAuto
+argstr ("__unused", Just typ) = argStr [] typ
 argstr (name, Just typ) = argStr name typ
 
-argStr :: String -> Type -> String
-argStr name typ = argTypStr typ ++ if null name then [] else " " ++ name
+argStr :: String -> CppType -> String
+argStr name typ = runType typ ++ if null name then [] else " " ++ name
 
--- argParamStr :: String -> Type -> String
--- argParamStr name typ = "param" ++ angles (runType typ) ++ if null name then [] else " " ++ name
-
-argRefStr :: String -> Type -> String
-argRefStr name typ = argTypStr typ ++ "&" ++ if null name then [] else " " ++ name
-
-argTypStr :: Type -> String
-argTypStr typ = "const " ++ runType typ
-
-templDecl :: [TemplateInfo] -> String
+templDecl :: [(String, Int)] -> String
 templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))
   where
-  go :: TemplateInfo -> String
+  go :: (String, Int) -> String
   go (name, 0) = "typename " ++ name
   go (name, n) = "typename" ++ parens (intercalate "," $ replicate n "typename") ++ ' ' : name
 

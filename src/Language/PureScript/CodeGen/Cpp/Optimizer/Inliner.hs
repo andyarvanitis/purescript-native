@@ -222,7 +222,7 @@ inlineCommonOperators = applyAll $
         Just (args, cpp) -> CppLambda [CppCaptureAll] args Nothing (CppBlock cpp)
         Nothing -> orig
     convert other = other
-    collectArgs :: Int -> [(String, Maybe Type)] -> Cpp -> Maybe ([(String, Maybe Type)], [Cpp])
+    collectArgs :: Int -> [(String, Maybe CppType)] -> Cpp -> Maybe ([(String, Maybe CppType)], [Cpp])
     collectArgs 1 acc (CppLambda _ [oneArg] _ (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
     collectArgs m acc (CppLambda _ [oneArg] _ (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
     collectArgs _ _   _ = Nothing
@@ -253,7 +253,7 @@ inlineFnComposition = everywhereOnCppTopDownM convert
     return $ CppApp x [CppApp y [z]]
   convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isFnCompose dict' fn = do
     arg <- freshName
-    return $ CppLambda [CppCaptureAll] [(arg, Just AnyType)] (Just AnyType) (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
+    return $ CppLambda [CppCaptureAll] [(arg, Just (CppAny [CppConst, CppRef]))] (Just $ CppAny []) (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
   convert other = return other
   isFnCompose :: Cpp -> Cpp -> Bool
   isFnCompose dict' fn = isDict semigroupoidFn dict' && (isPreludeFn (C.<<<) fn || isPreludeFn (C.compose) fn)

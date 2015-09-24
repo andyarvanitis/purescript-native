@@ -36,7 +36,7 @@ tco' = everywhereOnCpp convert
   tcoLabel = "tco"
   tcoVar :: String -> String
   tcoVar arg = "__tco_" ++ arg
-  copyVar :: (String, Maybe Type) -> (String, Maybe Type)
+  copyVar :: (String, Maybe CppType) -> (String, Maybe CppType)
   copyVar (nm, ty) = ("__copy_" ++ nm, ty)
   convert :: Cpp -> Cpp
   convert cpp@(CppFunction name _ _ _ _) =
@@ -60,7 +60,7 @@ tco' = everywhereOnCpp convert
               CppVariableIntroduction (name, typ) qs (Just (replace (toLoop name allArgs body')))
         | otherwise -> cpp
   convert cpp = cpp
-  collectAllFunctionArgs :: [[(String, Maybe Type)]] -> (Cpp -> Cpp) -> Cpp -> ([[(String, Maybe Type)]], Cpp, Cpp -> Cpp)
+  collectAllFunctionArgs :: [[(String, Maybe CppType)]] -> (Cpp -> Cpp) -> Cpp -> ([[(String, Maybe CppType)]], Cpp, Cpp -> Cpp)
   collectAllFunctionArgs allArgs f (CppFunction ident args rty qs (CppBlock (body@(CppReturn _):_))) =
     collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident (map copyVar args) rty qs (CppBlock [b]))) body
   collectAllFunctionArgs allArgs f (CppFunction ident args rty qs body@(CppBlock _)) =
@@ -101,9 +101,9 @@ tco' = everywhereOnCpp convert
     countSelfCallsWithFnArgs :: Cpp -> Int
     countSelfCallsWithFnArgs ret = if isSelfCallWithFnArgs ident ret [] then 1 else 0
 
-  toLoop :: String -> [(String, Maybe Type)] -> Cpp -> Cpp
+  toLoop :: String -> [(String, Maybe CppType)] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
-        map (\arg -> CppVariableIntroduction arg [CppMutable] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
+        map (\arg@(name, _) -> CppVariableIntroduction (name, Just $ CppAny []) [] (Just (CppVar (fst $ copyVar arg)))) allArgs ++
         [ CppLabel tcoLabel $ CppWhile (CppBooleanLiteral True) block ]
     where
     block :: Cpp
@@ -116,7 +116,7 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppSequence $ zipWith (\val arg ->
-                      CppVariableIntroduction (tcoVar arg, Nothing) [CppMutable] (Just val)) allArgumentValues (map fst allArgs)
+                      CppVariableIntroduction (tcoVar arg, (Just $ CppAny [])) [] (Just val)) allArgumentValues (map fst allArgs)
                     ++ map (\arg ->
                       CppAssignment (CppVar arg) (CppVar (tcoVar arg))) (map fst allArgs)
                     ++ [ CppContinue tcoLabel ]

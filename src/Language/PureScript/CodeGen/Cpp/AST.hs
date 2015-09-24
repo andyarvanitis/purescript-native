@@ -183,15 +183,15 @@ data Cpp
   -- |
   -- A function introduction (name, arguments, return type, qualifiers, body)
   --
-  | CppFunction String [(String, Maybe Type)] (Maybe Type) [CppQualifier] Cpp
+  | CppFunction String [(String, Maybe CppType)] (Maybe CppType) [CppValueQual] Cpp
   -- |
   -- A lambda introduction (arguments, return type, body)
   --
-  | CppLambda [CppCaptureType] [(String, Maybe Type)] (Maybe Type) Cpp
+  | CppLambda [CppCaptureType] [(String, Maybe CppType)] (Maybe CppType) Cpp
   -- |
   -- Value type cast
   --
-  | CppCast Type Cpp
+  | CppCast CppType Cpp
   -- |
   -- Function application
   --
@@ -223,11 +223,11 @@ data Cpp
   -- |
   -- Type alias, e.g. "using T = U" (new name and template types, original type)
   --
-  | CppTypeAlias (String,[(String, Int)]) Type String
+  | CppTypeAlias (String,[(String, Int)]) CppType String
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction (String, Maybe Type) [CppQualifier] (Maybe Cpp)
+  | CppVariableIntroduction (String, Maybe CppType) [CppValueQual] (Maybe Cpp)
   -- |
   -- A variable assignment
   --

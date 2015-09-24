@@ -9,7 +9,7 @@
 -- Portability :
 --
 -- |
--- Type synonym generation utility functions
+-- CppType synonym generation utility functions
 --
 -----------------------------------------------------------------------------
 
@@ -46,7 +46,7 @@ synonymsToCpp env mn
     let names' = qualifiedToStr mn (Ident . runProperName) . fst <$> ds
         -- tmplts = map templateFromKind . fst . snd <$> ds
         -- typs = catMaybes $ mktype mn . snd . snd <$> ds
-        typs = replicate (length ds) AnyType
+        typs = replicate (length ds) (CppAny [])
         syns = zip names' typs
         (synonyms, invalidSynonyms) = partition isValid syns
         cpps = toTypeAlias <$> synonyms
@@ -54,10 +54,11 @@ synonymsToCpp env mn
     return $ cpps ++ rejected
   | otherwise = return []
   where
-  isValid :: (String, Type) -> Bool
-  isValid (_, t) = everythingOnTypes (&&) (/= AutoType) t
-  -- toTypeAlias :: (String, [TemplateInfo], Type) -> Cpp
-  toTypeAlias :: (String, Type) -> Cpp
+  isValid :: (String, CppType) -> Bool
+  -- isValid (_, t) = everythingOnTypes (&&) (/= AutoType) t
+  isValid (_, t) = True
+  -- toTypeAlias :: (String, [TemplateInfo], CppType) -> Cpp
+  toTypeAlias :: (String, CppType) -> Cpp
   -- toTypeAlias (n, tmps, Template t _) =
   --   CppTypeAlias (n, tmps ++ ptmps) (Template t (templateToType <$> ptmps)) []
   --   where
@@ -79,12 +80,12 @@ depSortSynonymsAndData allCpps = consolidateNamespaces . reverse $
   cpps = filter (/= CppNoOp) allCpps
   findEdges :: Cpp -> [G.Edge]
   findEdges cpp@(CppTypeAlias _ typ _)
-    | Just thisVertex <- lookup cpp vertexCpps' = everythingOnTypes (++) (go thisVertex) typ
+    | Just thisVertex <- lookup cpp vertexCpps' = [] -- everythingOnTypes (++) (go thisVertex) typ
   findEdges _ = []
 
-  go :: G.Vertex -> Type -> [G.Edge]
-  go thisVertex (Native name _)
-    | Just depVertex <- lookup name vertexes = [(thisVertex, depVertex)]
+  go :: G.Vertex -> CppType -> [G.Edge]
+  -- go thisVertex (Native name _)
+  --   | Just depVertex <- lookup name vertexes = [(thisVertex, depVertex)]
   go _ _ = []
 
   vertexes :: [(String, G.Vertex)]

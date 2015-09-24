@@ -42,10 +42,6 @@ constexpr auto operator "" _key(const char s[], size_t) -> uint32_t {
   return Private::literalStringHash(s);
 }
 
-struct as_thunk {
-};
-const as_thunk unthunk = as_thunk();
-
 class any {
 
   public:
@@ -65,6 +61,10 @@ class any {
   };
 
   const Type type = Type::Unknown;
+
+  struct as_thunk {
+  };
+  constexpr static const as_thunk unthunk = as_thunk{};
 
   using string = std::string;
   using map    = std::unordered_map<string, const any>;

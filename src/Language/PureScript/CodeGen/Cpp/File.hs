@@ -35,13 +35,13 @@ toHeader = catMaybes . map go
   go :: Cpp -> Maybe Cpp
   go (CppNamespace name cpps) = Just (CppNamespace name (toHeader cpps))
   go cpp@(CppUseNamespace{}) = Just cpp
-  go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just AutoType
+  go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just CppAuto
     = Just CppNoOp
   go (CppFunction name args rtyp qs _) =
     let args' = (\(_,t) -> ("", t)) <$> args in
     Just (CppFunction name args' rtyp qs CppNoOp)
   -- go (CppVariableIntroduction v@(name, Just t) qs (Just _))
-  --   | t /= AutoType, all isAlphaNum name
+  --   | t /= CppAuto, all isAlphaNum name
   --   = Just (CppVariableIntroduction v (CppExtern:qs) Nothing)
   -- go cpp@(CppVariableIntroduction{}) = Just cpp
 
@@ -52,8 +52,8 @@ toHeader = catMaybes . map go
   go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
     Nothing
   -- Generate thunks for top-level values
-  go (CppVariableIntroduction (name, _) _ (Just cpp)) =
-    Just $ CppVariableIntroduction (name, Just AnyType) [CppExtern] Nothing
+  go (CppVariableIntroduction (name, _) _ (Just _)) =
+    Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [CppExtern] Nothing
   go (CppComment comms cpp')
     | Just cpp <- go cpp' = Just $ case cpp of CppFunction {} -> cpp
                                                _ -> CppComment comms cpp
@@ -67,14 +67,14 @@ toHeaderFns = catMaybes . map go
   go :: Cpp -> Maybe Cpp
   go (CppNamespace name cpps) = Just (CppNamespace name (toHeaderFns cpps))
   go (CppFunction name [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp cpp [_])]))
-    | atyp == Just AutoType
+    | atyp == Just CppAuto
     = Just (CppVariableIntroduction (name, Nothing) [] (Just cpp))
 
-  go cpp@(CppVariableIntroduction v qs (Just CppNumericLiteral {})) =
+  go cpp@(CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
     Just cpp
-  go cpp@(CppVariableIntroduction v qs (Just CppStringLiteral {})) =
+  go cpp@(CppVariableIntroduction _ _ (Just CppStringLiteral {})) =
     Just cpp
-  go cpp@(CppVariableIntroduction v qs (Just CppBooleanLiteral {})) =
+  go cpp@(CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
     Just cpp
 
   go (CppComment comms cpp') | Just cpp <- go cpp' = Just (CppComment comms cpp)
@@ -118,14 +118,14 @@ toBody = catMaybes . map go
     Nothing
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
-    Just $ CppVariableIntroduction (name, Just AnyType) [] (Just lambda)
+    Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [] (Just lambda)
     where
-    val = CppVariableIntroduction ("_value_", Just AnyType) [CppStatic] (Just cpp)
+    val = CppVariableIntroduction ("_value_", Just $ CppAny [CppConst]) [CppStatic] (Just cpp)
     block = CppBlock [val, CppReturn (CppVar "_value_")]
-    lambda = CppLambda [] [("", Just (Native "as_thunk" []))] (Just AnyTypeRef) block
+    lambda = CppLambda [] [("", Just $ thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) block
 
   -- go cpp@(CppVariableIntroduction (name, Just t) [] _ (Just _))
-  --   | t /= AutoType, all isAlphaNum name
+  --   | t /= CppAuto, all isAlphaNum name
   --   = Just cpp
 
   go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
@@ -159,13 +159,14 @@ isMain _ = False
 
 nativeMain :: Cpp
 nativeMain = CppFunction "main"
-               [ ([], Just (Primitive "int"))
-               , ([], Just (Primitive "char *[]"))
+               [ ([], Just $ CppPrimitive "int")
+               , ([], Just $ CppPrimitive "char *[]")
                ]
-               (Just (Native "int" []))
+               (Just $ CppPrimitive "int")
                []
-               (CppBlock [ CppApp (CppApp (CppAccessor (CppVar "main") (CppVar "Main"))
-                                          [CppVar "PureScript::unthunk"])
+               (CppBlock [ CppUseNamespace "Main"
+                         , CppApp (CppApp (CppAccessor (CppVar "main") (CppVar "Main"))
+                                          [CppVar unthunkMarkerValue])
                                   []
                          , CppRaw ";"
                          , CppReturn (CppNumericLiteral (Left 0))

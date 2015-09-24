@@ -129,21 +129,24 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     | arg' == arg = do
     block <- asReturnBlock <$> valueToCpp body
     let fn' = CppFunction (identToCpp ident)
-                          [(identToCpp arg, Just AnyType)]
-                          (Just AnyTypeRef)
+                          [(identToCpp arg, Just $ CppAny [CppConst, CppRef])]
+                          (Just $ CppAny [CppConst, CppRef])
                           []
                           block
     return fn'
 
   declToCpp ident (Abs (_, com, _, _) arg body) = do
     block <- asReturnBlock <$> valueToCpp body
-    let block' = convertNestedLambdas [] block
-        fn' = CppFunction (identToCpp ident) [(identToCpp arg, Just AnyType)] (Just AnyType) [] block'
+    let block' = convertNestedLambdas block
+        fn' = CppFunction (identToCpp ident) [(identToCpp arg, Just $ CppAny [CppConst, CppRef])]
+                                             (Just $ CppAny [])
+                                             []
+                                             block'
     return (CppComment com fn')
 
   declToCpp ident (Constructor _ _ (ProperName ctor) fields) = return $
     CppFunction (identToCpp ident) (farg <$> f)
-                                   (Just AnyType)
+                                   (Just $ CppAny [])
                                    []
                                    (CppBlock (fieldLambdas fs))
     where
@@ -151,29 +154,29 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     fields' = identToCpp <$> fields
     (f, fs) | (f' : fs') <- fields' = ([f'], fs')
             | otherwise = ([], [])
-    farg = \x -> (x, Just AnyType)
+    farg = \x -> (x, Just $ CppAny [CppConst, CppRef])
     fieldLambdas flds
       | (f' : fs') <- flds = [CppReturn $ CppLambda [CppCaptureAll] (farg <$> [f'])
-                                                                    (Just AnyType)
+                                                                    (Just $ CppAny [])
                                                                     (CppBlock $ fieldLambdas fs')]
       | otherwise = [CppReturn (CppObjectLiteral (("type", CppStringLiteral name) : zip fields' (CppVar <$> fields')))]
 
   declToCpp ident val = do
     val' <- valueToCpp val
-    return $ CppVariableIntroduction (identToCpp ident, Just AnyType) [] (Just val')
+    return $ CppVariableIntroduction (identToCpp ident, Just $ CppAny [CppConst]) [] (Just val')
 
   -------------------------------------------------------------------------------------------------
-  toLambda :: [CppCaptureType] -> [TemplateInfo] -> Cpp -> Cpp
+  toLambda :: [CppCaptureType] -> Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  toLambda cs encTmplts (CppFunction name args rtyp qs body) =
-    CppVariableIntroduction (name, Just AnyType)
+  toLambda cs (CppFunction name args rtyp qs body) =
+    CppVariableIntroduction (name, Just $ CppAny [CppConst])
                             (filter (==CppStatic) qs)
-                            (Just (CppLambda cs' args (Just AnyType) body))
+                            (Just (CppLambda cs' args (Just $ CppAny []) body))
     where
     cs' | (not . null) (qs `intersect` [CppInline, CppStatic]) = []
         | otherwise = cs
-  toLambda cs encTmplts (CppComment com cpp) = CppComment com (toLambda cs encTmplts cpp)
-  toLambda _ _ _ = error "Not a function!"
+  toLambda cs (CppComment com cpp) = CppComment com (toLambda cs cpp)
+  toLambda _ _ = error "Not a function!"
 
   -------------------------------------------------------------------------------------------------
   asReturnBlock :: Cpp -> Cpp
@@ -181,12 +184,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   asReturnBlock cpp = CppBlock [CppReturn cpp]
 
   -------------------------------------------------------------------------------------------------
-  convertNestedLambdas :: [TemplateInfo] -> Cpp -> Cpp
+  convertNestedLambdas :: Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  convertNestedLambdas encTmplts = everywhereOnCpp go
+  convertNestedLambdas = everywhereOnCpp go
     where
     go :: Cpp -> Cpp
-    go f@(CppFunction {}) = toLambda [CppCaptureAll] encTmplts f
+    go f@(CppFunction {}) = toLambda [CppCaptureAll] f
     go (CppLambda [] args rtyp body) = CppLambda [CppCaptureAll] args rtyp body
     go cpp = cpp
 
@@ -243,8 +246,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp (Abs (_, _, ty, _) arg body) = do
     cpp <- valueToCpp body
-    let cpp' = convertNestedLambdas [] cpp
-    return $ CppLambda [] [(identToCpp arg, Just AnyType)] (Just AnyType) (asReturnBlock cpp')
+    let cpp' = convertNestedLambdas cpp
+    return $ CppLambda [] [(identToCpp arg, Just $ CppAny [CppConst, CppRef])] (Just $ CppAny []) (asReturnBlock cpp')
 
   -- valueToCpp (App _ e (Var _ (Qualified (Just (ModuleName [ProperName "Prim"])) (Ident "undefined")))) =
   --   valueToCpp e
@@ -267,7 +270,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Let (_, _, ty, _) ds val) = do
     ds' <- concat <$> mapM bindToCpp ds
     ret <- valueToCpp val
-    let ds'' = convertNestedLambdas [] <$> ds'
+    let ds'' = convertNestedLambdas <$> ds'
     return $ CppApp (CppLambda [] [] Nothing (CppBlock (ds'' ++ [CppReturn ret]))) []
 
   -- |
@@ -295,7 +298,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       go valNames ret bs
     return $ CppApp (CppLambda []
                                []
-                               (Just AnyType)
+                               (Just $ CppAny [])
                                (CppBlock (assignments ++ concat cpps ++ [failedPatternError valNames]))) []
     where
       mkVarDecl :: String -> Maybe Cpp -> Cpp
@@ -318,7 +321,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       guardsToCpp (Left gs) = forM gs $ \(cond, val) -> do
         cond' <- valueToCpp cond
         done  <- valueToCpp val
-        return $ CppIfElse (CppCast (Primitive "bool") cond') (asReturnBlock done) Nothing
+        return $ CppIfElse (CppCast boolType cond') (asReturnBlock done) Nothing
       guardsToCpp (Right v) = return . CppReturn <$> valueToCpp v
 
   -- |
@@ -334,7 +337,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     literalToBinderCpp varName done l
 
   binderToCpp varName done (VarBinder (_, _, ty, _) ident) =
-    return (CppVariableIntroduction (identToCpp ident, Just AnyType) [] (Just (CppVar varName)) : done)
+    return (CppVariableIntroduction (identToCpp ident, Just $ CppAny [CppConst]) [] (Just (CppVar varName)) : done)
 
   binderToCpp varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
     binderToCpp varName done b
@@ -366,7 +369,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   binderToCpp varName done (NamedBinder (_, _, ty, _) ident binder) = do
     cpp <- binderToCpp varName done binder
-    return (CppVariableIntroduction (identToCpp ident, Just AnyType) [] (Just (CppVar varName)) : cpp)
+    return (CppVariableIntroduction (identToCpp ident, Just $ CppAny [CppConst]) [] (Just (CppVar varName)) : cpp)
 
   -------------------------------------------------------------------------------------------------
   literalToBinderCpp :: String -> [Cpp] -> Literal (Binder Ann) -> m [Cpp]
@@ -375,26 +378,26 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return [CppIfElse (CppBinary Equal var' (CppNumericLiteral num)) (CppBlock done) Nothing]
     where
     var' = case num of
-             Left  int    -> (CppCast (Primitive "long") (CppVar varName))
-             Right double -> (CppCast (Primitive "double") (CppVar varName))
+             Left  int    -> CppCast intType $ CppVar varName
+             Right double -> CppCast doubleType $ CppVar varName
 
   literalToBinderCpp varName done (CharLiteral c) =
-    return [CppIfElse (CppBinary Equal (CppCast (Primitive "char") (CppVar varName))
+    return [CppIfElse (CppBinary Equal (CppCast charType $ CppVar varName)
                                        (CppCharLiteral c))
                       (CppBlock done)
                       Nothing]
 
   literalToBinderCpp varName done (StringLiteral str) =
-    return [CppIfElse (CppBinary Equal (CppCast (Primitive "string") (CppVar varName))
+    return [CppIfElse (CppBinary Equal (CppCast stringType $ CppVar varName)
                                        (CppStringLiteral str))
                       (CppBlock done)
                       Nothing]
 
   literalToBinderCpp varName done (BooleanLiteral True) =
-    return [CppIfElse (CppCast (Primitive "bool") (CppVar varName)) (CppBlock done) Nothing]
+    return [CppIfElse (CppCast boolType $ CppVar varName) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (BooleanLiteral False) =
-    return [CppIfElse (CppUnary CppNot (CppCast (Primitive "bool") (CppVar varName))) (CppBlock done) Nothing]
+    return [CppIfElse (CppUnary CppNot (CppCast boolType $ CppVar varName)) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (ObjectLiteral bs) = go done bs
     where
@@ -412,9 +415,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   literalToBinderCpp varName done (ArrayLiteral bs) = do
     cpp <- go done 0 bs
     let cond = case length bs of
-                 0 -> CppBinary Dot (CppCast (Native "any::vector" []) (CppVar varName))
+                 0 -> CppBinary Dot (CppCast arrayType $ CppVar varName)
                                     (CppApp (CppVar "empty") [])
-                 n -> let var = CppCast (Native "any::vector" []) (CppVar varName) in
+                 n -> let var = CppCast arrayType $ CppVar varName in
                       CppBinary Equal (CppBinary Dot var (CppApp (CppVar "size") []))
                                       (CppNumericLiteral (Left (fromIntegral n)))
     return [ CppIfElse cond (CppBlock cpp) Nothing ]
