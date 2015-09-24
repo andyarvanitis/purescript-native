@@ -126,11 +126,7 @@ buildMakeActions outputDir filePathMap usePrefix =
       when (not supportFilesExist) $ do
         writeTextFile (outputDir  </> "CMakeLists.txt") cmakeListsTxt
         writeTextFile (supportDir </> "PureScript.hh")  $ BU.toString $(embedFile "pcc/include/purescript.hh")
-        writeTextFile (supportDir </> "cmap.hh")        $ BU.toString $(embedFile "pcc/include/cmap.hh")
-        writeTextFile (supportDir </> "constructor.hh") $ BU.toString $(embedFile "pcc/include/constructor.hh")
-        writeTextFile (supportDir </> "macros.hh")      $ BU.toString $(embedFile "pcc/include/macros.hh")
         writeTextFile (supportDir </> "memory.hh")      $ BU.toString $(embedFile "pcc/include/memory.hh")
-        writeTextFile (supportDir </> "shared_list.hh") $ BU.toString $(embedFile "pcc/include/shared_list.hh")
 
       when (requiresForeign m) $ do
         let inputPath = dropExtension $ getInputFile mn

@@ -29,16 +29,17 @@ namespace PureScript {
 template <typename T>
 using managed = std::shared_ptr<T>;
 
-template <typename T, typename... ArgTypes>
-auto construct(ArgTypes... args) ->
-    typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value,T>::type {
-  return std::make_shared<typename T::element_type>(args...);
+//-----------------------------------------------------------------------------
+// For compile-time hashing of map key names
+//-----------------------------------------------------------------------------
+namespace Private {
+  constexpr auto literalStringHash(const char s[]) -> uint32_t {
+    return s[0] ? static_cast<uint32_t>(s[0]) + 33 * literalStringHash(s + 1) : 5381;
+  }
 }
 
-template <typename T, typename... ArgTypes>
-constexpr auto construct(ArgTypes... args) ->
-    typename std::enable_if<!std::is_assignable<std::shared_ptr<void>,T>::value,std::shared_ptr<T>>::type {
-  return std::make_shared<T>(args...);
+constexpr auto operator "" _key(const char s[], size_t) -> uint32_t {
+  return Private::literalStringHash(s);
 }
 
 struct as_thunk {
@@ -106,6 +107,7 @@ class any {
 
   any(const string& val) : type(Type::String), s(val) {}
   any(string&& val) : type(Type::String), s(std::move(val)) {}
+  any(const char* const val) : type(Type::String), s(val) {}
 
   any(const map& val) : type(Type::Map), m(val) {}
   any(map&& val) : type(Type::Map), m(std::move(val)) {}

@@ -136,18 +136,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                           block
     return fn'
 
-  declToCpp ident (Abs (_, com, _, _) arg@(Ident dict)
-                                      body@(App _ _ (Var _ (Qualified Nothing arg'))))
-    | "__dict_" `isPrefixOf` dict && arg' == arg = do
-    block <- asReturnBlock <$> valueToCpp body
-    let fn' = CppFunction (identToCpp ident)
-                          []
-                          [(identToCpp arg, Just AnyType)]
-                          (Just AnyTypeRef)
-                          []
-                          block
-    return (CppComment com fn')
-
   declToCpp ident (Abs (_, com, _, _) arg body) = do
     block <- asReturnBlock <$> valueToCpp body
     let block' = convertNestedLambdas [] block
