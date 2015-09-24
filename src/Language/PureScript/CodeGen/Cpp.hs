@@ -210,17 +210,11 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   valueToCpp :: Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
-  -- valueToCpp (Var (_, _, _, Just (IsConstructor _ _)) ident) =
-  --   return . CppVar $ qualifiedToStr' id ident
-  --
-  -- valueToCpp (Var (_, _, _, Just IsNewtype) ident) =
-  --   return . CppVar $ qualifiedToStr' id ident
+  valueToCpp (Var (_, _, _, Just (IsConstructor _ [])) ident) =
+    return $ CppApp (CppVar $ qualifiedToStr' id ident) []
 
-  -- valueToCpp (Var (_, _, ty, Just IsNewtype) ident) =
-  --   let qname = qualifiedToStr' id ident
-  --       argTypes = maybe [] (init . fnTypesN 1) (ty >>= mktype mn)
-  --       argTypes' = replicate (length argTypes) AnyType
-  --   in return (CppPartialApp argTypes' 1 (CppDataConstructor (qualifiedToStr' id ident) []) [])
+  valueToCpp (Var (_, _, _, Just (IsConstructor _ _)) ident) =
+    return . CppVar $ qualifiedToStr' id ident
 
   valueToCpp (Var _ ident) =
     return $ varToCpp ident
@@ -269,6 +263,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let (f, args) = unApp e []
     args' <- mapM valueToCpp args
     case f of
+      Var (_, _, _, Just IsNewtype) _ -> return (head args')
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (params, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return . CppObjectLiteral $ zip (superClassDictionaryNames constraints ++ (fst <$> fns)) args'
@@ -351,8 +346,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   binderToCpp varName done (VarBinder (_, _, ty, _) ident) =
     return (CppVariableIntroduction (identToCpp ident, Just AnyType) [] [] (Just (CppVar varName)) : done)
 
-  binderToCpp varName done (ConstructorBinder (com, ss, ty, Just IsNewtype) c ctor bs) =
-    binderToCpp varName done (ConstructorBinder (com, ss, ty, Just (IsConstructor ProductType [Ident "value0"])) c ctor bs)
+  binderToCpp varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
+    binderToCpp varName done b
 
   binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields)) _ ctor bs) = do
     cpps <- go (zip fields bs) done
