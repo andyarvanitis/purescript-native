@@ -96,12 +96,12 @@ repo = "git://github.com/pure14/"
 packages :: [(String, String)]
 -------------------------------------------------------------------------------
 packages =
-  [ ("purescript-eff",       [])
+  [ ("purescript-eff",       "pure14-dictionary")
   , ("purescript-prelude",   "pure14-dictionary")
-  , ("purescript-assert",    [])
-  , ("purescript-st",        [])
-  , ("purescript-console",   [])
-  , ("purescript-functions", [])
+  , ("purescript-assert",    "pure14-dictionary")
+  , ("purescript-st",        "pure14-dictionary")
+  , ("purescript-console",   "pure14-dictionary")
+  -- , ("purescript-functions", [])
   ]
 
 -------------------------------------------------------------------------------
@@ -136,40 +136,17 @@ makefileText = intercalate "\n" lines'
 skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
-  [ "862.purs"
-  , "Auto.purs"           -- rank-N
-  , "CheckTypeClass.purs" -- rank-N
-  , "Church.purs"         -- rank-N
-  , "Collatz.purs"        -- rank-N (runPure)
-  , "Do.purs"             -- rank-N, also mutually recursive lets
-  , "Dollar.purs"         -- rank-N (inferred)
-  , "Eff.purs"            -- rank-N (runPure)
-  , "EmptyDataDecls.purs"
+  [ "862.purs"                    -- id' from ST (package needs implementation)
+  , "Collatz.purs"                -- runPure from ST (package needs implementation)
+  , "Do.purs"                     -- mutually recursive lets
+  , "Eff.purs"                    -- runPure from ST (package needs implementation)
   , "ExplicitImportReExport.purs" -- ok, test has no main (would pass otherwise)
-  , "Fib.purs"                 -- rank-N (runST)
-  , "FinalTagless.purs"        -- rank-N
-  , "Let.purs"                 -- rank-N
-  , "Let2.purs" -- mutually recursive lets
-  , "LiberalTypeSynonyms.purs" -- rank-N
-  , "Monad.purs"               -- rank-N
-  , "MonadState.purs"
-  , "MultiArgFunctions.purs" -- uses package purescript-functions
-  , "MutRec2.purs" -- incompatible test, uses foreign data (would pass otherwise)
-  , "MutRec3.purs" -- incompatible test, uses foreign data (would pass otherwise)
-  , "Nested.purs"
-  , "NestedWhere.purs" -- mutually recursive where
-  , "OperatorInlining.purs" -- excessive memory consumption bug
-  , "OverlappingInstances.purs"  -- ok, should fail with C++
-  , "OverlappingInstances2.purs" -- ok, should fail with C++
-  , "Rank2Data.purs"        -- rank-N
-  , "Rank2Object.purs"      -- rank-N
-  , "Rank2TypeSynonym.purs" -- rank-N
-  , "Rank2Types.purs"       -- rank-N
-  , "RebindableSyntax.purs"
-  , "RowPolyInstanceContext.purs"
-  , "ScopedTypeVariables.purs" -- rank-N
-  , "SequenceDesugared.purs"   -- rank-N
-  , "TypeClasses.purs"
-  , "TypedWhere.purs" -- rank-N
-  , "Where.purs"      -- rank-N
+  , "ExtendedInfixOperators.purs" -- uses package purescript-functions
+  , "Fib.purs"                    -- runST (package needs implementation)
+  , "Let.purs"                    -- recursive let
+  , "Let2.purs"                   -- mutually recursive lets
+  , "MultiArgFunctions.purs"      -- uses package purescript-functions (needs implementation)
+  , "NestedWhere.purs"            -- mutually recursive where
+  , "RebindableSyntax.purs"       -- lambda captures (fix)
+  , "TCOCase.purs"                -- recursive let (if TCO off)
   ]
