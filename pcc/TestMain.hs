@@ -149,4 +149,5 @@ skipped =
   , "NestedWhere.purs"            -- mutually recursive where
   , "RebindableSyntax.purs"       -- lambda captures (fix)
   , "TCOCase.purs"                -- recursive let (if TCO off)
+  , "Where.purs"                  -- recursive where
   ]
