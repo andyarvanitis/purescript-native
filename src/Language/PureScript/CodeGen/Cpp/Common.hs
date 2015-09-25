@@ -145,7 +145,6 @@ nameIsCppReserved name =
               , "override"
               , "param"
               , "private"
-              , "Private"
               , "protected"
               , "public"
               , "PureScript"

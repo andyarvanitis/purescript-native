@@ -32,15 +32,6 @@ using managed = std::shared_ptr<T>;
 //-----------------------------------------------------------------------------
 // For compile-time hashing of map key names
 //-----------------------------------------------------------------------------
-namespace Private {
-  constexpr auto literalStringHash(const char s[]) -> uint32_t {
-    return s[0] ? static_cast<uint32_t>(s[0]) + 33 * literalStringHash(s + 1) : 5381;
-  }
-}
-
-constexpr auto operator "" _key(const char s[], size_t) -> uint32_t {
-  return Private::literalStringHash(s);
-}
 
 class any {
 
@@ -66,8 +57,27 @@ class any {
   };
   constexpr static const as_thunk unthunk = as_thunk{};
 
+  struct map_key_t {
+    const uint32_t hash;
+    constexpr map_key_t(const uint32_t hash) : hash(hash) {}
+  };
+
+  static constexpr auto djb2(const char s[], const uint32_t hash = 5381) -> uint32_t {
+    return !s[0] ? hash : djb2(s + 1, 33 * hash ^ s[0]);
+  }
+
+  class map_key_helper {
+  public:
+    constexpr auto operator() (const map_key_t key) const -> size_t {
+      return key.hash;
+    }
+    constexpr auto operator() (const map_key_t key1, const map_key_t key2) const -> bool {
+      return key1.hash == key2.hash;
+    }
+  };
+
   using string = std::string;
-  using map    = std::unordered_map<string, const any>;
+  using map    = std::unordered_map<map_key_t, const any, map_key_helper, map_key_helper>;
   using vector = std::vector<any>;
   using fn     = std::function<any(const any&)>;
   using eff_fn = std::function<any()>;
@@ -107,7 +117,7 @@ class any {
 
   any(const string& val) : type(Type::String), s(val) {}
   any(string&& val) : type(Type::String), s(std::move(val)) {}
-  any(const char* const val) : type(Type::String), s(val) {}
+  any(const char val[]) : type(Type::String), s(val) {}
 
   any(const map& val) : type(Type::Map), m(val) {}
   any(map&& val) : type(Type::Map), m(std::move(val)) {}
@@ -330,12 +340,16 @@ class any {
     return ptr ? dynamic_cast<T*>(static_cast<base_type*>(ptr)) != nullptr : false;
   }
 
-  inline auto operator[](const string& rhs) const -> const any& {
+  inline auto operator[](const map_key_t rhs) const -> const any& {
     returnValue(Type::Map, m.at(rhs),)
   }
 
-  inline auto operator[](const size_t rhs) const -> const any& {
+  inline auto operator[](const vector::size_type rhs) const -> const any& {
     returnValue(Type::Vector, v[rhs],)
+  }
+
+  inline auto operator[](const any& rhs) const -> const any& {
+    returnValue(Type::Vector, v[rhs.cast<long>()],)
   }
 
   inline static auto extractValue(const any& a) -> const any& {
@@ -475,6 +489,10 @@ class any {
 template <typename T>
 constexpr auto cast(const any& a) {
   return *(a.cast<T>());
+}
+
+constexpr auto operator "" _key(const char s[], size_t) -> const any::map_key_t {
+  return any::map_key_t(any::djb2(s));
 }
 
 } // namespace PureScript

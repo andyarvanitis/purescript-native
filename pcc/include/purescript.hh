@@ -27,7 +27,6 @@ namespace PureScript {
 using nullptr_t = std::nullptr_t;
 
 using string = std::string;
-using namespace std::literals::string_literals;
 
 using runtime_error = std::runtime_error;
 
