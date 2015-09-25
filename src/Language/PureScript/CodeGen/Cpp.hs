@@ -42,7 +42,6 @@ import Language.PureScript.CodeGen.Cpp.AST as AST
 import Language.PureScript.CodeGen.Cpp.Common as Common
 import Language.PureScript.CodeGen.Cpp.File
 import Language.PureScript.CodeGen.Cpp.Optimizer
-import Language.PureScript.CodeGen.Cpp.Synonyms
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CoreFn
 import Language.PureScript.Names
@@ -84,7 +83,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                   ++ headerDefsBegin mn
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak
-                                                         ++ (depSortSynonymsAndData $ synonyms)
+                                                         ++ synonyms
                                                          ++ toHeader optimized
                                                          ++ toHeaderFns optimized
                      ]
@@ -463,3 +462,21 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   findValue mname ident
     | Just (ty, _, _) <- M.lookup (mname, ident) (E.names env) = Just ty
   findValue _ _ = Nothing
+
+-------------------------------------------------------------------------------------------------
+synonymsToCpp :: Monad m => E.Environment -> ModuleName -> m [Cpp]
+-------------------------------------------------------------------------------------------------
+synonymsToCpp env mn
+  | tcs <- E.typeClasses env,
+    ds@(_:_) <-  M.toList
+               . M.filterWithKey (\k@(Qualified mn' _) _ -> mn' == Just mn && M.lookup k tcs == Nothing)
+               $ E.typeSynonyms env = do
+    let names' = qualifiedToStr mn (Ident . runProperName) . fst <$> ds
+        typs = replicate (length ds) (CppAny [])
+        syns = zip names' typs
+        cpps = toTypeAlias <$> syns
+    return $ cpps
+  | otherwise = return []
+  where
+  toTypeAlias :: (String, CppType) -> Cpp
+  toTypeAlias (n, t) = CppTypeAlias (n, []) t []
