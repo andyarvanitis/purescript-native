@@ -112,3 +112,6 @@ thunkMarkerType = CppPrimitive "any::as_thunk"
 
 unthunkMarkerValue :: String
 unthunkMarkerValue = "any::unthunk"
+
+ctorKey :: String
+ctorKey = "constructor"

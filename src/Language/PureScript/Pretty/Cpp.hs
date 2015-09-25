@@ -56,7 +56,7 @@ literals = mkPattern' match
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
   match (CppArrayLiteral xs) = fmap concat $ sequence
-    [ return "any::vector"
+    [ return $ runType arrayType
     , return "{ "
     , fmap (intercalate ", ") $ forM xs prettyPrintCpp'
     , return " }"

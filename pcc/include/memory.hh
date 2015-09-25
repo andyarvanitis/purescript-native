@@ -215,60 +215,59 @@ class any {
     }
   };
 
-  #define returnValue(T, V, F) \
-    if (type == T) { \
-      return F(V); \
+  #define RETURN_VALUE(TYPE, VAL, FN) \
+    if (type == TYPE) { \
+      return FN(VAL); \
     } else { \
-      if (type != Type::Thunk) std::cout << int(type) << std::endl; \
       assert(type == Type::Thunk); \
       const any& value = t(unthunk); \
-      assert(value.type == T); \
-      return F(value.V); \
+      assert(value.type == TYPE); \
+      return FN(value.VAL); \
     }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type {
-    returnValue(Type::Integer, i,)
+    RETURN_VALUE(Type::Integer, i,)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, double>::value, T>::type {
-    returnValue(Type::Double, d,)
+    RETURN_VALUE(Type::Double, d,)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, char>::value, T>::type {
-    returnValue(Type::Character, c,)
+    RETURN_VALUE(Type::Character, c,)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, bool>::value, T>::type {
-    returnValue(Type::Boolean, b,)
+    RETURN_VALUE(Type::Boolean, b,)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
-    returnValue(Type::String, s,)
+    RETURN_VALUE(Type::String, s,)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
-    returnValue(Type::Map, m,)
+    RETURN_VALUE(Type::Map, m,)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
-    returnValue(Type::Vector, v,)
+    RETURN_VALUE(Type::Vector, v,)
   }
 
   template <typename T>
   constexpr auto cast() const ->
       typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value, const T&>::type {
-    returnValue(Type::Pointer, p, std::static_pointer_cast<typename T::element_type>)
+    RETURN_VALUE(Type::Pointer, p, std::static_pointer_cast<typename T::element_type>)
   }
 
   auto operator()(const any arg) const -> any {
-    returnValue(Type::Function, f(arg),)
+    RETURN_VALUE(Type::Function, f(arg),)
   }
 
   auto operator()(const as_thunk) const -> const any& {
@@ -308,51 +307,34 @@ class any {
   // }
 
   operator const string&() const {
-    returnValue(Type::String, s,)
+    RETURN_VALUE(Type::String, s,)
   }
 
   operator const map&() const {
-    returnValue(Type::Map, m,)
+    RETURN_VALUE(Type::Map, m,)
   }
 
   operator const vector&() const {
-    returnValue(Type::Vector, v,)
+    RETURN_VALUE(Type::Vector, v,)
   }
 
   auto extractPointer() const -> const void* {
-    returnValue(Type::Pointer, p.get(),)
-  }
-
-  template <typename T>
-  auto instance_of() const ->
-      typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value, bool>::type {
-    using elem_type = const typename T::element_type;
-    using base_type = const typename elem_type::base_type;
-    const auto ptr = extractPointer();
-    return ptr ? dynamic_cast<elem_type*>(static_cast<base_type*>(ptr)) != nullptr : false;
-  }
-
-  template <typename T>
-  auto instance_of() const ->
-      typename std::enable_if<!std::is_assignable<std::shared_ptr<void>,T>::value, bool>::type {
-    using base_type = const typename T::base_type;
-    const auto ptr = extractPointer();
-    return ptr ? dynamic_cast<T*>(static_cast<base_type*>(ptr)) != nullptr : false;
+    RETURN_VALUE(Type::Pointer, p.get(),)
   }
 
   inline auto operator[](const map_key_t rhs) const -> const any& {
-    returnValue(Type::Map, m.at(rhs),)
+    RETURN_VALUE(Type::Map, m.at(rhs),)
   }
 
   inline auto operator[](const vector::size_type rhs) const -> const any& {
-    returnValue(Type::Vector, v[rhs],)
+    RETURN_VALUE(Type::Vector, v[rhs],)
   }
 
   inline auto operator[](const any& rhs) const -> const any& {
-    returnValue(Type::Vector, v[rhs.cast<long>()],)
+    RETURN_VALUE(Type::Vector, v[rhs.cast<long>()],)
   }
 
-  inline static auto extractValue(const any& a) -> const any& {
+  inline static auto extract_value(const any& a) -> const any& {
     if (a.type != Type::Thunk) {
       return a;
     } else {
@@ -362,8 +344,8 @@ class any {
   }
 
   inline auto operator==(const any& rhs_) const -> bool {
-    auto& lhs = extractValue(*this);
-    auto& rhs = extractValue(rhs_);
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer:   return lhs.i == rhs.i;
@@ -377,8 +359,8 @@ class any {
   }
 
   inline auto operator!=(const any& rhs_) const -> bool {
-    auto& lhs = extractValue(*this);
-    auto& rhs = extractValue(rhs_);
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer:   return lhs.i != rhs.i;
@@ -392,8 +374,8 @@ class any {
   }
 
   inline auto operator<(const any& rhs_) const -> bool {
-    auto& lhs = extractValue(*this);
-    auto& rhs = extractValue(rhs_);
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer:   return lhs.i < rhs.i;
@@ -405,8 +387,8 @@ class any {
   }
 
   inline auto operator>(const any& rhs_) const -> bool {
-    auto& lhs = extractValue(*this);
-    auto& rhs = extractValue(rhs_);
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer:   return lhs.i > rhs.i;
@@ -418,8 +400,8 @@ class any {
   }
 
   inline auto operator+(const any& rhs_) const -> any {
-    auto& lhs = extractValue(*this);
-    auto& rhs = extractValue(rhs_);
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer:   return lhs.i + rhs.i;
@@ -431,8 +413,8 @@ class any {
   }
 
   inline auto operator-(const any& rhs_) const -> any {
-    auto& lhs = extractValue(*this);
-    auto& rhs = extractValue(rhs_);
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer:   return lhs.i - rhs.i;
@@ -443,8 +425,8 @@ class any {
   }
 
   inline auto operator*(const any& rhs_) const -> any {
-    auto& lhs = extractValue(*this);
-    auto& rhs = extractValue(rhs_);
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer: return lhs.i * rhs.i;
@@ -454,8 +436,8 @@ class any {
   }
 
   inline auto operator/(const any& rhs_) const -> any {
-    auto& lhs = extractValue(*this);
-    auto& rhs = extractValue(rhs_);
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer: return lhs.i / rhs.i;
@@ -465,8 +447,8 @@ class any {
   }
 
   inline auto operator%(const any& rhs_) const -> any {
-    auto& lhs = extractValue(*this);
-    auto& rhs = extractValue(rhs_);
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer: return lhs.i % rhs.i;
@@ -475,7 +457,7 @@ class any {
   }
 
   inline auto operator-() const -> any {
-    auto& lhs = extractValue(*this);
+    auto& lhs = extract_value(*this);
     switch (lhs.type) {
       case Type::Integer: return (- lhs.i);
       case Type::Double:  return (- lhs.d);
@@ -483,13 +465,8 @@ class any {
     }
   }
 
-  #undef returnValue
+  #undef RETURN_VALUE
 };
-
-template <typename T>
-constexpr auto cast(const any& a) {
-  return *(a.cast<T>());
-}
 
 constexpr auto operator "" _key(const char s[], size_t) -> const any::map_key_t {
   return any::map_key_t(any::djb2(s));
