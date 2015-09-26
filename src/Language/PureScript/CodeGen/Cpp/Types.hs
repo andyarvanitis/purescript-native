@@ -53,6 +53,10 @@ data CppValueQual
   -- Extern value
   --
   | CppExtern
+  -- |
+  -- Function or lambda is involved in recursion
+  --
+  | CppRecursive
 
   deriving (Show, Eq, Data, Typeable)
 

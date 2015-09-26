@@ -111,20 +111,20 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   bindToCpp :: Bind Ann -> m [Cpp]
   -------------------------------------------------------------------------------------------------
-  bindToCpp (NonRec ident val) = return <$> declToCpp ident val
-  bindToCpp (Rec vals) = forM vals (uncurry declToCpp)
+  bindToCpp (NonRec ident val) = return <$> declToCpp [] ident val
+  bindToCpp (Rec vals) = forM vals (uncurry $ declToCpp [CppRecursive])
 
   -- |
   -- Desugar a declaration into a variable introduction or named function
   -- declaration.
   -------------------------------------------------------------------------------------------------
-  declToCpp :: Ident -> Expr Ann -> m Cpp
+  declToCpp :: [CppValueQual] -> Ident -> Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
-  declToCpp ident (Abs ann@(_, _, _, Just IsTypeClassConstructor) _ _) =
+  declToCpp _ ident (Abs ann@(_, _, _, Just IsTypeClassConstructor) _ _) =
     return CppNoOp
 
-  declToCpp ident (Abs _ arg@(Ident "dict")
-                         body@(Accessor _ _ (Var _ (Qualified Nothing arg'))))
+  declToCpp _ ident (Abs _ arg@(Ident "dict")
+                           body@(Accessor _ _ (Var _ (Qualified Nothing arg'))))
     | arg' == arg = do
     block <- asReturnBlock <$> valueToCpp body
     let fn' = CppFunction (identToCpp ident)
@@ -134,16 +134,16 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                           block
     return fn'
 
-  declToCpp ident (Abs (_, com, _, _) arg body) = do
+  declToCpp vqs ident (Abs (_, com, _, _) arg body) = do
     block <- asReturnBlock <$> valueToCpp body
     let block' = convertNestedLambdas block
         fn' = CppFunction (identToCpp ident) [(identToCpp arg, Just $ CppAny [CppConst, CppRef])]
                                              (Just $ CppAny [])
-                                             []
+                                             vqs
                                              block'
     return (CppComment com fn')
 
-  declToCpp ident (Constructor _ _ (ProperName ctor) fields) = return $
+  declToCpp _ ident (Constructor _ _ (ProperName ctor) fields) = return $
     CppFunction (identToCpp ident) (farg <$> f)
                                    (Just $ CppAny [])
                                    []
@@ -160,7 +160,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                                                     (CppBlock $ fieldLambdas fs')]
       | otherwise = [CppReturn (CppObjectLiteral ((ctorKey, CppStringLiteral name) : zip fields' (CppVar <$> fields')))]
 
-  declToCpp ident val = do
+  declToCpp _ ident val = do
     val' <- valueToCpp val
     return $ CppVariableIntroduction (identToCpp ident, Just $ CppAny [CppConst]) [] (Just val')
 
@@ -191,6 +191,50 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     go f@(CppFunction {}) = toLambda [CppCaptureAll] f
     go (CppLambda [] args rtyp body) = CppLambda [CppCaptureAll] args rtyp body
     go cpp = cpp
+
+  -------------------------------------------------------------------------------------------------
+  convertRecursiveFns :: [Cpp] -> [Cpp]
+  -------------------------------------------------------------------------------------------------
+  convertRecursiveFns cpps
+    | not $ null fns = dict : (accessor topdict <$> fns)
+    where
+    fns :: [(String, Cpp)]
+    fns = toelem <$> concatMap (everythingOnCpp (++) recursive) cpps
+
+    remove :: Cpp -> Cpp
+    remove CppFunction{} = CppNoOp
+    remove cpp' = cpp'
+
+    recursive :: Cpp -> [Cpp]
+    recursive cpp'@(CppFunction _ _ _ qs _) | CppRecursive `elem` qs = [cpp']
+    recursive cpp' = []
+
+    dict :: Cpp
+    dict = CppVariableIntroduction (topdict, Just $ CppAny [CppConst]) []
+                                   (Just $ CppObjectLiteral fns)
+
+    accessor :: String -> (String, Cpp) -> Cpp
+    accessor dictname (name, _) = CppVariableIntroduction (name, Just $ CppAny [CppConst]) [] (Just accessed)
+      where
+      dict' = CppVar dictname
+      accessed = CppApp (CppIndexer (CppStringLiteral name) dict') [dict']
+
+    toelem :: Cpp -> (String, Cpp)
+    toelem f'@(CppFunction name args rtyp _ (CppBlock body)) =
+      (name, withdict $ CppLambda [CppCaptureAll] args rtyp (CppBlock $ (accessor localdict <$> fns) ++ body))
+    toelem _ = error "not a function"
+
+    withdict :: Cpp -> Cpp
+    withdict cpp' =
+      CppLambda [CppCaptureAll] [(localdict, Just $ CppAny [CppConst, CppRef])]
+                                (Just $ CppAny [])
+                                (CppBlock [CppReturn cpp'])
+    topdict :: String
+    topdict = "__dict__"
+    localdict :: String
+    localdict = "_dict_"
+
+  convertRecursiveFns cpps = cpps
 
   -- |
   -- Generate code in the simplified C++14 intermediate representation for a value or expression.
@@ -269,8 +313,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Let (_, _, ty, _) ds val) = do
     ds' <- concat <$> mapM bindToCpp ds
     ret <- valueToCpp val
-    let ds'' = convertNestedLambdas <$> ds'
-    return $ CppApp (CppLambda [] [] Nothing (CppBlock (ds'' ++ [CppReturn ret]))) []
+    let rs = convertRecursiveFns ds'
+    let cpps = convertNestedLambdas <$> rs
+    return $ CppApp (CppLambda [] [] Nothing (CppBlock (cpps ++ [CppReturn ret]))) []
 
   -- |
   -- Generate code in the simplified C++14 intermediate representation for a reference to a
