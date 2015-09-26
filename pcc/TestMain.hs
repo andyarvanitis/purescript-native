@@ -138,16 +138,10 @@ skipped :: [String]
 skipped =
   [ "862.purs"                    -- id' from ST (package needs implementation)
   , "Collatz.purs"                -- runPure from ST (package needs implementation)
-  , "Do.purs"                     -- mutually recursive lets
   , "Eff.purs"                    -- runPure from ST (package needs implementation)
   , "ExplicitImportReExport.purs" -- ok, test has no main (would pass otherwise)
   , "ExtendedInfixOperators.purs" -- uses package purescript-functions
   , "Fib.purs"                    -- runST (package needs implementation)
-  , "Let.purs"                    -- recursive let
-  , "Let2.purs"                   -- mutually recursive lets
   , "MultiArgFunctions.purs"      -- uses package purescript-functions (needs implementation)
-  , "NestedWhere.purs"            -- mutually recursive where
   , "RebindableSyntax.purs"       -- lambda captures (fix)
-  , "TCOCase.purs"                -- recursive let (if TCO off)
-  , "Where.purs"                  -- recursive where
   ]

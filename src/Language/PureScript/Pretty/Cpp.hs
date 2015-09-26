@@ -340,9 +340,15 @@ binary op str = AssocL match (\v1 v2 -> v1 ++ str ++ v2)
 
 prettyStatements :: [Cpp] -> StateT PrinterState Maybe String
 prettyStatements sts = do
-  cpps <- forM (filter (/=CppNoOp) sts) prettyPrintCpp'
+  cpps <- forM (filter (not . isNoOp) sts) prettyPrintCpp'
   indentString <- currentIndent
   return $ intercalate "\n" $ map (indentString ++) cpps
+  where
+  isNoOp :: Cpp -> Bool
+  isNoOp CppNoOp = True
+  isNoOp (CppSequence []) = True
+  isNoOp (CppComment [] CppNoOp) = True
+  isNoOp z = False
 
 -- |
 -- Generate a pretty-printed string representing a C++11 expression

@@ -196,18 +196,18 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   convertRecursiveFns :: [Cpp] -> [Cpp]
   -------------------------------------------------------------------------------------------------
   convertRecursiveFns cpps
-    | not $ null fns = dict : (accessor topdict <$> fns)
+    | not $ null fns = dict : (accessor topdict <$> fns) ++ (everywhereOnCpp removeRec <$> cpps)
     where
     fns :: [(String, Cpp)]
     fns = toelem <$> concatMap (everythingOnCpp (++) recursive) cpps
 
-    remove :: Cpp -> Cpp
-    remove CppFunction{} = CppNoOp
-    remove cpp' = cpp'
-
     recursive :: Cpp -> [Cpp]
     recursive cpp'@(CppFunction _ _ _ qs _) | CppRecursive `elem` qs = [cpp']
     recursive cpp' = []
+
+    removeRec :: Cpp -> Cpp
+    removeRec(CppFunction _ _ _ qs _) | CppRecursive `elem` qs = CppNoOp
+    removeRec cpp' = cpp'
 
     dict :: Cpp
     dict = CppVariableIntroduction (topdict, Just $ CppAny [CppConst]) []
@@ -220,7 +220,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       accessed = CppApp (CppIndexer (CppStringLiteral name) dict') [dict']
 
     toelem :: Cpp -> (String, Cpp)
-    toelem f'@(CppFunction name args rtyp _ (CppBlock body)) =
+    toelem (CppFunction name args rtyp _ (CppBlock body)) =
       (name, withdict $ CppLambda [CppCaptureAll] args rtyp (CppBlock $ (accessor localdict <$> fns) ++ body))
     toelem _ = error "not a function"
 
