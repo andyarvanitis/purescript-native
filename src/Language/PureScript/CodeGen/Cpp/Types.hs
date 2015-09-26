@@ -79,6 +79,7 @@ runValueQual CppStatic    = "static"
 runValueQual CppInline    = "inline"
 runValueQual CppConstExpr = "constexpr"
 runValueQual CppExtern    = "extern"
+runValueQual CppRecursive = ""
 
 runCaptureType :: CppCaptureType -> String
 runCaptureType CppCaptureAll = "="
