@@ -120,14 +120,15 @@ toBody = catMaybes . map go
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [] (Just lambda)
     where
-    val = CppVariableIntroduction ("_value_", Just $ CppAny [CppConst]) [CppStatic] (Just cpp)
+    val = CppVariableIntroduction ("_value_", Just $ CppAny [CppConst]) [CppStatic] (Just $ addCaptures cpp)
     block = CppBlock [val, CppReturn (CppVar "_value_")]
     lambda = CppLambda [] [("", Just $ thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) block
-
-  -- go cpp@(CppVariableIntroduction (name, Just t) [] _ (Just _))
-  --   | t /= CppAuto, all isAlphaNum name
-  --   = Just cpp
-
+    addCaptures :: Cpp -> Cpp
+    addCaptures = everywhereOnCpp addCapture
+      where
+      addCapture :: Cpp -> Cpp
+      addCapture (CppLambda [] args rty body) = CppLambda [CppCaptureAll] args rty body
+      addCapture cpp' = cpp'
   go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
   go _ = Nothing
 
