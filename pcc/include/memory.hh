@@ -26,9 +26,6 @@
 
 namespace PureScript {
 
-template <typename T>
-using managed = std::shared_ptr<T>;
-
 //-----------------------------------------------------------------------------
 // For compile-time hashing of map key names
 //-----------------------------------------------------------------------------
@@ -38,7 +35,6 @@ class any {
   public:
   enum class Type : std::int8_t {
     Unknown,
-    Pointer,
     Integer,
     Double,
     Character,
@@ -48,7 +44,8 @@ class any {
     Vector,
     Function,
     EffFunction,
-    Thunk
+    Thunk,
+    Pointer
   };
 
   const Type type = Type::Unknown;
@@ -66,36 +63,58 @@ class any {
     return !s[0] ? hash : djb2(s + 1, 33 * hash ^ s[0]);
   }
 
-  class map_key_helper {
+  class map_key_hash {
   public:
     constexpr auto operator() (const map_key_t key) const -> size_t {
       return key.hash;
     }
+  };
+
+  class map_key_equal {
+  public:
     constexpr auto operator() (const map_key_t key1, const map_key_t key2) const -> bool {
       return key1.hash == key2.hash;
     }
   };
 
   using string = std::string;
-  using map    = std::unordered_map<map_key_t, const any, map_key_helper, map_key_helper>;
+  using map    = std::unordered_map<map_key_t, const any, map_key_hash, map_key_equal>;
   using vector = std::vector<any>;
   using fn     = std::function<any(const any&)>;
   using eff_fn = std::function<any()>;
   using thunk  = std::function<const any& (const as_thunk)>;
 
+  using shared_map    = std::shared_ptr<map>;
+  using shared_vector = std::shared_ptr<vector>;
+
+  using unique_map    = std::shared_ptr<map>;
+  using unique_vector = std::shared_ptr<vector>;
+
+  using shared_ptr = std::shared_ptr<void>;
+
+  template <typename T>
+  static constexpr auto shared(const T& arg) {
+    return std::make_shared<T>(arg);
+  }
+
+  template <typename T>
+  static constexpr auto shared(T&& arg) {
+    return std::make_shared<T>(std::move(arg));
+  }
+
   private:
   union {
-    mutable std::shared_ptr<void> p;
-    mutable long   i;
-    mutable double d;
-    mutable char   c;
-    mutable bool   b;
-    mutable string s;
-    mutable map    m;
-    mutable vector v;
-    mutable fn     f;
-    mutable eff_fn e;
-    mutable thunk  t;
+    mutable long          i;
+    mutable double        d;
+    mutable char          c;
+    mutable bool          b;
+    mutable string        s;
+    mutable shared_map    m;
+    mutable shared_vector v;
+    mutable fn            f;
+    mutable eff_fn        e;
+    mutable thunk         t;
+    mutable shared_ptr    p;
   };
 
   public:
@@ -119,11 +138,17 @@ class any {
   any(string&& val) : type(Type::String), s(std::move(val)) {}
   any(const char val[]) : type(Type::String), s(val) {}
 
-  any(const map& val) : type(Type::Map), m(val) {}
-  any(map&& val) : type(Type::Map), m(std::move(val)) {}
+  any(const map& val) : type(Type::Map), m(shared<map>(val)) {}
+  any(map&& val) : type(Type::Map), m(shared<map>(std::move(val))) {}
 
-  any(const vector& val) : type(Type::Vector), v(val) {}
-  any(vector&& val) : type(Type::Vector), v(std::move(val)) {}
+  any(const shared_map& val) : type(Type::Map), m(val) {}
+  any(shared_map&& val) : type(Type::Map), m(std::move(val)) {}
+
+  any(const vector& val) : type(Type::Vector), v(shared<vector>(val)) {}
+  any(vector&& val) : type(Type::Vector), v(shared<vector>(std::move(val))) {}
+
+  any(const shared_vector& val) : type(Type::Vector), v(val) {}
+  any(shared_vector&& val) : type(Type::Vector), v(std::move(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
@@ -142,17 +167,21 @@ class any {
     : type(Type::Thunk), t(val) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value>::type* = 0)
-    : type(Type::Pointer), p(val) {}
+  any(const T& val, typename std::enable_if<std::is_assignable<shared_ptr,T>::value>::type* = 0)
+    : type(Type::Pointer), p(val) {
+      throw std::runtime_error("Generic pointers should not be created yet");
+    }
 
   any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
 
   template <typename T>
-  any(T&& val, typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value>::type* = 0)
-    : type(Type::Pointer), p(std::move(val)) {}
+  any(T&& val, typename std::enable_if<std::is_assignable<shared_ptr,T>::value>::type* = 0)
+    : type(Type::Pointer), p(std::move(val)) {
+      throw std::runtime_error("Generic pointers should not be created yet");
+    }
 
   const any& operator=(const any& val) const {
-    assert(false);
+    throw std::runtime_error("No copy assignment operator yet");
     *this = val;
     return *this;
   }
@@ -165,12 +194,12 @@ class any {
       case Type::Character:       c = val.c;                       break;
       case Type::Boolean:         b = val.b;                       break;
       case Type::String:          new (&s) string        (val.s);  break;
-      case Type::Map:             new (&m) map           (val.m);  break;
-      case Type::Vector:          new (&v) vector        (val.v);  break;
+      case Type::Map:             new (&m) shared_map    (val.m);  break;
+      case Type::Vector:          new (&v) shared_vector (val.v);  break;
       case Type::Function:        new (&f) fn            (val.f);  break;
       case Type::EffFunction:     new (&e) eff_fn        (val.e);  break;
       case Type::Thunk:           new (&t) thunk         (val.t);  break;
-      case Type::Pointer:         new (&p) std::shared_ptr<void> (val.p);  break;
+      case Type::Pointer:         new (&p) shared_ptr    (val.p);  break;
 
       default: throw std::runtime_error("unsupported type in copy ctor");
     }
@@ -184,12 +213,12 @@ class any {
       case Type::Character:       c = val.c;                                  break;
       case Type::Boolean:         b = val.b;                                  break;
       case Type::String:          new (&s) string        (std::move(val.s));  break;
-      case Type::Map:             new (&m) map           (std::move(val.m));  break;
-      case Type::Vector:          new (&v) vector        (std::move(val.v));  break;
+      case Type::Map:             new (&m) shared_map    (std::move(val.m));  break;
+      case Type::Vector:          new (&v) shared_vector (std::move(val.v));  break;
       case Type::Function:        new (&f) fn            (std::move(val.f));  break;
       case Type::EffFunction:     new (&e) eff_fn        (std::move(val.e));  break;
       case Type::Thunk:           new (&t) thunk         (std::move(val.t));  break;
-      case Type::Pointer:         new (&p) std::shared_ptr<void> (std::move(val.p));  break;
+      case Type::Pointer:         new (&p) shared_ptr    (std::move(val.p));  break;
 
       default: throw std::runtime_error("unsupported type in move ctor");
     }
@@ -204,12 +233,12 @@ class any {
       case Type::Character:       ;                    break;
       case Type::Boolean:         ;                    break;
       case Type::String:          s.~string();         break;
-      case Type::Map:             m.~map();            break;
-      case Type::Vector:          v.~vector();         break;
+      case Type::Map:             m.~shared_map();     break;
+      case Type::Vector:          v.~shared_vector();  break;
       case Type::Function:        f.~fn();             break;
       case Type::EffFunction:     e.~eff_fn();         break;
       case Type::Thunk:           t.~thunk();          break;
-      case Type::Pointer:         p.~managed<void>();  break;
+      case Type::Pointer:         p.~shared_ptr();     break;
 
       default: throw std::runtime_error("unsupported type in destructor");
     }
@@ -252,17 +281,17 @@ class any {
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
-    RETURN_VALUE(Type::Map, m,)
+    RETURN_VALUE(Type::Map, m, *)
   }
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
-    RETURN_VALUE(Type::Vector, v,)
+    RETURN_VALUE(Type::Vector, v, *)
   }
 
   template <typename T>
   constexpr auto cast() const ->
-      typename std::enable_if<std::is_assignable<std::shared_ptr<void>,T>::value, const T&>::type {
+      typename std::enable_if<std::is_assignable<shared_ptr,T>::value, const T&>::type {
     RETURN_VALUE(Type::Pointer, p, std::static_pointer_cast<typename T::element_type>)
   }
 
@@ -311,11 +340,11 @@ class any {
   }
 
   operator const map&() const {
-    RETURN_VALUE(Type::Map, m,)
+    RETURN_VALUE(Type::Map, m, *)
   }
 
   operator const vector&() const {
-    RETURN_VALUE(Type::Vector, v,)
+    RETURN_VALUE(Type::Vector, v, *)
   }
 
   auto extractPointer() const -> const void* {
@@ -323,15 +352,15 @@ class any {
   }
 
   inline auto operator[](const map_key_t rhs) const -> const any& {
-    RETURN_VALUE(Type::Map, m.at(rhs),)
+    RETURN_VALUE(Type::Map, m->at(rhs),)
   }
 
   inline auto operator[](const vector::size_type rhs) const -> const any& {
-    RETURN_VALUE(Type::Vector, v[rhs],)
+    RETURN_VALUE(Type::Vector, v->at(rhs),)
   }
 
   inline auto operator[](const any& rhs) const -> const any& {
-    RETURN_VALUE(Type::Vector, v[rhs.cast<long>()],)
+    RETURN_VALUE(Type::Vector, v->at(rhs.cast<long>()),)
   }
 
   inline static auto extract_value(const any& a) -> const any& {
