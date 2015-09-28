@@ -101,7 +101,7 @@ packages =
   , ("purescript-assert",    "pure14-dictionary")
   , ("purescript-st",        "pure14-dictionary")
   , ("purescript-console",   "pure14-dictionary")
-  -- , ("purescript-functions", [])
+  , ("purescript-functions", "pure14-dictionary")
   ]
 
 -------------------------------------------------------------------------------
@@ -137,7 +137,5 @@ skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
   [ "ExplicitImportReExport.purs" -- OK, test has no main (would pass otherwise)
-  , "ExtendedInfixOperators.purs" -- uses package purescript-functions (package needs implementation)
-  , "MultiArgFunctions.purs"      -- uses package purescript-functions (needs implementation)
   , "TCOCase.purs"                -- stack overflow if TCO off -- re-test after TCO back
   ]

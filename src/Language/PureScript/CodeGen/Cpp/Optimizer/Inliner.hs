@@ -174,8 +174,8 @@ inlineCommonOperators = applyAll $
   , binary' C.dataIntBits C.shr ShiftRight
   -- , binary' C.dataIntBits C.zshr ZeroFillShiftRight
   , unary'  C.dataIntBits C.complement CppBitwiseNot
-  ] ++
-  [ fn | i <- [0..10], fn <- [ mkFn i, runFn i ] ]
+  ] -- ++ -- DISABLE mkFn/runFn inlining
+  -- [ fn | i <- [0..10], fn <- [ mkFn i, runFn i ] ]
   where
   binary :: (String, String) -> String -> BinaryOp -> Cpp -> Cpp
   binary dict opString op = everywhereOnCpp convert

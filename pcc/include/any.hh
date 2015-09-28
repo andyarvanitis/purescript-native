@@ -421,6 +421,7 @@ class any {
       case Type::Integer:   return lhs.i < rhs.i;
       case Type::Double:    return lhs.d < rhs.d;
       case Type::Character: return lhs.c < rhs.c;
+      case Type::Boolean:   return lhs.b < rhs.b;
       case Type::String:    return lhs.s < rhs.s;
       default: throw std::runtime_error("unsupported type for '<' operator");
     }
@@ -434,6 +435,7 @@ class any {
       case Type::Integer:   return lhs.i > rhs.i;
       case Type::Double:    return lhs.d > rhs.d;
       case Type::Character: return lhs.c > rhs.c;
+      case Type::Boolean:   return lhs.b > rhs.b;
       case Type::String:    return lhs.s > rhs.s;
       default: throw std::runtime_error("unsupported type for '>' operator");
     }
