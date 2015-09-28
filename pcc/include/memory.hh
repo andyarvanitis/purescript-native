@@ -48,7 +48,7 @@ class any {
     Pointer
   };
 
-  const Type type = Type::Unknown;
+  mutable Type type = Type::Unknown;
 
   struct as_thunk {
   };
@@ -90,16 +90,24 @@ class any {
   using unique_map    = std::shared_ptr<map>;
   using unique_vector = std::shared_ptr<vector>;
 
+  template <typename T>
+  using shared = std::shared_ptr<T>;
+
   using shared_ptr = std::shared_ptr<void>;
 
   template <typename T>
-  static constexpr auto shared(const T& arg) {
+  static constexpr auto make_shared(const T& arg) {
     return std::make_shared<T>(arg);
   }
 
   template <typename T>
-  static constexpr auto shared(T&& arg) {
+  static constexpr auto make_shared(T&& arg) {
     return std::make_shared<T>(std::move(arg));
+  }
+
+  template <typename T, typename U>
+  static constexpr auto static_cast_shared(U arg) {
+    return static_cast<T*>(arg.get());
   }
 
   private:
@@ -138,14 +146,14 @@ class any {
   any(string&& val) : type(Type::String), s(std::move(val)) {}
   any(const char val[]) : type(Type::String), s(val) {}
 
-  any(const map& val) : type(Type::Map), m(shared<map>(val)) {}
-  any(map&& val) : type(Type::Map), m(shared<map>(std::move(val))) {}
+  any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
+  any(map&& val) : type(Type::Map), m(make_shared<map>(std::move(val))) {}
 
   any(const shared_map& val) : type(Type::Map), m(val) {}
   any(shared_map&& val) : type(Type::Map), m(std::move(val)) {}
 
-  any(const vector& val) : type(Type::Vector), v(shared<vector>(val)) {}
-  any(vector&& val) : type(Type::Vector), v(shared<vector>(std::move(val))) {}
+  any(const vector& val) : type(Type::Vector), v(make_shared<vector>(val)) {}
+  any(vector&& val) : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
 
   any(const shared_vector& val) : type(Type::Vector), v(val) {}
   any(shared_vector&& val) : type(Type::Vector), v(std::move(val)) {}
@@ -169,7 +177,6 @@ class any {
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<shared_ptr,T>::value>::type* = 0)
     : type(Type::Pointer), p(val) {
-      throw std::runtime_error("Generic pointers should not be created yet");
     }
 
   any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
@@ -177,17 +184,9 @@ class any {
   template <typename T>
   any(T&& val, typename std::enable_if<std::is_assignable<shared_ptr,T>::value>::type* = 0)
     : type(Type::Pointer), p(std::move(val)) {
-      throw std::runtime_error("Generic pointers should not be created yet");
     }
 
-  const any& operator=(const any& val) const {
-    throw std::runtime_error("No copy assignment operator yet");
-    *this = val;
-    return *this;
-  }
-
   any(const any& val) : type(val.type) {
-    // std::cout << "copy" << std::endl;
     switch (type) {
       case Type::Integer:         i = val.i;                       break;
       case Type::Double:          d = val.d;                       break;
@@ -205,8 +204,8 @@ class any {
     }
   }
 
-  any(any&& val) : type(val.type) {
-    // std::cout << "move" << std::endl;
+  auto swap(any&& val) const {
+    type = val.type;
     switch (type) {
       case Type::Integer:         i = val.i;                                  break;
       case Type::Double:          d = val.d;                                  break;
@@ -222,6 +221,20 @@ class any {
 
       default: throw std::runtime_error("unsupported type in move ctor");
     }
+  }
+
+  any(any&& val) {
+    swap(std::move(val));
+  }
+
+  auto operator=(const any& val) const -> const any& {
+    swap(any(val));
+    return *this;
+  }
+
+  auto operator=(any*& val) const -> const any& {
+    swap(std::move(val));
+    return *this;
   }
 
   any() = delete;
@@ -244,6 +257,9 @@ class any {
     }
   };
 
+  // Note: thunks are always stored in a local static variable, so
+  // the appropriate warning is suppressed here.
+  //
   #define RETURN_VALUE(TYPE, VAL, FN) \
     if (type == TYPE) { \
       return FN(VAL); \
@@ -291,8 +307,8 @@ class any {
 
   template <typename T>
   constexpr auto cast() const ->
-      typename std::enable_if<std::is_assignable<shared_ptr,T>::value, const T&>::type {
-    RETURN_VALUE(Type::Pointer, p, std::static_pointer_cast<typename T::element_type>)
+      typename std::enable_if<std::is_assignable<shared_ptr,T>::value, typename T::element_type*>::type {
+    RETURN_VALUE(Type::Pointer, p, static_cast_shared<typename T::element_type>)
   }
 
   auto operator()(const any arg) const -> any {

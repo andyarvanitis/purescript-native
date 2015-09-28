@@ -136,12 +136,8 @@ makefileText = intercalate "\n" lines'
 skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
-  [ "862.purs"                    -- id' from ST (package needs implementation)
-  , "Collatz.purs"                -- runPure from ST (package needs implementation)
-  , "Eff.purs"                    -- runPure from ST (package needs implementation)
-  , "ExplicitImportReExport.purs" -- ok, test has no main (would pass otherwise)
-  , "ExtendedInfixOperators.purs" -- uses package purescript-functions
-  , "Fib.purs"                    -- runST (package needs implementation)
+  [ "ExplicitImportReExport.purs" -- OK, test has no main (would pass otherwise)
+  , "ExtendedInfixOperators.purs" -- uses package purescript-functions (package needs implementation)
   , "MultiArgFunctions.purs"      -- uses package purescript-functions (needs implementation)
   , "TCOCase.purs"                -- stack overflow if TCO off -- re-test after TCO back
   ]
