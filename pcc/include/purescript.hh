@@ -20,7 +20,7 @@
 #include <functional>
 #include <string>
 #include <stdexcept>
-#include "memory.hh"
+#include "any.hh"
 
 namespace PureScript {
 
