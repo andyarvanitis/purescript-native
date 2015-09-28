@@ -93,7 +93,7 @@ class any {
   template <typename T>
   using shared = std::shared_ptr<T>;
 
-  using shared_ptr = std::shared_ptr<void>;
+  using shared_void_ptr = std::shared_ptr<void>;
 
   template <typename T>
   static constexpr auto make_shared(const T& arg) {
@@ -112,17 +112,17 @@ class any {
 
   private:
   union {
-    mutable long          i;
-    mutable double        d;
-    mutable char          c;
-    mutable bool          b;
-    mutable string        s;
-    mutable shared_map    m;
-    mutable shared_vector v;
-    mutable fn            f;
-    mutable eff_fn        e;
-    mutable thunk         t;
-    mutable shared_ptr    p;
+    mutable long            i;
+    mutable double          d;
+    mutable char            c;
+    mutable bool            b;
+    mutable string          s;
+    mutable shared_map      m;
+    mutable shared_vector   v;
+    mutable fn              f;
+    mutable eff_fn          e;
+    mutable thunk           t;
+    mutable shared_void_ptr p;
   };
 
   public:
@@ -175,30 +175,30 @@ class any {
     : type(Type::Thunk), t(val) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<shared_ptr,T>::value>::type* = 0)
+  any(const T& val, typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value>::type* = 0)
     : type(Type::Pointer), p(val) {
     }
 
   any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
 
   template <typename T>
-  any(T&& val, typename std::enable_if<std::is_assignable<shared_ptr,T>::value>::type* = 0)
+  any(T&& val, typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value>::type* = 0)
     : type(Type::Pointer), p(std::move(val)) {
     }
 
   any(const any& val) : type(val.type) {
     switch (type) {
-      case Type::Integer:         i = val.i;                       break;
-      case Type::Double:          d = val.d;                       break;
-      case Type::Character:       c = val.c;                       break;
-      case Type::Boolean:         b = val.b;                       break;
-      case Type::String:          new (&s) string        (val.s);  break;
-      case Type::Map:             new (&m) shared_map    (val.m);  break;
-      case Type::Vector:          new (&v) shared_vector (val.v);  break;
-      case Type::Function:        new (&f) fn            (val.f);  break;
-      case Type::EffFunction:     new (&e) eff_fn        (val.e);  break;
-      case Type::Thunk:           new (&t) thunk         (val.t);  break;
-      case Type::Pointer:         new (&p) shared_ptr    (val.p);  break;
+      case Type::Integer:         i = val.i;                         break;
+      case Type::Double:          d = val.d;                         break;
+      case Type::Character:       c = val.c;                         break;
+      case Type::Boolean:         b = val.b;                         break;
+      case Type::String:          new (&s) string          (val.s);  break;
+      case Type::Map:             new (&m) shared_map      (val.m);  break;
+      case Type::Vector:          new (&v) shared_vector   (val.v);  break;
+      case Type::Function:        new (&f) fn              (val.f);  break;
+      case Type::EffFunction:     new (&e) eff_fn          (val.e);  break;
+      case Type::Thunk:           new (&t) thunk           (val.t);  break;
+      case Type::Pointer:         new (&p) shared_void_ptr (val.p);  break;
 
       default: throw std::runtime_error("unsupported type in copy ctor");
     }
@@ -207,17 +207,17 @@ class any {
   auto swap(any&& val) const {
     type = val.type;
     switch (type) {
-      case Type::Integer:         i = val.i;                                  break;
-      case Type::Double:          d = val.d;                                  break;
-      case Type::Character:       c = val.c;                                  break;
-      case Type::Boolean:         b = val.b;                                  break;
-      case Type::String:          new (&s) string        (std::move(val.s));  break;
-      case Type::Map:             new (&m) shared_map    (std::move(val.m));  break;
-      case Type::Vector:          new (&v) shared_vector (std::move(val.v));  break;
-      case Type::Function:        new (&f) fn            (std::move(val.f));  break;
-      case Type::EffFunction:     new (&e) eff_fn        (std::move(val.e));  break;
-      case Type::Thunk:           new (&t) thunk         (std::move(val.t));  break;
-      case Type::Pointer:         new (&p) shared_ptr    (std::move(val.p));  break;
+      case Type::Integer:         i = val.i;                                    break;
+      case Type::Double:          d = val.d;                                    break;
+      case Type::Character:       c = val.c;                                    break;
+      case Type::Boolean:         b = val.b;                                    break;
+      case Type::String:          new (&s) string          (std::move(val.s));  break;
+      case Type::Map:             new (&m) shared_map      (std::move(val.m));  break;
+      case Type::Vector:          new (&v) shared_vector   (std::move(val.v));  break;
+      case Type::Function:        new (&f) fn              (std::move(val.f));  break;
+      case Type::EffFunction:     new (&e) eff_fn          (std::move(val.e));  break;
+      case Type::Thunk:           new (&t) thunk           (std::move(val.t));  break;
+      case Type::Pointer:         new (&p) shared_void_ptr (std::move(val.p));  break;
 
       default: throw std::runtime_error("unsupported type in move ctor");
     }
@@ -241,25 +241,22 @@ class any {
   ~any() {
     // std::cout << "destroy" << std::endl;
     switch (type) {
-      case Type::Integer:         ;                    break;
-      case Type::Double:          ;                    break;
-      case Type::Character:       ;                    break;
-      case Type::Boolean:         ;                    break;
-      case Type::String:          s.~string();         break;
-      case Type::Map:             m.~shared_map();     break;
-      case Type::Vector:          v.~shared_vector();  break;
-      case Type::Function:        f.~fn();             break;
-      case Type::EffFunction:     e.~eff_fn();         break;
-      case Type::Thunk:           t.~thunk();          break;
-      case Type::Pointer:         p.~shared_ptr();     break;
+      case Type::Integer:         ;                     break;
+      case Type::Double:          ;                     break;
+      case Type::Character:       ;                     break;
+      case Type::Boolean:         ;                     break;
+      case Type::String:          s.~string();          break;
+      case Type::Map:             m.~shared_map();      break;
+      case Type::Vector:          v.~shared_vector();   break;
+      case Type::Function:        f.~fn();              break;
+      case Type::EffFunction:     e.~eff_fn();          break;
+      case Type::Thunk:           t.~thunk();           break;
+      case Type::Pointer:         p.~shared_void_ptr(); break;
 
       default: throw std::runtime_error("unsupported type in destructor");
     }
   };
 
-  // Note: thunks are always stored in a local static variable, so
-  // the appropriate warning is suppressed here.
-  //
   #define RETURN_VALUE(TYPE, VAL, FN) \
     if (type == TYPE) { \
       return FN(VAL); \
@@ -307,7 +304,7 @@ class any {
 
   template <typename T>
   constexpr auto cast() const ->
-      typename std::enable_if<std::is_assignable<shared_ptr,T>::value, typename T::element_type*>::type {
+      typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value, typename T::element_type*>::type {
     RETURN_VALUE(Type::Pointer, p, static_cast_shared<typename T::element_type>)
   }
 
