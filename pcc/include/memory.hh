@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
-// Module      :  memory.hh
+// Module      :  any.hh
 // Copyright   :  (c) Andy Arvanitis 2015
 // License     :  MIT
 //
@@ -8,12 +8,12 @@
 // Stability   :  experimental
 // Portability :
 //
-// Support for reference-count-based memory management
+// A variant data class designed to provide some features of dynamic typing.
 //
 ///////////////////////////////////////////////////////////////////////////////
 //
-#ifndef PS_memory_HH
-#define PS_memory_HH
+#ifndef PS_ANY_HH
+#define PS_ANY_HH
 
 #include <memory>
 #include <functional>
@@ -25,10 +25,6 @@
 #include <iostream>
 
 namespace PureScript {
-
-//-----------------------------------------------------------------------------
-// For compile-time hashing of map key names
-//-----------------------------------------------------------------------------
 
 class any {
 
@@ -59,6 +55,8 @@ class any {
     constexpr map_key_t(const uint32_t hash) : hash(hash) {}
   };
 
+  // For compile-time hashing of map key names
+  //
   static constexpr auto djb2(const char s[], const uint32_t hash = 5381) -> uint32_t {
     return !s[0] ? hash : djb2(s + 1, 33 * hash ^ s[0]);
   }
@@ -510,10 +508,12 @@ class any {
   #undef RETURN_VALUE
 };
 
+// Compile-time string key literals
+//
 constexpr auto operator "" _key(const char s[], size_t) -> const any::map_key_t {
   return any::map_key_t(any::djb2(s));
 }
 
 } // namespace PureScript
 
-#endif // PS_memory_HH
+#endif // PS_ANY_HH
