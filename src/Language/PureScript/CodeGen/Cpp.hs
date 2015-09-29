@@ -313,9 +313,29 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Let (_, _, ty, _) ds val) = do
     ds' <- concat <$> mapM bindToCpp ds
     ret <- valueToCpp val
-    let rs = convertRecursiveFns ds'
+    let rs = if hasRecursion ds'
+               then convertRecursiveFns ds'
+               else ds'
     let cpps = convertNestedLambdas <$> rs
     return $ CppApp (CppLambda [] [] Nothing (CppBlock (cpps ++ [CppReturn ret]))) []
+    where
+    hasRecursion :: [Cpp] -> Bool
+    hasRecursion cpps' = any (everythingOnCpp (||) hasRecursiveRef) cpps'
+      where
+      fnames :: [String]
+      fnames  = concatMap (everythingOnCpp (++) fname) cpps'
+
+      fname :: Cpp -> [String]
+      fname (CppFunction name _ _ _ _) = [name]
+      fname _ = []
+
+      hasRecursiveRef :: Cpp -> Bool
+      hasRecursiveRef (CppFunction _ _ _ _ body) = everythingOnCpp (||) ref body
+      hasRecursiveRef _ = False
+
+      ref :: Cpp -> Bool
+      ref (CppVar name) | name `elem` fnames = True
+      ref _ = False
 
   -- |
   -- Generate code in the simplified C++14 intermediate representation for a reference to a
