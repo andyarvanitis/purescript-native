@@ -259,11 +259,11 @@ data Cpp
   -- |
   -- Break statement
   --
-  | CppBreak String
+  | CppBreak
   -- |
   -- Continue statement
   --
-  | CppContinue String
+  | CppContinue
   -- |
   -- A sequence of declarations or expressions
   --

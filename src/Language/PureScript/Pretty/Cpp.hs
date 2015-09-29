@@ -87,6 +87,7 @@ literals = mkPattern' match
           cpps <- prettyPrintCpp' ret
           return $ ' ' : cpps
     ]
+  match (CppBlock [CppBlock sts]) = match $ CppBlock sts
   match (CppBlock sts) = fmap concat $ sequence
     [ return "{\n"
     , withIndent $ prettyStatements sts
@@ -224,8 +225,8 @@ literals = mkPattern' match
     , prettyPrintCpp' value
     , return ";"
     ]
-  match (CppBreak lbl) = return $ "goto " ++ lbl ++ ";"
-  match (CppContinue lbl) = return $ "goto " ++ lbl ++ ";"
+  match CppBreak = return "break;"
+  match CppContinue = return "continue;"
   match (CppLabel lbl cpp) = fmap concat $ sequence
     [ return $ lbl ++ ": "
     , prettyPrintCpp' cpp
@@ -343,12 +344,6 @@ prettyStatements sts = do
   cpps <- forM (filter (not . isNoOp) sts) prettyPrintCpp'
   indentString <- currentIndent
   return $ intercalate "\n" $ map (indentString ++) cpps
-  where
-  isNoOp :: Cpp -> Bool
-  isNoOp CppNoOp = True
-  isNoOp (CppSequence []) = True
-  isNoOp (CppComment [] CppNoOp) = True
-  isNoOp z = False
 
 -- |
 -- Generate a pretty-printed string representing a C++11 expression
@@ -438,3 +433,9 @@ angles s = '<' : s ++ ">"
 
 linebreak :: [Cpp]
 linebreak = [CppRaw ""]
+
+isNoOp :: Cpp -> Bool
+isNoOp CppNoOp = True
+isNoOp (CppSequence []) = True
+isNoOp (CppComment [] CppNoOp) = True
+isNoOp _ = False

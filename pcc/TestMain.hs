@@ -137,5 +137,4 @@ skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
   [ "ExplicitImportReExport.purs" -- OK, test has no main (would pass otherwise)
-  , "TCOCase.purs"                -- stack overflow if TCO off -- re-test after TCO back
   ]

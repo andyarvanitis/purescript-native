@@ -42,6 +42,7 @@ import Language.PureScript.CodeGen.Cpp.AST as AST
 import Language.PureScript.CodeGen.Cpp.Common as Common
 import Language.PureScript.CodeGen.Cpp.File
 import Language.PureScript.CodeGen.Cpp.Optimizer
+import Language.PureScript.CodeGen.Cpp.Optimizer.TCO
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CoreFn
 import Language.PureScript.Names
@@ -313,9 +314,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Let (_, _, ty, _) ds val) = do
     ds' <- concat <$> mapM bindToCpp ds
     ret <- valueToCpp val
-    let rs = if hasRecursion ds'
-               then convertRecursiveFns ds'
-               else ds'
+    let ds'' = tco defaultOptions <$> ds'
+    let rs = if hasRecursion ds''
+               then convertRecursiveFns ds''
+               else ds''
     let cpps = convertNestedLambdas <$> rs
     return $ CppApp (CppLambda [] [] Nothing (CppBlock (cpps ++ [CppReturn ret]))) []
     where

@@ -65,8 +65,8 @@ optimize' :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => C
 optimize' cpp = do
   opts <- ask
   untilFixedPoint (inlineFnComposition . applyAll
-    [ {- tco opts -}
-      removeCodeAfterReturnStatements
+    [ tco opts
+    , removeCodeAfterReturnStatements
     , removeUnusedArg
     , removeUndefinedApp
     , unThunk
