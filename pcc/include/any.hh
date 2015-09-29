@@ -334,17 +334,17 @@ class any {
     }
   }
 
-  // operator long() const {
-  //   return i;
-  // }
-  //
-  // operator double() const {
-  //   return d;
-  // }
-  //
-  // operator bool() const {
-  //   return b;
-  // }
+  explicit operator long() const {
+    return i;
+  }
+
+  explicit operator double() const {
+    return d;
+  }
+
+  explicit  operator bool() const {
+    return b;
+  }
 
   operator const string&() const {
     RETURN_VALUE(Type::String, s,)
@@ -373,6 +373,8 @@ class any {
   inline auto operator[](const any& rhs) const -> const any& {
     RETURN_VALUE(Type::Vector, v->at(rhs.cast<long>()),)
   }
+
+  #undef RETURN_VALUE
 
   inline static auto extract_value(const any& a) -> const any& {
     if (a.type != Type::Thunk) {
@@ -427,6 +429,20 @@ class any {
     }
   }
 
+  inline auto operator<=(const any& rhs_) const -> bool {
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer:   return lhs.i <= rhs.i;
+      case Type::Double:    return lhs.d <= rhs.d;
+      case Type::Character: return lhs.c <= rhs.c;
+      case Type::Boolean:   return lhs.b <= rhs.b;
+      case Type::String:    return lhs.s <= rhs.s;
+      default: throw std::runtime_error("unsupported type for '<' operator");
+    }
+  }
+
   inline auto operator>(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
     auto& rhs = extract_value(rhs_);
@@ -437,6 +453,20 @@ class any {
       case Type::Character: return lhs.c > rhs.c;
       case Type::Boolean:   return lhs.b > rhs.b;
       case Type::String:    return lhs.s > rhs.s;
+      default: throw std::runtime_error("unsupported type for '>' operator");
+    }
+  }
+
+  inline auto operator>=(const any& rhs_) const -> bool {
+    auto& lhs = extract_value(*this);
+    auto& rhs = extract_value(rhs_);
+    assert(lhs.type == rhs.type);
+    switch (lhs.type) {
+      case Type::Integer:   return lhs.i >= rhs.i;
+      case Type::Double:    return lhs.d >= rhs.d;
+      case Type::Character: return lhs.c >= rhs.c;
+      case Type::Boolean:   return lhs.b >= rhs.b;
+      case Type::String:    return lhs.s >= rhs.s;
       default: throw std::runtime_error("unsupported type for '>' operator");
     }
   }
@@ -507,8 +537,42 @@ class any {
     }
   }
 
-  #undef RETURN_VALUE
+  friend auto operator+(const long, const any&) -> any;
+  friend auto operator-(const long, const any&) -> any;
+  friend auto operator*(const long, const any&) -> any;
+  friend auto operator/(const long, const any&) -> any;
+  friend auto operator%(const long, const any&) -> any;
+
+  friend auto operator+(const double, const any&) -> any;
+  friend auto operator-(const double, const any&) -> any;
+  friend auto operator*(const double, const any&) -> any;
+  friend auto operator/(const double, const any&) -> any;
+
+  friend auto operator+(const char* const, const any&) -> any;
+
 };
+
+#define DEFINE_OPERATOR(K, T, OP, V) \
+inline auto operator OP(const T lhs, const any& rhs_) -> any { \
+  auto& rhs = any::extract_value(rhs_); \
+  assert(rhs.type == any::Type::K); \
+  return lhs OP rhs.V; \
+}
+
+DEFINE_OPERATOR(Integer, long, +, i)
+DEFINE_OPERATOR(Integer, long, -, i)
+DEFINE_OPERATOR(Integer, long, *, i)
+DEFINE_OPERATOR(Integer, long, /, i)
+DEFINE_OPERATOR(Integer, long, %, i)
+
+DEFINE_OPERATOR(Double, double, +, d)
+DEFINE_OPERATOR(Double, double, -, d)
+DEFINE_OPERATOR(Double, double, *, d)
+DEFINE_OPERATOR(Double, double, /, d)
+
+DEFINE_OPERATOR(String, char* const, +, s)
+
+#undef DEFINE_OPERATOR
 
 // Compile-time string key literals
 //

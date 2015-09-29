@@ -103,10 +103,10 @@ inlineValues = everywhereOnCpp convert
                             | isDict boundedBoolean dict && isFn fnBottom fn = CppBooleanLiteral False
                             | isDict boundedBoolean dict && isFn fnTop fn = CppBooleanLiteral True
   convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y])
-    | isDict semiringInt dict && isFn fnAdd fn = CppBinary BitwiseOr (CppBinary Add x y) (CppNumericLiteral (Left 0))
-    | isDict semiringInt dict && isFn fnMultiply fn = CppBinary BitwiseOr (CppBinary Multiply x y) (CppNumericLiteral (Left 0))
-    | isDict moduloSemiringInt dict && isFn fnDivide fn = CppBinary BitwiseOr (CppBinary Divide x y) (CppNumericLiteral (Left 0))
-    | isDict ringInt dict && isFn fnSubtract fn = CppBinary BitwiseOr (CppBinary Subtract x y) (CppNumericLiteral (Left 0))
+    | isDict semiringInt dict && isFn fnAdd fn = CppBinary Add x y
+    | isDict semiringInt dict && isFn fnMultiply fn = CppBinary Multiply x y
+    | isDict moduloSemiringInt dict && isFn fnDivide fn = CppBinary Divide x y
+    | isDict ringInt dict && isFn fnSubtract fn = CppBinary Subtract x y
   convert other = other
   fnZero = (C.prelude, C.zero)
   fnOne = (C.prelude, C.one)
@@ -181,6 +181,8 @@ inlineCommonOperators = applyAll $
   binary dict opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
+    convert (CppApp (CppApp (CppApp fn [dict']) [CppStringLiteral x]) [CppStringLiteral y])
+      | isDict dict dict' && isPreludeFn opString fn = CppStringLiteral (x ++ y)
     convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isDict dict dict' && isPreludeFn opString fn = CppBinary op x y
     convert other = other
   binary' :: String -> String -> BinaryOp -> Cpp -> Cpp
@@ -263,7 +265,7 @@ isDict (moduleName, dictName) (CppAccessor (CppVar x) (CppVar y)) = x == dictNam
 isDict _ _ = False
 
 isFn :: (String, String) -> Cpp -> Bool
-isFn (moduleName, fnName) (CppAccessor (CppVar x) (CppVar y)) = x == fnName && y == moduleName
+isFn (moduleName, fnName) (CppAccessor (CppVar x) (CppVar y)) = x == (identToCpp (Ident fnName)) && y == moduleName
 isFn (moduleName, fnName) (CppIndexer (CppStringLiteral x) (CppVar y)) = x == fnName && y == moduleName
 isFn _ _ = False
 

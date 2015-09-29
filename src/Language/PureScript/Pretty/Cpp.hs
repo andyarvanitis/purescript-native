@@ -50,6 +50,7 @@ literals = mkPattern' match
   match :: Cpp -> StateT PrinterState Maybe String
   match CppNoOp = return []
   match CppEndOfHeader = return []
+  match (CppNumericLiteral (Left n)) = return $ show n ++ "L"
   match (CppNumericLiteral n) = return $ either show show n
   match (CppStringLiteral s) = return $ string s
   match (CppCharLiteral c) = return $ show c

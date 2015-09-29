@@ -387,7 +387,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       guardsToCpp (Left gs) = forM gs $ \(cond, val) -> do
         cond' <- valueToCpp cond
         done  <- valueToCpp val
-        return $ CppIfElse (CppCast boolType cond') (asReturnBlock done) Nothing
+        return $ CppIfElse cond' (asReturnBlock done) Nothing
       guardsToCpp (Right v) = return . CppReturn <$> valueToCpp v
 
   -- |
@@ -441,11 +441,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   literalToBinderCpp :: String -> [Cpp] -> Literal (Binder Ann) -> m [Cpp]
   -------------------------------------------------------------------------------------------------
   literalToBinderCpp varName done (NumericLiteral num) =
-    return [CppIfElse (CppBinary Equal var' (CppNumericLiteral num)) (CppBlock done) Nothing]
-    where
-    var' = case num of
-             Left  int    -> CppCast intType $ CppVar varName
-             Right double -> CppCast doubleType $ CppVar varName
+    return [CppIfElse (CppBinary Equal (CppVar varName) (CppNumericLiteral num)) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (CharLiteral c) =
     return [CppIfElse (CppBinary Equal (CppCast charType $ CppVar varName)
@@ -460,10 +456,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                       Nothing]
 
   literalToBinderCpp varName done (BooleanLiteral True) =
-    return [CppIfElse (CppCast boolType $ CppVar varName) (CppBlock done) Nothing]
+    return [CppIfElse (CppVar varName) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (BooleanLiteral False) =
-    return [CppIfElse (CppUnary CppNot (CppCast boolType $ CppVar varName)) (CppBlock done) Nothing]
+    return [CppIfElse (CppUnary CppNot (CppVar varName)) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (ObjectLiteral bs) = go done bs
     where
