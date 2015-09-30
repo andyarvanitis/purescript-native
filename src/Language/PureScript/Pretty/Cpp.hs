@@ -62,7 +62,6 @@ literals = mkPattern' match
     , fmap (intercalate ", ") $ forM xs prettyPrintCpp'
     , return " }"
     ]
-  match (CppObjectLiteral []) = return "nullptr"
   match (CppObjectLiteral ps) = fmap concat $ sequence
     [ return $ runType mapType ++ "{\n"
     , withIndent $ do
