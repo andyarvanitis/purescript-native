@@ -24,7 +24,6 @@ module Make
   , buildMakeActions
   ) where
 
-import Control.Applicative
 import Control.Monad
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.Trans.Except
@@ -35,7 +34,6 @@ import Data.FileEmbed (embedFile)
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 import Data.Time.Clock
-import Data.Traversable (traverse)
 import Data.Version (showVersion)
 import qualified Data.Map as M
 import qualified Data.ByteString.UTF8 as BU

@@ -18,9 +18,6 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo (
   magicDo
 ) where
 
-import Data.List (nub)
-import Data.Maybe (fromJust, isJust)
-
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.Types
@@ -110,7 +107,6 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   applyReturns (CppReturn ret) = CppReturn (CppApp ret [])
   applyReturns (CppBlock cpps) = CppBlock (map applyReturns cpps)
   applyReturns (CppWhile cond cpp) = CppWhile cond (applyReturns cpp)
-  applyReturns (CppFor v lo hi cpp) = CppFor v lo hi (applyReturns cpp)
   applyReturns (CppIfElse cond t f) = CppIfElse cond (applyReturns t) (applyReturns `fmap` f)
   applyReturns other = other
 

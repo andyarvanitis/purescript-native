@@ -20,7 +20,6 @@ module Language.PureScript.Pretty.Cpp (
     dotsTo,
     linebreak,
     prettyPrintCpp,
-    stripScope
 ) where
 
 import Data.Char
@@ -192,14 +191,6 @@ literals = mkPattern' match
     , return ") "
     , prettyPrintCpp' sts
     ]
-  match (CppFor ident start end sts) = fmap concat $ sequence
-    [ return $ "for (auto " ++ ident ++ " = "
-    , prettyPrintCpp' start
-    , return $ "; " ++ ident ++ " < "
-    , prettyPrintCpp' end
-    , return $ "; " ++ ident ++ "++) "
-    , prettyPrintCpp' sts
-    ]
   match (CppIfElse cond thens elses) = fmap concat $ sequence
     [ return "if ("
     , prettyPrintCpp' cond
@@ -221,12 +212,7 @@ literals = mkPattern' match
     [ return "throw "
     , prettyPrintCpp' value
     ]
-  match CppBreak = return "break;"
   match CppContinue = return "continue;"
-  match (CppLabel lbl cpp) = fmap concat $ sequence
-    [ return $ lbl ++ ": "
-    , prettyPrintCpp' cpp
-    ]
   match (CppComment [] cpp) = match cpp
   match (CppComment com cpp) = fmap concat $ sequence $
     [ return "\n"
@@ -272,12 +258,6 @@ string s = '"' : concatMap encodeChar s ++ "\""
   encodeChar c | fromEnum c > 0xFFF = "\\u" ++ showHex (fromEnum c) ""
   encodeChar c | fromEnum c > 0xFF = "\\u0" ++ showHex (fromEnum c) ""
   encodeChar c = [c]
-
-conditional :: Pattern PrinterState Cpp ((Cpp, Cpp), Cpp)
-conditional = mkPattern match
-  where
-  match (CppConditional cond th el) = Just ((th, el), cond)
-  match _ = Nothing
 
 accessor :: Pattern PrinterState Cpp (String, Cpp)
 accessor = mkPattern match
@@ -344,7 +324,7 @@ prettyStatements sts = do
   addsemi :: String -> String
   addsemi [] = []
   addsemi s | all isSpace s = []
-  addsemi s@('#':ss) = s
+  addsemi s@('#':_) = s
   addsemi s = s ++ ";"
 
 -- |
@@ -402,7 +382,6 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ binary    BitwiseOr            " | " ]
                   , [ binary    And                  " && " ]
                   , [ binary    Or                   " || " ]
-                  , [ Wrap conditional $ \(th, el) cond -> cond ++ " ? " ++ prettyPrintCpp1 th ++ " : " ++ prettyPrintCpp1 el ]
                     ]
 
 dotsTo :: Char -> String -> String
@@ -426,9 +405,6 @@ templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))
 isNestedNamespace :: Cpp -> Bool
 isNestedNamespace (CppNamespace (':':':':_) _) = True
 isNestedNamespace _ = False
-
-stripScope :: String -> String
-stripScope = reverse . takeWhile (/=':') . reverse
 
 angles :: String -> String
 angles s = '<' : s ++ ">"

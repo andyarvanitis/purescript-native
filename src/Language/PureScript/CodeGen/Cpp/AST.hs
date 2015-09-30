@@ -201,10 +201,6 @@ data Cpp
   --
   | CppVar String
   -- |
-  -- Conditional expression
-  --
-  | CppConditional Cpp Cpp Cpp
-  -- |
   -- A block of expressions in braces
   --
   | CppBlock [Cpp]
@@ -237,10 +233,6 @@ data Cpp
   --
   | CppWhile Cpp Cpp
   -- |
-  -- For loop
-  --
-  | CppFor String Cpp Cpp Cpp
-  -- |
   -- If-then-else statement
   --
   | CppIfElse Cpp Cpp (Maybe Cpp)
@@ -252,14 +244,6 @@ data Cpp
   -- Throw statement
   --
   | CppThrow Cpp
-  -- |
-  -- Labelled statement
-  --
-  | CppLabel String Cpp
-  -- |
-  -- Break statement
-  --
-  | CppBreak
   -- |
   -- Continue statement
   --
@@ -299,17 +283,14 @@ everywhereOnCpp f = go
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
   go (CppCast t cpp) = f (CppCast t (go cpp))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
-  go (CppConditional j1 j2 j3) = f (CppConditional (go j1) (go j2) (go j3))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
   go (CppVariableIntroduction name qs j) = f (CppVariableIntroduction name qs (fmap go j))
   go (CppAssignment j1 j2) = f (CppAssignment (go j1) (go j2))
   go (CppWhile j1 j2) = f (CppWhile (go j1) (go j2))
-  go (CppFor name j1 j2 j3) = f (CppFor name (go j1) (go j2) (go j3))
   go (CppIfElse j1 j2 j3) = f (CppIfElse (go j1) (go j2) (fmap go j3))
   go (CppReturn cpp) = f (CppReturn (go cpp))
   go (CppThrow cpp) = f (CppThrow (go cpp))
-  go (CppLabel name cpp) = f (CppLabel name (go cpp))
   go (CppComment com j) = f (CppComment com (go j))
   go other = f other
 
@@ -330,17 +311,14 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
   go (CppCast t cpp) = CppCast t <$> f' cpp
   go (CppApp j cpp) = CppApp <$> f' j <*> traverse f' cpp
-  go (CppConditional j1 j2 j3) = CppConditional <$> f' j1 <*> f' j2 <*> f' j3
   go (CppBlock cpp) = CppBlock <$> traverse f' cpp
   go (CppNamespace name cpp) = CppNamespace name <$> traverse f' cpp
   go (CppVariableIntroduction name qs j) = CppVariableIntroduction name qs <$> traverse f' j
   go (CppAssignment j1 j2) = CppAssignment <$> f' j1 <*> f' j2
   go (CppWhile j1 j2) = CppWhile <$> f' j1 <*> f' j2
-  go (CppFor name j1 j2 j3) = CppFor name <$> f' j1 <*> f' j2 <*> f' j3
   go (CppIfElse j1 j2 j3) = CppIfElse <$> f' j1 <*> f' j2 <*> traverse f' j3
   go (CppReturn j) = CppReturn <$> f' j
   go (CppThrow j) = CppThrow <$> f' j
-  go (CppLabel name j) = CppLabel name <$> f' j
   go (CppComment com j) = CppComment com <$> f' j
   go other = f other
 
@@ -357,17 +335,14 @@ everythingOnCpp (<>) f = go
   go j@(CppLambda _ _ _ j1) = f j <> go j1
   go j@(CppCast _ cpp) = f j <> go cpp
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
-  go j@(CppConditional j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppVariableIntroduction _ _ (Just j1)) = f j <> go j1
   go j@(CppAssignment j1 j2) = f j <> go j1 <> go j2
   go j@(CppWhile j1 j2) = f j <> go j1 <> go j2
-  go j@(CppFor _ j1 j2 j3) = f j <> go j1 <> go j2 <> go j3
   go j@(CppIfElse j1 j2 Nothing) = f j <> go j1 <> go j2
   go j@(CppIfElse j1 j2 (Just j3)) = f j <> go j1 <> go j2 <> go j3
   go j@(CppReturn j1) = f j <> go j1
   go j@(CppThrow j1) = f j <> go j1
-  go j@(CppLabel _ j1) = f j <> go j1
   go j@(CppComment _ j1) = f j <> go j1
   go other = f other

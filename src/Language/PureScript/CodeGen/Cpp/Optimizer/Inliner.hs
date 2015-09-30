@@ -26,8 +26,6 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner (
   evaluateIifes
 ) where
 
-import Data.Maybe (fromMaybe)
-
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative)
 #endif
@@ -209,41 +207,41 @@ inlineCommonOperators = applyAll $
     convert :: Cpp -> Cpp
     convert (CppApp fn [x]) | isFn (moduleName, fnName) fn = CppUnary op x
     convert other = other
-  mkFn :: Int -> Cpp -> Cpp
-  mkFn 0 = everywhereOnCpp convert
-    where
-    convert :: Cpp -> Cpp
-    convert (CppApp mkFnN [CppLambda caps [_] _ (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
-      CppLambda caps [] Nothing (CppBlock cpp)
-    convert other = other
-  mkFn n = everywhereOnCpp convert
-    where
-    convert :: Cpp -> Cpp
-    convert orig@(CppApp mkFnN [fn]) | isNFn C.mkFn n mkFnN =
-      case collectArgs n [] fn of
-        Just (args, cpp) -> CppLambda [CppCaptureAll] args Nothing (CppBlock cpp)
-        Nothing -> orig
-    convert other = other
-    collectArgs :: Int -> [(String, Maybe CppType)] -> Cpp -> Maybe ([(String, Maybe CppType)], [Cpp])
-    collectArgs 1 acc (CppLambda _ [oneArg] _ (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
-    collectArgs m acc (CppLambda _ [oneArg] _ (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
-    collectArgs _ _   _ = Nothing
-
-  isNFn :: String -> Int -> Cpp -> Bool
-  isNFn prefix n (CppVar name) = name == (prefix ++ show n)
-  isNFn prefix n (CppAccessor (CppVar name) (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
-  isNFn _ _ _ = False
-
-  runFn :: Int -> Cpp -> Cpp
-  runFn n = everywhereOnCpp convert
-    where
-    convert :: Cpp -> Cpp
-    convert cpp = fromMaybe cpp $ go n [] cpp
-
-    go :: Int -> [Cpp] -> Cpp -> Maybe Cpp
-    go 0 acc (CppApp runFnN [fn]) | isNFn C.runFn n runFnN && length acc == n = Just (CppApp fn acc)
-    go m acc (CppApp lhs [arg]) = go (m - 1) (arg : acc) lhs
-    go _ _   _ = Nothing
+  -- mkFn :: Int -> Cpp -> Cpp
+  -- mkFn 0 = everywhereOnCpp convert
+  --   where
+  --   convert :: Cpp -> Cpp
+  --   convert (CppApp mkFnN [CppLambda caps [_] _ (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
+  --     CppLambda caps [] Nothing (CppBlock cpp)
+  --   convert other = other
+  -- mkFn n = everywhereOnCpp convert
+  --   where
+  --   convert :: Cpp -> Cpp
+  --   convert orig@(CppApp mkFnN [fn]) | isNFn C.mkFn n mkFnN =
+  --     case collectArgs n [] fn of
+  --       Just (args, cpp) -> CppLambda [CppCaptureAll] args Nothing (CppBlock cpp)
+  --       Nothing -> orig
+  --   convert other = other
+  --   collectArgs :: Int -> [(String, Maybe CppType)] -> Cpp -> Maybe ([(String, Maybe CppType)], [Cpp])
+  --   collectArgs 1 acc (CppLambda _ [oneArg] _ (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
+  --   collectArgs m acc (CppLambda _ [oneArg] _ (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
+  --   collectArgs _ _   _ = Nothing
+  --
+  -- isNFn :: String -> Int -> Cpp -> Bool
+  -- isNFn prefix n (CppVar name) = name == (prefix ++ show n)
+  -- isNFn prefix n (CppAccessor (CppVar name) (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
+  -- isNFn _ _ _ = False
+  --
+  -- runFn :: Int -> Cpp -> Cpp
+  -- runFn n = everywhereOnCpp convert
+  --   where
+  --   convert :: Cpp -> Cpp
+  --   convert cpp = fromMaybe cpp $ go n [] cpp
+  --
+  --   go :: Int -> [Cpp] -> Cpp -> Maybe Cpp
+  --   go 0 acc (CppApp runFnN [fn]) | isNFn C.runFn n runFnN && length acc == n = Just (CppApp fn acc)
+  --   go m acc (CppApp lhs [arg]) = go (m - 1) (arg : acc) lhs
+  --   go _ _   _ = Nothing
 
 -- (f <<< g $ x) = f (g x)
 -- (f <<< g)     = \x -> f (g x)

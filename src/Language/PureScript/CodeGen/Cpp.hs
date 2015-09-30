@@ -26,15 +26,11 @@ module Language.PureScript.CodeGen.Cpp
   , P.prettyPrintCpp
   ) where
 
-import Data.Char
 import Data.List
-import Data.Maybe
 import Data.Function (on)
-import Data.Traversable (traverse)
 import qualified Data.Map as M
 
-import Control.Applicative
-import Control.Monad (forM, liftM2, replicateM, when)
+import Control.Monad (forM, replicateM)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.Supply.Class
 import Language.PureScript.AST.SourcePos
@@ -53,7 +49,6 @@ import Language.PureScript.Traversals (sndM)
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.Environment as E
 import qualified Language.PureScript.Pretty.Cpp as P
-import qualified Language.PureScript.TypeClassDictionaries as TCD
 import qualified Language.PureScript.Types as T
 
 -- import Debug.Trace
@@ -121,7 +116,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   declToCpp :: [CppValueQual] -> Ident -> Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
-  declToCpp _ ident (Abs ann@(_, _, _, Just IsTypeClassConstructor) _ _) =
+  declToCpp _ _ (Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
     return CppNoOp
 
   declToCpp _ ident (Abs _ arg@(Ident "dict")
@@ -144,7 +139,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                              block'
     return (CppComment com fn')
 
-  declToCpp _ ident (Constructor _ _ (ProperName ctor) fields) = return $
+  declToCpp _ ident (Constructor _ _ (ProperName _) fields) = return $
     CppFunction (identToCpp ident) (farg <$> f)
                                    (Just $ CppAny [])
                                    []
@@ -168,7 +163,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   toLambda :: [CppCaptureType] -> Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  toLambda cs (CppFunction name args rtyp qs body) =
+  toLambda cs (CppFunction name args _ qs body) =
     CppVariableIntroduction (name, Just $ CppAny [CppConst])
                             (filter (==CppStatic) qs)
                             (Just (CppLambda cs' args (Just $ CppAny []) body))
@@ -204,7 +199,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
     recursive :: Cpp -> [Cpp]
     recursive cpp'@(CppFunction _ _ _ qs _) | CppRecursive `elem` qs = [cpp']
-    recursive cpp' = []
+    recursive _ = []
 
     removeRec :: Cpp -> Cpp
     removeRec(CppFunction _ _ _ qs _) | CppRecursive `elem` qs = CppNoOp
@@ -264,7 +259,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Literal _ (BooleanLiteral b)) =
     return (CppBooleanLiteral b)
 
-  valueToCpp (Literal (_, _, ty, _) (ArrayLiteral xs)) =
+  valueToCpp (Literal _ (ArrayLiteral xs)) =
     CppArrayLiteral <$> mapM valueToCpp xs
 
   valueToCpp (Literal _ (ObjectLiteral ps)) =
@@ -288,7 +283,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp (ObjectUpdate _ _ _) = error $ "Bad Type in object update!"
 
-  valueToCpp (Abs (_, _, ty, _) arg body) = do
+  valueToCpp (Abs _ arg body) = do
     cpp <- valueToCpp body
     let cpp' = convertNestedLambdas cpp
     return $ CppLambda [] [(identToCpp arg, Just $ CppAny [CppConst, CppRef])] (Just $ CppAny []) (asReturnBlock cpp')
@@ -302,7 +297,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     case f of
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
-        let Just (params, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
+        let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return . CppObjectLiteral $ zip ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns)) args'
       _ -> -- TODO: verify this
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
@@ -311,7 +306,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     vals <- mapM valueToCpp values
     bindersToCpp maybeSpan ty binders vals
 
-  valueToCpp (Let (_, _, ty, _) ds val) = do
+  valueToCpp (Let _ ds val) = do
     ds' <- concat <$> mapM bindToCpp ds
     ret <- valueToCpp val
     let ds'' = tco defaultOptions <$> ds'
@@ -339,6 +334,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       ref (CppVar name) | name `elem` fnames = True
       ref _ = False
 
+  valueToCpp Constructor{} = return CppNoOp
+
   -- |
   -- Generate code in the simplified C++14 intermediate representation for a reference to a
   -- variable.
@@ -356,7 +353,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   bindersToCpp :: Maybe SourceSpan -> Maybe T.Type -> [CaseAlternative Ann] -> [Cpp] -> m Cpp
   -------------------------------------------------------------------------------------------------
-  bindersToCpp maybeSpan ty binders vals = do
+  bindersToCpp maybeSpan _ binders vals = do
     valNames <- replicateM (length vals) freshName
     let assignments = zipWith mkVarDecl valNames (map Just vals)
     cpps <- forM binders $ \(CaseAlternative bs result) -> do
@@ -402,7 +399,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   binderToCpp varName done (LiteralBinder _ l) =
     literalToBinderCpp varName done l
 
-  binderToCpp varName done (VarBinder (_, _, ty, _) ident) =
+  binderToCpp varName done (VarBinder _ ident) =
     return (CppVariableIntroduction (identToCpp ident, Just $ CppAny [CppConst]) [] (Just (CppVar varName)) : done)
 
   binderToCpp varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
@@ -433,7 +430,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   binderToCpp _ _ b@(ConstructorBinder{}) =
     error $ "Invalid ConstructorBinder in binderToCpp: " ++ show b
 
-  binderToCpp varName done (NamedBinder (_, _, ty, _) ident binder) = do
+  binderToCpp varName done (NamedBinder _ ident binder) = do
     cpp <- binderToCpp varName done binder
     return (CppVariableIntroduction (identToCpp ident, Just $ CppAny [CppConst]) [] (Just (CppVar varName)) : cpp)
 
@@ -517,14 +514,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       fns' <- (\(i,t) -> (runIdent i, t)) <$> fns
       = Just (fst <$> params, constraints, (sortBy (compare `on` normalizedName . fst) fns'))
   findClass _ = Nothing
-
-  -- |
-  -- Find a value (incl functions) in scope by name, retrieving its type
-  --
-  findValue :: ModuleName -> Ident -> Maybe T.Type
-  findValue mname ident
-    | Just (ty, _, _) <- M.lookup (mname, ident) (E.names env) = Just ty
-  findValue _ _ = Nothing
 
 -------------------------------------------------------------------------------------------------
 synonymsToCpp :: Monad m => E.Environment -> ModuleName -> m [Cpp]

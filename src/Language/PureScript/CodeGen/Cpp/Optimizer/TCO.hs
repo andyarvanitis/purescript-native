@@ -54,7 +54,7 @@ tco' = everywhereOnCpp convert
               CppVariableIntroduction (name, ty) qs (Just (replace (toLoop name allArgs body')))
         | otherwise -> cpp
 
-  convert fn@(CppFunction name args@(_:_) rty qs _) =
+  convert fn@(CppFunction name (_:_) _ _ _) =
     let
       (argss, body', replace) = collectAllFunctionArgs [] id fn
     in case () of
