@@ -225,8 +225,8 @@ class any {
     swap(std::move(val));
   }
 
-  auto operator=(const any& val) -> any& {
-    swap(any(val));
+  auto operator=(any val) -> any& {
+    swap(std::move(val));
     return *this;
   }
 
