@@ -169,6 +169,5 @@ nativeMain = CppFunction "main"
                          , CppApp (CppApp (CppAccessor (CppVar "main") (CppVar "Main"))
                                           [CppVar unthunkMarkerValue])
                                   []
-                         , CppRaw ";"
                          , CppReturn (CppNumericLiteral (Left 0))
                          ])

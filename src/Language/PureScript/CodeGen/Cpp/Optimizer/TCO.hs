@@ -110,19 +110,19 @@ tco' = everywhereOnCpp convert
   toLoop :: String -> [String] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
         map (\arg -> CppVariableIntroduction (arg, Just $ CppAny []) [] (Just (CppVar (copyVar arg)))) allArgs ++
-        [ CppWhile (CppBooleanLiteral True) loop ]
+        [ CppWhile (CppBooleanLiteral True) (CppBlock loop) ]
     where
-    loop :: Cpp
+    loop :: [Cpp]
     loop = case everywhereOnCpp loopify cpp of
-             CppReturn (CppApp (CppLambda _ [] _ (CppBlock cpps')) []) -> CppBlock $ nub cpps' -- elim dup var intros
-             CppBlock cpps' -> CppBlock $ nub cpps'
-             cpp' -> CppBlock [cpp']
+             CppReturn (CppApp (CppLambda _ [] _ (CppBlock cpps')) []) -> nub cpps' -- elim dup var intros
+             CppBlock cpps' -> nub cpps'
+             cpp' -> [cpp']
     loopify :: Cpp -> Cpp
     loopify (CppReturn ret) | isSelfCall ident ret =
       let
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
-        CppSequence $ zipWith (\val arg ->
+        CppBlock $ zipWith (\val arg ->
                     CppVariableIntroduction (tcoVar arg, Just $ CppAny []) [] (Just val)) allArgumentValues allArgs
                   ++ map (\arg ->
                     CppAssignment (CppVar arg) (CppVar (tcoVar arg))) allArgs

@@ -39,6 +39,7 @@ import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Comments
 import Language.PureScript.Pretty.Common
+import qualified Language.PureScript.Constants as C
 
 import Numeric
 
@@ -81,13 +82,12 @@ literals = mkPattern' match
     , return name
     , return $ parens (intercalate ", " $ argstr <$> args)
     , return (maybe "" ((" -> " ++) . runType) rty)
-    , if ret == CppNoOp
-        then return ";"
-        else do
+    , if ret /= CppNoOp
+        then do
           cpps <- prettyPrintCpp' ret
           return $ ' ' : cpps
+        else return ""
     ]
-  match (CppBlock [CppBlock sts]) = match $ CppBlock sts
   match (CppBlock sts) = fmap concat $ sequence
     [ return "{\n"
     , withIndent $ prettyStatements sts
@@ -135,12 +135,6 @@ literals = mkPattern' match
     isUseNamespace :: Cpp -> Bool
     isUseNamespace (CppUseNamespace{}) = True
     isUseNamespace _ = False
-
-  match (CppSequence []) = return []
-  match (CppSequence cpps) = fmap concat $ sequence
-    [ return "\n"
-    , prettyStatements cpps
-    ]
   match (CppInclude path name) =
     let fullpath
           | null path = last . words . dotsTo ' ' $ name
@@ -149,7 +143,7 @@ literals = mkPattern' match
     [ return $ "#include \"" ++ fullpath ++ ".hh\""
     ]
   match (CppUseNamespace name) = fmap concat $ sequence
-    [ return $ "using namespace " ++ (dotsTo '_' name) ++ ";"
+    [ return $ "using namespace " ++ (dotsTo '_' name)
     ]
   match (CppTypeAlias (newName, newTyps) typ spec) =
     let typ' = runType typ
@@ -158,8 +152,10 @@ literals = mkPattern' match
                           else ([return (templDecl newTyps), return "\n", currentIndent], typ')
     in fmap concat $ sequence $
     tmps ++
-    [ return $ "using " ++ newName ++ " = " ++ if null spec then name' else spec ++ angles name'
-    , return ";"
+    [ return $ "using "
+    , return newName
+    , return " = "
+    , return $ if null spec then name' else spec ++ angles name'
     ]
   match (CppCast typ val) = return $
     case val of
@@ -174,19 +170,21 @@ literals = mkPattern' match
 
   match (CppVar ident) = return ident
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
+  match (CppVariableIntroduction (ident, _) _ (Just value))
+    | ident == C.__unused = fmap concat $ sequence
+    [ prettyPrintCpp' value
+    ]
   match (CppVariableIntroduction (ident, typ) qs value) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
     , return (maybe "any" runType typ ++ " ")
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
-    , return ";"
     ]
   match (CppAssignment target value) = fmap concat $ sequence
     [ prettyPrintCpp' target
     , return " = "
     , prettyPrintCpp' value
-    , return ";"
     ]
   match (CppWhile cond sts) = fmap concat $ sequence
     [ return "while ("
@@ -218,12 +216,10 @@ literals = mkPattern' match
   match (CppReturn value) = fmap concat $ sequence
     [ return "return "
     , prettyPrintCpp' value
-    , return ";"
     ]
   match (CppThrow value) = fmap concat $ sequence
     [ return "throw "
     , prettyPrintCpp' value
-    , return ";"
     ]
   match CppBreak = return "break;"
   match CppContinue = return "continue;"
@@ -343,7 +339,13 @@ prettyStatements :: [Cpp] -> StateT PrinterState Maybe String
 prettyStatements sts = do
   cpps <- forM (filter (not . isNoOp) sts) prettyPrintCpp'
   indentString <- currentIndent
-  return $ intercalate "\n" $ map (indentString ++) cpps
+  return $ intercalate "\n" $ map (addsemi . (indentString ++)) cpps
+  where
+  addsemi :: String -> String
+  addsemi [] = []
+  addsemi s | all isSpace s = []
+  addsemi s@('#':ss) = s
+  addsemi s = s ++ ";"
 
 -- |
 -- Generate a pretty-printed string representing a C++11 expression
@@ -408,7 +410,7 @@ dotsTo chr' = map (\c -> if c == '.' then chr' else c)
 
 argstr :: (String, Maybe CppType) -> String
 argstr (name, Nothing) = argStr name CppAuto
-argstr ("__unused", Just typ) = argStr [] typ
+argstr (name, Just typ) | name == C.__unused = argStr [] typ
 argstr (name, Just typ) = argStr name typ
 
 argStr :: String -> CppType -> String
@@ -436,6 +438,5 @@ linebreak = [CppRaw ""]
 
 isNoOp :: Cpp -> Bool
 isNoOp CppNoOp = True
-isNoOp (CppSequence []) = True
 isNoOp (CppComment [] CppNoOp) = True
 isNoOp _ = False

@@ -265,10 +265,6 @@ data Cpp
   --
   | CppContinue
   -- |
-  -- A sequence of declarations or expressions
-  --
-  | CppSequence [Cpp]
-  -- |
   -- Empty statement/expression
   --
   | CppNoOp
@@ -284,13 +280,6 @@ data Cpp
   -- Commented C++11
   --
   | CppComment [Comment] Cpp deriving (Show, Eq, Data, Typeable)
-
---
--- Expand a Cpp sequence (non-recursively)
---
-expandSeq :: Cpp -> [Cpp]
-expandSeq (CppSequence cpps) = cpps
-expandSeq cpp = [cpp]
 
 --
 -- Traversals
@@ -321,7 +310,6 @@ everywhereOnCpp f = go
   go (CppReturn cpp) = f (CppReturn (go cpp))
   go (CppThrow cpp) = f (CppThrow (go cpp))
   go (CppLabel name cpp) = f (CppLabel name (go cpp))
-  go (CppSequence cpp) = f (CppSequence (map go cpp))
   go (CppComment com j) = f (CppComment com (go j))
   go other = f other
 
@@ -345,7 +333,6 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppConditional j1 j2 j3) = CppConditional <$> f' j1 <*> f' j2 <*> f' j3
   go (CppBlock cpp) = CppBlock <$> traverse f' cpp
   go (CppNamespace name cpp) = CppNamespace name <$> traverse f' cpp
-  go (CppSequence cpp) = CppSequence <$> traverse f' cpp
   go (CppVariableIntroduction name qs j) = CppVariableIntroduction name qs <$> traverse f' j
   go (CppAssignment j1 j2) = CppAssignment <$> f' j1 <*> f' j2
   go (CppWhile j1 j2) = CppWhile <$> f' j1 <*> f' j2
@@ -382,6 +369,5 @@ everythingOnCpp (<>) f = go
   go j@(CppReturn j1) = f j <> go j1
   go j@(CppThrow j1) = f j <> go j1
   go j@(CppLabel _ j1) = f j <> go j1
-  go j@(CppSequence cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppComment _ j1) = f j <> go j1
   go other = f other

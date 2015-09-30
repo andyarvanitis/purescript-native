@@ -48,8 +48,10 @@ import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.Options
 import qualified Language.PureScript.Constants as C
 
+import Language.PureScript.CodeGen.Cpp.Optimizer.Blocks
 import Language.PureScript.CodeGen.Cpp.Optimizer.Common
 import Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
+import Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo
 import Language.PureScript.CodeGen.Cpp.Optimizer.TCO
 import Language.PureScript.CodeGen.Cpp.Optimizer.Unused
 
@@ -65,7 +67,10 @@ optimize' :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => C
 optimize' cpp = do
   opts <- ask
   untilFixedPoint (inlineFnComposition . applyAll
-    [ tco opts
+    [ collapseNestedBlocks
+    , collapseNestedIfs
+    , tco opts
+    , magicDo opts
     , removeCodeAfterReturnStatements
     , removeUnusedArg
     , removeUndefinedApp

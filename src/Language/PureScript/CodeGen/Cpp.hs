@@ -70,7 +70,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   cppImports <- traverse (pure . runModuleName) . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
   let cppImports' = "PureScript" : cppImports
   cppDecls <- concat <$> mapM bindToCpp decls
-  optimized <- traverse optimize (concatMap expandSeq cppDecls)
+  optimized <- traverse optimize cppDecls
   -- datas <- datasToCpps env mn
   synonyms <- synonymsToCpp env mn
   let moduleHeader = fileBegin mn "HH"
