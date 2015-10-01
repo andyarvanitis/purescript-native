@@ -28,8 +28,6 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
-#include <stdexcept>
-#include <iostream>
 
 namespace PureScript {
 
@@ -206,7 +204,7 @@ class any {
       case Type::Thunk:           new (&t) thunk           (val.t);  break;
       case Type::Pointer:         new (&p) shared_void_ptr (val.p);  break;
 
-      default: throw std::runtime_error("unsupported type in copy ctor");
+      default: assert(not "supported type in copy ctor");
     }
   }
 
@@ -225,7 +223,7 @@ class any {
       case Type::Thunk:           new (&t) thunk           (std::move(val.t));  break;
       case Type::Pointer:         new (&p) shared_void_ptr (std::move(val.p));  break;
 
-      default: throw std::runtime_error("unsupported type in move ctor");
+      default: assert(not "supported type in move ctor");
     }
   }
 
@@ -254,7 +252,7 @@ class any {
       case Type::Thunk:           t.~thunk();           break;
       case Type::Pointer:         p.~shared_void_ptr(); break;
 
-      default: throw std::runtime_error("unsupported type in destructor");
+      default: assert(not "supported type in destructor");
     }
   };
 
@@ -401,8 +399,9 @@ class any {
       case Type::Boolean:   return lhs.b == rhs.b;
       case Type::String:    return lhs.s == rhs.s;
       case Type::Pointer:   return lhs.p == rhs.p;
-      default: throw std::runtime_error("unsupported type for '==' operator");
+      default: assert(not "supported type for '==' operator");
     }
+    return false;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   ==, i, bool)
@@ -422,8 +421,9 @@ class any {
       case Type::Boolean:   return lhs.b != rhs.b;
       case Type::String:    return lhs.s != rhs.s;
       case Type::Pointer:   return lhs.p != rhs.p;
-      default: throw std::runtime_error("unsupported type for '!=' operator");
+      default: assert(not "supported type for '!=' operator");
     }
+    return false;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   !=, i, bool)
@@ -442,8 +442,9 @@ class any {
       case Type::Character: return lhs.c < rhs.c;
       case Type::Boolean:   return lhs.b < rhs.b;
       case Type::String:    return lhs.s < rhs.s;
-      default: throw std::runtime_error("unsupported type for '<' operator");
+      default: assert(not "supported type for '<' operator");
     }
+    return false;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   <, i, bool)
@@ -462,8 +463,9 @@ class any {
       case Type::Character: return lhs.c <= rhs.c;
       case Type::Boolean:   return lhs.b <= rhs.b;
       case Type::String:    return lhs.s <= rhs.s;
-      default: throw std::runtime_error("unsupported type for '<' operator");
+      default: assert(not "supported type for '<' operator");
     }
+    return false;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   <=, i, bool)
@@ -482,8 +484,9 @@ class any {
       case Type::Character: return lhs.c > rhs.c;
       case Type::Boolean:   return lhs.b > rhs.b;
       case Type::String:    return lhs.s > rhs.s;
-      default: throw std::runtime_error("unsupported type for '>' operator");
+      default: assert(not "supported type for '>' operator");
     }
+    return false;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   >, i, bool)
@@ -502,8 +505,9 @@ class any {
       case Type::Character: return lhs.c >= rhs.c;
       case Type::Boolean:   return lhs.b >= rhs.b;
       case Type::String:    return lhs.s >= rhs.s;
-      default: throw std::runtime_error("unsupported type for '>' operator");
+      default: assert(not "supported type for '>' operator");
     }
+    return false;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   >=, i, bool)
@@ -521,8 +525,9 @@ class any {
       case Type::Double:    return lhs.d + rhs.d;
       case Type::Character: return lhs.c + rhs.c;
       case Type::String:    return lhs.s + rhs.s;
-      default: throw std::runtime_error("unsupported for '+' operator");
+      default: assert(not "supported type for '+' operator");
     }
+    return nullptr;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   +, i, long)
@@ -538,8 +543,9 @@ class any {
       case Type::Integer:   return lhs.i - rhs.i;
       case Type::Double:    return lhs.d - rhs.d;
       case Type::Character: return lhs.c - rhs.c;
-      default: throw std::runtime_error("unsupported type for '-' binary operator");
+      default: assert(not "supported type for '-' binary operator");
     }
+    return nullptr;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   -, i, long)
@@ -553,8 +559,9 @@ class any {
     switch (lhs.type) {
       case Type::Integer: return lhs.i * rhs.i;
       case Type::Double:  return lhs.d * rhs.d;
-      default: throw std::runtime_error("unsupported type for '*' operator");
+      default: assert(not "supported type for '*' operator");
     }
+    return nullptr;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   *, i, long)
@@ -567,8 +574,9 @@ class any {
     switch (lhs.type) {
       case Type::Integer: return lhs.i / rhs.i;
       case Type::Double:  return lhs.d / rhs.d;
-      default: throw std::runtime_error("unsupported type for '/' operator");
+      default: assert(not "supported type for '/' operator");
     }
+    return nullptr;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long,   /, i, long)
@@ -580,8 +588,9 @@ class any {
     assert(lhs.type == rhs.type);
     switch (lhs.type) {
       case Type::Integer: return lhs.i % rhs.i;
-      default: throw std::runtime_error("unsupported type for '%' operator");
+      default: assert(not "supported type for '%' operator");
     }
+    return nullptr;
   }
 
   DEFINE_OPERATOR_RHS(Integer,   long, %, i, long)
@@ -591,8 +600,9 @@ class any {
     switch (lhs.type) {
       case Type::Integer: return (- lhs.i);
       case Type::Double:  return (- lhs.d);
-      default: throw std::runtime_error("unsupported type for unary '-' operator");
+      default: assert(not "supported type for unary '-' operator");
     }
+    return nullptr;
   }
 
   friend auto operator==(const long, const any&) -> bool;
