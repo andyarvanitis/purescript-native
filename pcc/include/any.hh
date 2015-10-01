@@ -15,12 +15,19 @@
 #ifndef PS_ANY_HH
 #define PS_ANY_HH
 
+#if defined(DEBUG)
+  #include <cassert>
+#else
+  #define NDEBUG
+  #undef assert
+  #define assert(x)
+#endif
+
 #include <memory>
 #include <functional>
 #include <unordered_map>
 #include <string>
 #include <vector>
-#include <cassert>
 #include <stdexcept>
 #include <iostream>
 
@@ -157,7 +164,7 @@ class any {
   any(shared_vector&& val) : type(Type::Vector), v(std::move(val)) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
+  constexpr any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
     : type(Type::Function), f(val) {}
 
   // template <typename T>
@@ -165,11 +172,11 @@ class any {
   //   : type(Type::Function), f(std::move(val)) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
+  constexpr any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
     : type(Type::EffFunction), e(val) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
+  constexpr any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
     : type(Type::Thunk), t(val) {}
 
   template <typename T>
@@ -177,6 +184,7 @@ class any {
     : type(Type::Pointer), p(val) {
     }
 
+  constexpr
   any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
 
   template <typename T>
@@ -337,7 +345,7 @@ class any {
     return d;
   }
 
-  explicit  operator bool() const {
+  explicit operator bool() const {
     return b;
   }
 
@@ -371,13 +379,15 @@ class any {
 
   #undef RETURN_VALUE
 
-  inline static auto extract_value(const any& a) -> const any& {
-    if (a.type != Type::Thunk) {
-      return a;
-    } else {
-      assert(a.type == Type::Thunk);
-      return a.t(unthunk);
-    }
+  static constexpr auto extract_value(const any& a) -> const any& {
+    return a.type != Type::Thunk ? a : a.t(unthunk);
+  }
+
+  #define DEFINE_OPERATOR_RHS(K, T, OP, V, R) \
+  inline auto operator OP(const T rhs) const -> R { \
+    auto& lhs = extract_value(*this); \
+    assert(lhs.type == Type::K); \
+    return lhs.V OP rhs; \
   }
 
   inline auto operator==(const any& rhs_) const -> bool {
@@ -395,6 +405,12 @@ class any {
     }
   }
 
+  DEFINE_OPERATOR_RHS(Integer,   long,   ==, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double, ==, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,   ==, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,   ==, b, bool)
+  DEFINE_OPERATOR_RHS(String, char* const, ==, s, bool)
+
   inline auto operator!=(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
     auto& rhs = extract_value(rhs_);
@@ -410,6 +426,12 @@ class any {
     }
   }
 
+  DEFINE_OPERATOR_RHS(Integer,   long,   !=, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double, !=, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,   !=, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,   !=, b, bool)
+  DEFINE_OPERATOR_RHS(String, char* const, !=, s, bool)
+
   inline auto operator<(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
     auto& rhs = extract_value(rhs_);
@@ -423,6 +445,12 @@ class any {
       default: throw std::runtime_error("unsupported type for '<' operator");
     }
   }
+
+  DEFINE_OPERATOR_RHS(Integer,   long,   <, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double, <, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,   <, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,   <, b, bool)
+  DEFINE_OPERATOR_RHS(String, char* const, <, s, bool)
 
   inline auto operator<=(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -438,6 +466,12 @@ class any {
     }
   }
 
+  DEFINE_OPERATOR_RHS(Integer,   long,   <=, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double, <=, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,   <=, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,   <=, b, bool)
+  DEFINE_OPERATOR_RHS(String, char* const, <=, s, bool)
+
   inline auto operator>(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
     auto& rhs = extract_value(rhs_);
@@ -451,6 +485,12 @@ class any {
       default: throw std::runtime_error("unsupported type for '>' operator");
     }
   }
+
+  DEFINE_OPERATOR_RHS(Integer,   long,   >, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double, >, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,   >, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,   >, b, bool)
+  DEFINE_OPERATOR_RHS(String, char* const, >, s, bool)
 
   inline auto operator>=(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -466,6 +506,12 @@ class any {
     }
   }
 
+  DEFINE_OPERATOR_RHS(Integer,   long,   >=, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double, >=, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,   >=, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,   >=, b, bool)
+  DEFINE_OPERATOR_RHS(String, char* const, >=, s, bool)
+
   inline auto operator+(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
     auto& rhs = extract_value(rhs_);
@@ -479,6 +525,11 @@ class any {
     }
   }
 
+  DEFINE_OPERATOR_RHS(Integer,   long,   +, i, long)
+  DEFINE_OPERATOR_RHS(Double,    double, +, d, double)
+  DEFINE_OPERATOR_RHS(Character, char,   +, c, char)
+  DEFINE_OPERATOR_RHS(String, char* const, +, s, string)
+
   inline auto operator-(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
     auto& rhs = extract_value(rhs_);
@@ -491,6 +542,10 @@ class any {
     }
   }
 
+  DEFINE_OPERATOR_RHS(Integer,   long,   -, i, long)
+  DEFINE_OPERATOR_RHS(Double,    double, -, d, double)
+  DEFINE_OPERATOR_RHS(Character, char,   -, c, char)
+
   inline auto operator*(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
     auto& rhs = extract_value(rhs_);
@@ -501,6 +556,9 @@ class any {
       default: throw std::runtime_error("unsupported type for '*' operator");
     }
   }
+
+  DEFINE_OPERATOR_RHS(Integer,   long,   *, i, long)
+  DEFINE_OPERATOR_RHS(Double,    double, *, d, double)
 
   inline auto operator/(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
@@ -513,6 +571,9 @@ class any {
     }
   }
 
+  DEFINE_OPERATOR_RHS(Integer,   long,   /, i, long)
+  DEFINE_OPERATOR_RHS(Double,    double, /, d, double)
+
   inline auto operator%(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
     auto& rhs = extract_value(rhs_);
@@ -523,6 +584,8 @@ class any {
     }
   }
 
+  DEFINE_OPERATOR_RHS(Integer,   long, %, i, long)
+
   inline auto operator-() const -> any {
     auto& lhs = extract_value(*this);
     switch (lhs.type) {
@@ -532,42 +595,119 @@ class any {
     }
   }
 
-  friend auto operator+(const long, const any&) -> any;
-  friend auto operator-(const long, const any&) -> any;
-  friend auto operator*(const long, const any&) -> any;
-  friend auto operator/(const long, const any&) -> any;
-  friend auto operator%(const long, const any&) -> any;
+  friend auto operator==(const long, const any&) -> bool;
+  friend auto operator!=(const long, const any&) -> bool;
+  friend auto operator< (const long, const any&) -> bool;
+  friend auto operator<=(const long, const any&) -> bool;
+  friend auto operator> (const long, const any&) -> bool;
+  friend auto operator>=(const long, const any&) -> bool;
 
-  friend auto operator+(const double, const any&) -> any;
-  friend auto operator-(const double, const any&) -> any;
-  friend auto operator*(const double, const any&) -> any;
-  friend auto operator/(const double, const any&) -> any;
+  friend auto operator==(const double, const any&) -> bool;
+  friend auto operator!=(const double, const any&) -> bool;
+  friend auto operator< (const double, const any&) -> bool;
+  friend auto operator<=(const double, const any&) -> bool;
+  friend auto operator> (const double, const any&) -> bool;
+  friend auto operator>=(const double, const any&) -> bool;
 
-  friend auto operator+(const char* const, const any&) -> any;
+  friend auto operator==(const char, const any&) -> bool;
+  friend auto operator!=(const char, const any&) -> bool;
+  friend auto operator< (const char, const any&) -> bool;
+  friend auto operator<=(const char, const any&) -> bool;
+  friend auto operator> (const char, const any&) -> bool;
+  friend auto operator>=(const char, const any&) -> bool;
+
+  friend auto operator==(const bool, const any&) -> bool;
+  friend auto operator!=(const bool, const any&) -> bool;
+  friend auto operator< (const bool, const any&) -> bool;
+  friend auto operator<=(const bool, const any&) -> bool;
+  friend auto operator> (const bool, const any&) -> bool;
+  friend auto operator>=(const bool, const any&) -> bool;
+
+  friend auto operator==(const char* const, const any&) -> bool;
+  friend auto operator!=(const char* const, const any&) -> bool;
+  friend auto operator< (const char* const, const any&) -> bool;
+  friend auto operator<=(const char* const, const any&) -> bool;
+  friend auto operator> (const char* const, const any&) -> bool;
+  friend auto operator>=(const char* const, const any&) -> bool;
+
+  friend auto operator+(const long, const any&) -> long;
+  friend auto operator-(const long, const any&) -> long;
+  friend auto operator*(const long, const any&) -> long;
+  friend auto operator/(const long, const any&) -> long;
+  friend auto operator%(const long, const any&) -> long;
+
+  friend auto operator+(const double, const any&) -> double;
+  friend auto operator-(const double, const any&) -> double;
+  friend auto operator*(const double, const any&) -> double;
+  friend auto operator/(const double, const any&) -> double;
+
+  friend auto operator+(const char, const any&) -> char;
+  friend auto operator-(const char, const any&) -> char;
+
+  friend auto operator+(const char* const, const any&) -> string;
 
 };
 
-#define DEFINE_OPERATOR(K, T, OP, V) \
-inline auto operator OP(const T lhs, const any& rhs_) -> any { \
+#define DEFINE_OPERATOR_LHS(K, T, OP, V, R) \
+inline auto operator OP(const T lhs, const any& rhs_) -> R { \
   auto& rhs = any::extract_value(rhs_); \
   assert(rhs.type == any::Type::K); \
   return lhs OP rhs.V; \
 }
 
-DEFINE_OPERATOR(Integer, long, +, i)
-DEFINE_OPERATOR(Integer, long, -, i)
-DEFINE_OPERATOR(Integer, long, *, i)
-DEFINE_OPERATOR(Integer, long, /, i)
-DEFINE_OPERATOR(Integer, long, %, i)
+DEFINE_OPERATOR_LHS(Integer, long, ==, i, bool)
+DEFINE_OPERATOR_LHS(Integer, long, !=, i, bool)
+DEFINE_OPERATOR_LHS(Integer, long, <,  i, bool)
+DEFINE_OPERATOR_LHS(Integer, long, <=, i, bool)
+DEFINE_OPERATOR_LHS(Integer, long, >,  i, bool)
+DEFINE_OPERATOR_LHS(Integer, long, >=, i, bool)
 
-DEFINE_OPERATOR(Double, double, +, d)
-DEFINE_OPERATOR(Double, double, -, d)
-DEFINE_OPERATOR(Double, double, *, d)
-DEFINE_OPERATOR(Double, double, /, d)
+DEFINE_OPERATOR_LHS(Double, double, ==, d, bool)
+DEFINE_OPERATOR_LHS(Double, double, !=, d, bool)
+DEFINE_OPERATOR_LHS(Double, double, <,  d, bool)
+DEFINE_OPERATOR_LHS(Double, double, <=, d, bool)
+DEFINE_OPERATOR_LHS(Double, double, >,  d, bool)
+DEFINE_OPERATOR_LHS(Double, double, >=, d, bool)
 
-DEFINE_OPERATOR(String, char* const, +, s)
+DEFINE_OPERATOR_LHS(Character, char, ==, c, bool)
+DEFINE_OPERATOR_LHS(Character, char, !=, c, bool)
+DEFINE_OPERATOR_LHS(Character, char, <,  c, bool)
+DEFINE_OPERATOR_LHS(Character, char, <=, c, bool)
+DEFINE_OPERATOR_LHS(Character, char, >,  c, bool)
+DEFINE_OPERATOR_LHS(Character, char, >=, c, bool)
 
-#undef DEFINE_OPERATOR
+DEFINE_OPERATOR_LHS(Boolean, bool, ==, b, bool)
+DEFINE_OPERATOR_LHS(Boolean, bool, !=, b, bool)
+DEFINE_OPERATOR_LHS(Boolean, bool, <,  b, bool)
+DEFINE_OPERATOR_LHS(Boolean, bool, <=, b, bool)
+DEFINE_OPERATOR_LHS(Boolean, bool, >,  b, bool)
+DEFINE_OPERATOR_LHS(Boolean, bool, >=, b, bool)
+
+DEFINE_OPERATOR_LHS(String, char* const, ==, s, bool)
+DEFINE_OPERATOR_LHS(String, char* const, !=, s, bool)
+DEFINE_OPERATOR_LHS(String, char* const, <,  s, bool)
+DEFINE_OPERATOR_LHS(String, char* const, <=, s, bool)
+DEFINE_OPERATOR_LHS(String, char* const, >,  s, bool)
+DEFINE_OPERATOR_LHS(String, char* const, >=, s, bool)
+
+DEFINE_OPERATOR_LHS(Integer, long, +, i, long)
+DEFINE_OPERATOR_LHS(Integer, long, -, i, long)
+DEFINE_OPERATOR_LHS(Integer, long, *, i, long)
+DEFINE_OPERATOR_LHS(Integer, long, /, i, long)
+DEFINE_OPERATOR_LHS(Integer, long, %, i, long)
+
+DEFINE_OPERATOR_LHS(Double, double, +, d, double)
+DEFINE_OPERATOR_LHS(Double, double, -, d, double)
+DEFINE_OPERATOR_LHS(Double, double, *, d, double)
+DEFINE_OPERATOR_LHS(Double, double, /, d, double)
+
+DEFINE_OPERATOR_LHS(Character, char, +, i, char)
+DEFINE_OPERATOR_LHS(Character, char, -, i, char)
+
+DEFINE_OPERATOR_LHS(String, char* const, +, s, any::string)
+
+#undef DEFINE_OPERATOR_RHS
+#undef DEFINE_OPERATOR_LHS
 
 // Compile-time string key literals
 //
