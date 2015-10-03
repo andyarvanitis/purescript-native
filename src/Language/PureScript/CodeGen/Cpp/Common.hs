@@ -126,6 +126,7 @@ nameIsCppReserved name =
               , "int"
               , "list"
               , "long"
+              , "map_key_t"
               , "mutable"
               , "namespace"
               , "new"
