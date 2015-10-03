@@ -4,7 +4,7 @@
 -- Copyright   :  (c) 2013-15 Phil Freeman, Andy Arvanitis, and other contributors
 -- License     :  MIT
 --
--- Maintainer  :  Andy Arvanitis
+-- Maintainer  :  Andy Arvanitis <andy.arvanitis@gmail.com>
 -- Stability   :  experimental
 -- Portability :
 --
@@ -40,11 +40,6 @@ toHeader = catMaybes . map go
   go (CppFunction name args rtyp qs _) =
     let args' = (\(_,t) -> ("", t)) <$> args in
     Just (CppFunction name args' rtyp qs CppNoOp)
-  -- go (CppVariableIntroduction v@(name, Just t) qs (Just _))
-  --   | t /= CppAuto, all isAlphaNum name
-  --   = Just (CppVariableIntroduction v (CppExtern:qs) Nothing)
-  -- go cpp@(CppVariableIntroduction{}) = Just cpp
-
   go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
     Nothing
   go (CppVariableIntroduction _ _ (Just CppStringLiteral {})) =

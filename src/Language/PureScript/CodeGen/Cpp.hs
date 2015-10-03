@@ -4,7 +4,7 @@
 -- Copyright   :  (c) Phil Freeman 2013
 -- License     :  MIT
 --
--- Maintainer  :  Phil Freeman <paf31@cantab.net>
+-- Maintainer  :  Andy Arvanitis <andy.arvanitis@gmail.com>
 -- Stability   :  experimental
 -- Portability :
 --
