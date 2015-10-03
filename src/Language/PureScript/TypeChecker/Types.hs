@@ -282,9 +282,7 @@ infer' v@(Constructor c) = do
     Just (_, _, ty, _) -> do (v', ty') <- sndM (introduceSkolemScope <=< replaceAllTypeSynonyms) <=< instantiatePolyTypeWithUnknowns v $ ty
                              return $ TypedValue True v' ty'
 infer' (Case vals binders) = do
-  (vals', ts) <- fmap unzip $ forM vals $ \val -> do
-    TypedValue _ val' ty <- infer val
-    instantiatePolyTypeWithUnknowns val' ty
+  (vals', ts) <- instantiateForBinders vals binders
   ret <- fresh
   binders' <- checkBinders ts ret binders
   return $ TypedValue True (Case vals' binders') ret
@@ -410,6 +408,26 @@ inferBinder val (NamedBinder name binder) = do
 inferBinder val (PositionedBinder pos _ binder) =
   warnAndRethrowWithPosition pos $ inferBinder val binder
 
+-- | Returns true if a binder requires its argument type to be a monotype.
+-- | If this is the case, we need to instantiate any polymorphic types before checking binders.
+binderRequiresMonotype :: Binder -> Bool
+binderRequiresMonotype NullBinder = False
+binderRequiresMonotype (VarBinder _) = False
+binderRequiresMonotype (NamedBinder _ b) = binderRequiresMonotype b
+binderRequiresMonotype (PositionedBinder _ _ b) = binderRequiresMonotype b
+binderRequiresMonotype _ = True
+
+-- | Instantiate polytypes only when necessitated by a binder.
+instantiateForBinders :: [Expr] -> [CaseAlternative] -> UnifyT Type Check ([Expr], [Type])
+instantiateForBinders vals cas = fmap unzip $ zipWithM (\val inst -> do
+  TypedValue _ val' ty <- infer val
+  if inst
+    then instantiatePolyTypeWithUnknowns val' ty
+    else return (val', ty)) vals shouldInstantiate
+  where
+  shouldInstantiate :: [Bool]
+  shouldInstantiate = map (any binderRequiresMonotype) . transpose . map caseAlternativeBinders $ cas
+
 -- |
 -- Check the types of the return values in a set of binders in a case statement
 --
@@ -471,7 +489,7 @@ check' val t@(ConstrainedType constraints ty) = do
                                                       name
                                                       (supName, instantiateSuperclass (map fst args) supArgs instanceTy)
                                   ) superclasses [0..]
-    return (TypeClassDictionaryInScope name path className instanceTy Nothing TCDRegular : supDicts)
+    return (TypeClassDictionaryInScope name path className instanceTy Nothing : supDicts)
 
   instantiateSuperclass :: [String] -> [Type] -> [Type] -> [Type]
   instantiateSuperclass args supArgs tys = map (replaceAllTypeVars (zip args tys)) supArgs
@@ -539,9 +557,7 @@ check' (TypedValue checkType val ty1) ty2 = do
       val''' <- if checkType then withScopedTypeVars moduleName args (check val ty2') else return val
       return $ TypedValue checkType val''' ty2'
 check' (Case vals binders) ret = do
-  (vals', ts) <- fmap unzip $ forM vals $ \val -> do
-    TypedValue _ val' ty <- infer val
-    instantiatePolyTypeWithUnknowns val' ty
+  (vals', ts) <- instantiateForBinders vals binders
   binders' <- checkBinders ts ret binders
   return $ TypedValue True (Case vals' binders') ret
 check' (IfThenElse cond th el) ty = do
@@ -583,9 +599,6 @@ check' v@(Constructor c) ty = do
 check' (Let ds val) ty = do
   (ds', val') <- inferLetBinding [] ds val (`check` ty)
   return $ TypedValue True (Let ds' val') ty
-check' val ty | containsTypeSynonyms ty = do
-  ty' <- introduceSkolemScope <=< expandAllTypeSynonyms <=< replaceTypeWildcards $ ty
-  check val ty'
 check' val kt@(KindedType ty kind) = do
   checkTypeKind ty kind
   val' <- check' val ty
@@ -598,12 +611,6 @@ check' val ty = do
   case mt of
     Nothing -> throwError . errorMessage $ SubsumptionCheckFailed
     Just v' -> return $ TypedValue True v' ty
-
-containsTypeSynonyms :: Type -> Bool
-containsTypeSynonyms = everythingOnTypes (||) go where
-  go (SaturatedTypeSynonym _ _) = True
-  go _ = False
-
 
 -- |
 -- Check the type of a collection of named record fields

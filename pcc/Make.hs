@@ -33,10 +33,11 @@ import Control.Monad.Writer.Strict
 import Data.FileEmbed (embedFile)
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
+import Data.String (fromString)
 import Data.Time.Clock
 import Data.Version (showVersion)
 import qualified Data.Map as M
-import qualified Data.ByteString.UTF8 as BU
+import qualified Data.ByteString.Lazy as B
 
 import System.Directory (doesDirectoryExist, doesFileExist, getModificationTime, createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory, addExtension, dropExtension)
@@ -93,7 +94,7 @@ buildMakeActions outputDir filePathMap usePrefix =
         externsFile = outputDir </> filePath </> "externs.purs"
     min <$> getTimestamp srcFile <*> getTimestamp externsFile
 
-  readExterns :: P.ModuleName -> Make (FilePath, String)
+  readExterns :: P.ModuleName -> Make (FilePath, B.ByteString)
   readExterns mn = do
     let path = outputDir </> (dotsTo '/' $ P.runModuleName mn) </> "externs.purs"
     (path, ) <$> readTextFile path
@@ -115,16 +116,16 @@ buildMakeActions outputDir filePathMap usePrefix =
         hdr = unlines $ map ("// " ++) prefix ++ [phdrs]
 
     lift $ do
-      writeTextFile srcFile src
-      writeTextFile headerFile hdr
+      writeTextFile srcFile (fromString src)
+      writeTextFile headerFile (fromString hdr)
       writeTextFile externsFile exts
 
       let supportDir = outputDir </> "PureScript"
       supportFilesExist <- dirExists supportDir
       when (not supportFilesExist) $ do
-        writeTextFile (outputDir  </> "CMakeLists.txt") cmakeListsTxt
-        writeTextFile (supportDir </> "PureScript.hh")  $ BU.toString $(embedFile "pcc/include/purescript.hh")
-        writeTextFile (supportDir </> "any.hh")         $ BU.toString $(embedFile "pcc/include/any.hh")
+        writeTextFile (outputDir  </> "CMakeLists.txt") (fromString cmakeListsTxt)
+        writeTextFile (supportDir </> "PureScript.hh") $ B.fromStrict $(embedFile "pcc/include/purescript.hh")
+        writeTextFile (supportDir </> "any.hh")        $ B.fromStrict $(embedFile "pcc/include/any.hh")
 
       when (requiresForeign m) $ do
         let inputPath = dropExtension $ getInputFile mn
@@ -155,16 +156,13 @@ buildMakeActions outputDir filePathMap usePrefix =
     exists <- doesFileExist path
     traverse (const $ getModificationTime path) $ guard exists
 
-  readTextFile :: FilePath -> Make String
-  readTextFile path = makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile path)) $ do
-    putStrLn $ "Reading " ++ path
-    readFile path
+  readTextFile :: FilePath -> Make B.ByteString
+  readTextFile path = makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile path)) $ B.readFile path
 
-  writeTextFile :: FilePath -> String -> Make ()
+  writeTextFile :: FilePath -> B.ByteString -> Make ()
   writeTextFile path text = makeIO (const (P.SimpleErrorWrapper $ P.CannotWriteFile path)) $ do
     mkdirp path
-    putStrLn $ "Writing " ++ path
-    writeFile path text
+    B.writeFile path text
     where
     mkdirp :: FilePath -> IO ()
     mkdirp = createDirectoryIfMissing True . takeDirectory

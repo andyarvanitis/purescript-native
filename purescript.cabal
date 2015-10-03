@@ -46,7 +46,7 @@ library
                    pattern-arrows >= 0.0.2 && < 0.1,
                    time -any,
                    boxes >= 0.1.4 && < 0.2.0,
-                   aeson >= 0.8 && < 0.10,
+                   aeson >= 0.8 && < 0.11,
                    vector -any,
                    bower-json >= 0.7,
                    aeson-better-errors >= 0.8,
@@ -56,7 +56,7 @@ library
                    language-javascript == 0.5.*,
                    syb -any,
                    Glob >= 0.7 && < 0.8,
-                   process >= 1.2.0 && < 1.3,
+                   process >= 1.2.0 && < 1.4,
                    safe >= 0.3.9 && < 0.4,
                    semigroups >= 0.16.2 && < 0.18
 
@@ -69,9 +69,8 @@ library
                      Language.PureScript.AST.Traversals
                      Language.PureScript.AST.Exported
                      Language.PureScript.Bundle
+                     Language.PureScript.Externs
                      Language.PureScript.CodeGen
-                     Language.PureScript.CodeGen.Externs
-
                      Language.PureScript.CodeGen.JS
                      Language.PureScript.CodeGen.JS.AST
                      Language.PureScript.CodeGen.JS.Common
@@ -179,6 +178,7 @@ library
                      Control.Monad.Supply
                      Control.Monad.Supply.Class
 
+                     System.IO.UTF8
     exposed: True
     buildable: True
     hs-source-dirs: src
@@ -260,7 +260,7 @@ executable psc-bundle
 executable pcc
     build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
                    file-embed >= 0.0.7 && < 0.0.8,
-                   utf8-string >= 1 && < 2,
+                   bytestring -any,
                    mtl -any, optparse-applicative >= 0.10.0, parsec -any, purescript -any,
                    time -any, transformers -any, transformers-compat -any
     main-is: Main.hs
