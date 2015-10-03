@@ -90,9 +90,6 @@ class any {
   using shared_map    = std::shared_ptr<map>;
   using shared_vector = std::shared_ptr<vector>;
 
-  using unique_map    = std::shared_ptr<map>;
-  using unique_vector = std::shared_ptr<vector>;
-
   template <typename T>
   using shared = std::shared_ptr<T>;
 
