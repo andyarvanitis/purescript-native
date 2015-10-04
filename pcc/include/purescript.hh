@@ -386,11 +386,12 @@ class any {
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   ==, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double, ==, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,   ==, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,   ==, b, bool)
-  DEFINE_OPERATOR_RHS(String, char* const, ==, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        ==, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double,      ==, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,        ==, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        ==, b, bool)
+  DEFINE_OPERATOR_RHS(String,    string&,     ==, s, bool)
+  DEFINE_OPERATOR_RHS(String,    char* const, ==, s, bool)
 
   inline auto operator!=(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -408,11 +409,12 @@ class any {
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   !=, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double, !=, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,   !=, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,   !=, b, bool)
-  DEFINE_OPERATOR_RHS(String, char* const, !=, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        !=, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double,      !=, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,        !=, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        !=, b, bool)
+  DEFINE_OPERATOR_RHS(String,    string&,     !=, s, bool)
+  DEFINE_OPERATOR_RHS(String,    char* const, !=, s, bool)
 
   inline auto operator<(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -429,11 +431,12 @@ class any {
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   <, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double, <, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,   <, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,   <, b, bool)
-  DEFINE_OPERATOR_RHS(String, char* const, <, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        <, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double,      <, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,        <, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        <, b, bool)
+  DEFINE_OPERATOR_RHS(String,    string&,     <, s, bool)
+  DEFINE_OPERATOR_RHS(String,    char* const, <, s, bool)
 
   inline auto operator<=(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -450,11 +453,12 @@ class any {
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   <=, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double, <=, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,   <=, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,   <=, b, bool)
-  DEFINE_OPERATOR_RHS(String, char* const, <=, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        <=, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double,      <=, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,        <=, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        <=, b, bool)
+  DEFINE_OPERATOR_RHS(String,    string&,     <=, s, bool)
+  DEFINE_OPERATOR_RHS(String,    char* const, <=, s, bool)
 
   inline auto operator>(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -471,11 +475,12 @@ class any {
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   >, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double, >, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,   >, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,   >, b, bool)
-  DEFINE_OPERATOR_RHS(String, char* const, >, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        >, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double,      >, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,        >, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        >, b, bool)
+  DEFINE_OPERATOR_RHS(String,    string&,     >, s, bool)
+  DEFINE_OPERATOR_RHS(String,    char* const, >, s, bool)
 
   inline auto operator>=(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -492,11 +497,12 @@ class any {
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   >=, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double, >=, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,   >=, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,   >=, b, bool)
-  DEFINE_OPERATOR_RHS(String, char* const, >=, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        >=, i, bool)
+  DEFINE_OPERATOR_RHS(Double,    double,      >=, d, bool)
+  DEFINE_OPERATOR_RHS(Character, char,        >=, c, bool)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        >=, b, bool)
+  DEFINE_OPERATOR_RHS(String,    string&,     >=, s, bool)
+  DEFINE_OPERATOR_RHS(String,    char* const, >=, s, bool)
 
   inline auto operator+(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
@@ -512,10 +518,11 @@ class any {
     return nullptr;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   +, i, long)
-  DEFINE_OPERATOR_RHS(Double,    double, +, d, double)
-  DEFINE_OPERATOR_RHS(Character, char,   +, c, char)
-  DEFINE_OPERATOR_RHS(String, char* const, +, s, string)
+  DEFINE_OPERATOR_RHS(Integer,   long,        +, i, long)
+  DEFINE_OPERATOR_RHS(Double,    double,      +, d, double)
+  DEFINE_OPERATOR_RHS(Character, char,        +, c, char)
+  DEFINE_OPERATOR_RHS(String,    string&,     +, s, string)
+  DEFINE_OPERATOR_RHS(String,    char* const, +, s, string)
 
   inline auto operator-(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
@@ -615,6 +622,13 @@ class any {
   friend auto operator> (const bool, const any&) -> bool;
   friend auto operator>=(const bool, const any&) -> bool;
 
+  friend auto operator==(const string&, const any&) -> bool;
+  friend auto operator!=(const string&, const any&) -> bool;
+  friend auto operator< (const string&, const any&) -> bool;
+  friend auto operator<=(const string&, const any&) -> bool;
+  friend auto operator> (const string&, const any&) -> bool;
+  friend auto operator>=(const string&, const any&) -> bool;
+
   friend auto operator==(const char* const, const any&) -> bool;
   friend auto operator!=(const char* const, const any&) -> bool;
   friend auto operator< (const char* const, const any&) -> bool;
@@ -636,6 +650,7 @@ class any {
   friend auto operator+(const char, const any&) -> char;
   friend auto operator-(const char, const any&) -> char;
 
+  friend auto operator+(const string&, const any&) -> string;
   friend auto operator+(const char* const, const any&) -> string;
 
 };
@@ -675,6 +690,13 @@ DEFINE_OPERATOR_LHS(Boolean, bool, <=, b, bool)
 DEFINE_OPERATOR_LHS(Boolean, bool, >,  b, bool)
 DEFINE_OPERATOR_LHS(Boolean, bool, >=, b, bool)
 
+DEFINE_OPERATOR_LHS(String, string&, ==, s, bool)
+DEFINE_OPERATOR_LHS(String, string&, !=, s, bool)
+DEFINE_OPERATOR_LHS(String, string&, <,  s, bool)
+DEFINE_OPERATOR_LHS(String, string&, <=, s, bool)
+DEFINE_OPERATOR_LHS(String, string&, >,  s, bool)
+DEFINE_OPERATOR_LHS(String, string&, >=, s, bool)
+
 DEFINE_OPERATOR_LHS(String, char* const, ==, s, bool)
 DEFINE_OPERATOR_LHS(String, char* const, !=, s, bool)
 DEFINE_OPERATOR_LHS(String, char* const, <,  s, bool)
@@ -696,6 +718,7 @@ DEFINE_OPERATOR_LHS(Double, double, /, d, double)
 DEFINE_OPERATOR_LHS(Character, char, +, i, char)
 DEFINE_OPERATOR_LHS(Character, char, -, i, char)
 
+DEFINE_OPERATOR_LHS(String, string&, +, s, string)
 DEFINE_OPERATOR_LHS(String, char* const, +, s, string)
 
 #undef DEFINE_OPERATOR_RHS
