@@ -60,7 +60,7 @@ class any {
     Pointer
   };
 
-  mutable Type type = Type::Unknown;
+  Type type = Type::Unknown;
 
   struct as_thunk {
   };
@@ -97,17 +97,17 @@ class any {
 
   private:
   union {
-    mutable long            i;
-    mutable double          d;
-    mutable char            c;
-    mutable bool            b;
-    mutable string          s;
-    mutable shared_map      m;
-    mutable shared_vector   v;
-    mutable fn              f;
-    mutable eff_fn          e;
-    mutable thunk           t;
-    mutable shared_void_ptr p;
+    long            i;
+    double          d;
+    char            c;
+    bool            b;
+    string          s;
+    shared_map      m;
+    shared_vector   v;
+    fn              f;
+    eff_fn          e;
+    thunk           t;
+    shared_void_ptr p;
   };
 
   public:
@@ -190,7 +190,7 @@ class any {
     }
   }
 
-  auto swap(any&& val) const {
+  auto swap(any&& val) {
     type = val.type;
     switch (type) {
       case Type::Integer:         i = val.i;                                    break;
