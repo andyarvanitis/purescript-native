@@ -106,6 +106,7 @@ nameIsCppReserved name =
               , "decltype"
               , "default"
               , "delete"
+              , "djb2"
               , "do"
               , "double"
               , "dynamic_cast"

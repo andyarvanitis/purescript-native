@@ -53,6 +53,7 @@ literals = mkPattern' match
   match (CppNumericLiteral (Left n)) = return $ show n ++ "L"
   match (CppNumericLiteral n) = return $ either show show n
   match (CppStringLiteral s) = return $ string s
+  match (CppStringLiteralHash s) = return $ string s ++ "_hash"
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"

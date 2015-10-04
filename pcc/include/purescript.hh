@@ -33,12 +33,19 @@
 #include <stdexcept>
 
 #include "map_key.hh"
+#include "hash.hh"
 
 namespace PureScript {
 
 using string = std::string;
 using runtime_error = std::runtime_error;
 using nullptr_t = std::nullptr_t;
+
+// Compile-time string literal hash
+//
+constexpr auto operator "" _hash(const char s[], size_t) -> const long {
+  return djb2(s);
+}
 
 // A variant data class designed to provide some features of dynamic typing.
 //
