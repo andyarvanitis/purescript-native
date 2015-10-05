@@ -24,7 +24,7 @@ namespace PureScript {
     const uint32_t hash;
 
     public:
-    constexpr map_key_t(const uint32_t hash) : hash(hash) {}
+    explicit constexpr map_key_t(const uint32_t hash) : hash(hash) {}
 
     class hasher {
     public:
