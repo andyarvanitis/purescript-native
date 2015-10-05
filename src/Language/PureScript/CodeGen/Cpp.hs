@@ -76,7 +76,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                         else []
                      )
                   ++ P.linebreak
-                  ++ headerDefsBegin mn
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak
                                                          ++ synonyms
@@ -84,20 +83,15 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                                          ++ toHeaderFns optimized
                      ]
                   ++ P.linebreak
-                  ++ headerDefsEnd
-                  ++ P.linebreak
                   ++ fileEnd mn "HH"
   let bodyCpps = toBodyDecl optimized ++ toBody optimized
-      moduleBody = fileBegin mn "CC"
-                ++ P.linebreak
-                ++ CppInclude (runModuleName mn) (runModuleName mn) : P.linebreak
+      moduleBody = CppInclude (runModuleName mn) (runModuleName mn) : P.linebreak
                 ++ (if null bodyCpps
                       then []
                       else [CppNamespace (runModuleName mn) $
                              (CppUseNamespace <$> cppImports') ++ P.linebreak ++ bodyCpps])
                 ++ P.linebreak
-                ++ (if isMain mn then [nativeMain] else [])
-                ++ fileEnd mn "CC"
+                ++ (if isMain mn then [nativeMain] ++ P.linebreak else [])
   return $ moduleHeader ++ CppEndOfHeader : moduleBody
 
   where

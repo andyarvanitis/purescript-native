@@ -139,16 +139,6 @@ fileEnd mn suffix = [CppRaw ("#endif // " ++ fileModName mn suffix)]
 fileModName :: ModuleName -> String -> String
 fileModName mn suffix = P.dotsTo '_' (runModuleName mn ++ '_' : suffix)
 
-headerDefsBegin :: ModuleName -> [Cpp]
-headerDefsBegin mn = [CppRaw ("#if !defined" ++ P.parens (fileModName mn "CC")),
-                      CppRaw "#define EXTERN(e) extern e",
-                      CppRaw "#else",
-                      CppRaw "#define EXTERN(e)",
-                      CppRaw "#endif"]
-
-headerDefsEnd :: [Cpp]
-headerDefsEnd = [CppRaw "#undef EXTERN"]
-
 isMain :: ModuleName -> Bool
 isMain (ModuleName [ProperName "Main"]) = True
 isMain _ = False
