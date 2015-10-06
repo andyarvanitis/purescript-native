@@ -53,7 +53,7 @@ literals = mkPattern' match
   match (CppNumericLiteral (Left n)) = return $ show n ++ "L"
   match (CppNumericLiteral n) = return $ either show show n
   match (CppStringLiteral s) = return $ string s
-  match (CppStringLiteralHash s) = return $ string s ++ "_hash"
+  match (CppStringLiteralHash s) = return $ "HASH" ++ parens (string s)
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
@@ -75,7 +75,7 @@ literals = mkPattern' match
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
                             val <- prettyPrintCpp' value
-                            return $ "{ " ++ show key ++ "_key, " ++ val ++ " }"
+                            return $ "{ KEY" ++ parens(show key) ++ ", " ++ val ++ " }"
         indentString <- currentIndent
         return $ intercalate ", \n" $ map (indentString ++) cpps
     , return "\n"
@@ -277,7 +277,7 @@ indexer :: Pattern PrinterState Cpp (String, Cpp)
 indexer = mkPattern' match
   where
   match (CppIndexer index@(CppNumericLiteral {}) val) = (,) <$> prettyPrintCpp' index <*> pure val
-  match (CppIndexer index@(CppStringLiteral {}) val) = (,) <$> (liftM (++ "_key") . prettyPrintCpp') index <*> pure val
+  match (CppIndexer index@(CppStringLiteral {}) val) = (,) <$> (liftM (("KEY" ++) . parens) . prettyPrintCpp') index <*> pure val
   match _ = mzero
 
 lam :: Pattern PrinterState Cpp ((String, [(String, Maybe CppType)], Maybe CppType), Cpp)

@@ -19,11 +19,10 @@
 
 namespace PureScript {
 
-  class map_key_t {
+  struct map_key_t {
 
     const uint32_t hash;
 
-    public:
     explicit constexpr map_key_t(const uint32_t hash) : hash(hash) {}
 
     class hasher {
@@ -41,11 +40,17 @@ namespace PureScript {
     };
   };
 
-  // Compile-time string-key literals
+  // Compile-time map keys (from strings)
   //
-  constexpr auto operator "" _key(const char s[], size_t) -> const map_key_t {
-    return map_key_t(djb2(s));
-  }
+  template <uint32_t H>
+  struct _compile_time_key_ {
+    static constexpr map_key_t value = map_key_t(H);
+  };
+
+  template <uint32_t H>
+  constexpr map_key_t _compile_time_key_<H>::value;
+
+  #define KEY(s) _compile_time_key_<djb2(s)>::value
 
 } // namespace PureScript
 
