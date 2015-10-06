@@ -65,7 +65,7 @@ class any {
 
   struct as_thunk {
   };
-  constexpr static const as_thunk unthunk = as_thunk{};
+  static constexpr as_thunk unthunk = as_thunk{};
 
   using map    = std::unordered_map<map_key_t, const any, map_key_t::hasher, map_key_t::equal>;
   using vector = std::vector<any>;
@@ -113,19 +113,14 @@ class any {
 
   public:
 
-  constexpr
   any(const int val) : type(Type::Integer), i(val) {}
 
-  constexpr
   any(const long val) : type(Type::Integer), i(val) {}
 
-  constexpr
   any(const double val) : type(Type::Double), d(val) {}
 
-  constexpr
   any(const char val) : type(Type::Character), c(val) {}
 
-  constexpr
   any(const bool val) : type(Type::Boolean), b(val) {}
 
   any(const string& val) : type(Type::String), s(val) {}
@@ -145,7 +140,7 @@ class any {
   any(shared_vector&& val) : type(Type::Vector), v(std::move(val)) {}
 
   template <typename T>
-  constexpr any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
+  any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
     : type(Type::Function), f(val) {}
 
   // template <typename T>
@@ -153,11 +148,11 @@ class any {
   //   : type(Type::Function), f(std::move(val)) {}
 
   template <typename T>
-  constexpr any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
+  any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
     : type(Type::EffFunction), e(val) {}
 
   template <typename T>
-  constexpr any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
+  any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
     : type(Type::Thunk), t(val) {}
 
   template <typename T>
@@ -165,7 +160,6 @@ class any {
     : type(Type::Pointer), p(val) {
     }
 
-  constexpr
   any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
 
   template <typename T>
