@@ -70,7 +70,7 @@ main = do
     --
     setCurrentDirectory buildDir
     callProcess "cmake" ["../output"]
-    callProcess "make" []
+    callProcess "make" ["-j2"]
     callProcess (buildDir </> "Main") []
 
     removeFile (srcDir </> inputFile)
