@@ -57,6 +57,13 @@ literals = mkPattern' match
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
+  match (CppArrayLiteral [x@CppArrayLiteral {}]) = -- Works around what appears to be a recent clang bug
+    fmap concat $ sequence
+    [ return $ runType arrayType
+    , return "{ { "
+    , prettyPrintCpp' x
+    , return " } }"
+    ]
   match (CppArrayLiteral xs) = fmap concat $ sequence
     [ return $ runType arrayType
     , return "{ "
