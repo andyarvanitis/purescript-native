@@ -73,6 +73,7 @@ class any {
   using eff_fn = std::function<any()>;
   using thunk  = std::function<const any& (const as_thunk)>;
 
+  using shared_string = std::shared_ptr<string>;
   using shared_map    = std::shared_ptr<map>;
   using shared_vector = std::shared_ptr<vector>;
 
@@ -106,7 +107,7 @@ class any {
     double          d;
     char            c;
     bool            b;
-    string          s;
+    shared_string   s;
     shared_map      m;
     shared_vector   v;
     shared_fn       f;
@@ -127,9 +128,13 @@ class any {
 
   any(const bool val) : type(Type::Boolean), b(val) {}
 
-  any(const string& val) : type(Type::String), s(val) {}
-  any(string&& val) : type(Type::String), s(std::move(val)) {}
-  any(const char val[]) : type(Type::String), s(val) {}
+  any(const string& val) : type(Type::String), s(make_shared<string>(val)) {}
+  any(string&& val) : type(Type::String), s(make_shared<string>(std::move(val))) {}
+
+  any(const char val[]) : type(Type::String), s(make_shared<string>(val)) {}
+
+  any(const shared_string& val) : type(Type::String), s(val) {}
+  any(shared_string&& val) : type(Type::String), s(std::move(val)) {}
 
   any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
   any(map&& val) : type(Type::Map), m(make_shared<map>(std::move(val))) {}
@@ -186,7 +191,7 @@ class any {
       case Type::Double:          d = val.d;                         break;
       case Type::Character:       c = val.c;                         break;
       case Type::Boolean:         b = val.b;                         break;
-      case Type::String:          new (&s) string          (val.s);  break;
+      case Type::String:          new (&s) shared_string   (val.s);  break;
       case Type::Map:             new (&m) shared_map      (val.m);  break;
       case Type::Vector:          new (&v) shared_vector   (val.v);  break;
       case Type::Function:        new (&f) shared_fn       (val.f);  break;
@@ -205,7 +210,7 @@ class any {
       case Type::Double:          d = val.d;                                    break;
       case Type::Character:       c = val.c;                                    break;
       case Type::Boolean:         b = val.b;                                    break;
-      case Type::String:          new (&s) string          (std::move(val.s));  break;
+      case Type::String:          new (&s) shared_string   (std::move(val.s));  break;
       case Type::Map:             new (&m) shared_map      (std::move(val.m));  break;
       case Type::Vector:          new (&v) shared_vector   (std::move(val.v));  break;
       case Type::Function:        new (&f) shared_fn       (std::move(val.f));  break;
@@ -234,7 +239,7 @@ class any {
       case Type::Double:          ;                     break;
       case Type::Character:       ;                     break;
       case Type::Boolean:         ;                     break;
-      case Type::String:          s.~string();          break;
+      case Type::String:          s.~shared_string();   break;
       case Type::Map:             m.~shared_map();      break;
       case Type::Vector:          v.~shared_vector();   break;
       case Type::Function:        f.~shared_fn();       break;
@@ -278,7 +283,7 @@ class any {
 
   template <typename T>
   constexpr auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
-    RETURN_VALUE(Type::String, s,)
+    RETURN_VALUE(Type::String, s, *)
   }
 
   template <typename T>
@@ -345,7 +350,7 @@ class any {
   }
 
   operator const string&() const {
-    RETURN_VALUE(Type::String, s,)
+    RETURN_VALUE(Type::String, s, *)
   }
 
   operator const map&() const {
@@ -378,11 +383,11 @@ class any {
     return a.type != Type::Thunk ? a : (*a.t)(unthunk);
   }
 
-  #define DEFINE_OPERATOR_RHS(K, T, OP, V, R) \
+  #define DEFINE_OPERATOR_RHS(K, T, OP, V, R, P) \
   inline auto operator OP(const T rhs) const -> R { \
     auto& lhs = extract_value(*this); \
     assert(lhs.type == Type::K); \
-    return lhs.V OP rhs; \
+    return P(lhs.V) OP rhs; \
   }
 
   inline auto operator==(const any& rhs_) const -> bool {
@@ -394,19 +399,19 @@ class any {
       case Type::Double:    return lhs.d == rhs.d;
       case Type::Character: return lhs.c == rhs.c;
       case Type::Boolean:   return lhs.b == rhs.b;
-      case Type::String:    return lhs.s == rhs.s;
+      case Type::String:    return (*lhs.s) == (*rhs.s);
       case Type::Pointer:   return lhs.p == rhs.p;
       default: assert(not "supported type for '==' operator");
     }
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,        ==, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double,      ==, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,        ==, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,        ==, b, bool)
-  DEFINE_OPERATOR_RHS(String,    string&,     ==, s, bool)
-  DEFINE_OPERATOR_RHS(String,    char* const, ==, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        ==, i, bool,)
+  DEFINE_OPERATOR_RHS(Double,    double,      ==, d, bool,)
+  DEFINE_OPERATOR_RHS(Character, char,        ==, c, bool,)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        ==, b, bool,)
+  DEFINE_OPERATOR_RHS(String,    string&,     ==, s, bool, *)
+  DEFINE_OPERATOR_RHS(String,    char* const, ==, s, bool, *)
 
   inline auto operator!=(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -417,19 +422,19 @@ class any {
       case Type::Double:    return lhs.d != rhs.d;
       case Type::Character: return lhs.c != rhs.c;
       case Type::Boolean:   return lhs.b != rhs.b;
-      case Type::String:    return lhs.s != rhs.s;
+      case Type::String:    return (*lhs.s) != (*rhs.s);
       case Type::Pointer:   return lhs.p != rhs.p;
       default: assert(not "supported type for '!=' operator");
     }
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,        !=, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double,      !=, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,        !=, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,        !=, b, bool)
-  DEFINE_OPERATOR_RHS(String,    string&,     !=, s, bool)
-  DEFINE_OPERATOR_RHS(String,    char* const, !=, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        !=, i, bool,)
+  DEFINE_OPERATOR_RHS(Double,    double,      !=, d, bool,)
+  DEFINE_OPERATOR_RHS(Character, char,        !=, c, bool,)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        !=, b, bool,)
+  DEFINE_OPERATOR_RHS(String,    string&,     !=, s, bool, *)
+  DEFINE_OPERATOR_RHS(String,    char* const, !=, s, bool, *)
 
   inline auto operator<(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -440,18 +445,18 @@ class any {
       case Type::Double:    return lhs.d < rhs.d;
       case Type::Character: return lhs.c < rhs.c;
       case Type::Boolean:   return lhs.b < rhs.b;
-      case Type::String:    return lhs.s < rhs.s;
+      case Type::String:    return (*lhs.s) < (*rhs.s);
       default: assert(not "supported type for '<' operator");
     }
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,        <, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double,      <, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,        <, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,        <, b, bool)
-  DEFINE_OPERATOR_RHS(String,    string&,     <, s, bool)
-  DEFINE_OPERATOR_RHS(String,    char* const, <, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        <, i, bool,)
+  DEFINE_OPERATOR_RHS(Double,    double,      <, d, bool,)
+  DEFINE_OPERATOR_RHS(Character, char,        <, c, bool,)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        <, b, bool,)
+  DEFINE_OPERATOR_RHS(String,    string&,     <, s, bool, *)
+  DEFINE_OPERATOR_RHS(String,    char* const, <, s, bool, *)
 
   inline auto operator<=(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -462,18 +467,18 @@ class any {
       case Type::Double:    return lhs.d <= rhs.d;
       case Type::Character: return lhs.c <= rhs.c;
       case Type::Boolean:   return lhs.b <= rhs.b;
-      case Type::String:    return lhs.s <= rhs.s;
+      case Type::String:    return (*lhs.s) <= (*rhs.s);
       default: assert(not "supported type for '<' operator");
     }
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,        <=, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double,      <=, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,        <=, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,        <=, b, bool)
-  DEFINE_OPERATOR_RHS(String,    string&,     <=, s, bool)
-  DEFINE_OPERATOR_RHS(String,    char* const, <=, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        <=, i, bool,)
+  DEFINE_OPERATOR_RHS(Double,    double,      <=, d, bool,)
+  DEFINE_OPERATOR_RHS(Character, char,        <=, c, bool,)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        <=, b, bool,)
+  DEFINE_OPERATOR_RHS(String,    string&,     <=, s, bool, *)
+  DEFINE_OPERATOR_RHS(String,    char* const, <=, s, bool, *)
 
   inline auto operator>(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -484,18 +489,18 @@ class any {
       case Type::Double:    return lhs.d > rhs.d;
       case Type::Character: return lhs.c > rhs.c;
       case Type::Boolean:   return lhs.b > rhs.b;
-      case Type::String:    return lhs.s > rhs.s;
+      case Type::String:    return (*lhs.s) > (*rhs.s);
       default: assert(not "supported type for '>' operator");
     }
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,        >, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double,      >, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,        >, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,        >, b, bool)
-  DEFINE_OPERATOR_RHS(String,    string&,     >, s, bool)
-  DEFINE_OPERATOR_RHS(String,    char* const, >, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        >, i, bool,)
+  DEFINE_OPERATOR_RHS(Double,    double,      >, d, bool,)
+  DEFINE_OPERATOR_RHS(Character, char,        >, c, bool,)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        >, b, bool,)
+  DEFINE_OPERATOR_RHS(String,    string&,     >, s, bool, *)
+  DEFINE_OPERATOR_RHS(String,    char* const, >, s, bool, *)
 
   inline auto operator>=(const any& rhs_) const -> bool {
     auto& lhs = extract_value(*this);
@@ -506,18 +511,18 @@ class any {
       case Type::Double:    return lhs.d >= rhs.d;
       case Type::Character: return lhs.c >= rhs.c;
       case Type::Boolean:   return lhs.b >= rhs.b;
-      case Type::String:    return lhs.s >= rhs.s;
+      case Type::String:    return (*lhs.s) >= (*rhs.s);
       default: assert(not "supported type for '>' operator");
     }
     return false;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,        >=, i, bool)
-  DEFINE_OPERATOR_RHS(Double,    double,      >=, d, bool)
-  DEFINE_OPERATOR_RHS(Character, char,        >=, c, bool)
-  DEFINE_OPERATOR_RHS(Boolean,   bool,        >=, b, bool)
-  DEFINE_OPERATOR_RHS(String,    string&,     >=, s, bool)
-  DEFINE_OPERATOR_RHS(String,    char* const, >=, s, bool)
+  DEFINE_OPERATOR_RHS(Integer,   long,        >=, i, bool,)
+  DEFINE_OPERATOR_RHS(Double,    double,      >=, d, bool,)
+  DEFINE_OPERATOR_RHS(Character, char,        >=, c, bool,)
+  DEFINE_OPERATOR_RHS(Boolean,   bool,        >=, b, bool,)
+  DEFINE_OPERATOR_RHS(String,    string&,     >=, s, bool, *)
+  DEFINE_OPERATOR_RHS(String,    char* const, >=, s, bool, *)
 
   inline auto operator+(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
@@ -527,17 +532,17 @@ class any {
       case Type::Integer:   return lhs.i + rhs.i;
       case Type::Double:    return lhs.d + rhs.d;
       case Type::Character: return lhs.c + rhs.c;
-      case Type::String:    return lhs.s + rhs.s;
+      case Type::String:    return (*lhs.s) + (*rhs.s);
       default: assert(not "supported type for '+' operator");
     }
     return nullptr;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,        +, i, long)
-  DEFINE_OPERATOR_RHS(Double,    double,      +, d, double)
-  DEFINE_OPERATOR_RHS(Character, char,        +, c, char)
-  DEFINE_OPERATOR_RHS(String,    string&,     +, s, string)
-  DEFINE_OPERATOR_RHS(String,    char* const, +, s, string)
+  DEFINE_OPERATOR_RHS(Integer,   long,        +, i, long,)
+  DEFINE_OPERATOR_RHS(Double,    double,      +, d, double,)
+  DEFINE_OPERATOR_RHS(Character, char,        +, c, char,)
+  DEFINE_OPERATOR_RHS(String,    string&,     +, s, string, *)
+  DEFINE_OPERATOR_RHS(String,    char* const, +, s, string, *)
 
   inline auto operator-(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
@@ -552,9 +557,9 @@ class any {
     return nullptr;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   -, i, long)
-  DEFINE_OPERATOR_RHS(Double,    double, -, d, double)
-  DEFINE_OPERATOR_RHS(Character, char,   -, c, char)
+  DEFINE_OPERATOR_RHS(Integer,   long,   -, i, long,)
+  DEFINE_OPERATOR_RHS(Double,    double, -, d, double,)
+  DEFINE_OPERATOR_RHS(Character, char,   -, c, char,)
 
   inline auto operator*(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
@@ -568,8 +573,8 @@ class any {
     return nullptr;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   *, i, long)
-  DEFINE_OPERATOR_RHS(Double,    double, *, d, double)
+  DEFINE_OPERATOR_RHS(Integer,   long,   *, i, long,)
+  DEFINE_OPERATOR_RHS(Double,    double, *, d, double,)
 
   inline auto operator/(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
@@ -583,8 +588,8 @@ class any {
     return nullptr;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long,   /, i, long)
-  DEFINE_OPERATOR_RHS(Double,    double, /, d, double)
+  DEFINE_OPERATOR_RHS(Integer,   long,   /, i, long,)
+  DEFINE_OPERATOR_RHS(Double,    double, /, d, double,)
 
   inline auto operator%(const any& rhs_) const -> any {
     auto& lhs = extract_value(*this);
@@ -597,7 +602,7 @@ class any {
     return nullptr;
   }
 
-  DEFINE_OPERATOR_RHS(Integer,   long, %, i, long)
+  DEFINE_OPERATOR_RHS(Integer,   long, %, i, long,)
 
   inline auto operator-() const -> any {
     auto& lhs = extract_value(*this);
@@ -670,71 +675,71 @@ class any {
 
 };
 
-#define DEFINE_OPERATOR_LHS(K, T, OP, V, R) \
+#define DEFINE_OPERATOR_LHS(K, T, OP, V, R, P) \
 inline auto operator OP(const T lhs, const any& rhs_) -> R { \
   auto& rhs = any::extract_value(rhs_); \
   assert(rhs.type == any::Type::K); \
-  return lhs OP rhs.V; \
+  return lhs OP P(rhs.V); \
 }
 
-DEFINE_OPERATOR_LHS(Integer, long, ==, i, bool)
-DEFINE_OPERATOR_LHS(Integer, long, !=, i, bool)
-DEFINE_OPERATOR_LHS(Integer, long, <,  i, bool)
-DEFINE_OPERATOR_LHS(Integer, long, <=, i, bool)
-DEFINE_OPERATOR_LHS(Integer, long, >,  i, bool)
-DEFINE_OPERATOR_LHS(Integer, long, >=, i, bool)
+DEFINE_OPERATOR_LHS(Integer, long, ==, i, bool,)
+DEFINE_OPERATOR_LHS(Integer, long, !=, i, bool,)
+DEFINE_OPERATOR_LHS(Integer, long, <,  i, bool,)
+DEFINE_OPERATOR_LHS(Integer, long, <=, i, bool,)
+DEFINE_OPERATOR_LHS(Integer, long, >,  i, bool,)
+DEFINE_OPERATOR_LHS(Integer, long, >=, i, bool,)
 
-DEFINE_OPERATOR_LHS(Double, double, ==, d, bool)
-DEFINE_OPERATOR_LHS(Double, double, !=, d, bool)
-DEFINE_OPERATOR_LHS(Double, double, <,  d, bool)
-DEFINE_OPERATOR_LHS(Double, double, <=, d, bool)
-DEFINE_OPERATOR_LHS(Double, double, >,  d, bool)
-DEFINE_OPERATOR_LHS(Double, double, >=, d, bool)
+DEFINE_OPERATOR_LHS(Double, double, ==, d, bool,)
+DEFINE_OPERATOR_LHS(Double, double, !=, d, bool,)
+DEFINE_OPERATOR_LHS(Double, double, <,  d, bool,)
+DEFINE_OPERATOR_LHS(Double, double, <=, d, bool,)
+DEFINE_OPERATOR_LHS(Double, double, >,  d, bool,)
+DEFINE_OPERATOR_LHS(Double, double, >=, d, bool,)
 
-DEFINE_OPERATOR_LHS(Character, char, ==, c, bool)
-DEFINE_OPERATOR_LHS(Character, char, !=, c, bool)
-DEFINE_OPERATOR_LHS(Character, char, <,  c, bool)
-DEFINE_OPERATOR_LHS(Character, char, <=, c, bool)
-DEFINE_OPERATOR_LHS(Character, char, >,  c, bool)
-DEFINE_OPERATOR_LHS(Character, char, >=, c, bool)
+DEFINE_OPERATOR_LHS(Character, char, ==, c, bool,)
+DEFINE_OPERATOR_LHS(Character, char, !=, c, bool,)
+DEFINE_OPERATOR_LHS(Character, char, <,  c, bool,)
+DEFINE_OPERATOR_LHS(Character, char, <=, c, bool,)
+DEFINE_OPERATOR_LHS(Character, char, >,  c, bool,)
+DEFINE_OPERATOR_LHS(Character, char, >=, c, bool,)
 
-DEFINE_OPERATOR_LHS(Boolean, bool, ==, b, bool)
-DEFINE_OPERATOR_LHS(Boolean, bool, !=, b, bool)
-DEFINE_OPERATOR_LHS(Boolean, bool, <,  b, bool)
-DEFINE_OPERATOR_LHS(Boolean, bool, <=, b, bool)
-DEFINE_OPERATOR_LHS(Boolean, bool, >,  b, bool)
-DEFINE_OPERATOR_LHS(Boolean, bool, >=, b, bool)
+DEFINE_OPERATOR_LHS(Boolean, bool, ==, b, bool,)
+DEFINE_OPERATOR_LHS(Boolean, bool, !=, b, bool,)
+DEFINE_OPERATOR_LHS(Boolean, bool, <,  b, bool,)
+DEFINE_OPERATOR_LHS(Boolean, bool, <=, b, bool,)
+DEFINE_OPERATOR_LHS(Boolean, bool, >,  b, bool,)
+DEFINE_OPERATOR_LHS(Boolean, bool, >=, b, bool,)
 
-DEFINE_OPERATOR_LHS(String, string&, ==, s, bool)
-DEFINE_OPERATOR_LHS(String, string&, !=, s, bool)
-DEFINE_OPERATOR_LHS(String, string&, <,  s, bool)
-DEFINE_OPERATOR_LHS(String, string&, <=, s, bool)
-DEFINE_OPERATOR_LHS(String, string&, >,  s, bool)
-DEFINE_OPERATOR_LHS(String, string&, >=, s, bool)
+DEFINE_OPERATOR_LHS(String, string&, ==, s, bool, *)
+DEFINE_OPERATOR_LHS(String, string&, !=, s, bool, *)
+DEFINE_OPERATOR_LHS(String, string&, <,  s, bool, *)
+DEFINE_OPERATOR_LHS(String, string&, <=, s, bool, *)
+DEFINE_OPERATOR_LHS(String, string&, >,  s, bool, *)
+DEFINE_OPERATOR_LHS(String, string&, >=, s, bool, *)
 
-DEFINE_OPERATOR_LHS(String, char* const, ==, s, bool)
-DEFINE_OPERATOR_LHS(String, char* const, !=, s, bool)
-DEFINE_OPERATOR_LHS(String, char* const, <,  s, bool)
-DEFINE_OPERATOR_LHS(String, char* const, <=, s, bool)
-DEFINE_OPERATOR_LHS(String, char* const, >,  s, bool)
-DEFINE_OPERATOR_LHS(String, char* const, >=, s, bool)
+DEFINE_OPERATOR_LHS(String, char* const, ==, s, bool, *)
+DEFINE_OPERATOR_LHS(String, char* const, !=, s, bool, *)
+DEFINE_OPERATOR_LHS(String, char* const, <,  s, bool, *)
+DEFINE_OPERATOR_LHS(String, char* const, <=, s, bool, *)
+DEFINE_OPERATOR_LHS(String, char* const, >,  s, bool, *)
+DEFINE_OPERATOR_LHS(String, char* const, >=, s, bool, *)
 
-DEFINE_OPERATOR_LHS(Integer, long, +, i, long)
-DEFINE_OPERATOR_LHS(Integer, long, -, i, long)
-DEFINE_OPERATOR_LHS(Integer, long, *, i, long)
-DEFINE_OPERATOR_LHS(Integer, long, /, i, long)
-DEFINE_OPERATOR_LHS(Integer, long, %, i, long)
+DEFINE_OPERATOR_LHS(Integer, long, +, i, long,)
+DEFINE_OPERATOR_LHS(Integer, long, -, i, long,)
+DEFINE_OPERATOR_LHS(Integer, long, *, i, long,)
+DEFINE_OPERATOR_LHS(Integer, long, /, i, long,)
+DEFINE_OPERATOR_LHS(Integer, long, %, i, long,)
 
-DEFINE_OPERATOR_LHS(Double, double, +, d, double)
-DEFINE_OPERATOR_LHS(Double, double, -, d, double)
-DEFINE_OPERATOR_LHS(Double, double, *, d, double)
-DEFINE_OPERATOR_LHS(Double, double, /, d, double)
+DEFINE_OPERATOR_LHS(Double, double, +, d, double,)
+DEFINE_OPERATOR_LHS(Double, double, -, d, double,)
+DEFINE_OPERATOR_LHS(Double, double, *, d, double,)
+DEFINE_OPERATOR_LHS(Double, double, /, d, double,)
 
-DEFINE_OPERATOR_LHS(Character, char, +, i, char)
-DEFINE_OPERATOR_LHS(Character, char, -, i, char)
+DEFINE_OPERATOR_LHS(Character, char, +, i, char,)
+DEFINE_OPERATOR_LHS(Character, char, -, i, char,)
 
-DEFINE_OPERATOR_LHS(String, string&, +, s, string)
-DEFINE_OPERATOR_LHS(String, char* const, +, s, string)
+DEFINE_OPERATOR_LHS(String, string&, +, s, string, *)
+DEFINE_OPERATOR_LHS(String, char* const, +, s, string, *)
 
 #undef DEFINE_OPERATOR_RHS
 #undef DEFINE_OPERATOR_LHS
