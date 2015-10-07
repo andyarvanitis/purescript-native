@@ -76,6 +76,10 @@ class any {
   using shared_map    = std::shared_ptr<map>;
   using shared_vector = std::shared_ptr<vector>;
 
+  using shared_fn     = std::shared_ptr<fn>;
+  using shared_eff_fn = std::shared_ptr<eff_fn>;
+  using shared_thunk  = std::shared_ptr<thunk>;
+
   template <typename T>
   using shared = std::shared_ptr<T>;
 
@@ -105,9 +109,9 @@ class any {
     string          s;
     shared_map      m;
     shared_vector   v;
-    fn              f;
-    eff_fn          e;
-    thunk           t;
+    shared_fn       f;
+    shared_eff_fn   e;
+    shared_thunk    t;
     shared_void_ptr p;
   };
 
@@ -139,21 +143,30 @@ class any {
   any(const shared_vector& val) : type(Type::Vector), v(val) {}
   any(shared_vector&& val) : type(Type::Vector), v(std::move(val)) {}
 
+  any(const shared_fn& val) : type(Type::Function), f(val) {}
+  any(shared_fn&& val) : type(Type::Function), f(std::move(val)) {}
+
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
-    : type(Type::Function), f(val) {}
+    : type(Type::Function), f(make_shared<fn>(val)) {}
 
   // template <typename T>
   // any(T&& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
   //   : type(Type::Function), f(std::move(val)) {}
 
+  any(const shared_eff_fn& val) : type(Type::EffFunction), e(val) {}
+  any(shared_eff_fn&& val) : type(Type::EffFunction), e(std::move(val)) {}
+
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
-    : type(Type::EffFunction), e(val) {}
+    : type(Type::EffFunction), e(make_shared<eff_fn>(val)) {}
+
+  any(const shared_thunk& val) : type(Type::Thunk), t(val) {}
+  any(shared_thunk&& val) : type(Type::Thunk), t(std::move(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
-    : type(Type::Thunk), t(val) {}
+    : type(Type::Thunk), t(make_shared<thunk>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value>::type* = 0)
@@ -176,9 +189,9 @@ class any {
       case Type::String:          new (&s) string          (val.s);  break;
       case Type::Map:             new (&m) shared_map      (val.m);  break;
       case Type::Vector:          new (&v) shared_vector   (val.v);  break;
-      case Type::Function:        new (&f) fn              (val.f);  break;
-      case Type::EffFunction:     new (&e) eff_fn          (val.e);  break;
-      case Type::Thunk:           new (&t) thunk           (val.t);  break;
+      case Type::Function:        new (&f) shared_fn       (val.f);  break;
+      case Type::EffFunction:     new (&e) shared_eff_fn   (val.e);  break;
+      case Type::Thunk:           new (&t) shared_thunk    (val.t);  break;
       case Type::Pointer:         new (&p) shared_void_ptr (val.p);  break;
 
       default: assert(not "supported type in copy ctor");
@@ -195,9 +208,9 @@ class any {
       case Type::String:          new (&s) string          (std::move(val.s));  break;
       case Type::Map:             new (&m) shared_map      (std::move(val.m));  break;
       case Type::Vector:          new (&v) shared_vector   (std::move(val.v));  break;
-      case Type::Function:        new (&f) fn              (std::move(val.f));  break;
-      case Type::EffFunction:     new (&e) eff_fn          (std::move(val.e));  break;
-      case Type::Thunk:           new (&t) thunk           (std::move(val.t));  break;
+      case Type::Function:        new (&f) shared_fn       (std::move(val.f));  break;
+      case Type::EffFunction:     new (&e) shared_eff_fn   (std::move(val.e));  break;
+      case Type::Thunk:           new (&t) shared_thunk    (std::move(val.t));  break;
       case Type::Pointer:         new (&p) shared_void_ptr (std::move(val.p));  break;
 
       default: assert(not "supported type in move ctor");
@@ -224,9 +237,9 @@ class any {
       case Type::String:          s.~string();          break;
       case Type::Map:             m.~shared_map();      break;
       case Type::Vector:          v.~shared_vector();   break;
-      case Type::Function:        f.~fn();              break;
-      case Type::EffFunction:     e.~eff_fn();          break;
-      case Type::Thunk:           t.~thunk();           break;
+      case Type::Function:        f.~shared_fn();       break;
+      case Type::EffFunction:     e.~shared_eff_fn();   break;
+      case Type::Thunk:           t.~shared_thunk();    break;
       case Type::Pointer:         p.~shared_void_ptr(); break;
 
       default: assert(not "supported type in destructor");
@@ -238,7 +251,7 @@ class any {
       return FN(VAL); \
     } else { \
       assert(type == Type::Thunk); \
-      const any& value = t(unthunk); \
+      const any& value = (*t)(unthunk); \
       assert(value.type == TYPE); \
       return FN(value.VAL); \
     }
@@ -285,20 +298,27 @@ class any {
   }
 
   auto operator()(const any arg) const -> any {
-    RETURN_VALUE(Type::Function, f(arg),)
+    if (type == Type::Function) {
+      return (*f)(arg);
+    } else {
+      assert(type == Type::Thunk);
+      const any& value = (*t)(unthunk);
+      assert(value.type == Type::Function);
+      return (*value.f)(arg);
+    }
   }
 
   auto operator()(const as_thunk) const -> const any& {
     assert(type == Type::Thunk);
-    return t(unthunk);
+    return (*t)(unthunk);
   }
 
   inline static auto call(const any& a) -> any {
     assert(a.type == Type::EffFunction || a.type == Type::Function);
     if (a.type == Type::EffFunction) {
-      return a.e();
+      return (*a.e)();
     } else {
-      return a.f(false);
+      return (*a.f)(false);
     }
   }
 
@@ -307,7 +327,7 @@ class any {
       return call(*this);
     } else {
       assert(type == Type::Thunk);
-      const any& value = t(unthunk);
+      const any& value = (*t)(unthunk);
       return call(value);
     }
   }
@@ -355,7 +375,7 @@ class any {
   #undef RETURN_VALUE
 
   static constexpr auto extract_value(const any& a) -> const any& {
-    return a.type != Type::Thunk ? a : a.t(unthunk);
+    return a.type != Type::Thunk ? a : (*a.t)(unthunk);
   }
 
   #define DEFINE_OPERATOR_RHS(K, T, OP, V, R) \
