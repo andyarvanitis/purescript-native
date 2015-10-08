@@ -30,7 +30,7 @@ any::any(const any& val) : type(val.type) {
     case Type::Thunk:           new (&t) shared_thunk    (val.t);  break;
     case Type::Pointer:         new (&p) shared_void_ptr (val.p);  break;
 
-    default: assert(not "supported type in copy ctor");
+    default: assert(false && "Unsupported type in copy ctor");
   }
 }
 
@@ -49,7 +49,7 @@ void any::swap(any&& val) {
     case Type::Thunk:           new (&t) shared_thunk    (std::move(val.t));  break;
     case Type::Pointer:         new (&p) shared_void_ptr (std::move(val.p));  break;
 
-    default: assert(not "supported type in move ctor");
+    default: assert(false && "Unsupported type in move ctor");
   }
 }
 
@@ -68,7 +68,7 @@ any::~any() {
     case Type::Thunk:           t.~shared_thunk();    break;
     case Type::Pointer:         p.~shared_void_ptr(); break;
 
-    default: assert(not "supported type in destructor");
+    default: assert(false && "Unsupported type in destructor");
   }
 };
 
@@ -254,7 +254,7 @@ auto any::operator==(const any& rhs_) const -> bool {
     case Type::Boolean:   return lhs.b == rhs.b;
     case Type::String:    return (*lhs.s) == (*rhs.s);
     case Type::Pointer:   return lhs.p == rhs.p;
-    default: assert(not "supported type for '==' operator");
+    default: assert(false && "Unsupported type for '==' operator");
   }
   return false;
 }
@@ -277,7 +277,7 @@ auto any::operator!=(const any& rhs_) const -> bool {
     case Type::Boolean:   return lhs.b != rhs.b;
     case Type::String:    return (*lhs.s) != (*rhs.s);
     case Type::Pointer:   return lhs.p != rhs.p;
-    default: assert(not "supported type for '!=' operator");
+    default: assert(false && "Unsupported type for '!=' operator");
   }
   return false;
 }
@@ -299,7 +299,7 @@ auto any::operator<(const any& rhs_) const -> bool {
     case Type::Character: return lhs.c < rhs.c;
     case Type::Boolean:   return lhs.b < rhs.b;
     case Type::String:    return (*lhs.s) < (*rhs.s);
-    default: assert(not "supported type for '<' operator");
+    default: assert(false && "Unsupported type for '<' operator");
   }
   return false;
 }
@@ -321,7 +321,7 @@ auto any::operator<=(const any& rhs_) const -> bool {
     case Type::Character: return lhs.c <= rhs.c;
     case Type::Boolean:   return lhs.b <= rhs.b;
     case Type::String:    return (*lhs.s) <= (*rhs.s);
-    default: assert(not "supported type for '<' operator");
+    default: assert(false && "Unsupported type for '<' operator");
   }
   return false;
 }
@@ -343,7 +343,7 @@ auto any::operator>(const any& rhs_) const -> bool {
     case Type::Character: return lhs.c > rhs.c;
     case Type::Boolean:   return lhs.b > rhs.b;
     case Type::String:    return (*lhs.s) > (*rhs.s);
-    default: assert(not "supported type for '>' operator");
+    default: assert(false && "Unsupported type for '>' operator");
   }
   return false;
 }
@@ -365,7 +365,7 @@ auto any::operator>=(const any& rhs_) const -> bool {
     case Type::Character: return lhs.c >= rhs.c;
     case Type::Boolean:   return lhs.b >= rhs.b;
     case Type::String:    return (*lhs.s) >= (*rhs.s);
-    default: assert(not "supported type for '>' operator");
+    default: assert(false && "Unsupported type for '>' operator");
   }
   return false;
 }
@@ -386,7 +386,7 @@ auto any::operator+(const any& rhs_) const -> any {
     case Type::Double:    return lhs.d + rhs.d;
     case Type::Character: return any(char(lhs.c + rhs.c));
     case Type::String:    return (*lhs.s) + (*rhs.s);
-    default: assert(not "supported type for '+' operator");
+    default: assert(false && "Unsupported type for '+' operator");
   }
   return nullptr;
 }
@@ -405,7 +405,7 @@ auto any::operator-(const any& rhs_) const -> any {
     case Type::Integer:   return lhs.i - rhs.i;
     case Type::Double:    return lhs.d - rhs.d;
     case Type::Character: return any(char(lhs.c - rhs.c));
-    default: assert(not "supported type for '-' binary operator");
+    default: assert(false && "Unsupported type for '-' binary operator");
   }
   return nullptr;
 }
@@ -421,7 +421,7 @@ auto any::operator*(const any& rhs_) const -> any {
   switch (lhs.type) {
     case Type::Integer: return lhs.i * rhs.i;
     case Type::Double:  return lhs.d * rhs.d;
-    default: assert(not "supported type for '*' operator");
+    default: assert(false && "Unsupported type for '*' operator");
   }
   return nullptr;
 }
@@ -436,7 +436,7 @@ auto any::operator/(const any& rhs_) const -> any {
   switch (lhs.type) {
     case Type::Integer: return lhs.i / rhs.i;
     case Type::Double:  return lhs.d / rhs.d;
-    default: assert(not "supported type for '/' operator");
+    default: assert(false && "Unsupported type for '/' operator");
   }
   return nullptr;
 }
@@ -450,7 +450,7 @@ auto any::operator%(const any& rhs_) const -> any {
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer: return lhs.i % rhs.i;
-    default: assert(not "supported type for '%' operator");
+    default: assert(false && "Unsupported type for '%' operator");
   }
   return nullptr;
 }
@@ -462,7 +462,7 @@ auto any::operator-() const -> any {
   switch (lhs.type) {
     case Type::Integer: return (- lhs.i);
     case Type::Double:  return (- lhs.d);
-    default: assert(not "supported type for unary '-' operator");
+    default: assert(false && "Unsupported type for unary '-' operator");
   }
   return nullptr;
 }
