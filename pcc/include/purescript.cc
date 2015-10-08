@@ -72,15 +72,20 @@ any::~any() {
   }
 };
 
-#define RETURN_VALUE(TYPE, VAL, FN) \
-  if (type == TYPE) { \
-    return FN(VAL); \
-  } else { \
-    assert(type == Type::Thunk); \
-    const any& value = (*t)(unthunk); \
-    assert(value.type == TYPE); \
-    return FN(value.VAL); \
-  }
+  #define RETURN_VALUE(TYPE, VAL, FN) \
+    if (type == TYPE) { \
+      return FN(VAL); \
+    } \
+    const any* valuePtr = this; \
+    do { \
+      assert(valuePtr->type == Type::Thunk); \
+      const any& value = (*valuePtr->t)(unthunk); \
+      if (value.type == TYPE) { \
+        return FN(value.VAL); \
+      } \
+      valuePtr = &value; \
+    } while (valuePtr->type != Type::Unknown); \
+    return FN(VAL);
 
   template <typename T>
   auto any::cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type {
@@ -128,12 +133,17 @@ any::~any() {
   auto any::operator()(const any arg) const -> any {
     if (type == Type::Function) {
       return (*f)(arg);
-    } else {
-      assert(type == Type::Thunk);
-      const any& value = (*t)(unthunk);
-      assert(value.type == Type::Function);
-      return (*value.f)(arg);
     }
+    const any* valuePtr = this;
+    do {
+      assert(valuePtr->type == Type::Thunk);
+      const any& value = (*valuePtr->t)(unthunk);
+      if (value.type == Type::Function) {
+        return (*value.f)(arg);
+      }
+      valuePtr = &value;
+    } while (valuePtr->type != Type::Unknown);
+    return nullptr;
   }
 
   auto any::operator()(const as_thunk) const -> const any& {
@@ -153,11 +163,16 @@ any::~any() {
   auto any::operator()() const -> any {
     if (type == Type::EffFunction || type == Type::Function) {
       return call(*this);
-    } else {
-      assert(type == Type::Thunk);
-      const any& value = (*t)(unthunk);
-      return call(value);
     }
+    assert(type == Type::Thunk);
+    const any* valuePtr = this;
+    do {
+      const any& value = (*valuePtr->t)(unthunk);
+      if (value.type != Type::Thunk) {
+        return call(value);
+      }
+      valuePtr = &value;
+    } while (true);
   }
 
   any::operator long() const {
@@ -189,7 +204,17 @@ any::~any() {
   }
 
   auto any::extract_value(const any& a) -> const any& {
-    return a.type != Type::Thunk ? a : (*a.t)(unthunk);
+    if (a.type != Type::Thunk) {
+      return a;
+    }
+    const any* valuePtr = &a;
+    do {
+      const any& value = (*valuePtr->t)(unthunk);
+      if (value.type != Type::Thunk) {
+        return value;
+      }
+      valuePtr = &value;
+    } while (true);
   }
 
   auto any::operator[](const map_key_t rhs) const -> const any& {
@@ -359,7 +384,7 @@ auto any::operator+(const any& rhs_) const -> any {
   switch (lhs.type) {
     case Type::Integer:   return lhs.i + rhs.i;
     case Type::Double:    return lhs.d + rhs.d;
-    case Type::Character: return lhs.c + rhs.c;
+    case Type::Character: return any(char(lhs.c + rhs.c));
     case Type::String:    return (*lhs.s) + (*rhs.s);
     default: assert(not "supported type for '+' operator");
   }
@@ -379,7 +404,7 @@ auto any::operator-(const any& rhs_) const -> any {
   switch (lhs.type) {
     case Type::Integer:   return lhs.i - rhs.i;
     case Type::Double:    return lhs.d - rhs.d;
-    case Type::Character: return lhs.c - rhs.c;
+    case Type::Character: return any(char(lhs.c - rhs.c));
     default: assert(not "supported type for '-' binary operator");
   }
   return nullptr;

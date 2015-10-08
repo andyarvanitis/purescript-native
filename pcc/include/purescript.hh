@@ -224,12 +224,17 @@ class any {
   auto cast() const -> typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value, typename T::element_type*>::type {
     if (type == Type::Pointer) {
       return static_cast_shared<typename T::element_type>(p);
-    } else {
-      assert(type == Type::Thunk);
-      const any& value = (*t)(unthunk);
-      assert(value.type == Type::Pointer);
-      return static_cast_shared<typename T::element_type>(value.p);
     }
+    const any* valuePtr = this;
+    do {
+      assert(valuePtr->type == Type::Thunk);
+      const any& value = (*valuePtr->t)(unthunk);
+      if (value.type == Type::Pointer) {
+        return static_cast_shared<typename T::element_type>(value.p);
+      }
+      valuePtr = &value;
+    } while (valuePtr->type != Type::Unknown);
+    return nullptr;
   }
 
   auto operator()(const any) const -> any;
