@@ -87,17 +87,17 @@ class any {
   using shared_void_ptr = std::shared_ptr<void>;
 
   template <typename T>
-  static constexpr auto make_shared(const T& arg) {
+  static constexpr auto make_shared(const T& arg) -> shared<T> {
     return std::make_shared<T>(arg);
   }
 
   template <typename T>
-  static constexpr auto make_shared(T&& arg) {
+  static constexpr auto make_shared(T&& arg) -> shared<T> {
     return std::make_shared<T>(std::move(arg));
   }
 
   template <typename T, typename U>
-  static constexpr auto static_cast_shared(U arg) {
+  static constexpr auto static_cast_shared(U arg) -> T* {
     return static_cast<T*>(arg.get());
   }
 
