@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
 --
 -- Module      :  Language.PureScript.CodeGen.Cpp
--- Copyright   :  (c) Phil Freeman 2013
+-- Copyright   :  (c) 2013-15 Phil Freeman, Andy Arvanitis, and other contributors
 -- License     :  MIT
 --
 -- Maintainer  :  Andy Arvanitis <andy.arvanitis@gmail.com>
@@ -9,7 +9,7 @@
 -- Portability :
 --
 -- |
--- This module generates code in the simplified C++14 intermediate representation from Purescript code
+-- This module generates code in the simplified C++1x intermediate representation from Purescript code
 --
 -----------------------------------------------------------------------------
 
@@ -54,7 +54,7 @@ import qualified Language.PureScript.Types as T
 -- import Debug.Trace
 
 -- |
--- Generate code in the simplified C++14 intermediate representation for all declarations in a
+-- Generate code in the simplified C++1x intermediate representation for all declarations in a
 -- module.
 --
 ---------------------------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   where
   -- |
-  -- Generate code in the simplified C++14 intermediate representation for a declaration
+  -- Generate code in the simplified C++1x intermediate representation for a declaration
   --
   -------------------------------------------------------------------------------------------------
   bindToCpp :: Bind Ann -> m [Cpp]
@@ -227,7 +227,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   convertRecursiveFns cpps = cpps
 
   -- |
-  -- Generate code in the simplified C++14 intermediate representation for a value or expression.
+  -- Generate code in the simplified C++1x intermediate representation for a value or expression.
   --
   -------------------------------------------------------------------------------------------------
   valueToCpp :: Expr Ann -> m Cpp
@@ -331,7 +331,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp Constructor{} = return CppNoOp
 
   -- |
-  -- Generate code in the simplified C++14 intermediate representation for a reference to a
+  -- Generate code in the simplified C++1x intermediate representation for a reference to a
   -- variable.
   --
   -------------------------------------------------------------------------------------------------
@@ -341,7 +341,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   varToCpp qual = qualifiedToCpp id qual
 
   -- |
-  -- Generate code in the simplified C++14 intermediate representation for pattern match binders
+  -- Generate code in the simplified C++1x intermediate representation for pattern match binders
   -- and guards.
   --
   -------------------------------------------------------------------------------------------------
@@ -382,7 +382,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       guardsToCpp (Right v) = return . CppReturn <$> valueToCpp v
 
   -- |
-  -- Generate code in the simplified C++14 intermediate representation for a pattern match
+  -- Generate code in the simplified C++1x intermediate representation for a pattern match
   -- binder.
   --
   -------------------------------------------------------------------------------------------------
