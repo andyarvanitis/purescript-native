@@ -70,7 +70,7 @@ main = do
     --
     setCurrentDirectory buildDir
     callProcess "cmake" ["../output"]
-    callProcess "make" ["-j2"]
+    callProcess "make" []
     callProcess (buildDir </> "Main") []
 
     removeFile (srcDir </> inputFile)
@@ -90,18 +90,18 @@ main = do
 -------------------------------------------------------------------------------
 repo :: String
 -------------------------------------------------------------------------------
-repo = "git://github.com/pure14/"
+repo = "git://github.com/pure11/"
 
 -------------------------------------------------------------------------------
 packages :: [(String, String)]
 -------------------------------------------------------------------------------
 packages =
-  [ ("purescript-eff",       "pure14-dictionary")
-  , ("purescript-prelude",   "pure14-dictionary")
-  , ("purescript-assert",    "pure14-dictionary")
-  , ("purescript-st",        "pure14-dictionary")
-  , ("purescript-console",   "pure14-dictionary")
-  , ("purescript-functions", "pure14-dictionary")
+  [ ("purescript-eff",       "")
+  , ("purescript-prelude",   "")
+  , ("purescript-assert",    "")
+  , ("purescript-st",        "")
+  , ("purescript-console",   "")
+  , ("purescript-functions", "")
   ]
 
 -------------------------------------------------------------------------------
