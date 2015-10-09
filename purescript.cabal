@@ -25,6 +25,7 @@ extra-source-files: examples/passing/*.purs
                   , tests/support/bower.json
                   , tests/support/setup-win.cmd
                   , psci/tests/data/Sample.purs
+                  , pcc/include/*.hh
 
 source-repository head
     type: git
@@ -80,6 +81,21 @@ library
                      Language.PureScript.CodeGen.JS.Optimizer.MagicDo
                      Language.PureScript.CodeGen.JS.Optimizer.TCO
                      Language.PureScript.CodeGen.JS.Optimizer.Unused
+
+                     Language.PureScript.CodeGen.Cpp
+                     Language.PureScript.CodeGen.Cpp.AST
+                     Language.PureScript.CodeGen.Cpp.Common
+                     Language.PureScript.CodeGen.Cpp.File
+                     Language.PureScript.CodeGen.Cpp.Optimizer
+                     Language.PureScript.CodeGen.Cpp.Optimizer.Blocks
+                     Language.PureScript.CodeGen.Cpp.Optimizer.Common
+                     Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
+                     Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo
+                     Language.PureScript.CodeGen.Cpp.Optimizer.TCO
+                     Language.PureScript.CodeGen.Cpp.Optimizer.Unused
+                     Language.PureScript.CodeGen.Cpp.Types
+                     Language.PureScript.Pretty.Cpp
+
                      Language.PureScript.Constants
                      Language.PureScript.CoreFn
                      Language.PureScript.CoreFn.Ann
@@ -241,6 +257,18 @@ executable psc-bundle
   ghc-options:         -Wall -O2
   hs-source-dirs:      psc-bundle
 
+executable pcc
+    build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
+                   file-embed >= 0.0.7 && < 0.0.8,
+                   bytestring -any,
+                   mtl -any, optparse-applicative >= 0.10.0, parsec -any, purescript -any,
+                   time -any, transformers -any, transformers-compat -any
+    main-is: Main.hs
+    buildable: True
+    hs-source-dirs: pcc
+    other-modules:
+    ghc-options: -Wall -O2 -fno-warn-unused-do-bind
+
 test-suite tests
     build-depends: base >=4 && <5, containers -any, directory -any,
                    filepath -any, mtl -any, parsec -any, purescript -any,
@@ -264,3 +292,10 @@ test-suite psci-tests
     buildable: True
     hs-source-dirs: psci psci/tests tests/common
     ghc-options: -Wall
+
+test-suite pcc-tests
+    build-depends: base >=4 && <5, directory -any, filepath -any, process -any
+    type: exitcode-stdio-1.0
+    main-is: TestMain.hs
+    buildable: True
+    hs-source-dirs: pcc

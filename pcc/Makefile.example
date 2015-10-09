@@ -1,0 +1,16 @@
+PCC := "../.cabal-sandbox/bin/pcc"
+
+MODULE_DIR="../../packages"
+#MODULE_DIR="bower_components"
+SOURCE_DIR="src"
+
+MODULES := $(shell find $(MODULE_DIR) -name '*.purs' | grep -v \/test\/ | grep -v \/example\/ | grep -v \/examples\/)
+SOURCES := $(shell find $(SOURCE_DIR) -name '*.purs')
+
+all: main
+
+main:
+	$(PCC) $(MODULES) $(SOURCES)
+
+clean:
+	@rm -rf output/*
