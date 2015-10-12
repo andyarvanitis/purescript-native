@@ -245,9 +245,9 @@ class any {
 
   static auto call(const any& a) -> any;
 
-  explicit operator long() const;
-  explicit operator double() const;
-  explicit operator bool() const;
+  operator long() const;
+  operator double() const;
+  operator bool() const;
 
   operator const string&() const;
   operator const map&() const;
