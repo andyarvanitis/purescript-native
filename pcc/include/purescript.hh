@@ -118,9 +118,9 @@ class any {
 
   public:
 
-  any(const int val) : type(Type::Integer), i(val) {}
-
   any(const long val) : type(Type::Integer), i(val) {}
+  any(const int val) : type(Type::Integer), i(val) {}
+  any(const unsigned int val) : type(Type::Integer), i(val) {}
 
   any(const double val) : type(Type::Double), d(val) {}
 
