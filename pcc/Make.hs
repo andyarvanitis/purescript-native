@@ -131,18 +131,19 @@ buildMakeActions outputDir filePathMap usePrefix =
         writeTextFile (supportDir </> "map_key.hh")    $ B.unpack $(embedFile "pcc/include/map_key.hh")
         writeTextFile (supportDir </> "hash.hh")       $ B.unpack $(embedFile "pcc/include/hash.hh")
 
-      when (requiresForeign m) $ do
-        let inputPath = dropExtension $ getInputFile mn
-            hfile = addExtension inputPath "hh"
-            sfile = addExtension inputPath "cc"
-        hfileExists <- textFileExists hfile
-        when (not hfileExists) (throwError . P.errorMessage $ P.MissingFFIModule mn)
-        text <- readTextFile hfile
+      let inputPath = dropExtension $ getInputFile mn
+          hfile = addExtension inputPath "hh"
+          sfile = addExtension inputPath "cc"
+      hfileExists <- textFileExists hfile
+      when (hfileExists || requiresForeign m) $ do
+        text <- if hfileExists
+                  then readTextFile hfile
+                  else pure []
         writeTextFile (addExtension (fileBase ++ "_ffi") "hh") text
-        sfileExists <- textFileExists sfile
-        when (sfileExists) $ do
-          text' <- readTextFile sfile
-          writeTextFile (addExtension (fileBase ++ "_ffi") "cc") text'
+      sfileExists <- textFileExists sfile
+      when (sfileExists) $ do
+        text' <- readTextFile sfile
+        writeTextFile (addExtension (fileBase ++ "_ffi") "cc") text'
 
   requiresForeign :: CF.Module a -> Bool
   requiresForeign = not . null . CF.moduleForeign
