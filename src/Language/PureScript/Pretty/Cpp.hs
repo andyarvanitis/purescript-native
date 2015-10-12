@@ -52,7 +52,8 @@ literals = mkPattern' match
   match CppEndOfHeader = return []
   match (CppNumericLiteral (Left n)) = return $ show n ++ "L"
   match (CppNumericLiteral n) = return $ either show show n
-  match (CppStringLiteral s) = return $ string s
+  match (CppStringLiteral s) | all isAscii s = return $ string s
+  match (CppStringLiteral s) = return $ "u8" ++ string s
   match (CppStringLiteralHash s) = return $ "HASH" ++ parens (string s)
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
@@ -277,7 +278,7 @@ indexer :: Pattern PrinterState Cpp (String, Cpp)
 indexer = mkPattern' match
   where
   match (CppIndexer index@(CppNumericLiteral {}) val) = (,) <$> prettyPrintCpp' index <*> pure val
-  match (CppIndexer index@(CppStringLiteral {}) val) = (,) <$> (liftM (("KEY" ++) . parens) . prettyPrintCpp') index <*> pure val
+  match (CppIndexer (CppStringLiteral index) val) = return ("KEY" ++ parens (show index), val)
   match _ = mzero
 
 lam :: Pattern PrinterState Cpp ((String, [(String, Maybe CppType)], Maybe CppType), Cpp)

@@ -37,11 +37,13 @@ import Data.String (fromString)
 import Data.Time.Clock
 import Data.Version (showVersion)
 import qualified Data.Map as M
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as B
 
 import System.Directory (doesDirectoryExist, doesFileExist, getModificationTime, createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory, addExtension, dropExtension)
 import System.IO.Error (tryIOError)
+import System.IO.UTF8
 
 import qualified Language.PureScript as P
 import qualified Language.PureScript.CodeGen.Cpp as CPP
@@ -94,10 +96,10 @@ buildMakeActions outputDir filePathMap usePrefix =
         externsFile = outputDir </> filePath </> "externs.purs"
     min <$> getTimestamp srcFile <*> getTimestamp externsFile
 
-  readExterns :: P.ModuleName -> Make (FilePath, B.ByteString)
+  readExterns :: P.ModuleName -> Make (FilePath, BL.ByteString)
   readExterns mn = do
     let path = outputDir </> (dotsTo '/' $ P.runModuleName mn) </> "externs.purs"
-    (path, ) <$> readTextFile path
+    (path, ) <$> readTextFile' path
 
   codegen :: CF.Module CF.Ann -> P.Environment -> P.Externs -> P.SupplyT Make ()
   codegen m env exts = do
@@ -116,18 +118,18 @@ buildMakeActions outputDir filePathMap usePrefix =
         hdr = unlines $ map ("// " ++) prefix ++ [phdrs]
 
     lift $ do
-      writeTextFile srcFile (fromString src)
-      writeTextFile headerFile (fromString hdr)
-      writeTextFile externsFile exts
+      writeTextFile srcFile src
+      writeTextFile headerFile hdr
+      writeTextFile externsFile $ B.unpack $ BL.toStrict exts
 
       let supportDir = outputDir </> "PureScript"
       supportFilesExist <- dirExists supportDir
       when (not supportFilesExist) $ do
         writeTextFile (outputDir  </> "CMakeLists.txt") (fromString cmakeListsTxt)
-        writeTextFile (supportDir </> "PureScript.hh") $ B.fromStrict $(embedFile "pcc/include/purescript.hh")
-        writeTextFile (supportDir </> "PureScript.cc") $ B.fromStrict $(embedFile "pcc/include/purescript.cc")
-        writeTextFile (supportDir </> "map_key.hh")    $ B.fromStrict $(embedFile "pcc/include/map_key.hh")
-        writeTextFile (supportDir </> "hash.hh")       $ B.fromStrict $(embedFile "pcc/include/hash.hh")
+        writeTextFile (supportDir </> "PureScript.hh") $ B.unpack $(embedFile "pcc/include/purescript.hh")
+        writeTextFile (supportDir </> "PureScript.cc") $ B.unpack $(embedFile "pcc/include/purescript.cc")
+        writeTextFile (supportDir </> "map_key.hh")    $ B.unpack $(embedFile "pcc/include/map_key.hh")
+        writeTextFile (supportDir </> "hash.hh")       $ B.unpack $(embedFile "pcc/include/hash.hh")
 
       when (requiresForeign m) $ do
         let inputPath = dropExtension $ getInputFile mn
@@ -158,13 +160,16 @@ buildMakeActions outputDir filePathMap usePrefix =
     exists <- doesFileExist path
     traverse (const $ getModificationTime path) $ guard exists
 
-  readTextFile :: FilePath -> Make B.ByteString
-  readTextFile path = makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile path)) $ B.readFile path
+  readTextFile :: FilePath -> Make String
+  readTextFile path = makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile path)) $ readUTF8File path
 
-  writeTextFile :: FilePath -> B.ByteString -> Make ()
+  readTextFile' :: FilePath -> Make BL.ByteString
+  readTextFile' path = makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile path)) $ BL.readFile path
+
+  writeTextFile :: FilePath -> String -> Make ()
   writeTextFile path text = makeIO (const (P.SimpleErrorWrapper $ P.CannotWriteFile path)) $ do
     mkdirp path
-    B.writeFile path text
+    writeFile path text
     where
     mkdirp :: FilePath -> IO ()
     mkdirp = createDirectoryIfMissing True . takeDirectory

@@ -31,6 +31,7 @@ import Options.Applicative as Opts
 
 import System.Exit (exitSuccess, exitFailure)
 import System.IO (hPutStrLn, stderr)
+import System.IO.UTF8
 
 import qualified Language.PureScript as P
 import qualified Paths_purescript as Paths
@@ -72,7 +73,7 @@ compile (PCCOptions input _ outputDir opts usePrefix) = do
           exitSuccess
 
 readInput :: InputOptions -> IO [(Either P.RebuildPolicy FilePath, String)]
-readInput InputOptions{..} = forM ioInputFiles $ \inFile -> (Right inFile, ) <$> readFile inFile
+readInput InputOptions{..} = forM ioInputFiles $ \inFile -> (Right inFile, ) <$> readUTF8File inFile
 
 parseInputs :: (Functor m, Applicative m, MonadError P.MultipleErrors m, MonadWriter P.MultipleErrors m)
             => [(Either P.RebuildPolicy FilePath, String)]
