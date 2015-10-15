@@ -118,6 +118,12 @@ any::~any() {
   template auto any::cast<string>() const -> const string&;
 
   template <typename T>
+  auto any::cast() const -> typename std::enable_if<std::is_same<T, const char*>::value, const T>::type {
+    RETURN_VALUE(Type::String, s->c_str(),)
+  }
+  template auto any::cast<const char*>() const -> const char* const;
+
+  template <typename T>
   auto any::cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
     RETURN_VALUE(Type::Map, m, *)
   }

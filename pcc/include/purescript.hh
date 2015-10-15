@@ -215,6 +215,9 @@ class any {
   auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type;
 
   template <typename T>
+  auto cast() const -> typename std::enable_if<std::is_same<T, const char*>::value, const T>::type;
+
+  template <typename T>
   auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type;
 
   template <typename T>
