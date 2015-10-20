@@ -1,5 +1,5 @@
 name: purescript
-version: 0.7.4.1
+version: 0.7.5
 cabal-version: >=1.8
 build-type: Simple
 license: MIT
@@ -25,6 +25,14 @@ extra-source-files: examples/passing/*.purs
                   , tests/support/bower.json
                   , tests/support/setup-win.cmd
                   , psci/tests/data/Sample.purs
+                  , stack.yaml
+                  , stack-lts-2.yaml
+                  , stack-lts-3.yaml
+                  , stack-nightly.yaml
+                  , README.md
+                  , INSTALL.md
+                  , CONTRIBUTORS.md
+                  , CONTRIBUTING.md
                   , pcc/include/*.hh
 
 source-repository head
@@ -33,6 +41,9 @@ source-repository head
 
 library
     build-depends: base >=4.6 && <5,
+                   lifted-base >= 0.2.3 && < 0.2.4,
+                   monad-control >= 1.0.0.0 && < 1.1,
+                   transformers-base >= 0.4.0 && < 0.5,
                    containers -any,
                    unordered-containers -any,
                    dlist -any,
@@ -192,7 +203,7 @@ executable psc
     main-is: Main.hs
     buildable: True
     hs-source-dirs: psc
-    ghc-options: -Wall -O2 -fno-warn-unused-do-bind
+    ghc-options: -Wall -O2 -fno-warn-unused-do-bind -threaded -rtsopts "-with-rtsopts=-N"
 
 executable psci
     build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,

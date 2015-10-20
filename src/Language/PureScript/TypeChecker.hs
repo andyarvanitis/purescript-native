@@ -27,7 +27,7 @@ import Language.PureScript.TypeChecker.Types as T
 import Language.PureScript.TypeChecker.Synonyms as T
 
 import Data.Maybe
-import Data.List (nub, (\\))
+import Data.List (nub, (\\), sort, group)
 import Data.Foldable (for_)
 
 import qualified Data.Map as M
@@ -51,7 +51,7 @@ addDataType moduleName dtype name args dctors ctorKind = do
   env <- getEnv
   putEnv $ env { types = M.insert (Qualified (Just moduleName) name) (ctorKind, DataType args dctors) (types env) }
   forM_ dctors $ \(dctor, tys) ->
-    warnAndRethrow (onErrorMessages (ErrorInDataConstructor dctor)) $
+    warnAndRethrow (addHint (ErrorInDataConstructor dctor)) $
       addDataConstructor moduleName dtype name (map fst args) dctor tys
 
 addDataConstructor :: ModuleName -> DataDeclType -> ProperName -> [String] -> ProperName -> [Type] -> Check ()
@@ -132,12 +132,12 @@ checkTypeSynonyms = void . replaceAllTypeSynonyms
 --
 --  * Process module imports
 --
-typeCheckAll :: Maybe ModuleName -> ModuleName -> [DeclarationRef] -> [Declaration] -> Check [Declaration]
-typeCheckAll mainModuleName moduleName _ ds = mapM go ds <* mapM_ checkOrphanFixities ds
+typeCheckAll :: ModuleName -> [DeclarationRef] -> [Declaration] -> Check [Declaration]
+typeCheckAll moduleName _ ds = mapM go ds <* mapM_ checkOrphanFixities ds
   where
   go :: Declaration -> Check Declaration
   go (DataDeclaration dtype name args dctors) = do
-    warnAndRethrow (onErrorMessages (ErrorInTypeConstructor name)) $ do
+    warnAndRethrow (addHint (ErrorInTypeConstructor name)) $ do
       when (dtype == Newtype) $ checkNewtype dctors
       checkDuplicateTypeArguments $ map fst args
       ctorKind <- kindsOf True moduleName name args (concatMap snd dctors)
@@ -150,7 +150,7 @@ typeCheckAll mainModuleName moduleName _ ds = mapM go ds <* mapM_ checkOrphanFix
     checkNewtype [(_, _)] = throwError . errorMessage $ InvalidNewtype
     checkNewtype _ = throwError . errorMessage $ InvalidNewtype
   go (d@(DataBindingGroupDeclaration tys)) = do
-    warnAndRethrow (onErrorMessages ErrorInDataBindingGroup) $ do
+    warnAndRethrow (addHint ErrorInDataBindingGroup) $ do
       let syns = mapMaybe toTypeSynonym tys
       let dataDecls = mapMaybe toDataDecl tys
       (syn_ks, data_ks) <- kindsOfAll moduleName syns (map (\(_, name, args, dctors) -> (name, args, concatMap snd dctors)) dataDecls)
@@ -171,7 +171,7 @@ typeCheckAll mainModuleName moduleName _ ds = mapM go ds <* mapM_ checkOrphanFix
     toDataDecl (PositionedDeclaration _ _ d') = toDataDecl d'
     toDataDecl _ = Nothing
   go (TypeSynonymDeclaration name args ty) = do
-    warnAndRethrow (onErrorMessages (ErrorInTypeSynonym name)) $ do
+    warnAndRethrow (addHint (ErrorInTypeSynonym name)) $ do
       checkDuplicateTypeArguments $ map fst args
       kind <- kindsOf False moduleName name args [ty]
       let args' = args `withKinds` kind
@@ -179,17 +179,17 @@ typeCheckAll mainModuleName moduleName _ ds = mapM go ds <* mapM_ checkOrphanFix
     return $ TypeSynonymDeclaration name args ty
   go (TypeDeclaration{}) = error "Type declarations should have been removed"
   go (ValueDeclaration name nameKind [] (Right val)) =
-    warnAndRethrow (onErrorMessages (ErrorInValueDeclaration name)) $ do
+    warnAndRethrow (addHint (ErrorInValueDeclaration name)) $ do
       valueIsNotDefined moduleName name
-      [(_, (val', ty))] <- typesOf mainModuleName moduleName [(name, val)]
+      [(_, (val', ty))] <- typesOf moduleName [(name, val)]
       addValue moduleName name ty nameKind
       return $ ValueDeclaration name nameKind [] $ Right val'
   go (ValueDeclaration{}) = error "Binders were not desugared"
   go (BindingGroupDeclaration vals) =
-    warnAndRethrow (onErrorMessages (ErrorInBindingGroup (map (\(ident, _, _) -> ident) vals))) $ do
+    warnAndRethrow (addHint (ErrorInBindingGroup (map (\(ident, _, _) -> ident) vals))) $ do
       forM_ (map (\(ident, _, _) -> ident) vals) $ \name ->
         valueIsNotDefined moduleName name
-      tys <- typesOf mainModuleName moduleName $ map (\(ident, _, ty) -> (ident, ty)) vals
+      tys <- typesOf moduleName $ map (\(ident, _, ty) -> (ident, ty)) vals
       vals' <- forM [ (name, val, nameKind, ty)
                     | (name, nameKind, _) <- vals
                     , (name', (val, ty)) <- tys
@@ -203,7 +203,7 @@ typeCheckAll mainModuleName moduleName _ ds = mapM go ds <* mapM_ checkOrphanFix
     putEnv $ env { types = M.insert (Qualified (Just moduleName) name) (kind, ExternData) (types env) }
     return d
   go (d@(ExternDeclaration name ty)) = do
-    warnAndRethrow (onErrorMessages (ErrorInForeignImport name)) $ do
+    warnAndRethrow (addHint (ErrorInForeignImport name)) $ do
       env <- getEnv
       kind <- kindOf moduleName ty
       guardWith (errorMessage (ExpectedType ty kind)) $ kind == Star
@@ -216,8 +216,14 @@ typeCheckAll mainModuleName moduleName _ ds = mapM go ds <* mapM_ checkOrphanFix
   go (d@(TypeClassDeclaration pn args implies tys)) = do
     addTypeClass moduleName pn args implies tys
     return d
-  go (d@(TypeInstanceDeclaration dictName deps className tys _)) =
-    goInstance d dictName deps className tys
+  go (d@(TypeInstanceDeclaration dictName deps className tys body)) = rethrow (addHint (ErrorInInstance className tys)) $ do
+    mapM_ (checkTypeClassInstance moduleName) tys
+    forM_ deps $ mapM_ (checkTypeClassInstance moduleName) . snd
+    checkOrphanInstance dictName className tys
+    _ <- traverseTypeInstanceBody checkInstanceMembers body
+    let dict = TypeClassDictionaryInScope (Qualified (Just moduleName) dictName) [] className tys (Just deps)
+    addTypeClassDictionaries (Just moduleName) . M.singleton className $ M.singleton (tcdName dict) dict
+    return d
   go (PositionedDeclaration pos com d) =
     warnAndRethrowWithPosition pos $ PositionedDeclaration pos com <$> go d
 
@@ -229,29 +235,36 @@ typeCheckAll mainModuleName moduleName _ ds = mapM go ds <* mapM_ checkOrphanFix
     warnAndRethrowWithPosition pos $ checkOrphanFixities d
   checkOrphanFixities _ = return ()
 
-  goInstance :: Declaration -> Ident -> [Constraint] -> Qualified ProperName -> [Type] -> Check Declaration
-  goInstance d dictName deps className tys = do
-    mapM_ (checkTypeClassInstance moduleName) tys
-    forM_ deps $ mapM_ (checkTypeClassInstance moduleName) . snd
-    checkOrphanInstance moduleName className tys
-    let dict = TypeClassDictionaryInScope (Qualified (Just moduleName) dictName) [] className tys (Just deps)
-    addTypeClassDictionaries (Just moduleName) . M.singleton className $ M.singleton (tcdName dict) dict
-    return d
-
+  checkInstanceMembers :: [Declaration] -> Check [Declaration]
+  checkInstanceMembers instDecls = do
+    let idents = sort . map head . group . map memberName $ instDecls
+    for_ (firstDuplicate idents) $ \ident ->
+      throwError . errorMessage $ DuplicateValueDeclaration ident
+    return instDecls
     where
+    memberName :: Declaration -> Ident
+    memberName (ValueDeclaration ident _ _ _) = ident
+    memberName (PositionedDeclaration _ _ d) = memberName d
+    memberName _ = error "checkInstanceMembers: Invalid declaration in type instance definition"
 
-    checkOrphanInstance :: ModuleName -> Qualified ProperName -> [Type] -> Check ()
-    checkOrphanInstance mn (Qualified (Just mn') _) tys'
-      | mn == mn' || any checkType tys' = return ()
-      | otherwise = throwError . errorMessage $ OrphanInstance dictName className tys'
-      where
-      checkType :: Type -> Bool
-      checkType (TypeVar _) = False
-      checkType (TypeConstructor (Qualified (Just mn'') _)) = mn == mn''
-      checkType (TypeConstructor (Qualified Nothing _)) = error "Unqualified type name in checkOrphanInstance"
-      checkType (TypeApp t1 _) = checkType t1
-      checkType _ = error "Invalid type in instance in checkOrphanInstance"
-    checkOrphanInstance _ _ _ = error "Unqualified class name in checkOrphanInstance"
+    firstDuplicate :: (Eq a) => [a] -> Maybe a
+    firstDuplicate (x : xs@(y : _))
+      | x == y = Just x
+      | otherwise = firstDuplicate xs
+    firstDuplicate _ = Nothing
+
+  checkOrphanInstance :: Ident -> Qualified ProperName -> [Type] -> Check ()
+  checkOrphanInstance dictName className@(Qualified (Just mn') _) tys'
+    | moduleName == mn' || any checkType tys' = return ()
+    | otherwise = throwError . errorMessage $ OrphanInstance dictName className tys'
+    where
+    checkType :: Type -> Bool
+    checkType (TypeVar _) = False
+    checkType (TypeConstructor (Qualified (Just mn'') _)) = moduleName == mn''
+    checkType (TypeConstructor (Qualified Nothing _)) = error "Unqualified type name in checkOrphanInstance"
+    checkType (TypeApp t1 _) = checkType t1
+    checkType _ = error "Invalid type in instance in checkOrphanInstance"
+  checkOrphanInstance _ _ _ = error "Unqualified class name in checkOrphanInstance"
 
   -- |
   -- This function adds the argument kinds for a type constructor so that they may appear in the externs file,
@@ -267,11 +280,11 @@ typeCheckAll mainModuleName moduleName _ ds = mapM go ds <* mapM_ checkOrphanFix
 -- Type check an entire module and ensure all types and classes defined within the module that are
 -- required by exported members are also exported.
 --
-typeCheckModule :: Maybe ModuleName -> Module -> Check Module
-typeCheckModule _ (Module _ _ _ _ Nothing) = error "exports should have been elaborated"
-typeCheckModule mainModuleName (Module ss coms mn decls (Just exps)) = warnAndRethrow (onErrorMessages (ErrorInModule mn)) $ do
+typeCheckModule :: Module -> Check Module
+typeCheckModule (Module _ _ _ _ Nothing) = error "exports should have been elaborated"
+typeCheckModule (Module ss coms mn decls (Just exps)) = warnAndRethrow (addHint (ErrorInModule mn)) $ do
   modify (\s -> s { checkCurrentModule = Just mn })
-  decls' <- typeCheckAll mainModuleName mn exps decls
+  decls' <- typeCheckAll mn exps decls
   forM_ exps $ \e -> do
     checkTypesAreExported e
     checkClassMembersAreExported e
@@ -280,20 +293,35 @@ typeCheckModule mainModuleName (Module ss coms mn decls (Just exps)) = warnAndRe
   where
 
   checkMemberExport :: (Type -> [DeclarationRef]) -> DeclarationRef -> Check ()
+  checkMemberExport extract dr@(TypeRef name dctors) = do
+    env <- getEnv
+    case M.lookup (Qualified (Just mn) name) (typeSynonyms env) of
+      Nothing -> return ()
+      Just (_, ty) -> checkExport dr extract ty
+    case dctors of
+      Nothing -> return ()
+      Just dctors' -> forM_ dctors' $ \dctor ->
+        case M.lookup (Qualified (Just mn) dctor) (dataConstructors env) of
+          Nothing -> return ()
+          Just (_, _, ty, _) -> checkExport dr extract ty
+    return ()
   checkMemberExport extract dr@(ValueRef name) = do
     ty <- lookupVariable mn (Qualified (Just mn) name)
-    case filter (not . exported) (extract ty) of
-      [] -> return ()
-      hidden -> throwError . errorMessage $ TransitiveExportError dr hidden
-      where
-      exported e = any (exports e) exps
-      exports (TypeRef pn1 _) (TypeRef pn2 _) = pn1 == pn2
-      exports (ValueRef id1) (ValueRef id2) = id1 == id2
-      exports (TypeClassRef pn1) (TypeClassRef pn2) = pn1 == pn2
-      exports (PositionedDeclarationRef _ _ r1) r2 = exports r1 r2
-      exports r1 (PositionedDeclarationRef _ _ r2) = exports r1 r2
-      exports _ _ = False
+    checkExport dr extract ty
   checkMemberExport _ _ = return ()
+
+  checkExport :: DeclarationRef -> (Type -> [DeclarationRef]) -> Type -> Check ()
+  checkExport dr extract ty = case filter (not . exported) (extract ty) of
+    [] -> return ()
+    hidden -> throwError . errorMessage $ TransitiveExportError dr hidden
+    where
+    exported e = any (exports e) exps
+    exports (TypeRef pn1 _) (TypeRef pn2 _) = pn1 == pn2
+    exports (ValueRef id1) (ValueRef id2) = id1 == id2
+    exports (TypeClassRef pn1) (TypeClassRef pn2) = pn1 == pn2
+    exports (PositionedDeclarationRef _ _ r1) r2 = exports r1 r2
+    exports r1 (PositionedDeclarationRef _ _ r2) = exports r1 r2
+    exports _ _ = False
 
   -- Check that all the type constructors defined in the current module that appear in member types
   -- have also been exported from the module

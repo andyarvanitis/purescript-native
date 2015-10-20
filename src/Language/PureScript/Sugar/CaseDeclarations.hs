@@ -50,7 +50,7 @@ isLeft (Right _) = False
 --
 desugarCasesModule :: (Functor m, Applicative m, MonadSupply m, MonadError MultipleErrors m) => [Module] -> m [Module]
 desugarCasesModule ms = forM ms $ \(Module ss coms name ds exps) ->
-  rethrow (onErrorMessages (ErrorInModule name)) $
+  rethrow (addHint (ErrorInModule name)) $
     Module ss coms name <$> (desugarCases <=< desugarAbs $ ds) <*> pure exps
 
 desugarAbs :: (Functor m, Applicative m, MonadSupply m, MonadError MultipleErrors m) => [Declaration] -> m [Declaration]
@@ -104,12 +104,14 @@ toDecls [ValueDeclaration ident nameKind bs (Right val)] | all isVarBinder bs = 
   isVarBinder NullBinder = True
   isVarBinder (VarBinder _) = True
   isVarBinder (PositionedBinder _ _ b) = isVarBinder b
+  isVarBinder (TypedBinder _ b) = isVarBinder b
   isVarBinder _ = False
 
   fromVarBinder :: Binder -> m Ident
   fromVarBinder NullBinder = Ident <$> freshName
   fromVarBinder (VarBinder name) = return name
   fromVarBinder (PositionedBinder _ _ b) = fromVarBinder b
+  fromVarBinder (TypedBinder _ b) = fromVarBinder b
   fromVarBinder _ = error "fromVarBinder: Invalid argument"
 toDecls ds@(ValueDeclaration ident _ bs result : _) = do
   let tuples = map toTuple ds

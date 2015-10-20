@@ -26,9 +26,7 @@ module Make
 
 import Control.Monad
 import Control.Monad.Error.Class (MonadError(..))
-import Control.Monad.Trans.Except
 import Control.Monad.Reader
-import Control.Monad.Writer.Strict
 
 import Data.FileEmbed (embedFile)
 import Data.List (intercalate)
@@ -45,16 +43,13 @@ import System.FilePath ((</>), takeDirectory, addExtension, dropExtension)
 import System.IO.Error (tryIOError)
 import System.IO.UTF8
 
+import Language.PureScript.Errors
+import Language.PureScript (Make, runMake)
+
 import qualified Language.PureScript as P
 import qualified Language.PureScript.CodeGen.Cpp as CPP
 import qualified Language.PureScript.CoreFn as CF
 import qualified Paths_purescript as Paths
-
-newtype Make a = Make { unMake :: ReaderT P.Options (WriterT P.MultipleErrors (ExceptT P.MultipleErrors IO)) a }
-  deriving (Functor, Applicative, Monad, MonadIO, MonadError P.MultipleErrors, MonadWriter P.MultipleErrors, MonadReader P.Options)
-
-runMake :: P.Options -> Make a -> IO (Either P.MultipleErrors (a, P.MultipleErrors))
-runMake opts = runExceptT . runWriterT . flip runReaderT opts . unMake
 
 makeIO :: (IOError -> P.ErrorMessage) -> IO a -> Make a
 makeIO f io = do
@@ -67,7 +62,7 @@ traverseEither _ (Left x) = pure (Left x)
 traverseEither f (Right y) = Right <$> f y
 
 buildMakeActions :: FilePath
-                 -> M.Map P.ModuleName (Either P.RebuildPolicy String)
+                 -> M.Map P.ModuleName (Either P.RebuildPolicy FilePath)
                  -> Bool
                  -> P.MakeActions Make
 buildMakeActions outputDir filePathMap usePrefix =
@@ -149,26 +144,26 @@ buildMakeActions outputDir filePathMap usePrefix =
   requiresForeign = not . null . CF.moduleForeign
 
   dirExists :: FilePath -> Make Bool
-  dirExists path = makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile path)) $ do
+  dirExists path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ do
     doesDirectoryExist path
 
   textFileExists :: FilePath -> Make Bool
-  textFileExists path = makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile path)) $ do
+  textFileExists path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ do
     doesFileExist path
 
   getTimestamp :: FilePath -> Make (Maybe UTCTime)
-  getTimestamp path = makeIO (const (P.SimpleErrorWrapper $ P.CannotGetFileInfo path)) $ do
+  getTimestamp path = makeIO (const (ErrorMessage [] $ CannotGetFileInfo path)) $ do
     exists <- doesFileExist path
     traverse (const $ getModificationTime path) $ guard exists
 
   readTextFile :: FilePath -> Make String
-  readTextFile path = makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile path)) $ readUTF8File path
+  readTextFile path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ readUTF8File path
 
   readTextFile' :: FilePath -> Make BL.ByteString
-  readTextFile' path = makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile path)) $ BL.readFile path
+  readTextFile' path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ BL.readFile path
 
   writeTextFile :: FilePath -> String -> Make ()
-  writeTextFile path text = makeIO (const (P.SimpleErrorWrapper $ P.CannotWriteFile path)) $ do
+  writeTextFile path text = makeIO (const (ErrorMessage [] $ CannotWriteFile path)) $ do
     mkdirp path
     writeFile path text
     where

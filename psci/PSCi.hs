@@ -263,10 +263,10 @@ makeIO f io = do
 
 make :: PSCiState -> [(Either P.RebuildPolicy FilePath, P.Module)] -> P.Make P.Environment
 make PSCiState{..} ms = P.make actions' (map snd (psciLoadedModules ++ ms))
-    where
-    filePathMap = M.fromList $ (first P.getModuleName . swap) `map` (psciLoadedModules ++ ms)
-    actions = P.buildMakeActions modulesDir filePathMap psciForeignFiles False
-    actions' = actions { P.progress = const (return ()) }
+  where
+  filePathMap = M.fromList $ (first P.getModuleName . swap) `map` (psciLoadedModules ++ ms)
+  actions = P.buildMakeActions modulesDir filePathMap psciForeignFiles False
+  actions' = actions { P.progress = const (return ()) }
 
 -- |
 -- Takes a value declaration and evaluates it with the current state.
@@ -464,7 +464,7 @@ handleCommand (LoadFile filePath) = whenFileExists filePath $ \absPath -> do
     Right mods -> PSCI . lift $ modify (updateModules (map ((,) (Right absPath)) mods))
 handleCommand (LoadForeign filePath) = whenFileExists filePath $ \absPath -> do
   foreignsOrError <- psciIO . runMake $ do
-    foreignFile <- makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile absPath)) (readFile absPath)
+    foreignFile <- makeIO (const (P.ErrorMessage [] $ P.CannotReadFile absPath)) (readFile absPath)
     P.parseForeignModulesFromFiles [(absPath, foreignFile)]
   case foreignsOrError of
     Left err -> PSCI $ outputStrLn $ P.prettyPrintMultipleErrors False err
@@ -533,7 +533,7 @@ loop PSCiOptions{..} = do
       historyFilename <- getHistoryFilename
       let settings = defaultSettings { historyFile = Just historyFilename }
       foreignsOrError <- runMake $ do
-        foreignFilesContent <- forM foreignFiles (\inFile -> (inFile,) <$> makeIO (const (P.SimpleErrorWrapper $ P.CannotReadFile inFile)) (readFile inFile))
+        foreignFilesContent <- forM foreignFiles (\inFile -> (inFile,) <$> makeIO (const (P.ErrorMessage [] $ P.CannotReadFile inFile)) (readFile inFile))
         P.parseForeignModulesFromFiles foreignFilesContent
       case foreignsOrError of
         Left errs -> putStrLn (P.prettyPrintMultipleErrors False errs) >> exitFailure

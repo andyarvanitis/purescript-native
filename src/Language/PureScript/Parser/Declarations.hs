@@ -176,9 +176,9 @@ parseImportDeclaration' = do
 
 parseDeclarationRef :: TokenParser DeclarationRef
 parseDeclarationRef =
-  parseModuleRef <|> (
-  withSourceSpan PositionedDeclarationRef $
-  ValueRef <$> parseIdent
+  parseModuleRef <|>
+  withSourceSpan PositionedDeclarationRef
+  (ValueRef <$> parseIdent
     <|> do name <- properName
            dctors <- P.optionMaybe $ parens (symbol' ".." *> pure Nothing <|> Just <$> commaSep properName)
            return $ maybe (TypeClassRef name) (TypeRef name) dctors
@@ -204,8 +204,8 @@ parseTypeClassDeclaration = do
     mark (P.many (same *> positioned parseTypeDeclaration))
   return $ TypeClassDeclaration className idents implies members
 
-parseTypeInstanceDeclaration :: TokenParser Declaration
-parseTypeInstanceDeclaration = do
+parseInstanceDeclaration :: TokenParser (TypeInstanceBody -> Declaration)
+parseInstanceDeclaration = do
   reserved "instance"
   name <- parseIdent <* indented <* doubleColon
   deps <- P.optionMaybe $ do
@@ -215,24 +215,21 @@ parseTypeInstanceDeclaration = do
     return deps
   className <- indented *> parseQualified properName
   ty <- P.many (indented *> noWildcards parseTypeAtom)
+  return $ TypeInstanceDeclaration name (fromMaybe [] deps) className ty
+
+parseTypeInstanceDeclaration :: TokenParser Declaration
+parseTypeInstanceDeclaration = do
+  instanceDecl <- parseInstanceDeclaration
   members <- P.option [] . P.try $ do
     indented *> reserved "where"
     mark (P.many (same *> positioned parseValueDeclaration))
-  return $ TypeInstanceDeclaration name (fromMaybe [] deps) className ty (ExplicitInstance members)
+  return $ instanceDecl (ExplicitInstance members)
 
 parseDerivingInstanceDeclaration :: TokenParser Declaration
 parseDerivingInstanceDeclaration = do
   reserved "derive"
-  reserved "instance"
-  name <- parseIdent <* indented <* doubleColon
-  deps <- P.optionMaybe $ do
-    deps <- parens (commaSep1 ((,) <$> parseQualified properName <*> P.many (noWildcards parseTypeAtom)))
-    indented
-    rfatArrow
-    return deps
-  className <- indented *> parseQualified properName
-  ty <- P.many (indented *> noWildcards parseTypeAtom)
-  return $ TypeInstanceDeclaration name (fromMaybe [] deps) className ty DerivedInstance
+  instanceDecl <- parseInstanceDeclaration
+  return $ instanceDecl DerivedInstance
 
 positioned :: TokenParser Declaration -> TokenParser Declaration
 positioned = withSourceSpan PositionedDeclaration
@@ -296,7 +293,7 @@ parseModulesFromFiles toFilePath input = do
   collect vss = [ (k, v) | (k, vs) <- vss, v <- vs ]
 
 toPositionedError :: P.ParseError -> ErrorMessage
-toPositionedError perr = PositionedError (SourceSpan name start end) (SimpleErrorWrapper (ErrorParsingModule perr))
+toPositionedError perr = ErrorMessage [ PositionedError (SourceSpan name start end) ] (ErrorParsingModule perr)
   where
   name   = (P.sourceName . P.errorPos) perr
   start  = (toSourcePos  . P.errorPos) perr
@@ -526,10 +523,13 @@ parseIdentifierAndBinder = do
 -- Parse a binder
 --
 parseBinder :: TokenParser Binder
-parseBinder = withSourceSpan PositionedBinder (P.buildExpressionParser operators parseBinderAtom)
+parseBinder = withSourceSpan PositionedBinder (P.buildExpressionParser operators (buildPostfixParser postfixTable parseBinderAtom))
   where
   -- TODO: remove this deprecation warning in 0.8
   operators = [ [ P.Infix (P.try $ C.indented *> colon *> featureWasRemoved "Cons binders are no longer supported. Consider using purescript-lists or purescript-sequences instead.") P.AssocRight ] ]
+  -- TODO: parsePolyType when adding support for polymorphic types
+  postfixTable = [ \b -> flip TypedBinder b <$> (P.try (indented *> doubleColon) *> parseType)
+                 ]
   parseBinderAtom :: TokenParser Binder
   parseBinderAtom = P.choice (map P.try
                     [ parseNullBinder
