@@ -40,6 +40,7 @@ import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.State
 import Control.Monad.Unify
 
+import Language.PureScript.Crash
 import Language.PureScript.Environment
 import Language.PureScript.Errors
 import Language.PureScript.Kinds
@@ -75,8 +76,8 @@ instance Unifiable Check Kind where
 -- |
 -- Infer the kind of a single type
 --
-kindOf :: ModuleName -> Type -> Check Kind
-kindOf _ ty = fst <$> kindOfWithScopedVars ty
+kindOf :: Type -> Check Kind
+kindOf ty = fst <$> kindOfWithScopedVars ty
 
 -- |
 -- Infer the kind of a single type, returning the kinds of any scoped type variables
@@ -220,4 +221,4 @@ infer' other = (, []) <$> go other
     k <- go ty
     k =?= Star
     return Star
-  go _ = error "Invalid argument to infer"
+  go _ = internalError "Invalid argument to infer"

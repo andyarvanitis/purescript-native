@@ -38,6 +38,7 @@ import Control.Applicative
 import Control.Arrow (first, second)
 import Control.Monad.Writer.Class
 
+import Language.PureScript.Crash
 import Language.PureScript.AST.Binders
 import Language.PureScript.AST.Declarations
 import Language.PureScript.Environment
@@ -92,7 +93,7 @@ getConstructors env defmn n = extractConstructors lnte
 
   extractConstructors :: Maybe (Kind, TypeKind) -> [(ProperName, [Type])]
   extractConstructors (Just (_, DataType _ pt)) = pt
-  extractConstructors _ = error "Data name not in the scope of the current environment in extractConstructors"
+  extractConstructors _ = internalError "Data name not in the scope of the current environment in extractConstructors"
 
 -- |
 -- Replicates a wildcard binder
@@ -197,7 +198,7 @@ missingCasesMultiple env mn = go
     where
     (miss1, pr1) = missingCasesSingle env mn x y
     (miss2, pr2) = go xs ys
-  go _ _ = error "Argument lengths did not match in missingCasesMultiple."
+  go _ _ = internalError "Argument lengths did not match in missingCasesMultiple."
 
 -- |
 -- Guard handling
@@ -245,7 +246,7 @@ checkExhaustive env mn numArgs cas = makeResult . first nub $ foldl' step ([init
   step :: ([[Binder]], (Either RedudancyError Bool, [[Binder]])) -> CaseAlternative -> ([[Binder]], (Either RedudancyError Bool, [[Binder]]))
   step (uncovered, (nec, redundant)) ca =
     let (missed, pr) = unzip (map (missingAlternative env mn ca) uncovered)
-        (missed', approx) = splitAt 10000 (concat missed)
+        (missed', approx) = splitAt 10000 (nub (concat missed))
         cond = liftA2 (&&) (or <$> sequenceA pr) nec
     in (missed', ( if null approx
                      then cond

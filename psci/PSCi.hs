@@ -71,7 +71,7 @@ supportModule :: P.Module
 supportModule =
   case P.parseModulesFromFiles id [("", code)] of
     Right [(_, P.Module ss cs _ ds exps)] -> P.Module ss cs supportModuleName ds exps
-    _ -> error "Support module could not be parsed"
+    _ -> P.internalError "Support module could not be parsed"
   where
   code :: String
   code = unlines
@@ -254,7 +254,7 @@ modulesDir = ".psci_modules" ++ pathSeparator : "node_modules"
 -- | This is different than the runMake in 'Language.PureScript.Make' in that it specifies the
 -- options and ignores the warning messages.
 runMake :: P.Make a -> IO (Either P.MultipleErrors a)
-runMake mk = fmap (fmap fst) $ P.runMake P.defaultOptions mk
+runMake mk = fmap fst $ P.runMake P.defaultOptions mk
 
 makeIO :: (IOError -> P.ErrorMessage) -> IO a -> P.Make a
 makeIO f io = do
@@ -390,7 +390,7 @@ printModuleSignatures moduleName env =
         findType envNames m@(_, mIdent) = (mIdent, M.lookup m envNames)
         showType :: (P.Ident, Maybe (P.Type, P.NameKind, P.NameVisibility)) -> String
         showType (mIdent, Just (mType, _, _)) = show mIdent ++ " :: " ++ P.prettyPrintType mType
-        showType _ = error "The impossible happened in printModuleSignatures."
+        showType _ = P.internalError "The impossible happened in printModuleSignatures."
 
 -- |
 -- Browse a module and displays its signature (if module exists).
@@ -425,7 +425,7 @@ handleKindOf typ = do
       case M.lookup (P.Qualified (Just mName) $ P.ProperName "IT") (P.typeSynonyms env') of
         Just (_, typ') -> do
           let chk = P.CheckState env' 0 0 (Just mName)
-              k   = fst . runWriter . runExceptT $ L.runStateT (P.unCheck (P.kindOf mName typ')) chk
+              k   = fst . runWriter . runExceptT $ L.runStateT (P.unCheck (P.kindOf typ')) chk
           case k of
             Left errStack   -> PSCI . outputStrLn . P.prettyPrintMultipleErrors False $ errStack
             Right (kind, _) -> PSCI . outputStrLn . P.prettyPrintKind $ kind
@@ -482,7 +482,7 @@ handleCommand (KindOf typ) = handleKindOf typ
 handleCommand (BrowseModule moduleName) = handleBrowse moduleName
 handleCommand (ShowInfo QueryLoaded) = handleShowLoadedModules
 handleCommand (ShowInfo QueryImport) = handleShowImportedModules
-handleCommand QuitPSCi = error "`handleCommand QuitPSCi` was called. This is a bug."
+handleCommand QuitPSCi = P.internalError "`handleCommand QuitPSCi` was called. This is a bug."
 
 whenFileExists :: FilePath -> (FilePath -> PSCI ()) -> PSCI ()
 whenFileExists filePath f = do

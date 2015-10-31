@@ -22,14 +22,16 @@ import Data.List (find, nub)
 import Data.Maybe (fromMaybe, mapMaybe)
 
 #if __GLASGOW_HASKELL__ < 710
+import Data.Monoid (mempty)
 import Control.Applicative (Applicative(..), (<$>), (<*>))
 #endif
 import Control.Monad
 import Control.Monad.Error.Class (MonadError(..))
-import Control.Monad.Writer (MonadWriter(..))
+import Control.Monad.Writer (MonadWriter(..), censor)
 
 import qualified Data.Map as M
 
+import Language.PureScript.Crash
 import Language.PureScript.AST
 import Language.PureScript.Names
 import Language.PureScript.Types
@@ -46,10 +48,13 @@ import Language.PureScript.Sugar.Names.Exports
 --
 desugarImports :: forall m. (Applicative m, MonadError MultipleErrors m, MonadWriter MultipleErrors m) => [ExternsFile] -> [Module] -> m [Module]
 desugarImports externs modules = do
-  env <- foldM externsEnv primEnv externs
+  env <- silence $ foldM externsEnv primEnv externs
   env' <- foldM updateEnv env modules
   mapM (renameInModule' env') modules
   where
+  silence :: m a -> m a
+  silence = censor (const mempty)
+
   -- | Create an environment from a collection of externs files
   externsEnv :: Env -> ExternsFile -> m Env
   externsEnv env ExternsFile{..} = do
@@ -99,7 +104,7 @@ desugarImports externs modules = do
   renameInModule' :: Env -> Module -> m Module
   renameInModule' env m@(Module _ _ mn _ _) =
     rethrow (addHint (ErrorInModule mn)) $ do
-      let (_, imps, exps) = fromMaybe (error "Module is missing in renameInModule'") $ M.lookup mn env
+      let (_, imps, exps) = fromMaybe (internalError "Module is missing in renameInModule'") $ M.lookup mn env
       elaborateImports imps <$> renameInModule env imps (elaborateExports exps m)
 
 -- |

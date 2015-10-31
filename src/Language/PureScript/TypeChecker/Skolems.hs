@@ -33,6 +33,7 @@ import Control.Applicative
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.Unify
 
+import Language.PureScript.Crash
 import Language.PureScript.AST
 import Language.PureScript.Errors
 import Language.PureScript.TypeChecker.Monad
@@ -71,11 +72,16 @@ skolemize ident sko scope = replaceTypeVars ident (Skolem ident sko scope)
 -- only example of scoped type variables.
 --
 skolemizeTypesInValue :: String -> Int -> SkolemScope -> Expr -> Expr
-skolemizeTypesInValue ident sko scope = let (_, f, _) = everywhereOnValues id go id in f
+skolemizeTypesInValue ident sko scope = let (_, f, _) = everywhereOnValues id onExpr onBinder in f
   where
-  go (SuperClassDictionary c ts) = SuperClassDictionary c (map (skolemize ident sko scope) ts)
-  go (TypedValue check val ty) = TypedValue check val (skolemize ident sko scope ty)
-  go other = other
+  onExpr :: Expr -> Expr
+  onExpr (SuperClassDictionary c ts) = SuperClassDictionary c (map (skolemize ident sko scope) ts)
+  onExpr (TypedValue check val ty) = TypedValue check val (skolemize ident sko scope ty)
+  onExpr other = other
+
+  onBinder :: Binder -> Binder
+  onBinder (TypedBinder ty b) = TypedBinder (skolemize ident sko scope ty) b
+  onBinder other = other
 
 -- |
 -- Ensure skolem variables do not escape their scope
@@ -115,4 +121,4 @@ skolemEscapeCheck root@TypedValue{} =
     where
     go' val@(TypedValue _ _ (ForAll _ _ (Just sco'))) | sco == sco' = First (Just val)
     go' _ = mempty
-skolemEscapeCheck _ = error "Untyped value passed to skolemEscapeCheck"
+skolemEscapeCheck _ = internalError "Untyped value passed to skolemEscapeCheck"
