@@ -35,9 +35,3 @@ removeUnusedArg = everywhereOnCpp convert
   convert (CppFunction name [(arg,atyp)] rtyp qs body)
     | arg == C.__unused = CppFunction name [("",atyp)] rtyp qs body
   convert cpp = cpp
-
-removeUndefinedApp :: Cpp -> Cpp
-removeUndefinedApp = everywhereOnCpp convert
-  where
-  convert (CppApp fn [CppVar arg]) | arg == C.undefined = CppApp fn []
-  convert cpp = cpp

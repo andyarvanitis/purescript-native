@@ -73,7 +73,6 @@ optimize' cpp = do
     , magicDo opts
     , removeCodeAfterReturnStatements
     , removeUnusedArg
-    , removeUndefinedApp
     , unThunk
     , etaConvert
     , evaluateIifes

@@ -157,28 +157,20 @@ any::~any() {
     return (*t)(unthunk);
   }
 
-  auto any::call(const any& a) -> any {
-    assert(a.type == Type::EffFunction || a.type == Type::Function);
-    if (a.type == Type::EffFunction) {
-      return (*a.e)();
-    } else {
-      return (*a.f)(false);
-    }
-  }
-
   auto any::operator()() const -> any {
-    if (type == Type::EffFunction || type == Type::Function) {
-      return call(*this);
+    if (type == Type::EffFunction) {
+      return (*e)();
     }
-    assert(type == Type::Thunk);
     const any* valuePtr = this;
     do {
+      assert(valuePtr->type == Type::Thunk);
       const any& value = (*valuePtr->t)(unthunk);
-      if (value.type != Type::Thunk) {
-        return call(value);
+      if (value.type == Type::EffFunction) {
+        return (*value.e)();
       }
       valuePtr = &value;
-    } while (true);
+    } while (valuePtr->type != Type::Unknown);
+    return nullptr;
   }
 
   any::operator long() const {

@@ -41,6 +41,8 @@ using string = std::string;
 using runtime_error = std::runtime_error;
 using nullptr_t = std::nullptr_t;
 
+const bool undefined = false;
+
 // A variant data class designed to provide some features of dynamic typing.
 //
 class any {
@@ -245,8 +247,6 @@ class any {
   auto operator()(const as_thunk) const -> const any&;
 
   auto operator()() const -> any;
-
-  static auto call(const any& a) -> any;
 
   operator long() const;
   operator double() const;
