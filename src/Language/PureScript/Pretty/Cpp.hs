@@ -22,9 +22,10 @@ module Language.PureScript.Pretty.Cpp (
     prettyPrintCpp,
 ) where
 
+import Data.Bits
 import Data.Char
 import Data.List
-import Data.Maybe (fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
@@ -253,8 +254,20 @@ literals = mkPattern' match
   match _ = mzero
 
 string :: String -> String
-string s = '"' : concatMap encodeChar s ++ "\""
+string s = '"' : concatMap encodeChar (decodeSurrogates s) ++ "\""
   where
+  decodeSurrogates :: String -> String
+  decodeSurrogates [c] = [c]
+  decodeSurrogates s = catMaybes $ zipWith decodePair s (tail s ++ ['\0'])
+    where
+    decodePair :: Char -> Char -> Maybe Char
+    decodePair a b
+      | fromEnum a >= 0xD800 && fromEnum a <= 0xDFFF &&
+        fromEnum b >= 0xD800 && fromEnum b <= 0xDFFF
+      = Just . chr $ 0x10000 + shiftL (fromEnum a .&. 0x03FF) 10 + (fromEnum b .&. 0x03FF)
+    decodePair a _
+      | fromEnum a >= 0xD800 && fromEnum a <= 0xDFFF  = Nothing
+    decodePair a _  = Just a
   encodeChar :: Char -> String
   encodeChar '\b' = "\\b"
   encodeChar '\t' = "\\t"
@@ -264,8 +277,14 @@ string s = '"' : concatMap encodeChar s ++ "\""
   encodeChar '\r' = "\\r"
   encodeChar '"'  = "\\\""
   encodeChar '\\' = "\\\\"
+  encodeChar c | fromEnum c > 0xFFFF = "\\U" ++ leading ++ hex
+    where
+    hex = showHex (fromEnum c) ""
+    leading = replicate (8 - length hex) '0'
   encodeChar c | fromEnum c > 0xFFF = "\\u" ++ showHex (fromEnum c) ""
   encodeChar c | fromEnum c > 0xFF = "\\u0" ++ showHex (fromEnum c) ""
+  encodeChar c | fromEnum c < 0x10 = "\\x0" ++ showHex (fromEnum c) ""
+  encodeChar c | fromEnum c > 0x7E || fromEnum c < 0x20 = "\\x" ++ showHex (fromEnum c) ""
   encodeChar c = [c]
 
 accessor :: Pattern PrinterState Cpp (String, Cpp)
