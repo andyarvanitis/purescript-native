@@ -29,7 +29,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text as T
 
 import Control.Exception (IOException)
-import Web.Bower.PackageMeta (BowerError, PackageName, runPackageName)
+import Web.Bower.PackageMeta (BowerError, PackageName, runPackageName, showBowerError)
 import qualified Web.Bower.PackageMeta as Bower
 
 import qualified Language.PureScript as P
@@ -49,14 +49,14 @@ data PackageWarning
   = NoResolvedVersion PackageName
   | UndeclaredDependency PackageName
   | UnacceptableVersion (PackageName, String)
+  | DirtyWorkingTree_Warn
   deriving (Show)
 
 -- | An error that should be fixed by the user.
 data UserError
   = BowerJSONNotFound
   | BowerExecutableNotFound [String] -- list of executable names tried
-  | CouldntParseBowerJSON (ParseError BowerError)
-  | BowerJSONNameMissing
+  | CouldntDecodeBowerJSON (ParseError BowerError)
   | TagMustBeCheckedOut
   | AmbiguousVersions [Version] -- Invariant: should contain at least two elements
   | BadRepositoryField RepositoryFieldError
@@ -130,21 +130,12 @@ displayUserError e = case e of
       ])
     where
     format = intercalate ", " . map show
-  CouldntParseBowerJSON err ->
+  CouldntDecodeBowerJSON err ->
     vcat
-      [ successivelyIndented
-        [ "The bower.json file could not be parsed as JSON:"
-        , "aeson reported: " ++ show err
-        ]
-      , para "Please ensure that your bower.json file is valid JSON."
-      ]
-  BowerJSONNameMissing ->
-    vcat
-      [ successivelyIndented
-        [ "In bower.json:"
-        , "the \"name\" key was not found."
-        ]
-      , para "Please give your package a name first."
+      [ para "There was a problem with your bower.json file:"
+      , indented (vcat (map (para . T.unpack) (displayError showBowerError err)))
+      , spacer
+      , para "Please ensure that your bower.json file is valid."
       ]
   TagMustBeCheckedOut ->
       vcat
@@ -289,21 +280,24 @@ data CollectedWarnings = CollectedWarnings
   { noResolvedVersions     :: [PackageName]
   , undeclaredDependencies :: [PackageName]
   , unacceptableVersions   :: [(PackageName, String)]
+  , dirtyWorkingTree       :: Any
   }
   deriving (Show, Eq, Ord)
 
 instance Monoid CollectedWarnings where
-  mempty = CollectedWarnings mempty mempty mempty
-  mappend (CollectedWarnings as bs cs) (CollectedWarnings as' bs' cs') =
-    CollectedWarnings (as <> as') (bs <> bs') (cs <> cs')
+  mempty = CollectedWarnings mempty mempty mempty mempty
+  mappend (CollectedWarnings as bs cs d)
+          (CollectedWarnings as' bs' cs' d') =
+    CollectedWarnings (as <> as') (bs <> bs') (cs <> cs') (d <> d')
 
 collectWarnings :: [PackageWarning] -> CollectedWarnings
 collectWarnings = foldMap singular
   where
   singular w = case w of
-    NoResolvedVersion    pn -> CollectedWarnings [pn] [] []
-    UndeclaredDependency pn -> CollectedWarnings [] [pn] []
-    UnacceptableVersion t   -> CollectedWarnings [] [] [t]
+    NoResolvedVersion    pn -> CollectedWarnings [pn] mempty mempty mempty
+    UndeclaredDependency pn -> CollectedWarnings mempty [pn] mempty mempty
+    UnacceptableVersion t   -> CollectedWarnings mempty mempty [t] mempty
+    DirtyWorkingTree_Warn   -> CollectedWarnings mempty mempty mempty (Any True)
 
 renderWarnings :: [PackageWarning] -> Box
 renderWarnings warns =
@@ -312,6 +306,9 @@ renderWarnings warns =
       mboxes = [ go warnNoResolvedVersions     noResolvedVersions
                , go warnUndeclaredDependencies undeclaredDependencies
                , go warnUnacceptableVersions   unacceptableVersions
+               , if getAny dirtyWorkingTree
+                   then Just warnDirtyWorkingTree
+                   else Nothing
                ]
   in case catMaybes mboxes of
        []    -> nullBox
@@ -386,6 +383,13 @@ warnUnacceptableVersions pkgs =
     ]
   where
   showTuple (pkgName, tag) = runPackageName pkgName ++ "#" ++ tag
+
+warnDirtyWorkingTree :: Box
+warnDirtyWorkingTree =
+  para (concat
+    [ "Your working tree is dirty. (Note: this would be an error if it "
+    , "were not a dry run)"
+    ])
 
 printWarnings :: [PackageWarning] -> IO ()
 printWarnings = printToStderr . renderWarnings

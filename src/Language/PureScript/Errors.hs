@@ -32,7 +32,7 @@ import Control.Monad
 import Control.Monad.Writer
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.Trans.State.Lazy
-import Control.Arrow(first)
+import Control.Arrow (first)
 
 import Language.PureScript.Crash
 import Language.PureScript.AST
@@ -139,6 +139,8 @@ data SimpleErrorMessage
   | ImportHidingModule ModuleName
   | UnusedImport ModuleName
   | UnusedExplicitImport ModuleName [String]
+  | UnusedDctorImport ProperName
+  | UnusedDctorExplicitImport ProperName [ProperName]
   deriving (Show)
 
 -- | Error message hints, providing more detailed information about failure.
@@ -271,6 +273,9 @@ errorCode em = case unwrapErrorMessage em of
   ImportHidingModule{} -> "ImportHidingModule"
   UnusedImport{} -> "UnusedImport"
   UnusedExplicitImport{} -> "UnusedExplicitImport"
+  UnusedDctorImport{} -> "UnusedDctorImport"
+  UnusedDctorExplicitImport{} -> "UnusedDctorExplicitImport"
+
 
 -- |
 -- A stack trace for an error
@@ -680,6 +685,13 @@ prettyPrintSingleError full level e = prettyPrintErrorMessage <$> onTypesInError
       paras [ line $ "The import of module " ++ runModuleName name ++ " contains the following unused references:"
             , indent $ paras $ map line names ]
 
+    renderSimpleErrorMessage (UnusedDctorImport name) =
+      line $ "The import of type " ++ runProperName name ++ " includes data constructors but only the type is used"
+
+    renderSimpleErrorMessage (UnusedDctorExplicitImport name names) =
+      paras [ line $ "The import of type " ++ runProperName name ++ " includes the following unused data constructors:"
+            , indent $ paras $ map (line .runProperName) names ]
+
     renderHint :: ErrorMessageHint -> Box.Box -> Box.Box
     renderHint (ErrorUnifyingTypes t1 t2) detail =
       paras [ detail
@@ -939,18 +951,16 @@ renderBox = unlines . map trimEnd . lines . Box.render
   trimEnd = reverse . dropWhile (== ' ') . reverse
 
 -- |
--- Interpret multiple errors and warnings in a monad supporting errors and warnings
---
-interpretMultipleErrorsAndWarnings :: (MonadError MultipleErrors m, MonadWriter MultipleErrors m) => (Either MultipleErrors a, MultipleErrors) -> m a
-interpretMultipleErrorsAndWarnings (err, ws) = do
-  tell ws
-  either throwError return err
-
--- |
 -- Rethrow an error with a more detailed error message in the case of failure
 --
 rethrow :: (MonadError e m) => (e -> e) -> m a -> m a
 rethrow f = flip catchError $ \e -> throwError (f e)
+
+reifyErrors :: (Functor m, MonadError e m) => m a -> m (Either e a)
+reifyErrors ma = catchError (fmap Right ma) (return . Left)
+
+reflectErrors :: (MonadError e m) => m (Either e a) -> m a
+reflectErrors ma = ma >>= either throwError return
 
 warnAndRethrow :: (MonadError e m, MonadWriter e m) => (e -> e) -> m a -> m a
 warnAndRethrow f = rethrow f . censor f
