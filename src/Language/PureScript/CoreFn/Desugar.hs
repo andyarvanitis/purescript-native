@@ -203,9 +203,13 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
 --
 findQualModules :: [A.Declaration] -> [ModuleName]
 findQualModules decls =
-  let (f, _, _, _, _) = everythingOnValues (++) (const []) fqValues fqBinders (const []) (const [])
+  let (f, _, _, _, _) = everythingOnValues (++) fqDecls fqValues fqBinders (const []) (const [])
   in f `concatMap` decls
   where
+  fqDecls :: A.Declaration -> [ModuleName]
+  fqDecls (A.TypeInstanceDeclaration _ _ (Qualified (Just mn) _) _ _) = [mn]
+  fqDecls _ = []
+
   fqValues :: A.Expr -> [ModuleName]
   fqValues (A.Var (Qualified (Just mn) _)) = [mn]
   fqValues (A.Constructor (Qualified (Just mn) _)) = [mn]
@@ -219,7 +223,7 @@ findQualModules decls =
 -- Desugars import declarations from AST to CoreFn representation.
 --
 importToCoreFn :: A.Declaration -> Maybe ModuleName
-importToCoreFn (A.ImportDeclaration name _ _) = Just name
+importToCoreFn (A.ImportDeclaration name _ _ _) = Just name
 importToCoreFn (A.PositionedDeclaration _ _ d) = importToCoreFn d
 importToCoreFn _ = Nothing
 
