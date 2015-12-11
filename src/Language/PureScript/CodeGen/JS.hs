@@ -29,11 +29,13 @@ import Prelude ()
 import Prelude.Compat
 
 import Data.List ((\\), delete, intersect)
-import Data.Maybe (isNothing)
+import Data.Maybe (isNothing, fromMaybe)
+import qualified Data.Map as M
 import qualified Data.Traversable as T (traverse)
 
 import Control.Arrow ((&&&))
 import Control.Monad (replicateM, forM)
+import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.Reader (MonadReader, asks)
 import Control.Monad.Supply.Class
 
@@ -43,6 +45,7 @@ import Language.PureScript.CodeGen.JS.AST as AST
 import Language.PureScript.CodeGen.JS.Common as Common
 import Language.PureScript.CoreFn
 import Language.PureScript.Names
+import Language.PureScript.Errors
 import Language.PureScript.CodeGen.JS.Optimizer
 import Language.PureScript.Options
 import Language.PureScript.Traversals (sndM)
@@ -54,33 +57,90 @@ import System.FilePath.Posix ((</>))
 -- Generate code in the simplified Javascript intermediate representation for all declarations in a
 -- module.
 --
-moduleToJs :: forall m. (Applicative m, Monad m, MonadReader Options m, MonadSupply m)
+moduleToJs :: forall m. (Applicative m, Monad m, MonadReader Options m, MonadSupply m, MonadError MultipleErrors m)
            => Module Ann -> Maybe JS -> m [JS]
-moduleToJs (Module coms mn imps exps foreigns decls) foreign_ = do
-  jsImports <- T.traverse importToJs . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
-  jsDecls <- mapM bindToJs decls
-  optimized <- T.traverse (T.traverse optimize) jsDecls
-  comments <- not <$> asks optionsNoComments
-  let strict = JSStringLiteral "use strict"
-  let header = if comments && not (null coms) then JSComment coms strict else strict
-  let foreign' = [JSVariableIntroduction "$foreign" foreign_ | not $ null foreigns || isNothing foreign_]
-  let moduleBody = header : foreign' ++ jsImports ++ concat optimized
-  let foreignExps = exps `intersect` (fst `map` foreigns)
-  let standardExps = exps \\ foreignExps
-  let exps' = JSObjectLiteral $ map (runIdent &&& JSVar . identToJs) standardExps
-                             ++ map (runIdent &&& foreignIdent) foreignExps
-  return $ moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
+moduleToJs (Module coms mn imps exps foreigns decls) foreign_ =
+  rethrow (addHint (ErrorInModule mn)) $ do
+    let usedNames = concatMap getNames decls
+    let mnLookup = renameImports usedNames imps
+    jsImports <- T.traverse (importToJs mnLookup) . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $ imps
+    let decls' = renameModules mnLookup decls
+    jsDecls <- mapM bindToJs decls'
+    optimized <- T.traverse (T.traverse optimize) jsDecls
+    comments <- not <$> asks optionsNoComments
+    let strict = JSStringLiteral "use strict"
+    let header = if comments && not (null coms) then JSComment coms strict else strict
+    let foreign' = [JSVariableIntroduction "$foreign" foreign_ | not $ null foreigns || isNothing foreign_]
+    let moduleBody = header : foreign' ++ jsImports ++ concat optimized
+    let foreignExps = exps `intersect` (fst `map` foreigns)
+    let standardExps = exps \\ foreignExps
+    let exps' = JSObjectLiteral $ map (runIdent &&& JSVar . identToJs) standardExps
+                               ++ map (runIdent &&& foreignIdent) foreignExps
+    return $ moduleBody ++ [JSAssignment (JSAccessor "exports" (JSVar "module")) exps']
 
   where
 
   -- |
-  -- Generates Javascript code for a module import.
+  -- Extracts all declaration names from a binding group.
   --
-  importToJs :: ModuleName -> m JS
-  importToJs mn' = do
+  getNames :: Bind Ann -> [Ident]
+  getNames (NonRec ident _) = [ident]
+  getNames (Rec vals) = map fst vals
+
+  -- |
+  -- Creates alternative names for each module to ensure they don't collide
+  -- with declaration names.
+  --
+  renameImports :: [Ident] -> [ModuleName] -> M.Map ModuleName ModuleName
+  renameImports ids mns = go M.empty ids mns
+    where
+    go :: M.Map ModuleName ModuleName -> [Ident] -> [ModuleName] -> M.Map ModuleName ModuleName
+    go acc used (mn' : mns') =
+      let mni = Ident $ runModuleName mn'
+      in if mni `elem` used
+         then let newName = freshModuleName 1 mn' used
+              in go (M.insert mn' newName acc) (Ident (runModuleName newName) : used) mns'
+         else go (M.insert mn' mn' acc) (mni : used) mns'
+    go acc _ [] = acc
+
+    freshModuleName :: Integer -> ModuleName -> [Ident] -> ModuleName
+    freshModuleName i mn'@(ModuleName pns) used =
+      let newName = ModuleName $ init pns ++ [ProperName $ runProperName (last pns) ++ "_" ++ show i]
+      in if Ident (runModuleName newName) `elem` used
+         then freshModuleName (i + 1) mn' used
+         else newName
+
+  -- |
+  -- Generates Javascript code for a module import, binding the required module
+  -- to the alternative
+  --
+  importToJs :: M.Map ModuleName ModuleName -> ModuleName -> m JS
+  importToJs mnLookup mn' = do
     path <- asks optionsRequirePath
+    let mnSafe = fromMaybe (internalError "Missing value in mnLookup") $ M.lookup mn' mnLookup
     let moduleBody = JSApp (JSVar "require") [JSStringLiteral (maybe id (</>) path $ runModuleName mn')]
-    return $ JSVariableIntroduction (moduleNameToJs mn') (Just moduleBody)
+    return $ JSVariableIntroduction (moduleNameToJs mnSafe) (Just moduleBody)
+
+  -- |
+  -- Replaces the `ModuleName`s in the AST so that the generated code refers to
+  -- the collision-avoiding renamed module imports.
+  --
+  renameModules :: M.Map ModuleName ModuleName -> [Bind Ann] -> [Bind Ann]
+  renameModules mnLookup binds =
+    let (f, _, _) = everywhereOnValues id goExpr goBinder
+    in map f binds
+    where
+    goExpr :: Expr a -> Expr a
+    goExpr (Var ann q) = Var ann (renameQual q)
+    goExpr e = e
+    goBinder :: Binder a -> Binder a
+    goBinder (ConstructorBinder ann q1 q2 bs) = ConstructorBinder ann (renameQual q1) (renameQual q2) bs
+    goBinder b = b
+    renameQual :: Qualified a -> Qualified a
+    renameQual (Qualified (Just mn') a) =
+      let mnSafe = fromMaybe (internalError "Missing value in mnLookup") $ M.lookup mn' mnLookup
+      in Qualified (Just mnSafe) a
+    renameQual q = q
 
   -- |
   -- Generate code in the simplified Javascript intermediate representation for a declaration
@@ -129,8 +189,8 @@ moduleToJs (Module coms mn imps exps foreigns decls) foreign_ = do
   -- Generate code in the simplified Javascript intermediate representation for a value or expression.
   --
   valueToJs :: Expr Ann -> m JS
-  valueToJs (Literal _ l) =
-    literalToValueJS l
+  valueToJs (Literal (pos, _, _, _) l) =
+    maybe id rethrowWithPosition pos $ literalToValueJS l
   valueToJs (Var (_, _, _, Just (IsConstructor _ [])) name) =
     return $ JSAccessor "value" $ qualifiedToJS id name
   valueToJs (Var (_, _, _, Just (IsConstructor _ _)) name) =
@@ -207,7 +267,13 @@ moduleToJs (Module coms mn imps exps foreigns decls) foreign_ = do
   iife v exprs = JSApp (JSFunction Nothing [] (JSBlock $ exprs ++ [JSReturn $ JSVar v])) []
 
   literalToValueJS :: Literal (Expr Ann) -> m JS
-  literalToValueJS (NumericLiteral n) = return $ JSNumericLiteral n
+  literalToValueJS (NumericLiteral (Left i)) =
+    let minInt = -2147483648
+        maxInt = 2147483647
+    in if i < minInt || i > maxInt
+       then throwError . errorMessage $ IntOutOfRange i "JavaScript" minInt maxInt
+       else return $ JSNumericLiteral (Left i)
+  literalToValueJS (NumericLiteral (Right n)) = return $ JSNumericLiteral (Right n)
   literalToValueJS (StringLiteral s) = return $ JSStringLiteral s
   literalToValueJS (CharLiteral c) = return $ JSStringLiteral [c]
   literalToValueJS (BooleanLiteral b) = return $ JSBooleanLiteral b
@@ -275,10 +341,10 @@ moduleToJs (Module coms mn imps exps foreigns decls) foreign_ = do
       go _ _ _ = internalError "Invalid arguments to bindersToJs"
 
       failedPatternError :: [String] -> JS
-      failedPatternError names = JSUnary JSNew $ JSApp (JSVar "Error") [JSBinary Add (JSStringLiteral errorMessage) (JSArrayLiteral $ zipWith valueError names vals)]
+      failedPatternError names = JSUnary JSNew $ JSApp (JSVar "Error") [JSBinary Add (JSStringLiteral failedPatternMessage) (JSArrayLiteral $ zipWith valueError names vals)]
 
-      errorMessage :: String
-      errorMessage = "Failed pattern match" ++ maybe "" (((" at " ++ runModuleName mn ++ " ") ++) . displayStartEndPos) maybeSpan ++ ": "
+      failedPatternMessage :: String
+      failedPatternMessage = "Failed pattern match" ++ maybe "" (((" at " ++ runModuleName mn ++ " ") ++) . displayStartEndPos) maybeSpan ++ ": "
 
       valueError :: String -> JS -> JS
       valueError _ l@(JSNumericLiteral _) = l

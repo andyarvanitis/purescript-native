@@ -406,9 +406,9 @@ inferBinder val (PositionedBinder pos _ binder) =
 -- change the definition of `binderRequiresMonotype`,
 -- and use `kindOfWithScopedVars`.
 inferBinder val (TypedBinder ty binder) = do
+  kind <- kindOf ty
+  checkTypeKind ty kind
   ty1 <- replaceAllTypeSynonyms <=< replaceTypeWildcards $ ty
-  kind <- kindOf ty1
-  checkTypeKind ty1 kind
   unifyTypes val ty1
   inferBinder val binder
 
@@ -487,8 +487,11 @@ check' :: forall m.
 check' val (ForAll ident ty _) = do
   scope <- newSkolemScope
   sko <- newSkolemConstant
-  let sk = skolemize ident sko scope ty
-  let skVal = skolemizeTypesInValue ident sko scope val
+  let ss = case val of
+             PositionedValue pos _ _ -> Just pos
+             _ -> Nothing
+      sk = skolemize ident sko scope ss ty
+      skVal = skolemizeTypesInValue ident sko scope ss val
   val' <- check skVal sk
   return $ TypedValue True val' (ForAll ident ty (Just scope))
 check' val t@(ConstrainedType constraints ty) = do

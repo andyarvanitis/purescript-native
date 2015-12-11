@@ -1,27 +1,19 @@
------------------------------------------------------------------------------
---
--- Module      :  Language.PureScript.AST.Declarations
--- Copyright   :  (c) 2013-15 Phil Freeman, (c) 2014-15 Gary Burgess
--- License     :  MIT (http://opensource.org/licenses/MIT)
---
--- Maintainer  :  Phil Freeman <paf31@cantab.net>
--- Stability   :  experimental
--- Portability :
---
--- | Data types for modules and declarations
---
------------------------------------------------------------------------------
-
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 
+-- |
+-- Data types for modules and declarations
+--
 module Language.PureScript.AST.Declarations where
 
 import Prelude ()
 import Prelude.Compat
 
 import Data.Aeson.TH
+import Data.List (nub, (\\))
+import Data.Maybe (mapMaybe)
 
 import qualified Data.Data as D
 import qualified Data.Map as M
@@ -74,6 +66,10 @@ data DeclarationRef
   --
   | ModuleRef ModuleName
   -- |
+  -- An unspecified ProperName ref. This will be replaced with a TypeClassRef
+  -- or TypeRef during name desugaring.
+  | ProperRef ProperName
+  -- |
   -- A declaration reference with source position information
   --
   | PositionedDeclarationRef SourceSpan [Comment] DeclarationRef
@@ -84,14 +80,38 @@ instance Eq DeclarationRef where
   (ValueRef name)        == (ValueRef name')        = name == name'
   (TypeClassRef name)    == (TypeClassRef name')    = name == name'
   (TypeInstanceRef name) == (TypeInstanceRef name') = name == name'
-  (ModuleRef name) == (ModuleRef name') = name == name'
+  (ModuleRef name)       == (ModuleRef name')       = name == name'
+  (ProperRef name)       == (ProperRef name')       = name == name'
   (PositionedDeclarationRef _ _ r) == r' = r == r'
   r == (PositionedDeclarationRef _ _ r') = r == r'
   _ == _ = False
 
 isModuleRef :: DeclarationRef -> Bool
+isModuleRef (PositionedDeclarationRef _ _ r) = isModuleRef r
 isModuleRef (ModuleRef _) = True
 isModuleRef _ = False
+
+-- |
+-- Finds duplicate values in a list of declaration refs. The returned values
+-- are the duplicate refs with data constructors elided, and then a separate
+-- list of duplicate data constructors.
+--
+findDuplicateRefs :: [DeclarationRef] -> ([DeclarationRef], [ProperName])
+findDuplicateRefs refs =
+  let positionless = stripPosInfo `map` refs
+      simplified = simplifyTypeRefs `map` positionless
+      dupeRefs = nub $ simplified \\ nub simplified
+      dupeCtors = concat $ flip mapMaybe positionless $ \case
+        TypeRef _ (Just dctors) ->
+          let dupes = dctors \\ nub dctors
+          in if null dupes then Nothing else Just dupes
+        _ -> Nothing
+  in (dupeRefs, dupeCtors)
+  where
+  stripPosInfo (PositionedDeclarationRef _ _ ref) = stripPosInfo ref
+  stripPosInfo other = other
+  simplifyTypeRefs (TypeRef pn _) = TypeRef pn Nothing
+  simplifyTypeRefs other = other
 
 -- |
 -- The data type which specifies type of import declaration
@@ -109,7 +129,7 @@ data ImportDeclarationType
   -- An import with a list of references to hide: `import M hiding (foo)`
   --
   | Hiding [DeclarationRef]
-  deriving (Show, Read, D.Data, D.Typeable)
+  deriving (Eq, Show, Read, D.Data, D.Typeable)
 
 -- |
 -- The data type of declarations
