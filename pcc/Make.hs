@@ -35,7 +35,6 @@ import Data.String (fromString)
 import Data.Time.Clock
 import Data.Version (showVersion)
 import qualified Data.Map as M
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B
 
 import System.Directory (doesDirectoryExist, doesFileExist, getModificationTime, createDirectoryIfMissing)
@@ -91,10 +90,10 @@ buildMakeActions outputDir filePathMap usePrefix =
         externsFile = outputDir </> filePath </> "externs.purs"
     min <$> getTimestamp srcFile <*> getTimestamp externsFile
 
-  readExterns :: P.ModuleName -> Make (FilePath, BL.ByteString)
+  readExterns :: P.ModuleName -> Make (FilePath, P.Externs)
   readExterns mn = do
     let path = outputDir </> (dotsTo '/' $ P.runModuleName mn) </> "externs.purs"
-    (path, ) <$> readTextFile' path
+    (path, ) <$> readTextFile path
 
   codegen :: CF.Module CF.Ann -> P.Environment -> P.Externs -> P.SupplyT Make ()
   codegen m env exts = do
@@ -115,7 +114,7 @@ buildMakeActions outputDir filePathMap usePrefix =
     lift $ do
       writeTextFile srcFile src
       writeTextFile headerFile hdr
-      writeTextFile externsFile $ B.unpack $ BL.toStrict exts
+      writeTextFile externsFile exts
 
       let supportDir = outputDir </> "PureScript"
       supportFilesExist <- dirExists supportDir
@@ -158,9 +157,6 @@ buildMakeActions outputDir filePathMap usePrefix =
 
   readTextFile :: FilePath -> Make String
   readTextFile path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ readUTF8File path
-
-  readTextFile' :: FilePath -> Make BL.ByteString
-  readTextFile' path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ BL.readFile path
 
   writeTextFile :: FilePath -> String -> Make ()
   writeTextFile path text = makeIO (const (ErrorMessage [] $ CannotWriteFile path)) $ do
