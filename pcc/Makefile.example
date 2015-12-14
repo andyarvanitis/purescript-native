@@ -15,5 +15,5 @@ Main: src/*
 
 clean:
 	@rm -f Main
-	@rm -rf output/*
+	@rm -rf output
 	@rm -rf build
