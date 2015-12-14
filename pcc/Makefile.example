@@ -7,10 +7,13 @@ SOURCE_DIR="src"
 MODULES := $(shell find $(MODULE_DIR) -name '*.purs' | grep -v \/test\/ | grep -v \/example\/ | grep -v \/examples\/)
 SOURCES := $(shell find $(SOURCE_DIR) -name '*.purs')
 
-all: main
+all: Main
 
-main:
+Main: src/*
 	$(PCC) $(MODULES) $(SOURCES)
+	@mkdir -p build && cd build && cmake ../output && $(MAKE) && cp Main ../
 
 clean:
+	@rm -f Main
 	@rm -rf output/*
+	@rm -rf build
