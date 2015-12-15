@@ -249,10 +249,6 @@ data Cpp
   --
   | CppContinue
   -- |
-  -- A string literal compile-time hash
-  --
-  | CppStringLiteralHash String
-  -- |
   -- Empty statement/expression
   --
   | CppNoOp

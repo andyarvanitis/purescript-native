@@ -148,7 +148,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       | (f' : fs') <- flds = [CppReturn $ CppLambda [CppCaptureAll] (farg <$> [f'])
                                                                     (Just $ CppAny [])
                                                                     (CppBlock $ fieldLambdas fs')]
-      | otherwise = [CppReturn (CppObjectLiteral ((ctorKey, CppStringLiteralHash name) : zip fields' (CppVar <$> fields')))]
+      | otherwise = [CppReturn (CppObjectLiteral ((ctorKey, CppStringLiteral name) : zip fields' (CppVar <$> fields')))]
 
   declToCpp _ ident val = do
     val' <- valueToCpp val
@@ -406,7 +406,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       ProductType -> cpps
       SumType ->
         [ CppIfElse (CppBinary Equal (CppIndexer (CppStringLiteral ctorKey) (CppVar varName))
-                                     (CppStringLiteralHash ctor'))
+                                     (CppStringLiteral ctor'))
                     (CppBlock cpps)
                     Nothing ]
     where

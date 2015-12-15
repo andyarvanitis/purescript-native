@@ -55,7 +55,6 @@ literals = mkPattern' match
   match (CppNumericLiteral n) = return $ either show show n
   match (CppStringLiteral s) | all isAscii s = return $ string s
   match (CppStringLiteral s) = return $ "u8" ++ string s
-  match (CppStringLiteralHash s) = return $ "HASH" ++ parens (string s)
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
