@@ -76,7 +76,8 @@ literals = mkPattern' match
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
                             val <- prettyPrintCpp' value
-                            return $ "{ KEY" ++ parens(show key) ++ ", " ++ val ++ " }"
+                            k <- prettyPrintCpp' (CppStringLiteral key)
+                            return $ "{ " ++ k ++ ", " ++ val ++ " }"
         indentString <- currentIndent
         return $ intercalate ", \n" $ map (indentString ++) cpps
     , return "\n"
@@ -257,7 +258,7 @@ string s = '"' : concatMap encodeChar (decodeSurrogates s) ++ "\""
   where
   decodeSurrogates :: String -> String
   decodeSurrogates [c] = [c]
-  decodeSurrogates s = catMaybes $ zipWith decodePair s (tail s ++ ['\0'])
+  decodeSurrogates s' = catMaybes $ zipWith decodePair s' (tail s' ++ ['\0'])
     where
     decodePair :: Char -> Char -> Maybe Char
     decodePair a b
@@ -295,8 +296,8 @@ accessor = mkPattern match
 indexer :: Pattern PrinterState Cpp (String, Cpp)
 indexer = mkPattern' match
   where
-  match (CppIndexer index@(CppNumericLiteral {}) val) = (,) <$> prettyPrintCpp' index <*> pure val
-  match (CppIndexer (CppStringLiteral index) val) = return ("KEY" ++ parens (show index), val)
+  match (CppIndexer (CppNumericLiteral (Left index)) val) = return (show index ++ "UL", val)
+  match (CppIndexer index val) = (,) <$> prettyPrintCpp' index <*> pure val
   match _ = mzero
 
 lam :: Pattern PrinterState Cpp ((String, [(String, Maybe CppType)], Maybe CppType), Cpp)
