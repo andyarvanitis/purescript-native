@@ -1,17 +1,3 @@
------------------------------------------------------------------------------
---
--- Module      :  Make
--- Copyright   :  (c) 2013-15 Phil Freeman, (c) 2014-15 Gary Burgess
--- License     :  MIT (http://opensource.org/licenses/MIT)
---
--- Maintainer  :  Phil Freeman <paf31@cantab.net>
--- Stability   :  experimental
--- Portability :
---
--- |
---
------------------------------------------------------------------------------
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -225,8 +211,9 @@ make MakeActions{..} ms = do
                 progress $ CompilingModule moduleName
                 let env = foldl' (flip applyExternsFileToEnvironment) initEnvironment externs
                 lint m
-                ([desugared], nextVar) <- runSupplyT 0 $ desugar externs [m]
-                (checked@(Module ss coms _ elaborated exps), env') <- runCheck' env $ typeCheckModule desugared
+                ((checked@(Module ss coms _ elaborated exps), env'), nextVar) <- runSupplyT 0 $ do
+                  [desugared] <- desugar externs [m]
+                  runCheck' env $ typeCheckModule desugared
                 checkExhaustiveModule env' checked
                 regrouped <- createBindingGroups moduleName . collapseBindingGroups $ elaborated
                 let mod' = Module ss coms moduleName regrouped exps
@@ -265,18 +252,6 @@ make MakeActions{..} ms = do
     externs <- decode (fromString bs)
     guard $ efVersion externs == showVersion Paths.version
     return externs
-
--- |
--- Add an import declaration for a module if it does not already explicitly import it.
---
-addDefaultImport :: ModuleName -> Module -> Module
-addDefaultImport toImport m@(Module ss coms mn decls exps)  =
-  if isExistingImport `any` decls || mn == toImport then m
-  else Module ss coms mn (ImportDeclaration toImport Implicit Nothing False : decls) exps
-  where
-  isExistingImport (ImportDeclaration mn' _ _ _) | mn' == toImport = True
-  isExistingImport (PositionedDeclaration _ _ d) = isExistingImport d
-  isExistingImport _ = False
 
 importPrim :: Module -> Module
 importPrim = addDefaultImport (ModuleName [ProperName C.prim])

@@ -67,8 +67,7 @@ data SimpleErrorMessage
   | UnknownExportModule ModuleName
   | UnknownImportDataConstructor ModuleName ProperName ProperName
   | UnknownExportDataConstructor ProperName ProperName
-  | ConflictingImport String ModuleName
-  | ConflictingImports String ModuleName ModuleName
+  | ScopeConflict String [ModuleName]
   | ConflictingTypeDecls ProperName
   | ConflictingCtorDecls ProperName
   | TypeConflictsWithClass ProperName
@@ -128,6 +127,7 @@ data SimpleErrorMessage
   | UnusedExplicitImport ModuleName [String]
   | UnusedDctorImport ProperName
   | UnusedDctorExplicitImport ProperName [ProperName]
+  | DeprecatedOperatorDecl String
   | DeprecatedQualifiedSyntax ModuleName ModuleName
   | DeprecatedClassImport ModuleName ProperName
   | DeprecatedClassExport ProperName
@@ -138,6 +138,8 @@ data SimpleErrorMessage
   | DuplicateExportRef String
   | IntOutOfRange Integer String Integer Integer
   | RedundantEmptyHidingImport ModuleName
+  | ImplicitImport ModuleName [DeclarationRef]
+  | CaseBinderLengthDiffers Int [Binder]
   deriving (Show)
 
 -- | Error message hints, providing more detailed information about failure.
@@ -175,6 +177,31 @@ data HintCategory
 
 data ErrorMessage = ErrorMessage [ErrorMessageHint] SimpleErrorMessage deriving (Show)
 
+-- | Get the source span for an error
+errorSpan :: ErrorMessage -> Maybe SourceSpan
+errorSpan = findHint matchSpan
+  where
+  matchSpan (PositionedError ss) = Just ss
+  matchSpan _ = Nothing
+
+-- | Get the module name for an error
+errorModule :: ErrorMessage -> Maybe ModuleName
+errorModule = findHint matchModule
+  where
+  matchModule (ErrorInModule mn) = Just mn
+  matchModule _ = Nothing
+
+findHint :: (ErrorMessageHint -> Maybe a) -> ErrorMessage -> Maybe a
+findHint f (ErrorMessage hints _) = getLast . foldMap (Last . f) $ hints
+
+-- | Remove the module name and span hints from an error
+stripModuleAndSpan :: ErrorMessage -> ErrorMessage
+stripModuleAndSpan (ErrorMessage hints e) = ErrorMessage (filter (not . shouldStrip) hints) e
+  where
+  shouldStrip (ErrorInModule _) = True
+  shouldStrip (PositionedError _) = True
+  shouldStrip _ = False
+
 -- |
 -- Get the error code for a particular error type
 --
@@ -211,8 +238,7 @@ errorCode em = case unwrapErrorMessage em of
   UnknownExportModule{} -> "UnknownExportModule"
   UnknownImportDataConstructor{} -> "UnknownImportDataConstructor"
   UnknownExportDataConstructor{} -> "UnknownExportDataConstructor"
-  ConflictingImport{} -> "ConflictingImport"
-  ConflictingImports{} -> "ConflictingImports"
+  ScopeConflict{} -> "ScopeConflict"
   ConflictingTypeDecls{} -> "ConflictingTypeDecls"
   ConflictingCtorDecls{} -> "ConflictingCtorDecls"
   TypeConflictsWithClass{} -> "TypeConflictsWithClass"
@@ -272,6 +298,7 @@ errorCode em = case unwrapErrorMessage em of
   UnusedExplicitImport{} -> "UnusedExplicitImport"
   UnusedDctorImport{} -> "UnusedDctorImport"
   UnusedDctorExplicitImport{} -> "UnusedDctorExplicitImport"
+  DeprecatedOperatorDecl{} -> "DeprecatedOperatorDecl"
   DeprecatedQualifiedSyntax{} -> "DeprecatedQualifiedSyntax"
   DeprecatedClassImport{} -> "DeprecatedClassImport"
   DeprecatedClassExport{} -> "DeprecatedClassExport"
@@ -282,7 +309,8 @@ errorCode em = case unwrapErrorMessage em of
   DuplicateExportRef{} -> "DuplicateExportRef"
   IntOutOfRange{} -> "IntOutOfRange"
   RedundantEmptyHidingImport{} -> "RedundantEmptyHidingImport"
-
+  ImplicitImport{} -> "ImplicitImport"
+  CaseBinderLengthDiffers{} -> "CaseBinderLengthDiffers"
 
 -- |
 -- A stack trace for an error
@@ -299,7 +327,6 @@ nonEmpty = not . null . runMultipleErrors
 --
 errorMessage :: SimpleErrorMessage -> MultipleErrors
 errorMessage err = MultipleErrors [ErrorMessage [] err]
-
 
 -- |
 -- Create an error set from a single error message
@@ -384,6 +411,9 @@ onTypesInErrorMessageM f (ErrorMessage hints simple) = ErrorMessage <$> traverse
   gHint (ErrorInApplication e1 t1 e2) = ErrorInApplication e1 <$> f t1 <*> pure e2
   gHint (ErrorInInstance cl ts) = ErrorInInstance cl <$> traverse f ts
   gHint other = pure other
+
+prettyPrintSingleError' :: Bool -> Level -> ErrorMessage ->Box.Box
+prettyPrintSingleError' full level = flip evalState defaultUnknownMap . prettyPrintSingleError full level
 
 -- |
 -- Pretty print a single error, simplifying if necessary
@@ -522,13 +552,10 @@ prettyPrintSingleError full level e = do
       line $ "Module " ++ runModuleName mn ++ " does not export data constructor " ++ runProperName dcon ++ " for type " ++ runProperName tcon
     renderSimpleErrorMessage (UnknownExportDataConstructor tcon dcon) =
       line $ "Cannot export data constructor " ++ runProperName dcon ++ " for type " ++ runProperName tcon ++ ", as it has not been declared."
-    renderSimpleErrorMessage (ConflictingImport nm mn) =
-      paras [ line $ "Cannot declare " ++ show nm ++ ", since another declaration of that name was imported from module " ++ runModuleName mn
-            , line $ "Consider hiding " ++ show nm ++ " when importing " ++ runModuleName mn ++ ":"
-            , indent . line $ "import " ++ runModuleName mn ++ " hiding (" ++ nm ++ ")"
+    renderSimpleErrorMessage (ScopeConflict nm ms) =
+      paras [ line $ "Conflicting definitions are in scope for " ++ nm ++ " from the following modules:"
+            , indent $ paras $ map (line . runModuleName) ms
             ]
-    renderSimpleErrorMessage (ConflictingImports nm m1 m2) =
-      line $ "Conflicting imports for " ++ nm ++ " from modules " ++ runModuleName m1 ++ " and " ++ runModuleName m2
     renderSimpleErrorMessage (ConflictingTypeDecls nm) =
       line $ "Conflicting type declarations for " ++ runProperName nm
     renderSimpleErrorMessage (ConflictingCtorDecls nm) =
@@ -715,8 +742,9 @@ prettyPrintSingleError full level e = do
             , line "All types appearing in instance declarations must be of the form T a_1 .. a_n, where each type a_i is of the same form."
             ]
     renderSimpleErrorMessage (TransitiveExportError x ys) =
-      paras $ line ("An export for " ++ prettyPrintExport x ++ " requires the following to also be exported: ")
-              : map (line . prettyPrintExport) ys
+      paras [ line $ "An export for " ++ prettyPrintExport x ++ " requires the following to also be exported: "
+            , indent $ paras $ map (line . prettyPrintExport) ys
+            ]
     renderSimpleErrorMessage (ShadowedName nm) =
       line $ "Name '" ++ showIdent nm ++ "' was shadowed."
     renderSimpleErrorMessage (ShadowedTypeVar tv) =
@@ -747,9 +775,12 @@ prettyPrintSingleError full level e = do
     renderSimpleErrorMessage (NotExhaustivePattern bs b) =
       paras $ [ line "A case expression could not be determined to cover all inputs."
               , line "The following additional cases are required to cover all inputs:\n"
-              , Box.hsep 1 Box.left (map (paras . map (line . prettyPrintBinderAtom)) (transpose bs))
-              ] ++
-              [ line "..." | not b ]
+              , indent $ paras $
+                  [ Box.hsep 1 Box.left (map (paras . map (line . prettyPrintBinderAtom)) (transpose bs)) ]
+                  ++ [ line "..." | not b ]
+              , line "Or alternatively, add a Partial constraint to the type of the enclosing value."
+              , line "Non-exhaustive patterns for values without a `Partial` constraint will be disallowed in PureScript 0.9."
+              ]
     renderSimpleErrorMessage (OverlappingPattern bs b) =
       paras $ [ line "A case expression contains unreachable cases:\n"
               , Box.hsep 1 Box.left (map (paras . map (line . prettyPrintBinderAtom)) (transpose bs))
@@ -772,6 +803,13 @@ prettyPrintSingleError full level e = do
     renderSimpleErrorMessage (UnusedDctorExplicitImport name names) =
       paras [ line $ "The import of type " ++ runProperName name ++ " includes the following unused data constructors:"
             , indent $ paras $ map (line .runProperName) names ]
+
+    renderSimpleErrorMessage (DeprecatedOperatorDecl name) =
+      paras [ line $ "The operator (" ++ name ++ ") was declared as a value rather than an alias for a named function."
+            , line "Operator aliases are declared by using a fixity declaration, for example:"
+            , indent $ line $ "infixl 9 someFunction as " ++ name
+            , line $ "Support for value-declared operators will be removed in PureScript 0.9."
+            ]
 
     renderSimpleErrorMessage (DeprecatedQualifiedSyntax name qualName) =
       paras [ line $ "Import uses the deprecated 'qualified' syntax:"
@@ -818,6 +856,16 @@ prettyPrintSingleError full level e = do
 
     renderSimpleErrorMessage (RedundantEmptyHidingImport mn) =
       line $ "The import for module " ++ runModuleName mn ++ " is redundant as all members have been explicitly hidden."
+
+    renderSimpleErrorMessage (ImplicitImport mn refs) =
+      paras [ line $ "Module " ++ runModuleName mn ++ " has unspecified imports, consider using the explicit form: "
+            , indent $ line $ "import " ++ runModuleName mn ++ " (" ++ intercalate ", " (map prettyPrintRef refs) ++ ")"
+            ]
+
+    renderSimpleErrorMessage (CaseBinderLengthDiffers l bs) =
+      paras $ [ line $ "Binder list length differs in case alternative:"
+              , indent $ line $ intercalate ", " $ fmap prettyPrintBinderAtom bs
+              , line $ "Expecting " ++ show l ++ " binder" ++ (if l == 1 then "" else "s") ++ "." ]
 
     renderHint :: ErrorMessageHint -> Box.Box -> Box.Box
     renderHint (ErrorUnifyingTypes t1 t2) detail =
@@ -954,9 +1002,10 @@ prettyPrintSingleError full level e = do
 
   prettyPrintRef :: DeclarationRef -> String
   prettyPrintRef (TypeRef pn Nothing) = runProperName pn ++ "(..)"
+  prettyPrintRef (TypeRef pn (Just [])) = runProperName pn
   prettyPrintRef (TypeRef pn (Just dctors)) = runProperName pn ++ "(" ++ intercalate ", " (map runProperName dctors) ++ ")"
   prettyPrintRef (ValueRef ident) = showIdent ident
-  prettyPrintRef (TypeClassRef pn) = runProperName pn
+  prettyPrintRef (TypeClassRef pn) = "class " ++ runProperName pn
   prettyPrintRef (ProperRef pn) = runProperName pn
   prettyPrintRef (TypeInstanceRef ident) = showIdent ident
   prettyPrintRef (ModuleRef name) = "module " ++ runModuleName name
@@ -965,7 +1014,8 @@ prettyPrintSingleError full level e = do
   prettyPrintImport :: ModuleName -> ImportDeclarationType -> Maybe ModuleName -> String
   prettyPrintImport mn idt qual =
     let i = case idt of
-              Implicit -> runModuleName mn
+              Implicit True -> runModuleName mn ++ " (..)"
+              Implicit False -> runModuleName mn
               Explicit refs -> runModuleName mn ++ " (" ++ intercalate ", " (map prettyPrintRef refs) ++ ")"
               Hiding refs -> runModuleName mn ++ " hiding (" ++ intercalate "," (map prettyPrintRef refs) ++ ")"
     in i ++ maybe "" (\q -> " as " ++ runModuleName q) qual

@@ -113,12 +113,12 @@ loadModule filename = do
 -- |
 -- Load all modules.
 --
-loadAllModules :: [FilePath] -> IO (Either P.MultipleErrors [(Either P.RebuildPolicy FilePath, P.Module)])
+loadAllModules :: [FilePath] -> IO (Either P.MultipleErrors [(FilePath, P.Module)])
 loadAllModules files = do
   filesAndContent <- forM files $ \filename -> do
     content <- readFile filename
-    return (Right filename, content)
-  return $ P.parseModulesFromFiles (either (const "") id) filesAndContent
+    return (filename, content)
+  return $ P.parseModulesFromFiles id filesAndContent
 
 -- |
 -- Load all modules, updating the application state
@@ -129,7 +129,7 @@ loadAllImportedModules = do
   modulesOrFirstError <- psciIO $ loadAllModules files
   case modulesOrFirstError of
     Left errs -> printErrors errs
-    Right modules -> PSCI . lift . modify $ \st -> st { psciLoadedModules = modules }
+    Right modules -> PSCI . lift . modify $ updateModules modules
 
 -- |
 -- Expands tilde in path.
@@ -202,7 +202,7 @@ createTemporaryModule exec PSCiState{psciImportedModules = imports, psciLetBindi
     trace = P.Var (P.Qualified (Just supportModuleName) (P.Ident "eval"))
     mainValue = P.App trace (P.Var (P.Qualified Nothing (P.Ident "it")))
     itDecl = P.ValueDeclaration (P.Ident "it") P.Public [] $ Right val
-    mainDecl = P.ValueDeclaration (P.Ident "main") P.Public [] $ Right mainValue
+    mainDecl = P.ValueDeclaration (P.Ident "$main") P.Public [] $ Right mainValue
     decls = if exec then [itDecl, mainDecl] else [itDecl]
   in
     P.Module (P.internalModuleSourceSpan "<internal>") [] moduleName ((importDecl `map` imports) ++ lets ++ decls) Nothing
@@ -248,26 +248,28 @@ makeIO f io = do
   e <- liftIO $ tryIOError io
   either (throwError . P.singleError . f) return e
 
-make :: PSCiState -> [(Either P.RebuildPolicy FilePath, P.Module)] -> P.Make P.Environment
-make PSCiState{..} ms = P.make actions' (map snd (psciLoadedModules ++ ms))
+make :: PSCiState -> [P.Module] -> P.Make P.Environment
+make st@PSCiState{..} ms = P.make actions' (map snd loadedModules ++ ms)
   where
-  filePathMap = M.fromList $ (first P.getModuleName . swap) `map` (psciLoadedModules ++ ms)
+  filePathMap = M.fromList $ (first P.getModuleName . swap) `map` allModules
   actions = P.buildMakeActions modulesDir filePathMap psciForeignFiles False
   actions' = actions { P.progress = const (return ()) }
+  loadedModules = psciLoadedModules st
+  allModules = map (first Right) loadedModules ++ map (Left P.RebuildAlways,) ms
 
 -- |
--- Takes a value declaration and evaluates it with the current state.
+-- Takes a value expression and evaluates it with the current state.
 --
-handleDeclaration :: P.Expr -> PSCI ()
-handleDeclaration val = do
+handleExpression :: P.Expr -> PSCI ()
+handleExpression val = do
   st <- PSCI $ lift get
   let m = createTemporaryModule True st val
   let nodeArgs = psciNodeFlags st ++ [indexFile]
-  e <- psciIO . runMake $ make st [(Left P.RebuildAlways, supportModule), (Left P.RebuildAlways, m)]
+  e <- psciIO . runMake $ make st [supportModule, m]
   case e of
     Left errs -> printErrors errs
     Right _ -> do
-      psciIO $ writeFile indexFile "require('$PSCI').main();"
+      psciIO $ writeFile indexFile "require('$PSCI')['$main']();"
       process <- psciIO findNodeProcess
       result  <- psciIO $ traverse (\node -> readProcessWithExitCode node nodeArgs "") process
       case result of
@@ -284,7 +286,7 @@ handleDecls ds = do
   st <- PSCI $ lift get
   let st' = updateLets ds st
   let m = createTemporaryModule False st' (P.ObjectLiteral [])
-  e <- psciIO . runMake $ make st' [(Left P.RebuildAlways, m)]
+  e <- psciIO . runMake $ make st' [m]
   case e of
     Left err -> printErrors err
     Right _ -> PSCI $ lift (put st')
@@ -294,7 +296,7 @@ handleDecls ds = do
 --
 handleShowLoadedModules :: PSCI ()
 handleShowLoadedModules = do
-  PSCiState { psciLoadedModules = loadedModules } <- PSCI $ lift get
+  loadedModules <- PSCI $ lift $ gets psciLoadedModules
   psciIO $ readModules loadedModules >>= putStrLn
   return ()
   where readModules = return . unlines . sort . nub . map toModuleName
@@ -315,10 +317,11 @@ handleShowImportedModules = do
       Just mn' -> "qualified " ++ N.runModuleName mn ++ " as " ++ N.runModuleName mn'
       Nothing  -> N.runModuleName mn ++ " " ++ showDeclType declType
 
-  showDeclType P.Implicit = ""
+  showDeclType (P.Implicit True) = " (..)"
+  showDeclType (P.Implicit False) = ""
   showDeclType (P.Explicit refs) = refsList refs
-  showDeclType (P.Hiding refs) = "hiding " ++ refsList refs
-  refsList refs = "(" ++ commaList (map showRef refs) ++ ")"
+  showDeclType (P.Hiding refs) = " hiding " ++ refsList refs
+  refsList refs = " (" ++ commaList (map showRef refs) ++ ")"
 
   showRef :: P.DeclarationRef -> String
   showRef (P.TypeRef pn dctors) = N.runProperName pn ++ "(" ++ maybe ".." (commaList . map N.runProperName) dctors ++ ")"
@@ -339,7 +342,7 @@ handleImport :: ImportedModule -> PSCI ()
 handleImport im = do
    st <- updateImportedModules im <$> PSCI (lift get)
    let m = createTemporaryModuleForImports st
-   e <- psciIO . runMake $ make st [(Left P.RebuildAlways, m)]
+   e <- psciIO . runMake $ make st [m]
    case e of
      Left errs -> printErrors errs
      Right _  -> do
@@ -353,7 +356,7 @@ handleTypeOf :: P.Expr -> PSCI ()
 handleTypeOf val = do
   st <- PSCI $ lift get
   let m = createTemporaryModule False st val
-  e <- psciIO . runMake $ make st [(Left P.RebuildAlways, m)]
+  e <- psciIO . runMake $ make st [m]
   case e of
     Left errs -> printErrors errs
     Right env' ->
@@ -490,7 +493,7 @@ handleKindOf typ = do
   st <- PSCI $ lift get
   let m = createTemporaryModuleForKind st typ
       mName = P.ModuleName [P.ProperName "$PSCI"]
-  e <- psciIO . runMake $ make st [(Left P.RebuildAlways, m)]
+  e <- psciIO . runMake $ make st [m]
   case e of
     Left errs -> printErrors errs
     Right env' ->
@@ -527,16 +530,15 @@ getCommand singleLineMode = handleInterrupt (return (Right Nothing)) $ do
 -- Performs an action for each meta-command given, and also for expressions.
 --
 handleCommand :: Command -> PSCI ()
-handleCommand (Expression val) = handleDeclaration val
+handleCommand (Expression val) = handleExpression val
 handleCommand ShowHelp = PSCI $ outputStrLn helpMessage
 handleCommand (Import im) = handleImport im
 handleCommand (Decls l) = handleDecls l
 handleCommand (LoadFile filePath) = whenFileExists filePath $ \absPath -> do
-  PSCI . lift $ modify (updateImportedFiles absPath)
   m <- psciIO $ loadModule absPath
   case m of
     Left err -> PSCI $ outputStrLn err
-    Right mods -> PSCI . lift $ modify (updateModules (map ((,) (Right absPath)) mods))
+    Right mods -> PSCI . lift $ modify (updateModules (map (absPath,) mods))
 handleCommand (LoadForeign filePath) = whenFileExists filePath $ \absPath -> do
   foreignsOrError <- psciIO . runMake $ do
     foreignFile <- makeIO (const (P.ErrorMessage [] $ P.CannotReadFile absPath)) (readFile absPath)
@@ -545,12 +547,10 @@ handleCommand (LoadForeign filePath) = whenFileExists filePath $ \absPath -> do
     Left err -> PSCI $ outputStrLn $ P.prettyPrintMultipleErrors False err
     Right foreigns -> PSCI . lift $ modify (updateForeignFiles foreigns)
 handleCommand ResetState = do
-  files <- psciImportedFilenames <$> PSCI (lift get)
-  PSCI . lift . modify $ \st -> st
-    { psciImportedFilenames   = files
-    , psciImportedModules     = []
-    , psciLetBindings         = []
-    }
+  PSCI . lift . modify $ \st ->
+    st { psciImportedModules = []
+       , psciLetBindings     = []
+       }
   loadAllImportedModules
 handleCommand (TypeOf val) = handleTypeOf val
 handleCommand (KindOf typ) = handleKindOf typ
@@ -613,7 +613,7 @@ loop PSCiOptions{..} = do
       case foreignsOrError of
         Left errs -> putStrLn (P.prettyPrintMultipleErrors False errs) >> exitFailure
         Right foreigns ->
-          flip evalStateT (PSCiState inputFiles [] modules foreigns [] psciInputNodeFlags) . runInputT (setComplete completion settings) $ do
+          flip evalStateT (mkPSCiState [] modules foreigns [] psciInputNodeFlags) . runInputT (setComplete completion settings) $ do
             outputStrLn prologueMessage
             traverse_ (traverse_ (runPSCI . handleCommand)) config
             modules' <- lift $ gets psciLoadedModules

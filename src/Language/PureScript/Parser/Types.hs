@@ -1,18 +1,3 @@
------------------------------------------------------------------------------
---
--- Module      :  Language.PureScript.Parser.Types
--- Copyright   :  (c) Phil Freeman 2013
--- License     :  MIT
---
--- Maintainer  :  Phil Freeman <paf31@cantab.net>
--- Stability   :  experimental
--- Portability :
---
--- |
--- Parsers for types
---
------------------------------------------------------------------------------
-
 module Language.PureScript.Parser.Types (
     parseType,
     parsePolyType,
@@ -32,19 +17,8 @@ import Language.PureScript.Environment
 import qualified Text.Parsec as P
 import qualified Text.Parsec.Expr as P
 
--- TODO: remove these deprecation warnings in 0.8
-parseArray :: TokenParser Type
-parseArray = do
-  _ <- squares $ return tyArray
-  featureWasRemoved "Array notation is no longer supported. Use Array instead of []."
-
-parseArrayOf :: TokenParser Type
-parseArrayOf = do
-  _ <- squares $ TypeApp tyArray <$> parseType
-  featureWasRemoved "Array notation is no longer supported. Use Array _ instead of [_]."
-
 parseFunction :: TokenParser Type
-parseFunction = parens $ rarrow >> return tyFunction
+parseFunction = parens rarrow >> return tyFunction
 
 parseObject :: TokenParser Type
 parseObject = braces $ TypeApp tyObject <$> parseRow
@@ -62,45 +36,48 @@ parseTypeConstructor :: TokenParser Type
 parseTypeConstructor = TypeConstructor <$> parseQualified properName
 
 parseForAll :: TokenParser Type
-parseForAll = mkForAll <$> (P.try (reserved "forall") *> P.many1 (indented *> identifier) <* indented <* dot)
+parseForAll = mkForAll <$> (reserved "forall" *> P.many1 (indented *> identifier) <* indented <* dot)
                        <*> parseType
 
 -- |
 -- Parse a type as it appears in e.g. a data constructor
 --
 parseTypeAtom :: TokenParser Type
-parseTypeAtom = indented *> P.choice (map P.try
-            [ parseArray
-            , parseArrayOf
-            , parseFunction
+parseTypeAtom = indented *> P.choice
+            [ P.try parseConstrainedType
+            , P.try parseFunction
             , parseObject
             , parseTypeWildcard
+            , parseForAll
             , parseTypeVariable
             , parseTypeConstructor
-            , parseForAll
-            , parens parseRow
-            , parseConstrainedType
+            -- This try is needed due to some unfortunate ambiguities between rows and kinded types
+            , P.try (parens parseRow)
             , parens parsePolyType
-            ])
+            ]
 
 parseConstrainedType :: TokenParser Type
 parseConstrainedType = do
-  constraints <- parens . commaSep1 $ do
-    className <- parseQualified properName
-    indented
-    ty <- P.many parseTypeAtom
-    return (className, ty)
+  constraints <- P.try (return <$> parseConstraint) <|> parens (commaSep1 parseConstraint)
   _ <- rfatArrow
   indented
   ty <- parseType
   return $ ConstrainedType constraints ty
+  where
+  parseConstraint = do
+    className <- parseQualified properName
+    indented
+    ty <- P.many parseTypeAtom
+    return (className, ty)
+
 
 parseAnyType :: TokenParser Type
 parseAnyType = P.buildExpressionParser operators (buildPostfixParser postfixTable parseTypeAtom) P.<?> "type"
   where
   operators = [ [ P.Infix (return TypeApp) P.AssocLeft ]
-              , [ P.Infix (rarrow >> return function) P.AssocRight ] ]
-  postfixTable = [ \t -> KindedType t <$> (P.try (indented *> doubleColon) *> parseKind)
+              , [ P.Infix (rarrow >> return function) P.AssocRight ]
+              ]
+  postfixTable = [ \t -> KindedType t <$> (indented *> doubleColon *> parseKind)
                  ]
 
 -- |
