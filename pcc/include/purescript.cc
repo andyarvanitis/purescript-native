@@ -215,7 +215,7 @@ any::~any() {
     } while (true);
   }
 
-  auto any::operator[](const map_key_t rhs) const -> const any& {
+  auto any::operator[](const char rhs[]) const -> const any& {
     RETURN_VALUE(Type::Map, m->at(rhs),)
   }
 
