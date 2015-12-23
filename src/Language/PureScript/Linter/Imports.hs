@@ -7,7 +7,7 @@ import Prelude ()
 import Prelude.Compat
 
 import qualified Data.Map as M
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, isNothing)
 import Data.List ((\\), find, intersect, nub)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.Writer.Class
@@ -58,12 +58,11 @@ findUnusedImports (Module _ _ _ mdecls mexports) env usedImps = do
   forM_ (M.toAscList imps) $ \(mni, decls) -> unless (mni `elem` alwaysUsedModules) $
     forM_ decls $ \(ss, declType, qualifierName) ->
       censor (onErrorMessages $ addModuleLocError ss) $ unless (qnameUsed qualifierName) $
-        let names = nub $ sugarNames mni ++ M.findWithDefault [] mni usedImps
+        let names = nub $ M.findWithDefault [] mni usedImps
             usedNames = mapMaybe (matchName (typeForDCtor mni) qualifierName) names
             usedDctors = mapMaybe (matchDctor qualifierName) names
         in case declType of
-          Implicit _ | null usedNames -> tell $ errorMessage $ UnusedImport mni
-          Implicit False ->
+          Implicit | isNothing qualifierName ->
             let classRefs = TypeClassRef <$> mapMaybe getClassName names
                 valueRefs = ValueRef <$> mapMaybe getIdentName names
                 types = mapMaybe getTypeName names
@@ -96,10 +95,6 @@ findUnusedImports (Module _ _ _ mdecls mexports) env usedImps = do
 
           _ -> return ()
   where
-  sugarNames :: ModuleName -> [ Name ]
-  sugarNames (ModuleName [ProperName n]) | n == C.prelude = [ IdentName $ Qualified Nothing (Ident C.bind) ]
-  sugarNames _ = []
-
   reconstructTypeRefs :: ModuleName -> [ProperName] -> M.Map ProperName [ProperName]
   reconstructTypeRefs mni = foldr accumDctors M.empty
     where
