@@ -31,6 +31,7 @@
 #include <vector>
 #include <unordered_map>
 #include <stdexcept>
+#include "map_key.hh"
 
 namespace PureScript {
 
@@ -39,9 +40,6 @@ using runtime_error = std::runtime_error;
 using nullptr_t = std::nullptr_t;
 
 const bool undefined = false;
-
-// TODO: deprecated -- remove
-#define KEY(k) k
 
 // A variant data class designed to provide some features of dynamic typing.
 //
@@ -69,7 +67,7 @@ class any {
   };
   static constexpr as_thunk unthunk = as_thunk{};
 
-  using map    = std::unordered_map<std::string, const any>;
+  using map    = std::unordered_map<map_key_t, const any, map_key_t::hasher, map_key_t::equal>;
   using vector = std::vector<any>;
   using fn     = std::function<any(const any&)>;
   using eff_fn = std::function<any()>;
@@ -246,7 +244,7 @@ class any {
   operator const map&() const;
   operator const vector&() const;
 
-  auto operator[](const char []) const -> const any&;
+  auto operator[](const map_key_t&) const -> const any&;
   auto operator[](const vector::size_type) const -> const any&;
   auto operator[](const any&) const -> const any&;
 
