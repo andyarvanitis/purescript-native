@@ -63,7 +63,7 @@ class any {
     Pointer
   };
 
-  Type type = Type::Unknown;
+  mutable Type type = Type::Unknown;
 
   struct as_thunk {
   };
@@ -75,18 +75,8 @@ class any {
   using eff_fn = std::function<any()>;
   using thunk  = std::function<const any& (const as_thunk)>;
 
-  using shared_string = std::shared_ptr<string>;
-  using shared_map    = std::shared_ptr<map>;
-  using shared_vector = std::shared_ptr<vector>;
-
-  using shared_fn     = std::shared_ptr<fn>;
-  using shared_eff_fn = std::shared_ptr<eff_fn>;
-  using shared_thunk  = std::shared_ptr<thunk>;
-
   template <typename T>
   using shared = std::shared_ptr<T>;
-
-  using shared_void_ptr = std::shared_ptr<void>;
 
   template <typename T>
   static constexpr auto make_shared(const T& arg) -> shared<T> {
@@ -105,17 +95,17 @@ class any {
 
   private:
   union {
-    long            i;
-    double          d;
-    char            c;
-    bool            b;
-    shared_string   s;
-    shared_map      m;
-    shared_vector   v;
-    shared_fn       f;
-    shared_eff_fn   e;
-    shared_thunk    t;
-    shared_void_ptr p;
+    mutable long            i;
+    mutable double          d;
+    mutable char            c;
+    mutable bool            b;
+    mutable shared<string>  s;
+    mutable shared<map>     m;
+    mutable shared<vector>  v;
+    mutable shared<fn>      f;
+    mutable shared<eff_fn>  e;
+    mutable shared<thunk>   t;
+    mutable shared<void>    p;
   };
 
   public:
@@ -135,23 +125,23 @@ class any {
 
   any(const char val[]) : type(Type::String), s(make_shared<string>(val)) {}
 
-  any(const shared_string& val) : type(Type::String), s(val) {}
-  any(shared_string&& val) : type(Type::String), s(std::move(val)) {}
+  any(const shared<string>& val) : type(Type::String), s(val) {}
+  any(shared<string>&& val) : type(Type::String), s(std::move(val)) {}
 
   any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
   any(map&& val) : type(Type::Map), m(make_shared<map>(std::move(val))) {}
 
-  any(const shared_map& val) : type(Type::Map), m(val) {}
-  any(shared_map&& val) : type(Type::Map), m(std::move(val)) {}
+  any(const shared<map>& val) : type(Type::Map), m(val) {}
+  any(shared<map>&& val) : type(Type::Map), m(std::move(val)) {}
 
   any(const vector& val) : type(Type::Vector), v(make_shared<vector>(val)) {}
   any(vector&& val) : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
 
-  any(const shared_vector& val) : type(Type::Vector), v(val) {}
-  any(shared_vector&& val) : type(Type::Vector), v(std::move(val)) {}
+  any(const shared<vector>& val) : type(Type::Vector), v(val) {}
+  any(shared<vector>&& val) : type(Type::Vector), v(std::move(val)) {}
 
-  any(const shared_fn& val) : type(Type::Function), f(val) {}
-  any(shared_fn&& val) : type(Type::Function), f(std::move(val)) {}
+  any(const shared<fn>& val) : type(Type::Function), f(val) {}
+  any(shared<fn>&& val) : type(Type::Function), f(std::move(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
@@ -161,33 +151,33 @@ class any {
   // any(T&& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
   //   : type(Type::Function), f(std::move(val)) {}
 
-  any(const shared_eff_fn& val) : type(Type::EffFunction), e(val) {}
-  any(shared_eff_fn&& val) : type(Type::EffFunction), e(std::move(val)) {}
+  any(const shared<eff_fn>& val) : type(Type::EffFunction), e(val) {}
+  any(shared<eff_fn>&& val) : type(Type::EffFunction), e(std::move(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
     : type(Type::EffFunction), e(make_shared<eff_fn>(val)) {}
 
-  any(const shared_thunk& val) : type(Type::Thunk), t(val) {}
-  any(shared_thunk&& val) : type(Type::Thunk), t(std::move(val)) {}
+  any(const shared<thunk>& val) : type(Type::Thunk), t(val) {}
+  any(shared<thunk>&& val) : type(Type::Thunk), t(std::move(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
     : type(Type::Thunk), t(make_shared<thunk>(val)) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value>::type* = 0)
+  any(const T& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0)
     : type(Type::Pointer), p(val) {}
 
   any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
 
   template <typename T>
-  any(T&& val, typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value>::type* = 0)
+  any(T&& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0)
     : type(Type::Pointer), p(std::move(val)) {}
 
   any(const any&);
 
-  void swap(any&&);
+  void swap(any&&) const;
 
   any(any&& val) {
     swap(std::move(val));
@@ -226,7 +216,7 @@ class any {
   auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type;
 
   template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value, typename T::element_type*>::type {
+  auto cast() const -> typename std::enable_if<std::is_assignable<shared<void>,T>::value, typename T::element_type*>::type {
     if (type == Type::Pointer) {
       return static_cast_shared<typename T::element_type>(p);
     }

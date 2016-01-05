@@ -22,32 +22,32 @@ any::any(const any& val) : type(val.type) {
     case Type::Double:          d = val.d;                         break;
     case Type::Character:       c = val.c;                         break;
     case Type::Boolean:         b = val.b;                         break;
-    case Type::String:          new (&s) shared_string   (val.s);  break;
-    case Type::Map:             new (&m) shared_map      (val.m);  break;
-    case Type::Vector:          new (&v) shared_vector   (val.v);  break;
-    case Type::Function:        new (&f) shared_fn       (val.f);  break;
-    case Type::EffFunction:     new (&e) shared_eff_fn   (val.e);  break;
-    case Type::Thunk:           new (&t) shared_thunk    (val.t);  break;
-    case Type::Pointer:         new (&p) shared_void_ptr (val.p);  break;
+    case Type::String:          new (&s) shared<string>  (val.s);  break;
+    case Type::Map:             new (&m) shared<map>     (val.m);  break;
+    case Type::Vector:          new (&v) shared<vector>  (val.v);  break;
+    case Type::Function:        new (&f) shared<fn>      (val.f);  break;
+    case Type::EffFunction:     new (&e) shared<eff_fn>  (val.e);  break;
+    case Type::Thunk:           new (&t) shared<thunk>   (val.t);  break;
+    case Type::Pointer:         new (&p) shared<void>    (val.p);  break;
 
     default: assert(false && "Unsupported type in copy ctor");
   }
 }
 
-void any::swap(any&& val) {
+void any::swap(any&& val) const {
   type = val.type;
   switch (type) {
     case Type::Integer:         i = val.i;                                    break;
     case Type::Double:          d = val.d;                                    break;
     case Type::Character:       c = val.c;                                    break;
     case Type::Boolean:         b = val.b;                                    break;
-    case Type::String:          new (&s) shared_string   (std::move(val.s));  break;
-    case Type::Map:             new (&m) shared_map      (std::move(val.m));  break;
-    case Type::Vector:          new (&v) shared_vector   (std::move(val.v));  break;
-    case Type::Function:        new (&f) shared_fn       (std::move(val.f));  break;
-    case Type::EffFunction:     new (&e) shared_eff_fn   (std::move(val.e));  break;
-    case Type::Thunk:           new (&t) shared_thunk    (std::move(val.t));  break;
-    case Type::Pointer:         new (&p) shared_void_ptr (std::move(val.p));  break;
+    case Type::String:          new (&s) shared<string>  (std::move(val.s));  break;
+    case Type::Map:             new (&m) shared<map>     (std::move(val.m));  break;
+    case Type::Vector:          new (&v) shared<vector>  (std::move(val.v));  break;
+    case Type::Function:        new (&f) shared<fn>      (std::move(val.f));  break;
+    case Type::EffFunction:     new (&e) shared<eff_fn>  (std::move(val.e));  break;
+    case Type::Thunk:           new (&t) shared<thunk>   (std::move(val.t));  break;
+    case Type::Pointer:         new (&p) shared<void>    (std::move(val.p));  break;
 
     default: assert(false && "Unsupported type in move ctor");
   }
@@ -60,13 +60,13 @@ any::~any() {
     case Type::Double:          ;                     break;
     case Type::Character:       ;                     break;
     case Type::Boolean:         ;                     break;
-    case Type::String:          s.~shared_string();   break;
-    case Type::Map:             m.~shared_map();      break;
-    case Type::Vector:          v.~shared_vector();   break;
-    case Type::Function:        f.~shared_fn();       break;
-    case Type::EffFunction:     e.~shared_eff_fn();   break;
-    case Type::Thunk:           t.~shared_thunk();    break;
-    case Type::Pointer:         p.~shared_void_ptr(); break;
+    case Type::String:          s.~shared<string>();  break;
+    case Type::Map:             m.~shared<map>();     break;
+    case Type::Vector:          v.~shared<vector>();  break;
+    case Type::Function:        f.~shared<fn>();      break;
+    case Type::EffFunction:     e.~shared<eff_fn>();  break;
+    case Type::Thunk:           t.~shared<thunk>();   break;
+    case Type::Pointer:         p.~shared<void>();    break;
 
     default: assert(false && "Unsupported type in destructor");
   }
@@ -229,21 +229,21 @@ any::~any() {
 
 #define DEFINE_OPERATOR_LHS(K, T, OP, V, R, P) \
 auto operator OP(const T lhs, const any& rhs_) -> R { \
-  auto& rhs = any::extract_value(rhs_); \
+  const any& rhs = any::extract_value(rhs_); \
   assert(rhs.type == any::Type::K); \
   return lhs OP P(rhs.V); \
 }
 
 #define DEFINE_OPERATOR_RHS(K, T, OP, V, R, P) \
 auto any::operator OP(const T rhs) const -> R { \
-  auto& lhs = any::extract_value(*this); \
+  const any& lhs = any::extract_value(*this); \
   assert(lhs.type == Type::K); \
   return P(lhs.V) OP rhs; \
 }
 
 auto any::operator==(const any& rhs_) const -> bool {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer:   return lhs.i == rhs.i;
@@ -265,8 +265,8 @@ DEFINE_OPERATOR_RHS(String,    string&,     ==, s, bool, *)
 DEFINE_OPERATOR_RHS(String,    char* const, ==, s, bool, *)
 
 auto any::operator!=(const any& rhs_) const -> bool {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer:   return lhs.i != rhs.i;
@@ -288,8 +288,8 @@ DEFINE_OPERATOR_RHS(String,    string&,     !=, s, bool, *)
 DEFINE_OPERATOR_RHS(String,    char* const, !=, s, bool, *)
 
 auto any::operator<(const any& rhs_) const -> bool {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer:   return lhs.i < rhs.i;
@@ -310,8 +310,8 @@ DEFINE_OPERATOR_RHS(String,    string&,     <, s, bool, *)
 DEFINE_OPERATOR_RHS(String,    char* const, <, s, bool, *)
 
 auto any::operator<=(const any& rhs_) const -> bool {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer:   return lhs.i <= rhs.i;
@@ -332,8 +332,8 @@ DEFINE_OPERATOR_RHS(String,    string&,     <=, s, bool, *)
 DEFINE_OPERATOR_RHS(String,    char* const, <=, s, bool, *)
 
 auto any::operator>(const any& rhs_) const -> bool {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer:   return lhs.i > rhs.i;
@@ -354,8 +354,8 @@ DEFINE_OPERATOR_RHS(String,    string&,     >, s, bool, *)
 DEFINE_OPERATOR_RHS(String,    char* const, >, s, bool, *)
 
 auto any::operator>=(const any& rhs_) const -> bool {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer:   return lhs.i >= rhs.i;
@@ -376,8 +376,8 @@ DEFINE_OPERATOR_RHS(String,    string&,     >=, s, bool, *)
 DEFINE_OPERATOR_RHS(String,    char* const, >=, s, bool, *)
 
 auto any::operator+(const any& rhs_) const -> any {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer:   return lhs.i + rhs.i;
@@ -396,8 +396,8 @@ DEFINE_OPERATOR_RHS(String,    string&,     +, s, string, *)
 DEFINE_OPERATOR_RHS(String,    char* const, +, s, string, *)
 
 auto any::operator-(const any& rhs_) const -> any {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer:   return lhs.i - rhs.i;
@@ -413,8 +413,8 @@ DEFINE_OPERATOR_RHS(Double,    double, -, d, double,)
 DEFINE_OPERATOR_RHS(Character, char,   -, c, char,)
 
 auto any::operator*(const any& rhs_) const -> any {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer: return lhs.i * rhs.i;
@@ -428,8 +428,8 @@ DEFINE_OPERATOR_RHS(Integer,   long,   *, i, long,)
 DEFINE_OPERATOR_RHS(Double,    double, *, d, double,)
 
 auto any::operator/(const any& rhs_) const -> any {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer: return lhs.i / rhs.i;
@@ -443,8 +443,8 @@ DEFINE_OPERATOR_RHS(Integer,   long,   /, i, long,)
 DEFINE_OPERATOR_RHS(Double,    double, /, d, double,)
 
 auto any::operator%(const any& rhs_) const -> any {
-  auto& lhs = extract_value(*this);
-  auto& rhs = extract_value(rhs_);
+  const any& lhs = extract_value(*this);
+  const any& rhs = extract_value(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case Type::Integer: return lhs.i % rhs.i;
@@ -456,7 +456,7 @@ auto any::operator%(const any& rhs_) const -> any {
 DEFINE_OPERATOR_RHS(Integer,   long, %, i, long,)
 
 auto any::operator-() const -> any {
-  auto& lhs = any::extract_value(*this);
+  const any& lhs = any::extract_value(*this);
   switch (lhs.type) {
     case Type::Integer: return (- lhs.i);
     case Type::Double:  return (- lhs.d);
