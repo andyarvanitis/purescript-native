@@ -141,7 +141,8 @@ class any {
   any(const shared<fn>& val) : type(Type::Function), f(val) {}
   any(shared<fn>&& val) : type(Type::Function), f(std::move(val)) {}
 
-  template <typename T>
+  template <typename T,
+            typename = typename std::enable_if<!std::is_same<any,T>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
     : type(Type::Function), f(make_shared<fn>(val)) {}
 
@@ -230,7 +231,7 @@ class any {
     return nullptr;
   }
 
-  auto operator()(const any) const -> any;
+  auto operator()(const any&) const -> any;
 
   auto operator()(const as_thunk) const -> const any&;
 
