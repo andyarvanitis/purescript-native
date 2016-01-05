@@ -15,6 +15,8 @@
 #ifndef PS_MapKey_HH
 #define PS_MapKey_HH
 
+#include <cstring>
+
 namespace PureScript {
 
   struct map_key_t {
