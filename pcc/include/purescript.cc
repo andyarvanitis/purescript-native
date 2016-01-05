@@ -136,7 +136,7 @@ any::~any() {
   template auto any::cast<any::vector>() const -> const vector&;
 
 
-  auto any::operator()(const any arg) const -> any {
+  auto any::operator()(const any& arg) const -> any {
     if (type == Type::Function) {
       return (*f)(arg);
     }
