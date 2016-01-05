@@ -122,6 +122,7 @@ buildMakeActions outputDir filePathMap usePrefix =
         writeTextFile (outputDir  </> "CMakeLists.txt") (fromString cmakeListsTxt)
         writeTextFile (supportDir </> "PureScript.hh") $ B.unpack $(embedFile "pcc/include/purescript.hh")
         writeTextFile (supportDir </> "PureScript.cc") $ B.unpack $(embedFile "pcc/include/purescript.cc")
+        writeTextFile (supportDir </> "map_key.hh")    $ B.unpack $(embedFile "pcc/include/map_key.hh")
 
       let inputPath = dropExtension $ getInputFile mn
           hfile = addExtension inputPath "hh"
