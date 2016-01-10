@@ -46,7 +46,7 @@ const bool undefined = false;
 class any {
 
   public:
-  enum class Type : std::int8_t {
+  enum class Type {
     Unknown,
     Integer,
     Double,
@@ -175,17 +175,11 @@ class any {
     : type(Type::Pointer), p(std::move(val)) {}
 
   any(const any&);
+  any(any&&);
 
-  void swap(any&&) const;
-
-  any(any&& val) {
-    swap(std::move(val));
-  }
-
-  auto operator=(any val) -> any& {
-    swap(std::move(val));
-    return *this;
-  }
+  auto operator=(const any&) -> any&;
+  auto operator=(any&) -> any&;
+  auto operator=(any&&) -> any&;
 
   any() = delete;
   ~any();

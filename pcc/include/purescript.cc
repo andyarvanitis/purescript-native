@@ -16,41 +16,64 @@
 
 namespace PureScript {
 
-any::any(const any& val) : type(val.type) {
-  switch (type) {
-    case Type::Integer:         i = val.i;                         break;
-    case Type::Double:          d = val.d;                         break;
-    case Type::Character:       c = val.c;                         break;
-    case Type::Boolean:         b = val.b;                         break;
-    case Type::String:          new (&s) shared<string>  (val.s);  break;
-    case Type::Map:             new (&m) shared<map>     (val.m);  break;
-    case Type::Vector:          new (&v) shared<vector>  (val.v);  break;
-    case Type::Function:        new (&f) shared<fn>      (val.f);  break;
-    case Type::EffFunction:     new (&e) shared<eff_fn>  (val.e);  break;
-    case Type::Thunk:           new (&t) shared<thunk>   (val.t);  break;
-    case Type::Pointer:         new (&p) shared<void>    (val.p);  break;
-
-    default: assert(false && "Unsupported type in copy ctor");
+#define copy_data(src) \
+  type = src.type; \
+  switch (type) { \
+    case Type::Integer:         i = src.i;                         break; \
+    case Type::Double:          d = src.d;                         break; \
+    case Type::Character:       c = src.c;                         break; \
+    case Type::Boolean:         b = src.b;                         break; \
+    case Type::String:          new (&s) shared<string>  (src.s);  break; \
+    case Type::Map:             new (&m) shared<map>     (src.m);  break; \
+    case Type::Vector:          new (&v) shared<vector>  (src.v);  break; \
+    case Type::Function:        new (&f) shared<fn>      (src.f);  break; \
+    case Type::EffFunction:     new (&e) shared<eff_fn>  (src.e);  break; \
+    case Type::Thunk:           new (&t) shared<thunk>   (src.t);  break; \
+    case Type::Pointer:         new (&p) shared<void>    (src.p);  break; \
+    \
+    default: assert(false && "Unsupported type in copy"); \
   }
+
+#define move_data(src) \
+  type = src.type; \
+  switch (type) { \
+    case Type::Integer:         i = src.i;                                    break; \
+    case Type::Double:          d = src.d;                                    break; \
+    case Type::Character:       c = src.c;                                    break; \
+    case Type::Boolean:         b = src.b;                                    break; \
+    case Type::String:          new (&s) shared<string>  (std::move(src.s));  break; \
+    case Type::Map:             new (&m) shared<map>     (std::move(src.m));  break; \
+    case Type::Vector:          new (&v) shared<vector>  (std::move(src.v));  break; \
+    case Type::Function:        new (&f) shared<fn>      (std::move(src.f));  break; \
+    case Type::EffFunction:     new (&e) shared<eff_fn>  (std::move(src.e));  break; \
+    case Type::Thunk:           new (&t) shared<thunk>   (std::move(src.t));  break; \
+    case Type::Pointer:         new (&p) shared<void>    (std::move(src.p));  break; \
+    \
+    default: assert(false && "Unsupported type in move"); \
+  }
+
+any::any(const any& other) {
+  copy_data(other);
 }
 
-void any::swap(any&& val) const {
-  type = val.type;
-  switch (type) {
-    case Type::Integer:         i = val.i;                                    break;
-    case Type::Double:          d = val.d;                                    break;
-    case Type::Character:       c = val.c;                                    break;
-    case Type::Boolean:         b = val.b;                                    break;
-    case Type::String:          new (&s) shared<string>  (std::move(val.s));  break;
-    case Type::Map:             new (&m) shared<map>     (std::move(val.m));  break;
-    case Type::Vector:          new (&v) shared<vector>  (std::move(val.v));  break;
-    case Type::Function:        new (&f) shared<fn>      (std::move(val.f));  break;
-    case Type::EffFunction:     new (&e) shared<eff_fn>  (std::move(val.e));  break;
-    case Type::Thunk:           new (&t) shared<thunk>   (std::move(val.t));  break;
-    case Type::Pointer:         new (&p) shared<void>    (std::move(val.p));  break;
+any::any(any&& other) {
+  move_data(other);
+}
 
-    default: assert(false && "Unsupported type in move ctor");
-  }
+auto any::operator=(const any& rhs) -> any& {
+  copy_data(rhs);
+  return *this;
+}
+
+// Takes ownership -- might need to reconsider this
+auto any::operator=(any& rhs) -> any& {
+  move_data(rhs);
+  return *this;
+}
+
+auto any::operator=(any&& rhs) -> any& {
+  move_data(rhs);
+  return *this;
 }
 
 any::~any() {
