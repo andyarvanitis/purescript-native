@@ -108,6 +108,7 @@ any::~any() {
       } \
       valuePtr = &value; \
     } while (valuePtr->type != Type::Unknown); \
+    assert(false && "Unknown value type"); \
     return FN(VAL);
 
   template <typename T>
@@ -158,7 +159,6 @@ any::~any() {
   }
   template auto any::cast<any::vector>() const -> const vector&;
 
-
   auto any::operator()(const any& arg) const -> any {
     if (type == Type::Function) {
       return (*f)(arg);
@@ -172,6 +172,7 @@ any::~any() {
       }
       valuePtr = &value;
     } while (valuePtr->type != Type::Unknown);
+    assert(false && "Unknown value type");
     return nullptr;
   }
 
@@ -193,6 +194,7 @@ any::~any() {
       }
       valuePtr = &value;
     } while (valuePtr->type != Type::Unknown);
+    assert(false && "Unknown value type");
     return nullptr;
   }
 
@@ -220,7 +222,7 @@ any::~any() {
     RETURN_VALUE(Type::Vector, v, *)
   }
 
-  auto any::extractPointer() const -> const void* {
+  auto any::extractPointer() const -> void* {
     RETURN_VALUE(Type::Pointer, p.get(),)
   }
 
@@ -235,7 +237,9 @@ any::~any() {
         return value;
       }
       valuePtr = &value;
-    } while (true);
+    } while (valuePtr->type != Type::Unknown);
+    assert(false && "Unknown value type");
+    return a;
   }
 
   auto any::operator[](const map_key_t& rhs) const -> const any& {

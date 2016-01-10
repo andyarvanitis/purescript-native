@@ -86,11 +86,6 @@ class any {
     return std::make_shared<T>(std::move(arg));
   }
 
-  template <typename T, typename U>
-  static constexpr auto static_cast_shared(U arg) -> T* {
-    return static_cast<T*>(arg.get());
-  }
-
   private:
   union {
     mutable long            i;
@@ -111,54 +106,29 @@ class any {
   any(const long val) : type(Type::Integer), i(val) {}
   any(const int val) : type(Type::Integer), i(val) {}
   any(const unsigned int val) : type(Type::Integer), i(val) {}
-
   any(const double val) : type(Type::Double), d(val) {}
-
   any(const char val) : type(Type::Character), c(val) {}
 
-  any(const bool val) : type(Type::Boolean), b(val) {}
+  template <typename T, typename = typename std::enable_if<std::is_same<bool,T>::value>::type>
+  any(const T val) : type(Type::Boolean), b(val) {}
 
   any(const string& val) : type(Type::String), s(make_shared<string>(val)) {}
   any(string&& val) : type(Type::String), s(make_shared<string>(std::move(val))) {}
-
   any(const char val[]) : type(Type::String), s(make_shared<string>(val)) {}
-
-  any(const shared<string>& val) : type(Type::String), s(val) {}
-  any(shared<string>&& val) : type(Type::String), s(std::move(val)) {}
 
   any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
   any(map&& val) : type(Type::Map), m(make_shared<map>(std::move(val))) {}
 
-  any(const shared<map>& val) : type(Type::Map), m(val) {}
-  any(shared<map>&& val) : type(Type::Map), m(std::move(val)) {}
-
   any(const vector& val) : type(Type::Vector), v(make_shared<vector>(val)) {}
   any(vector&& val) : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
 
-  any(const shared<vector>& val) : type(Type::Vector), v(val) {}
-  any(shared<vector>&& val) : type(Type::Vector), v(std::move(val)) {}
-
-  any(const shared<fn>& val) : type(Type::Function), f(val) {}
-  any(shared<fn>&& val) : type(Type::Function), f(std::move(val)) {}
-
-  template <typename T,
-            typename = typename std::enable_if<!std::is_same<any,T>::value>::type>
+  template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
     : type(Type::Function), f(make_shared<fn>(val)) {}
-
-  // template <typename T>
-  // any(T&& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
-  //   : type(Type::Function), f(std::move(val)) {}
-
-  any(const shared<eff_fn>& val) : type(Type::EffFunction), e(val) {}
-  any(shared<eff_fn>&& val) : type(Type::EffFunction), e(std::move(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
     : type(Type::EffFunction), e(make_shared<eff_fn>(val)) {}
-
-  any(const shared<thunk>& val) : type(Type::Thunk), t(val) {}
-  any(shared<thunk>&& val) : type(Type::Thunk), t(std::move(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
@@ -168,11 +138,11 @@ class any {
   any(const T& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0)
     : type(Type::Pointer), p(val) {}
 
-  any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
-
   template <typename T>
   any(T&& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0)
     : type(Type::Pointer), p(std::move(val)) {}
+
+  any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
 
   any(const any&);
   any(any&&);
@@ -210,19 +180,7 @@ class any {
 
   template <typename T>
   auto cast() const -> typename std::enable_if<std::is_assignable<shared<void>,T>::value, typename T::element_type*>::type {
-    if (type == Type::Pointer) {
-      return static_cast_shared<typename T::element_type>(p);
-    }
-    const any* valuePtr = this;
-    do {
-      assert(valuePtr->type == Type::Thunk);
-      const any& value = (*valuePtr->t)(unthunk);
-      if (value.type == Type::Pointer) {
-        return static_cast_shared<typename T::element_type>(value.p);
-      }
-      valuePtr = &value;
-    } while (valuePtr->type != Type::Unknown);
-    return nullptr;
+    return static_cast<typename T::element_type*>(extractPointer());
   }
 
   auto operator()(const any&) const -> any;
@@ -243,7 +201,7 @@ class any {
   auto operator[](const vector::size_type) const -> const any&;
   auto operator[](const any&) const -> const any&;
 
-  auto extractPointer() const -> const void*;
+  auto extractPointer() const -> void*;
 
   static auto extract_value(const any&) -> const any&;
 
