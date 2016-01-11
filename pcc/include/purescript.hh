@@ -67,7 +67,7 @@ class any {
   };
   static constexpr as_thunk unthunk = as_thunk{};
 
-  using map    = std::unordered_map<map_key_t, const any, map_key_t::hasher, map_key_t::equal>;
+  using map    = std::unordered_map<const map_key_t, const any, map_key_t::hasher, map_key_t::equal>;
   using vector = std::vector<any>;
   using fn     = std::function<any(const any&)>;
   using eff_fn = std::function<any()>;
