@@ -56,7 +56,7 @@ any::any(const any& other) {
   copy_data(other);
 }
 
-any::any(any&& other) {
+any::any(any&& other) noexcept {
   move_data(other);
 }
 
@@ -71,7 +71,7 @@ auto any::operator=(any& rhs) -> any& {
   return *this;
 }
 
-auto any::operator=(any&& rhs) -> any& {
+auto any::operator=(any&& rhs) noexcept -> any& {
   move_data(rhs);
   return *this;
 }

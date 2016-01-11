@@ -82,7 +82,7 @@ class any {
   }
 
   template <typename T>
-  static constexpr auto make_shared(T&& arg) -> shared<T> {
+  static constexpr auto make_shared(T&& arg) noexcept -> shared<T> {
     return std::make_shared<T>(std::move(arg));
   }
 
@@ -113,14 +113,14 @@ class any {
   any(const T val) : type(Type::Boolean), b(val) {}
 
   any(const string& val) : type(Type::String), s(make_shared<string>(val)) {}
-  any(string&& val) : type(Type::String), s(make_shared<string>(std::move(val))) {}
+  any(string&& val) noexcept : type(Type::String), s(make_shared<string>(std::move(val))) {}
   any(const char val[]) : type(Type::String), s(make_shared<string>(val)) {}
 
   any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
-  any(map&& val) : type(Type::Map), m(make_shared<map>(std::move(val))) {}
+  any(map&& val) noexcept : type(Type::Map), m(make_shared<map>(std::move(val))) {}
 
   any(const vector& val) : type(Type::Vector), v(make_shared<vector>(val)) {}
-  any(vector&& val) : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
+  any(vector&& val) noexcept : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
 
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
@@ -139,17 +139,17 @@ class any {
     : type(Type::Pointer), p(val) {}
 
   template <typename T>
-  any(T&& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0)
+  any(T&& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0) noexcept
     : type(Type::Pointer), p(std::move(val)) {}
 
   any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
 
   any(const any&);
-  any(any&&);
+  any(any&&) noexcept;
 
   auto operator=(const any&) -> any&;
   auto operator=(any&) -> any&;
-  auto operator=(any&&) -> any&;
+  auto operator=(any&&) noexcept -> any&;
 
   any() = delete;
   ~any();
