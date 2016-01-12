@@ -66,7 +66,7 @@ auto any::operator=(const any& rhs) -> any& {
 }
 
 // Takes ownership -- might need to reconsider this
-auto any::operator=(any& rhs) -> any& {
+auto any::operator=(any& rhs) noexcept -> any& {
   move_data(rhs);
   return *this;
 }

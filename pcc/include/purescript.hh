@@ -76,14 +76,9 @@ class any {
   template <typename T>
   using shared = std::shared_ptr<T>;
 
-  template <typename T>
-  static constexpr auto make_shared(const T& arg) -> shared<T> {
-    return std::make_shared<T>(arg);
-  }
-
-  template <typename T>
-  static constexpr auto make_shared(T&& arg) noexcept -> shared<T> {
-    return std::make_shared<T>(std::move(arg));
+  template <typename T, typename... Args>
+  inline static auto make_shared(Args&&... args) -> decltype(std::make_shared<T>(std::forward<Args>(args)...)) {
+    return std::make_shared<T>(std::forward<Args>(args)...);
   }
 
   private:
@@ -148,7 +143,7 @@ class any {
   any(any&&) noexcept;
 
   auto operator=(const any&) -> any&;
-  auto operator=(any&) -> any&;
+  auto operator=(any&) noexcept -> any&;
   auto operator=(any&&) noexcept -> any&;
 
   any() = delete;
