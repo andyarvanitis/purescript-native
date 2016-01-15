@@ -71,7 +71,7 @@ class any {
   using vector = std::vector<any>;
   using fn     = std::function<any(const any&)>;
   using eff_fn = std::function<any()>;
-  using thunk  = std::function<const any& (const as_thunk)>;
+  using thunk  = auto (*)(const as_thunk) -> const any&;
 
   template <typename T>
   using shared = std::shared_ptr<T>;
@@ -92,7 +92,7 @@ class any {
     mutable shared<vector>  v;
     mutable shared<fn>      f;
     mutable shared<eff_fn>  e;
-    mutable shared<thunk>   t;
+    mutable thunk           t;
     mutable shared<void>    p;
   };
 
@@ -126,8 +126,8 @@ class any {
     : type(Type::EffFunction), e(make_shared<eff_fn>(val)) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
-    : type(Type::Thunk), t(make_shared<thunk>(val)) {}
+  any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0)
+    : type(Type::Thunk), t(val) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0)
