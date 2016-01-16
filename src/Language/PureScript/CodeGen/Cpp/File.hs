@@ -20,7 +20,6 @@ module Language.PureScript.CodeGen.Cpp.File where
 import Data.Maybe
 
 import Language.PureScript.CodeGen.Cpp.AST
--- import Language.PureScript.CodeGen.Cpp.Templates
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Names
 
@@ -119,13 +118,35 @@ toBody = catMaybes . map go
     block = CppBlock [val, CppReturn (CppVar "_value_")]
     lambda = CppLambda [] [("", Just $ thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) block
     addCaptures :: Cpp -> Cpp
-    addCaptures = everywhereOnCpp addCapture
+    addCaptures (CppObjectLiteral objs) = CppObjectLiteral (objlam <$> objs)
+      where
+      objlam :: (String, Cpp) -> (String, Cpp)
+      objlam (name, (CppLambda _ args rty body)) = (name , CppLambda [] args rty $ addCaptures body)
+      objlam obj = obj
+    addCaptures cpps' = everywhereOnCpp addCapture cpps'
       where
       addCapture :: Cpp -> Cpp
-      addCapture (CppLambda [] args rty body) = CppLambda [CppCaptureAll] args rty body
+      addCapture (CppLambda _ args rty body) = maybeRemCaps $ CppLambda [CppCaptureAll] args rty body
       addCapture cpp' = cpp'
   go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
   go _ = Nothing
+
+-------------------------------------------------------------------------------------------------
+maybeRemCaps :: Cpp -> Cpp
+-------------------------------------------------------------------------------------------------
+maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppNumericLiteral{}]))
+  = CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppStringLiteral{}]))
+  = CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppCharLiteral{}]))
+  = CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppBooleanLiteral{}]))
+  = CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppAccessor{}]))
+  = CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn (CppVar "unit")])) -- TODO: not really safe
+  = CppLambda [] args rtyp body
+maybeRemCaps cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
 
