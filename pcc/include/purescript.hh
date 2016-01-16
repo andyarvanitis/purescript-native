@@ -56,6 +56,7 @@ class any {
     Map,
     Vector,
     Function,
+    Closure,
     EffFunction,
     Thunk,
     Pointer
@@ -69,7 +70,8 @@ class any {
 
   using map    = std::unordered_map<const map_key_t, const any, map_key_t::hasher, map_key_t::equal>;
   using vector = std::vector<any>;
-  using fn     = std::function<any(const any&)>;
+  using fn      = auto (*)(const any&) -> any;
+  using closure = std::function<any(const any&)>;
   using eff_fn = std::function<any()>;
   using thunk  = auto (*)(const as_thunk) -> const any&;
 
@@ -90,7 +92,8 @@ class any {
     mutable shared<string>  s;
     mutable shared<map>     m;
     mutable shared<vector>  v;
-    mutable shared<fn>      f;
+    mutable fn              f;
+    mutable shared<closure> l;
     mutable shared<eff_fn>  e;
     mutable thunk           t;
     mutable shared<void>    p;
@@ -117,9 +120,14 @@ class any {
   any(const vector& val) : type(Type::Vector), v(make_shared<vector>(val)) {}
   any(vector&& val) noexcept : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
 
-  template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value>::type>
-  any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
-    : type(Type::Function), f(make_shared<fn>(val)) {}
+  template <typename T>
+  any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0)
+    : type(Type::Function), f(val) {}
+
+  template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
+                                                           !std::is_convertible<T,fn>::value>::type>
+  any(const T& val, typename std::enable_if<std::is_assignable<closure,T>::value>::type* = 0)
+    : type(Type::Closure), l(make_shared<closure>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)

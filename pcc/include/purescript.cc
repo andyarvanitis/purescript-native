@@ -26,7 +26,8 @@ namespace PureScript {
     case Type::String:          new (&s) shared<string>  (src.s);  break; \
     case Type::Map:             new (&m) shared<map>     (src.m);  break; \
     case Type::Vector:          new (&v) shared<vector>  (src.v);  break; \
-    case Type::Function:        new (&f) shared<fn>      (src.f);  break; \
+    case Type::Function:        f = src.f;                         break; \
+    case Type::Closure:         new (&l) shared<closure> (src.l);  break; \
     case Type::EffFunction:     new (&e) shared<eff_fn>  (src.e);  break; \
     case Type::Thunk:           t = src.t;                         break; \
     case Type::Pointer:         new (&p) shared<void>    (src.p);  break; \
@@ -44,7 +45,8 @@ namespace PureScript {
     case Type::String:          new (&s) shared<string>  (std::move(src.s));  break; \
     case Type::Map:             new (&m) shared<map>     (std::move(src.m));  break; \
     case Type::Vector:          new (&v) shared<vector>  (std::move(src.v));  break; \
-    case Type::Function:        new (&f) shared<fn>      (std::move(src.f));  break; \
+    case Type::Function:        f = src.f;                                    break; \
+    case Type::Closure:         new (&l) shared<closure> (std::move(src.l));  break; \
     case Type::EffFunction:     new (&e) shared<eff_fn>  (std::move(src.e));  break; \
     case Type::Thunk:           t = src.t;                                    break; \
     case Type::Pointer:         new (&p) shared<void>    (std::move(src.p));  break; \
@@ -86,7 +88,8 @@ any::~any() {
     case Type::String:          s.~shared<string>();  break;
     case Type::Map:             m.~shared<map>();     break;
     case Type::Vector:          v.~shared<vector>();  break;
-    case Type::Function:        f.~shared<fn>();      break;
+    case Type::Function:        ;                     break;
+    case Type::Closure:         l.~shared<closure>(); break;
     case Type::EffFunction:     e.~shared<eff_fn>();  break;
     case Type::Thunk:           ;                     break;
     case Type::Pointer:         p.~shared<void>();    break;
@@ -163,12 +166,18 @@ any::~any() {
     if (type == Type::Function) {
       return (*f)(arg);
     }
+    if (type == Type::Closure) {
+      return (*l)(arg);
+    }
     const any* valuePtr = this;
     do {
       assert(valuePtr->type == Type::Thunk);
       const any& value = (*valuePtr->t)(unthunk);
       if (value.type == Type::Function) {
         return (*value.f)(arg);
+      }
+      if (value.type == Type::Closure) {
+        return (*value.l)(arg);
       }
       valuePtr = &value;
     } while (valuePtr->type != Type::Unknown);
