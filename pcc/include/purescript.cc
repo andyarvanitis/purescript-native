@@ -16,7 +16,7 @@
 
 namespace PureScript {
 
-#define copy_data(src) \
+#define COPY_DATA(src) \
   type = src.type; \
   switch (type) { \
     case Type::Integer:         i = src.i;                         break; \
@@ -35,7 +35,7 @@ namespace PureScript {
     default: assert(false && "Unsupported type in copy"); \
   }
 
-#define move_data(src) \
+#define MOVE_DATA(src) \
   type = src.type; \
   switch (type) { \
     case Type::Integer:         i = src.i;                                    break; \
@@ -55,26 +55,26 @@ namespace PureScript {
   }
 
 any::any(const any& other) {
-  copy_data(other);
+  COPY_DATA(other);
 }
 
 any::any(any&& other) noexcept {
-  move_data(other);
+  MOVE_DATA(other);
 }
 
 auto any::operator=(const any& rhs) -> any& {
-  copy_data(rhs);
+  COPY_DATA(rhs);
   return *this;
 }
 
 // Takes ownership -- might need to reconsider this
 auto any::operator=(any& rhs) noexcept -> any& {
-  move_data(rhs);
+  MOVE_DATA(rhs);
   return *this;
 }
 
 auto any::operator=(any&& rhs) noexcept -> any& {
-  move_data(rhs);
+  MOVE_DATA(rhs);
   return *this;
 }
 
@@ -98,467 +98,327 @@ any::~any() {
   }
 };
 
-  #define RETURN_VALUE(TYPE, VAL, FN) \
-    if (type == TYPE) { \
-      return FN(VAL); \
+#define RETURN_VALUE(TYPE, VAL, FN) \
+  if (type == TYPE) { \
+    return FN(VAL); \
+  } \
+  const any* valuePtr = this; \
+  do { \
+    assert(valuePtr->type == Type::Thunk); \
+    const any& value = (*valuePtr->t)(unthunk); \
+    if (value.type == TYPE) { \
+      return FN(value.VAL); \
     } \
-    const any* valuePtr = this; \
-    do { \
-      assert(valuePtr->type == Type::Thunk); \
-      const any& value = (*valuePtr->t)(unthunk); \
-      if (value.type == TYPE) { \
-        return FN(value.VAL); \
-      } \
-      valuePtr = &value; \
-    } while (valuePtr->type != Type::Unknown); \
-    assert(false && "Unknown value type"); \
-    return FN(VAL);
+    valuePtr = &value; \
+  } while (valuePtr->type != Type::Unknown); \
+  assert(false && "Unknown value type"); \
+  return FN(VAL);
 
-  template <typename T>
-  auto any::cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type {
-    RETURN_VALUE(Type::Integer, i,)
+template <typename T>
+auto any::cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type {
+  RETURN_VALUE(Type::Integer, i,)
+}
+template auto any::cast<long>() const -> long;
+
+template <typename T>
+auto any::cast() const -> typename std::enable_if<std::is_same<T, double>::value, T>::type {
+  RETURN_VALUE(Type::Double, d,)
+}
+template auto any::cast<double>() const -> double;
+
+template <typename T>
+auto any::cast() const -> typename std::enable_if<std::is_same<T, char>::value, T>::type {
+  RETURN_VALUE(Type::Character, c,)
+}
+template auto any::cast<char>() const -> char;
+
+template <typename T>
+auto any::cast() const -> typename std::enable_if<std::is_same<T, bool>::value, T>::type {
+  RETURN_VALUE(Type::Boolean, b,)
+}
+template auto any::cast<bool>() const -> bool;
+
+template <typename T>
+auto any::cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
+  RETURN_VALUE(Type::String, s, *)
+}
+template auto any::cast<string>() const -> const string&;
+
+template <typename T>
+auto any::cast() const -> typename std::enable_if<std::is_same<T, const char*>::value, const T>::type {
+  RETURN_VALUE(Type::String, s->c_str(),)
+}
+template auto any::cast<const char*>() const -> const char* const;
+
+template <typename T>
+auto any::cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
+  RETURN_VALUE(Type::Map, m, *)
+}
+template auto any::cast<any::map>() const -> const map&;
+
+template <typename T>
+auto any::cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
+  RETURN_VALUE(Type::Vector, v, *)
+}
+template auto any::cast<any::vector>() const -> const vector&;
+
+auto any::operator()(const any& arg) const -> any {
+  if (type == Type::Function) {
+    return (*f)(arg);
   }
-  template auto any::cast<long>() const -> long;
-
-  template <typename T>
-  auto any::cast() const -> typename std::enable_if<std::is_same<T, double>::value, T>::type {
-    RETURN_VALUE(Type::Double, d,)
+  if (type == Type::Closure) {
+    return (*l)(arg);
   }
-  template auto any::cast<double>() const -> double;
-
-  template <typename T>
-  auto any::cast() const -> typename std::enable_if<std::is_same<T, char>::value, T>::type {
-    RETURN_VALUE(Type::Character, c,)
-  }
-  template auto any::cast<char>() const -> char;
-
-  template <typename T>
-  auto any::cast() const -> typename std::enable_if<std::is_same<T, bool>::value, T>::type {
-    RETURN_VALUE(Type::Boolean, b,)
-  }
-  template auto any::cast<bool>() const -> bool;
-
-  template <typename T>
-  auto any::cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
-    RETURN_VALUE(Type::String, s, *)
-  }
-  template auto any::cast<string>() const -> const string&;
-
-  template <typename T>
-  auto any::cast() const -> typename std::enable_if<std::is_same<T, const char*>::value, const T>::type {
-    RETURN_VALUE(Type::String, s->c_str(),)
-  }
-  template auto any::cast<const char*>() const -> const char* const;
-
-  template <typename T>
-  auto any::cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
-    RETURN_VALUE(Type::Map, m, *)
-  }
-  template auto any::cast<any::map>() const -> const map&;
-
-  template <typename T>
-  auto any::cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
-    RETURN_VALUE(Type::Vector, v, *)
-  }
-  template auto any::cast<any::vector>() const -> const vector&;
-
-  auto any::operator()(const any& arg) const -> any {
-    if (type == Type::Function) {
-      return (*f)(arg);
+  const any* valuePtr = this;
+  do {
+    assert(valuePtr->type == Type::Thunk);
+    const any& value = (*valuePtr->t)(unthunk);
+    if (value.type == Type::Function) {
+      return (*value.f)(arg);
     }
-    if (type == Type::Closure) {
-      return (*l)(arg);
+    if (value.type == Type::Closure) {
+      return (*value.l)(arg);
     }
-    const any* valuePtr = this;
-    do {
-      assert(valuePtr->type == Type::Thunk);
-      const any& value = (*valuePtr->t)(unthunk);
-      if (value.type == Type::Function) {
-        return (*value.f)(arg);
-      }
-      if (value.type == Type::Closure) {
-        return (*value.l)(arg);
-      }
-      valuePtr = &value;
-    } while (valuePtr->type != Type::Unknown);
-    assert(false && "Unknown value type");
-    return nullptr;
-  }
+    valuePtr = &value;
+  } while (valuePtr->type != Type::Unknown);
+  assert(false && "Unknown value type");
+  return nullptr;
+}
 
-  auto any::operator()(const as_thunk) const -> const any& {
-    assert(type == Type::Thunk);
-    return (*t)(unthunk);
-  }
+auto any::operator()(const as_thunk) const -> const any& {
+  assert(type == Type::Thunk);
+  return (*t)(unthunk);
+}
 
-  auto any::operator()() const -> any {
-    if (type == Type::EffFunction) {
-      return (*e)();
+auto any::operator()() const -> any {
+  if (type == Type::EffFunction) {
+    return (*e)();
+  }
+  const any* valuePtr = this;
+  do {
+    assert(valuePtr->type == Type::Thunk);
+    const any& value = (*valuePtr->t)(unthunk);
+    if (value.type == Type::EffFunction) {
+      return (*value.e)();
     }
-    const any* valuePtr = this;
-    do {
-      assert(valuePtr->type == Type::Thunk);
-      const any& value = (*valuePtr->t)(unthunk);
-      if (value.type == Type::EffFunction) {
-        return (*value.e)();
-      }
-      valuePtr = &value;
-    } while (valuePtr->type != Type::Unknown);
-    assert(false && "Unknown value type");
-    return nullptr;
-  }
+    valuePtr = &value;
+  } while (valuePtr->type != Type::Unknown);
+  assert(false && "Unknown value type");
+  return nullptr;
+}
 
-  any::operator long() const {
-    RETURN_VALUE(Type::Integer, i,)
-  }
+any::operator long() const {
+  RETURN_VALUE(Type::Integer, i,)
+}
 
-  any::operator double() const {
-    RETURN_VALUE(Type::Double, d,)
-  }
+any::operator double() const {
+  RETURN_VALUE(Type::Double, d,)
+}
 
-  any::operator bool() const {
-    RETURN_VALUE(Type::Boolean, b,)
-  }
+any::operator bool() const {
+  RETURN_VALUE(Type::Boolean, b,)
+}
 
-  any::operator const string&() const {
-    RETURN_VALUE(Type::String, s, *)
-  }
+any::operator const string&() const {
+  RETURN_VALUE(Type::String, s, *)
+}
 
-  any::operator const map&() const {
-    RETURN_VALUE(Type::Map, m, *)
-  }
+any::operator const map&() const {
+  RETURN_VALUE(Type::Map, m, *)
+}
 
-  any::operator const vector&() const {
-    RETURN_VALUE(Type::Vector, v, *)
-  }
+any::operator const vector&() const {
+  RETURN_VALUE(Type::Vector, v, *)
+}
 
-  auto any::extractPointer() const -> void* {
-    RETURN_VALUE(Type::Pointer, p.get(),)
-  }
+auto any::extractPointer() const -> void* {
+  RETURN_VALUE(Type::Pointer, p.get(),)
+}
 
-  auto any::extract_value(const any& a) -> const any& {
-    if (a.type != Type::Thunk) {
-      return a;
-    }
-    const any* valuePtr = &a;
-    do {
-      const any& value = (*valuePtr->t)(unthunk);
-      if (value.type != Type::Thunk) {
-        return value;
-      }
-      valuePtr = &value;
-    } while (valuePtr->type != Type::Unknown);
-    assert(false && "Unknown value type");
+auto any::extractValue(const any& a) -> const any& {
+  if (a.type != Type::Thunk) {
     return a;
   }
-
-  auto any::operator[](const map_key_t& rhs) const -> const any& {
-    RETURN_VALUE(Type::Map, m->at(rhs),)
-  }
-
-  auto any::operator[](const vector::size_type rhs) const -> const any& {
-    RETURN_VALUE(Type::Vector, v->at(rhs),)
-  }
-
-  auto any::operator[](const any& rhs) const -> const any& {
-    RETURN_VALUE(Type::Vector, v->at(rhs.cast<long>()),)
-  }
-
-#define DEFINE_OPERATOR_LHS(K, T, OP, V, R, P) \
-auto operator OP(const T lhs, const any& rhs_) -> R { \
-  const any& rhs = any::extract_value(rhs_); \
-  assert(rhs.type == any::Type::K); \
-  return lhs OP P(rhs.V); \
+  const any* valuePtr = &a;
+  do {
+    const any& value = (*valuePtr->t)(unthunk);
+    if (value.type != Type::Thunk) {
+      return value;
+    }
+    valuePtr = &value;
+  } while (valuePtr->type != Type::Unknown);
+  assert(false && "Unknown value type");
+  return a;
 }
 
-#define DEFINE_OPERATOR_RHS(K, T, OP, V, R, P) \
-auto any::operator OP(const T rhs) const -> R { \
-  const any& lhs = any::extract_value(*this); \
-  assert(lhs.type == Type::K); \
-  return P(lhs.V) OP rhs; \
+auto any::operator[](const map_key_t& rhs) const -> const any& {
+  RETURN_VALUE(Type::Map, m->at(rhs),)
 }
 
-auto any::operator==(const any& rhs_) const -> bool {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
+auto any::operator[](const vector::size_type rhs) const -> const any& {
+  RETURN_VALUE(Type::Vector, v->at(rhs),)
+}
+
+auto any::operator[](const any& rhs) const -> const any& {
+  RETURN_VALUE(Type::Vector, v->at(rhs.cast<long>()),)
+}
+
+//-----------------------------------------------------------------------------
+// Operator helper macros
+//-----------------------------------------------------------------------------
+
+#define DEFINE_OPERATOR(op, ty, rty) \
+auto operator op (const any& lhs, ty rhs) -> rty { \
+  return lhs.cast<typename std::remove_const<std::remove_reference<ty>::type>::type>() op rhs; \
+} \
+auto operator op (ty lhs, const any& rhs) -> rty { \
+  return lhs op rhs.cast<typename std::remove_const<std::remove_reference<ty>::type>::type>(); \
+}
+
+#define DEFINE_CSTR_COMPARISON_OPERATOR(op) \
+  auto operator op (const any& lhs, const char * rhs) -> bool { \
+    return lhs.cast<string>() op rhs; \
+  } \
+  auto operator op (const char * lhs, const any& rhs) -> bool { \
+    return lhs op rhs.cast<string>(); \
+  }
+
+#define DEFINE_COMPARISON_OPERATOR(op) \
+  auto operator op (const any& lhs_, const any& rhs_) -> bool { \
+    const any& lhs = any::extractValue(lhs_); \
+    const any& rhs = any::extractValue(rhs_); \
+    assert(lhs.type == rhs.type); \
+    switch (lhs.type) { \
+      case any::Type::Integer:   return lhs.i op rhs.i; \
+      case any::Type::Double:    return lhs.d op rhs.d; \
+      case any::Type::Character: return lhs.c op rhs.c; \
+      case any::Type::Boolean:   return lhs.b op rhs.b; \
+      case any::Type::String:    return (*lhs.s) op (*rhs.s); \
+      case any::Type::Pointer:   return lhs.p op rhs.p; \
+      default: assert(false && "Unsupported type for operator " #op); \
+    } \
+    return false; \
+  } \
+  DEFINE_OPERATOR(op, long, bool) \
+  DEFINE_OPERATOR(op, double, bool) \
+  DEFINE_OPERATOR(op, char, bool) \
+  DEFINE_OPERATOR(op, bool, bool) \
+  DEFINE_OPERATOR(op, const string&, bool) \
+  DEFINE_CSTR_COMPARISON_OPERATOR(op)
+
+//-----------------------------------------------------------------------------
+// Operator definitions
+//-----------------------------------------------------------------------------
+
+DEFINE_COMPARISON_OPERATOR(==)
+DEFINE_COMPARISON_OPERATOR(!=)
+DEFINE_COMPARISON_OPERATOR(<)
+DEFINE_COMPARISON_OPERATOR(<=)
+DEFINE_COMPARISON_OPERATOR(>)
+DEFINE_COMPARISON_OPERATOR(>=)
+
+auto operator+(const any& lhs_, const any& rhs_) -> any {
+  const any& lhs = any::extractValue(lhs_);
+  const any& rhs = any::extractValue(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
-    case Type::Integer:   return lhs.i == rhs.i;
-    case Type::Double:    return lhs.d == rhs.d;
-    case Type::Character: return lhs.c == rhs.c;
-    case Type::Boolean:   return lhs.b == rhs.b;
-    case Type::String:    return (*lhs.s) == (*rhs.s);
-    case Type::Pointer:   return lhs.p == rhs.p;
-    default: assert(false && "Unsupported type for '==' operator");
-  }
-  return false;
-}
-
-DEFINE_OPERATOR_RHS(Integer,   long,        ==, i, bool,)
-DEFINE_OPERATOR_RHS(Double,    double,      ==, d, bool,)
-DEFINE_OPERATOR_RHS(Character, char,        ==, c, bool,)
-DEFINE_OPERATOR_RHS(Boolean,   bool,        ==, b, bool,)
-DEFINE_OPERATOR_RHS(String,    string&,     ==, s, bool, *)
-DEFINE_OPERATOR_RHS(String,    char* const, ==, s, bool, *)
-
-auto any::operator!=(const any& rhs_) const -> bool {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
-  assert(lhs.type == rhs.type);
-  switch (lhs.type) {
-    case Type::Integer:   return lhs.i != rhs.i;
-    case Type::Double:    return lhs.d != rhs.d;
-    case Type::Character: return lhs.c != rhs.c;
-    case Type::Boolean:   return lhs.b != rhs.b;
-    case Type::String:    return (*lhs.s) != (*rhs.s);
-    case Type::Pointer:   return lhs.p != rhs.p;
-    default: assert(false && "Unsupported type for '!=' operator");
-  }
-  return false;
-}
-
-DEFINE_OPERATOR_RHS(Integer,   long,        !=, i, bool,)
-DEFINE_OPERATOR_RHS(Double,    double,      !=, d, bool,)
-DEFINE_OPERATOR_RHS(Character, char,        !=, c, bool,)
-DEFINE_OPERATOR_RHS(Boolean,   bool,        !=, b, bool,)
-DEFINE_OPERATOR_RHS(String,    string&,     !=, s, bool, *)
-DEFINE_OPERATOR_RHS(String,    char* const, !=, s, bool, *)
-
-auto any::operator<(const any& rhs_) const -> bool {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
-  assert(lhs.type == rhs.type);
-  switch (lhs.type) {
-    case Type::Integer:   return lhs.i < rhs.i;
-    case Type::Double:    return lhs.d < rhs.d;
-    case Type::Character: return lhs.c < rhs.c;
-    case Type::Boolean:   return lhs.b < rhs.b;
-    case Type::String:    return (*lhs.s) < (*rhs.s);
-    default: assert(false && "Unsupported type for '<' operator");
-  }
-  return false;
-}
-
-DEFINE_OPERATOR_RHS(Integer,   long,        <, i, bool,)
-DEFINE_OPERATOR_RHS(Double,    double,      <, d, bool,)
-DEFINE_OPERATOR_RHS(Character, char,        <, c, bool,)
-DEFINE_OPERATOR_RHS(Boolean,   bool,        <, b, bool,)
-DEFINE_OPERATOR_RHS(String,    string&,     <, s, bool, *)
-DEFINE_OPERATOR_RHS(String,    char* const, <, s, bool, *)
-
-auto any::operator<=(const any& rhs_) const -> bool {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
-  assert(lhs.type == rhs.type);
-  switch (lhs.type) {
-    case Type::Integer:   return lhs.i <= rhs.i;
-    case Type::Double:    return lhs.d <= rhs.d;
-    case Type::Character: return lhs.c <= rhs.c;
-    case Type::Boolean:   return lhs.b <= rhs.b;
-    case Type::String:    return (*lhs.s) <= (*rhs.s);
-    default: assert(false && "Unsupported type for '<' operator");
-  }
-  return false;
-}
-
-DEFINE_OPERATOR_RHS(Integer,   long,        <=, i, bool,)
-DEFINE_OPERATOR_RHS(Double,    double,      <=, d, bool,)
-DEFINE_OPERATOR_RHS(Character, char,        <=, c, bool,)
-DEFINE_OPERATOR_RHS(Boolean,   bool,        <=, b, bool,)
-DEFINE_OPERATOR_RHS(String,    string&,     <=, s, bool, *)
-DEFINE_OPERATOR_RHS(String,    char* const, <=, s, bool, *)
-
-auto any::operator>(const any& rhs_) const -> bool {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
-  assert(lhs.type == rhs.type);
-  switch (lhs.type) {
-    case Type::Integer:   return lhs.i > rhs.i;
-    case Type::Double:    return lhs.d > rhs.d;
-    case Type::Character: return lhs.c > rhs.c;
-    case Type::Boolean:   return lhs.b > rhs.b;
-    case Type::String:    return (*lhs.s) > (*rhs.s);
-    default: assert(false && "Unsupported type for '>' operator");
-  }
-  return false;
-}
-
-DEFINE_OPERATOR_RHS(Integer,   long,        >, i, bool,)
-DEFINE_OPERATOR_RHS(Double,    double,      >, d, bool,)
-DEFINE_OPERATOR_RHS(Character, char,        >, c, bool,)
-DEFINE_OPERATOR_RHS(Boolean,   bool,        >, b, bool,)
-DEFINE_OPERATOR_RHS(String,    string&,     >, s, bool, *)
-DEFINE_OPERATOR_RHS(String,    char* const, >, s, bool, *)
-
-auto any::operator>=(const any& rhs_) const -> bool {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
-  assert(lhs.type == rhs.type);
-  switch (lhs.type) {
-    case Type::Integer:   return lhs.i >= rhs.i;
-    case Type::Double:    return lhs.d >= rhs.d;
-    case Type::Character: return lhs.c >= rhs.c;
-    case Type::Boolean:   return lhs.b >= rhs.b;
-    case Type::String:    return (*lhs.s) >= (*rhs.s);
-    default: assert(false && "Unsupported type for '>' operator");
-  }
-  return false;
-}
-
-DEFINE_OPERATOR_RHS(Integer,   long,        >=, i, bool,)
-DEFINE_OPERATOR_RHS(Double,    double,      >=, d, bool,)
-DEFINE_OPERATOR_RHS(Character, char,        >=, c, bool,)
-DEFINE_OPERATOR_RHS(Boolean,   bool,        >=, b, bool,)
-DEFINE_OPERATOR_RHS(String,    string&,     >=, s, bool, *)
-DEFINE_OPERATOR_RHS(String,    char* const, >=, s, bool, *)
-
-auto any::operator+(const any& rhs_) const -> any {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
-  assert(lhs.type == rhs.type);
-  switch (lhs.type) {
-    case Type::Integer:   return lhs.i + rhs.i;
-    case Type::Double:    return lhs.d + rhs.d;
-    case Type::Character: return any(char(lhs.c + rhs.c));
-    case Type::String:    return (*lhs.s) + (*rhs.s);
+    case any::Type::Integer:   return lhs.i + rhs.i;
+    case any::Type::Double:    return lhs.d + rhs.d;
+    case any::Type::Character: return any(char(lhs.c + rhs.c));
+    case any::Type::String:    return (*lhs.s) + (*rhs.s);
     default: assert(false && "Unsupported type for '+' operator");
   }
   return nullptr;
 }
 
-DEFINE_OPERATOR_RHS(Integer,   long,        +, i, long,)
-DEFINE_OPERATOR_RHS(Double,    double,      +, d, double,)
-DEFINE_OPERATOR_RHS(Character, char,        +, c, char,)
-DEFINE_OPERATOR_RHS(String,    string&,     +, s, string, *)
-DEFINE_OPERATOR_RHS(String,    char* const, +, s, string, *)
+DEFINE_OPERATOR(+, long, long)
+DEFINE_OPERATOR(+, double, double)
+DEFINE_OPERATOR(+, char, char)
+DEFINE_OPERATOR(+, const string&, string)
 
-auto any::operator-(const any& rhs_) const -> any {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
+auto operator+(const any& lhs, const char * rhs) -> string {
+  return lhs.cast<string>() + rhs;
+}
+
+auto operator+(const char * lhs, const any& rhs) -> string {
+  return lhs + rhs.cast<string>();
+}
+
+auto operator-(const any& lhs_, const any& rhs_) -> any {
+  const any& lhs = any::extractValue(lhs_);
+  const any& rhs = any::extractValue(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
-    case Type::Integer:   return lhs.i - rhs.i;
-    case Type::Double:    return lhs.d - rhs.d;
-    case Type::Character: return any(char(lhs.c - rhs.c));
-    default: assert(false && "Unsupported type for '-' binary operator");
+    case any::Type::Integer:   return lhs.i - rhs.i;
+    case any::Type::Double:    return lhs.d - rhs.d;
+    case any::Type::Character: return any(char(lhs.c - rhs.c));
+    default: assert(false && "Unsupported type for '-' operator");
   }
   return nullptr;
 }
 
-DEFINE_OPERATOR_RHS(Integer,   long,   -, i, long,)
-DEFINE_OPERATOR_RHS(Double,    double, -, d, double,)
-DEFINE_OPERATOR_RHS(Character, char,   -, c, char,)
+DEFINE_OPERATOR(-, long, long)
+DEFINE_OPERATOR(-, double, double)
+DEFINE_OPERATOR(-, char, char)
 
-auto any::operator*(const any& rhs_) const -> any {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
+auto operator*(const any& lhs_, const any& rhs_) -> any {
+  const any& lhs = any::extractValue(lhs_);
+  const any& rhs = any::extractValue(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
-    case Type::Integer: return lhs.i * rhs.i;
-    case Type::Double:  return lhs.d * rhs.d;
+    case any::Type::Integer:   return lhs.i * rhs.i;
+    case any::Type::Double:    return lhs.d * rhs.d;
+    case any::Type::Character: return any(char(lhs.c * rhs.c));
     default: assert(false && "Unsupported type for '*' operator");
   }
   return nullptr;
 }
 
-DEFINE_OPERATOR_RHS(Integer,   long,   *, i, long,)
-DEFINE_OPERATOR_RHS(Double,    double, *, d, double,)
+DEFINE_OPERATOR(*, long, long)
+DEFINE_OPERATOR(*, double, double)
+DEFINE_OPERATOR(*, char, char)
 
-auto any::operator/(const any& rhs_) const -> any {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
+auto operator/(const any& lhs_, const any& rhs_) -> any {
+  const any& lhs = any::extractValue(lhs_);
+  const any& rhs = any::extractValue(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
-    case Type::Integer: return lhs.i / rhs.i;
-    case Type::Double:  return lhs.d / rhs.d;
+    case any::Type::Integer:   return lhs.i / rhs.i;
+    case any::Type::Double:    return lhs.d / rhs.d;
+    case any::Type::Character: return any(char(lhs.c / rhs.c));
     default: assert(false && "Unsupported type for '/' operator");
   }
   return nullptr;
 }
 
-DEFINE_OPERATOR_RHS(Integer,   long,   /, i, long,)
-DEFINE_OPERATOR_RHS(Double,    double, /, d, double,)
+DEFINE_OPERATOR(/, long, long)
+DEFINE_OPERATOR(/, double, double)
+DEFINE_OPERATOR(/, char, char)
 
-auto any::operator%(const any& rhs_) const -> any {
-  const any& lhs = extract_value(*this);
-  const any& rhs = extract_value(rhs_);
+auto operator%(const any& lhs_, const any& rhs_) -> any {
+  const any& lhs = any::extractValue(lhs_);
+  const any& rhs = any::extractValue(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
-    case Type::Integer: return lhs.i % rhs.i;
+    case any::Type::Integer:   return lhs.i % rhs.i;
+    case any::Type::Character: return any(char(lhs.c % rhs.c));
     default: assert(false && "Unsupported type for '%' operator");
   }
   return nullptr;
 }
 
-DEFINE_OPERATOR_RHS(Integer,   long, %, i, long,)
+DEFINE_OPERATOR(%, long, long)
+DEFINE_OPERATOR(%, char, char)
 
-auto any::operator-() const -> any {
-  const any& lhs = any::extract_value(*this);
-  switch (lhs.type) {
-    case Type::Integer: return (- lhs.i);
-    case Type::Double:  return (- lhs.d);
+// unary negate
+auto operator-(const any& rhs_) -> any {
+  const any& rhs = any::extractValue(rhs_);
+  switch (rhs.type) {
+    case any::Type::Integer: return (- rhs.i);
+    case any::Type::Double:  return (- rhs.d);
     default: assert(false && "Unsupported type for unary '-' operator");
   }
   return nullptr;
 }
-
-DEFINE_OPERATOR_LHS(Integer, long, ==, i, bool,)
-DEFINE_OPERATOR_LHS(Integer, long, !=, i, bool,)
-DEFINE_OPERATOR_LHS(Integer, long, <,  i, bool,)
-DEFINE_OPERATOR_LHS(Integer, long, <=, i, bool,)
-DEFINE_OPERATOR_LHS(Integer, long, >,  i, bool,)
-DEFINE_OPERATOR_LHS(Integer, long, >=, i, bool,)
-
-DEFINE_OPERATOR_LHS(Double, double, ==, d, bool,)
-DEFINE_OPERATOR_LHS(Double, double, !=, d, bool,)
-DEFINE_OPERATOR_LHS(Double, double, <,  d, bool,)
-DEFINE_OPERATOR_LHS(Double, double, <=, d, bool,)
-DEFINE_OPERATOR_LHS(Double, double, >,  d, bool,)
-DEFINE_OPERATOR_LHS(Double, double, >=, d, bool,)
-
-DEFINE_OPERATOR_LHS(Character, char, ==, c, bool,)
-DEFINE_OPERATOR_LHS(Character, char, !=, c, bool,)
-DEFINE_OPERATOR_LHS(Character, char, <,  c, bool,)
-DEFINE_OPERATOR_LHS(Character, char, <=, c, bool,)
-DEFINE_OPERATOR_LHS(Character, char, >,  c, bool,)
-DEFINE_OPERATOR_LHS(Character, char, >=, c, bool,)
-
-DEFINE_OPERATOR_LHS(Boolean, bool, ==, b, bool,)
-DEFINE_OPERATOR_LHS(Boolean, bool, !=, b, bool,)
-DEFINE_OPERATOR_LHS(Boolean, bool, <,  b, bool,)
-DEFINE_OPERATOR_LHS(Boolean, bool, <=, b, bool,)
-DEFINE_OPERATOR_LHS(Boolean, bool, >,  b, bool,)
-DEFINE_OPERATOR_LHS(Boolean, bool, >=, b, bool,)
-
-DEFINE_OPERATOR_LHS(String, string&, ==, s, bool, *)
-DEFINE_OPERATOR_LHS(String, string&, !=, s, bool, *)
-DEFINE_OPERATOR_LHS(String, string&, <,  s, bool, *)
-DEFINE_OPERATOR_LHS(String, string&, <=, s, bool, *)
-DEFINE_OPERATOR_LHS(String, string&, >,  s, bool, *)
-DEFINE_OPERATOR_LHS(String, string&, >=, s, bool, *)
-
-DEFINE_OPERATOR_LHS(String, char* const, ==, s, bool, *)
-DEFINE_OPERATOR_LHS(String, char* const, !=, s, bool, *)
-DEFINE_OPERATOR_LHS(String, char* const, <,  s, bool, *)
-DEFINE_OPERATOR_LHS(String, char* const, <=, s, bool, *)
-DEFINE_OPERATOR_LHS(String, char* const, >,  s, bool, *)
-DEFINE_OPERATOR_LHS(String, char* const, >=, s, bool, *)
-
-DEFINE_OPERATOR_LHS(Integer, long, +, i, long,)
-DEFINE_OPERATOR_LHS(Integer, long, -, i, long,)
-DEFINE_OPERATOR_LHS(Integer, long, *, i, long,)
-DEFINE_OPERATOR_LHS(Integer, long, /, i, long,)
-DEFINE_OPERATOR_LHS(Integer, long, %, i, long,)
-
-DEFINE_OPERATOR_LHS(Double, double, +, d, double,)
-DEFINE_OPERATOR_LHS(Double, double, -, d, double,)
-DEFINE_OPERATOR_LHS(Double, double, *, d, double,)
-DEFINE_OPERATOR_LHS(Double, double, /, d, double,)
-
-DEFINE_OPERATOR_LHS(Character, char, +, i, char,)
-DEFINE_OPERATOR_LHS(Character, char, -, i, char,)
-
-DEFINE_OPERATOR_LHS(String, string&, +, s, string, *)
-DEFINE_OPERATOR_LHS(String, char* const, +, s, string, *)
-
 
 } // namespace PureScript

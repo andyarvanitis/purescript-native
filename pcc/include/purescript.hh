@@ -33,6 +33,18 @@
 #include <stdexcept>
 #include "map_key.hh"
 
+#define DECLARE_OPERATOR(op, ty, rty) \
+  friend auto operator op (const any&, ty) -> rty; \
+  friend auto operator op (ty, const any&) -> rty;
+
+#define DECLARE_COMPARISON_OPERATOR(op) \
+  friend auto operator op (const any&, const any&) -> bool; \
+  DECLARE_OPERATOR(op, long, bool) \
+  DECLARE_OPERATOR(op, double, bool) \
+  DECLARE_OPERATOR(op, char, bool) \
+  DECLARE_OPERATOR(op, const string&, bool) \
+  DECLARE_OPERATOR(op, const char *, bool)
+
 namespace PureScript {
 
 using string = std::string;
@@ -206,142 +218,52 @@ class any {
 
   auto extractPointer() const -> void*;
 
-  static auto extract_value(const any&) -> const any&;
+  static auto extractValue(const any&) -> const any&;
 
-  auto operator==(const any&) const -> bool;
-  auto operator==(const long) const -> bool;
-  auto operator==(const double) const -> bool;
-  auto operator==(const char) const -> bool;
-  auto operator==(const bool) const -> bool;
-  auto operator==(const string&) const -> bool;
-  auto operator==(const char * const) const -> bool;
+  DECLARE_COMPARISON_OPERATOR(==)
+  DECLARE_COMPARISON_OPERATOR(!=)
+  DECLARE_COMPARISON_OPERATOR(<)
+  DECLARE_COMPARISON_OPERATOR(<=)
+  DECLARE_COMPARISON_OPERATOR(>)
+  DECLARE_COMPARISON_OPERATOR(>=)
 
-  auto operator!=(const any&) const -> bool;
-  auto operator!=(const long) const -> bool;
-  auto operator!=(const double) const -> bool;
-  auto operator!=(const char) const -> bool;
-  auto operator!=(const bool) const -> bool;
-  auto operator!=(const string&) const -> bool;
-  auto operator!=(const char * const) const -> bool;
+  friend auto operator+(const any&, const any&) -> any;
 
-  auto operator<(const any&) const -> bool;
-  auto operator<(const long) const -> bool;
-  auto operator<(const double) const -> bool;
-  auto operator<(const char) const -> bool;
-  auto operator<(const bool) const -> bool;
-  auto operator<(const string&) const -> bool;
-  auto operator<(const char * const) const -> bool;
+  DECLARE_OPERATOR(+, long, long)
+  DECLARE_OPERATOR(+, double, double)
+  DECLARE_OPERATOR(+, char, char)
+  DECLARE_OPERATOR(+, const string&, string)
+  DECLARE_OPERATOR(+, const char *, string)
 
-  auto operator<=(const any&) const -> bool;
-  auto operator<=(const long) const -> bool;
-  auto operator<=(const double) const -> bool;
-  auto operator<=(const char) const -> bool;
-  auto operator<=(const bool) const -> bool;
-  auto operator<=(const string&) const -> bool;
-  auto operator<=(const char * const) const -> bool;
+  friend auto operator-(const any&, const any&) -> any;
 
-  auto operator>(const any&) const -> bool;
-  auto operator>(const long) const -> bool;
-  auto operator>(const double) const -> bool;
-  auto operator>(const char) const -> bool;
-  auto operator>(const bool) const -> bool;
-  auto operator>(const string&) const -> bool;
-  auto operator>(const char * const) const -> bool;
+  DECLARE_OPERATOR(-, long, long)
+  DECLARE_OPERATOR(-, double, double)
+  DECLARE_OPERATOR(-, char, char)
 
-  auto operator>=(const any&) const -> bool;
-  auto operator>=(const long) const -> bool;
-  auto operator>=(const double) const -> bool;
-  auto operator>=(const char) const -> bool;
-  auto operator>=(const bool) const -> bool;
-  auto operator>=(const string&) const -> bool;
-  auto operator>=(const char * const) const -> bool;
+  friend auto operator*(const any&, const any&) -> any;
 
-  auto operator+(const any&) const -> any;
-  auto operator+(const long) const -> long;
-  auto operator+(const double) const -> double;
-  auto operator+(const char) const -> char;
-  auto operator+(const string&) const -> string;
-  auto operator+(const char * const) const -> string;
+  DECLARE_OPERATOR(*, long, long)
+  DECLARE_OPERATOR(*, double, double)
+  DECLARE_OPERATOR(*, char, char)
 
-  auto operator-(const any&) const -> any;
-  auto operator-(const long) const -> long;
-  auto operator-(const double) const -> double;
-  auto operator-(const char) const -> char;
+  friend auto operator/(const any&, const any&) -> any;
 
-  auto operator*(const any&) const -> any;
-  auto operator*(const long) const -> long;
-  auto operator*(const double) const -> double;
+  DECLARE_OPERATOR(/, long, long)
+  DECLARE_OPERATOR(/, double, double)
+  DECLARE_OPERATOR(/, char, char)
 
-  auto operator/(const any&) const -> any;
-  auto operator/(const long) const -> long;
-  auto operator/(const double) const -> double;
+  friend auto operator%(const any&, const any&) -> any;
 
-  auto operator%(const any&) const -> any;
-  auto operator%(const long) const -> long;
+  DECLARE_OPERATOR(%, long, long)
+  DECLARE_OPERATOR(%, char, char)
 
-  auto operator-() const -> any; // unary negate
-
-  friend auto operator==(const long, const any&) -> bool;
-  friend auto operator!=(const long, const any&) -> bool;
-  friend auto operator< (const long, const any&) -> bool;
-  friend auto operator<=(const long, const any&) -> bool;
-  friend auto operator> (const long, const any&) -> bool;
-  friend auto operator>=(const long, const any&) -> bool;
-
-  friend auto operator==(const double, const any&) -> bool;
-  friend auto operator!=(const double, const any&) -> bool;
-  friend auto operator< (const double, const any&) -> bool;
-  friend auto operator<=(const double, const any&) -> bool;
-  friend auto operator> (const double, const any&) -> bool;
-  friend auto operator>=(const double, const any&) -> bool;
-
-  friend auto operator==(const char, const any&) -> bool;
-  friend auto operator!=(const char, const any&) -> bool;
-  friend auto operator< (const char, const any&) -> bool;
-  friend auto operator<=(const char, const any&) -> bool;
-  friend auto operator> (const char, const any&) -> bool;
-  friend auto operator>=(const char, const any&) -> bool;
-
-  friend auto operator==(const bool, const any&) -> bool;
-  friend auto operator!=(const bool, const any&) -> bool;
-  friend auto operator< (const bool, const any&) -> bool;
-  friend auto operator<=(const bool, const any&) -> bool;
-  friend auto operator> (const bool, const any&) -> bool;
-  friend auto operator>=(const bool, const any&) -> bool;
-
-  friend auto operator==(const string&, const any&) -> bool;
-  friend auto operator!=(const string&, const any&) -> bool;
-  friend auto operator< (const string&, const any&) -> bool;
-  friend auto operator<=(const string&, const any&) -> bool;
-  friend auto operator> (const string&, const any&) -> bool;
-  friend auto operator>=(const string&, const any&) -> bool;
-
-  friend auto operator==(const char* const, const any&) -> bool;
-  friend auto operator!=(const char* const, const any&) -> bool;
-  friend auto operator< (const char* const, const any&) -> bool;
-  friend auto operator<=(const char* const, const any&) -> bool;
-  friend auto operator> (const char* const, const any&) -> bool;
-  friend auto operator>=(const char* const, const any&) -> bool;
-
-  friend auto operator+(const long, const any&) -> long;
-  friend auto operator-(const long, const any&) -> long;
-  friend auto operator*(const long, const any&) -> long;
-  friend auto operator/(const long, const any&) -> long;
-  friend auto operator%(const long, const any&) -> long;
-
-  friend auto operator+(const double, const any&) -> double;
-  friend auto operator-(const double, const any&) -> double;
-  friend auto operator*(const double, const any&) -> double;
-  friend auto operator/(const double, const any&) -> double;
-
-  friend auto operator+(const char, const any&) -> char;
-  friend auto operator-(const char, const any&) -> char;
-
-  friend auto operator+(const string&, const any&) -> string;
-  friend auto operator+(const char* const, const any&) -> string;
-
+  friend auto operator-(const any&) -> any; // unary negate
 };
 
 } // namespace PureScript
+
+#undef DECLARE_OPERATOR
+#undef DECLARE_COMPARISON_OPERATOR
 
 #endif // PureScript_HH
