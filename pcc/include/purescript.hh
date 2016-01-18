@@ -42,12 +42,12 @@
   DECLARE_OPERATOR(op, long, bool) \
   DECLARE_OPERATOR(op, double, bool) \
   DECLARE_OPERATOR(op, char, bool) \
-  DECLARE_OPERATOR(op, const string&, bool) \
   DECLARE_OPERATOR(op, const char *, bool)
+
 
 namespace PureScript {
 
-using string = std::string;
+using string = const char *;
 using runtime_error = std::runtime_error;
 using nullptr_t = std::nullptr_t;
 
@@ -58,12 +58,13 @@ const bool undefined = false;
 class any {
 
   public:
-  enum class Type {
+  enum class Type : int8_t {
     Unknown,
     Integer,
     Double,
     Character,
     Boolean,
+    StringLiteral,
     String,
     Map,
     Vector,
@@ -80,12 +81,12 @@ class any {
   };
   static constexpr as_thunk unthunk = as_thunk{};
 
-  using map    = std::unordered_map<const map_key_t, const any, map_key_t::hasher, map_key_t::equal>;
-  using vector = std::vector<any>;
+  using map     = std::unordered_map<const map_key_t, const any, map_key_t::hasher, map_key_t::equal>;
+  using vector  = std::vector<any>;
   using fn      = auto (*)(const any&) -> any;
   using closure = std::function<any(const any&)>;
-  using eff_fn = std::function<any()>;
-  using thunk  = auto (*)(const as_thunk) -> const any&;
+  using eff_fn  = std::function<any()>;
+  using thunk   = auto (*)(const as_thunk) -> const any&;
 
   template <typename T>
   using shared = std::shared_ptr<T>;
@@ -97,18 +98,19 @@ class any {
 
   private:
   union {
-    mutable long            i;
-    mutable double          d;
-    mutable char            c;
-    mutable bool            b;
-    mutable shared<string>  s;
-    mutable shared<map>     m;
-    mutable shared<vector>  v;
-    mutable fn              f;
-    mutable shared<closure> l;
-    mutable shared<eff_fn>  e;
-    mutable thunk           t;
-    mutable shared<void>    p;
+    mutable long                 i;
+    mutable double               d;
+    mutable char                 c;
+    mutable bool                 b;
+    mutable string               r;
+    mutable shared<std::string>  s;
+    mutable shared<map>          m;
+    mutable shared<vector>       v;
+    mutable fn                   f;
+    mutable shared<closure>      l;
+    mutable shared<eff_fn>       e;
+    mutable thunk                t;
+    mutable shared<void>         p;
   };
 
   public:
@@ -122,9 +124,15 @@ class any {
   template <typename T, typename = typename std::enable_if<std::is_same<bool,T>::value>::type>
   any(const T val) : type(Type::Boolean), b(val) {}
 
-  any(const string& val) : type(Type::String), s(make_shared<string>(val)) {}
-  any(string&& val) noexcept : type(Type::String), s(make_shared<string>(std::move(val))) {}
-  any(const char val[]) : type(Type::String), s(make_shared<string>(val)) {}
+  template <size_t N>
+  any(const char (&val)[N]) : type(Type::StringLiteral), r(val) {}
+  any(char * val) : type(Type::String), s(make_shared<std::string>(val)) {}
+
+  any(const std::string& val) : type(Type::String), s(make_shared<std::string>(val)) {}
+  any(std::string&& val) : type(Type::String), s(make_shared<std::string>(std::move(val))) {}
+
+  any(const shared<std::string>& val) : type(Type::String), s(val) {}
+  any(shared<std::string>&& val) noexcept : type(Type::String), s(std::move(val)) {}
 
   any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
   any(map&& val) noexcept : type(Type::Map), m(make_shared<map>(std::move(val))) {}
@@ -182,10 +190,7 @@ class any {
   auto cast() const -> typename std::enable_if<std::is_same<T, bool>::value, T>::type;
 
   template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, const char*>::value, const T>::type;
+  auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, T>::type;
 
   template <typename T>
   auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type;
@@ -208,7 +213,8 @@ class any {
   operator double() const;
   operator bool() const;
 
-  operator const string&() const;
+  operator string() const;
+  operator std::string() const;
   operator const map&() const;
   operator const vector&() const;
 
@@ -232,8 +238,7 @@ class any {
   DECLARE_OPERATOR(+, long, long)
   DECLARE_OPERATOR(+, double, double)
   DECLARE_OPERATOR(+, char, char)
-  DECLARE_OPERATOR(+, const string&, string)
-  DECLARE_OPERATOR(+, const char *, string)
+  DECLARE_OPERATOR(+, const char *, std::string)
 
   friend auto operator-(const any&, const any&) -> any;
 

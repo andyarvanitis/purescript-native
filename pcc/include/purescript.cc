@@ -19,18 +19,19 @@ namespace PureScript {
 #define COPY_DATA(src) \
   type = src.type; \
   switch (type) { \
-    case Type::Integer:         i = src.i;                         break; \
-    case Type::Double:          d = src.d;                         break; \
-    case Type::Character:       c = src.c;                         break; \
-    case Type::Boolean:         b = src.b;                         break; \
-    case Type::String:          new (&s) shared<string>  (src.s);  break; \
-    case Type::Map:             new (&m) shared<map>     (src.m);  break; \
-    case Type::Vector:          new (&v) shared<vector>  (src.v);  break; \
-    case Type::Function:        f = src.f;                         break; \
-    case Type::Closure:         new (&l) shared<closure> (src.l);  break; \
-    case Type::EffFunction:     new (&e) shared<eff_fn>  (src.e);  break; \
-    case Type::Thunk:           t = src.t;                         break; \
-    case Type::Pointer:         new (&p) shared<void>    (src.p);  break; \
+    case Type::Integer:         i = src.i;                           break; \
+    case Type::Double:          d = src.d;                           break; \
+    case Type::Character:       c = src.c;                           break; \
+    case Type::Boolean:         b = src.b;                           break; \
+    case Type::StringLiteral:   r = src.r;                           break; \
+    case Type::String:          new (&s) shared<std::string>(src.s); break; \
+    case Type::Map:             new (&m) shared<map>(src.m);         break; \
+    case Type::Vector:          new (&v) shared<vector>(src.v);      break; \
+    case Type::Function:        f = src.f;                           break; \
+    case Type::Closure:         new (&l) shared<closure>(src.l);     break; \
+    case Type::EffFunction:     new (&e) shared<eff_fn>(src.e);      break; \
+    case Type::Thunk:           t = src.t;                           break; \
+    case Type::Pointer:         new (&p) shared<void>(src.p);        break; \
     \
     default: assert(false && "Unsupported type in copy"); \
   }
@@ -38,18 +39,19 @@ namespace PureScript {
 #define MOVE_DATA(src) \
   type = src.type; \
   switch (type) { \
-    case Type::Integer:         i = src.i;                                    break; \
-    case Type::Double:          d = src.d;                                    break; \
-    case Type::Character:       c = src.c;                                    break; \
-    case Type::Boolean:         b = src.b;                                    break; \
-    case Type::String:          new (&s) shared<string>  (std::move(src.s));  break; \
-    case Type::Map:             new (&m) shared<map>     (std::move(src.m));  break; \
-    case Type::Vector:          new (&v) shared<vector>  (std::move(src.v));  break; \
-    case Type::Function:        f = src.f;                                    break; \
-    case Type::Closure:         new (&l) shared<closure> (std::move(src.l));  break; \
-    case Type::EffFunction:     new (&e) shared<eff_fn>  (std::move(src.e));  break; \
-    case Type::Thunk:           t = src.t;                                    break; \
-    case Type::Pointer:         new (&p) shared<void>    (std::move(src.p));  break; \
+    case Type::Integer:         i = src.i;                                      break; \
+    case Type::Double:          d = src.d;                                      break; \
+    case Type::Character:       c = src.c;                                      break; \
+    case Type::Boolean:         b = src.b;                                      break; \
+    case Type::StringLiteral:   r = src.r;                                      break; \
+    case Type::String:          new (&s) shared<std::string>(std::move(src.s)); break; \
+    case Type::Map:             new (&m) shared<map>(std::move(src.m));         break; \
+    case Type::Vector:          new (&v) shared<vector>(std::move(src.v));      break; \
+    case Type::Function:        f = src.f;                                      break; \
+    case Type::Closure:         new (&l) shared<closure>(std::move(src.l));     break; \
+    case Type::EffFunction:     new (&e) shared<eff_fn>(std::move(src.e));      break; \
+    case Type::Thunk:           t = src.t;                                      break; \
+    case Type::Pointer:         new (&p) shared<void>(std::move(src.p));        break; \
     \
     default: assert(false && "Unsupported type in move"); \
   }
@@ -81,18 +83,19 @@ auto any::operator=(any&& rhs) noexcept -> any& {
 any::~any() {
   // std::cout << "destroy" << std::endl;
   switch (type) {
-    case Type::Integer:         ;                     break;
-    case Type::Double:          ;                     break;
-    case Type::Character:       ;                     break;
-    case Type::Boolean:         ;                     break;
-    case Type::String:          s.~shared<string>();  break;
-    case Type::Map:             m.~shared<map>();     break;
-    case Type::Vector:          v.~shared<vector>();  break;
-    case Type::Function:        ;                     break;
-    case Type::Closure:         l.~shared<closure>(); break;
-    case Type::EffFunction:     e.~shared<eff_fn>();  break;
-    case Type::Thunk:           ;                     break;
-    case Type::Pointer:         p.~shared<void>();    break;
+    case Type::Integer:         ;                          break;
+    case Type::Double:          ;                          break;
+    case Type::Character:       ;                          break;
+    case Type::Boolean:         ;                          break;
+    case Type::StringLiteral:   ;                          break;
+    case Type::String:          s.~shared<std::string>();  break;
+    case Type::Map:             m.~shared<map>();          break;
+    case Type::Vector:          v.~shared<vector>();       break;
+    case Type::Function:        ;                          break;
+    case Type::Closure:         l.~shared<closure>();      break;
+    case Type::EffFunction:     e.~shared<eff_fn>();       break;
+    case Type::Thunk:           ;                          break;
+    case Type::Pointer:         p.~shared<void>();         break;
 
     default: assert(false && "Unsupported type in destructor");
   }
@@ -139,16 +142,15 @@ auto any::cast() const -> typename std::enable_if<std::is_same<T, bool>::value, 
 template auto any::cast<bool>() const -> bool;
 
 template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type {
-  RETURN_VALUE(Type::String, s, *)
+auto any::cast() const -> typename std::enable_if<std::is_same<T, string>::value, T>::type {
+  const any& val = extractValue(*this);
+  if (val.type == Type::StringLiteral) {
+    return val.r;
+  }
+  assert(val.type == Type::String);
+  return val.s->c_str();
 }
-template auto any::cast<string>() const -> const string&;
-
-template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, const char*>::value, const T>::type {
-  RETURN_VALUE(Type::String, s->c_str(),)
-}
-template auto any::cast<const char*>() const -> const char* const;
+template auto any::cast<string>() const -> string;
 
 template <typename T>
 auto any::cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
@@ -219,8 +221,12 @@ any::operator bool() const {
   RETURN_VALUE(Type::Boolean, b,)
 }
 
-any::operator const string&() const {
-  RETURN_VALUE(Type::String, s, *)
+any::operator string() const {
+  return cast<string>();
+}
+
+any::operator std::string() const {
+  return cast<string>();
 }
 
 any::operator const map&() const {
@@ -275,25 +281,49 @@ auto operator op (ty lhs, const any& rhs) -> rty { \
   return lhs op rhs.cast<typename std::remove_const<std::remove_reference<ty>::type>::type>(); \
 }
 
+#define DEFINE_CSTR_EQUALS_OPERATOR() \
+  auto operator==(const any& lhs_, const char * rhs) -> bool { \
+    const any& lhs = any::extractValue(lhs_); \
+    assert(lhs.type == any::Type::StringLiteral || lhs.type == any::Type::String); \
+    if (lhs.type == any::Type::StringLiteral) { \
+      return (lhs.r == rhs) || (strcmp(lhs.r, rhs) == 0); \
+    } \
+    return strcmp(lhs.s->c_str(), rhs) == 0; \
+  } \
+  auto operator==(const char * lhs, const any& rhs_) -> bool { \
+    const any& rhs = any::extractValue(rhs_); \
+    assert(rhs.type == any::Type::StringLiteral || rhs.type == any::Type::String); \
+    if (rhs.type == any::Type::StringLiteral) { \
+      return (lhs == rhs.r) || (strcmp(lhs, rhs) == 0); \
+    } \
+    return strcmp(lhs, rhs.s->c_str()) == 0; \
+  }
+
 #define DEFINE_CSTR_COMPARISON_OPERATOR(op) \
   auto operator op (const any& lhs, const char * rhs) -> bool { \
-    return lhs.cast<string>() op rhs; \
+    return strcmp(lhs.cast<string>(), rhs) op 0; \
   } \
   auto operator op (const char * lhs, const any& rhs) -> bool { \
-    return lhs op rhs.cast<string>(); \
+    return strcmp(lhs, rhs.cast<string>()) op 0; \
   }
 
 #define DEFINE_COMPARISON_OPERATOR(op) \
   auto operator op (const any& lhs_, const any& rhs_) -> bool { \
     const any& lhs = any::extractValue(lhs_); \
     const any& rhs = any::extractValue(rhs_); \
-    assert(lhs.type == rhs.type); \
     switch (lhs.type) { \
-      case any::Type::Integer:   return lhs.i op rhs.i; \
-      case any::Type::Double:    return lhs.d op rhs.d; \
-      case any::Type::Character: return lhs.c op rhs.c; \
-      case any::Type::Boolean:   return lhs.b op rhs.b; \
-      case any::Type::String:    return (*lhs.s) op (*rhs.s); \
+      case any::Type::Integer:   assert(lhs.type == any::Type::Integer);   return lhs.i op rhs.i; \
+      case any::Type::Double:    assert(lhs.type == any::Type::Double);    return lhs.d op rhs.d; \
+      case any::Type::Character: assert(lhs.type == any::Type::Character); return lhs.c op rhs.c; \
+      case any::Type::Boolean:   assert(lhs.type == any::Type::Boolean);   return lhs.b op rhs.b; \
+      case any::Type::StringLiteral: \
+        assert(lhs.type == any::Type::StringLiteral || lhs.type == any::Type::String); \
+        assert(rhs.type == any::Type::StringLiteral || rhs.type == any::Type::String); \
+        return strcmp(lhs.r, rhs.type == any::Type::StringLiteral ? rhs.r : rhs.s->c_str()) op 0; \
+      case any::Type::String: \
+        assert(lhs.type == any::Type::StringLiteral || lhs.type == any::Type::String); \
+        assert(rhs.type == any::Type::StringLiteral || rhs.type == any::Type::String); \
+        return strcmp(lhs.s->c_str(), rhs.type == any::Type::StringLiteral ? rhs.r : rhs.s->c_str()) op 0; \
       case any::Type::Pointer:   return lhs.p op rhs.p; \
       default: assert(false && "Unsupported type for operator " #op); \
     } \
@@ -303,8 +333,6 @@ auto operator op (ty lhs, const any& rhs) -> rty { \
   DEFINE_OPERATOR(op, double, bool) \
   DEFINE_OPERATOR(op, char, bool) \
   DEFINE_OPERATOR(op, bool, bool) \
-  DEFINE_OPERATOR(op, const string&, bool) \
-  DEFINE_CSTR_COMPARISON_OPERATOR(op)
 
 //-----------------------------------------------------------------------------
 // Operator definitions
@@ -317,15 +345,28 @@ DEFINE_COMPARISON_OPERATOR(<=)
 DEFINE_COMPARISON_OPERATOR(>)
 DEFINE_COMPARISON_OPERATOR(>=)
 
+DEFINE_CSTR_EQUALS_OPERATOR()
+DEFINE_CSTR_COMPARISON_OPERATOR(!=)
+DEFINE_CSTR_COMPARISON_OPERATOR(<)
+DEFINE_CSTR_COMPARISON_OPERATOR(<=)
+DEFINE_CSTR_COMPARISON_OPERATOR(>)
+DEFINE_CSTR_COMPARISON_OPERATOR(>=)
+
 auto operator+(const any& lhs_, const any& rhs_) -> any {
   const any& lhs = any::extractValue(lhs_);
   const any& rhs = any::extractValue(rhs_);
-  assert(lhs.type == rhs.type);
   switch (lhs.type) {
-    case any::Type::Integer:   return lhs.i + rhs.i;
-    case any::Type::Double:    return lhs.d + rhs.d;
-    case any::Type::Character: return any(char(lhs.c + rhs.c));
-    case any::Type::String:    return (*lhs.s) + (*rhs.s);
+    case any::Type::Integer:       assert(lhs.type == any::Type::Integer);   return lhs.i + rhs.i;
+    case any::Type::Double:        assert(lhs.type == any::Type::Double);    return lhs.d + rhs.d;
+    case any::Type::Character:     assert(lhs.type == any::Type::Character); return any(char(lhs.c + rhs.c));
+    case any::Type::StringLiteral:
+      assert(lhs.type == any::Type::StringLiteral || lhs.type == any::Type::String);
+      assert(rhs.type == any::Type::StringLiteral || rhs.type == any::Type::String);
+      return rhs.type == any::Type::StringLiteral ? std::string(lhs.r) + rhs.r : lhs.r + *rhs.s;
+    case any::Type::String:
+      assert(lhs.type == any::Type::StringLiteral || lhs.type == any::Type::String);
+      assert(rhs.type == any::Type::StringLiteral || rhs.type == any::Type::String);
+      return rhs.type == any::Type::StringLiteral ? *lhs.s + rhs.r : *lhs.s + *rhs.s;
     default: assert(false && "Unsupported type for '+' operator");
   }
   return nullptr;
@@ -334,14 +375,17 @@ auto operator+(const any& lhs_, const any& rhs_) -> any {
 DEFINE_OPERATOR(+, long, long)
 DEFINE_OPERATOR(+, double, double)
 DEFINE_OPERATOR(+, char, char)
-DEFINE_OPERATOR(+, const string&, string)
 
-auto operator+(const any& lhs, const char * rhs) -> string {
-  return lhs.cast<string>() + rhs;
+auto operator+(const any& lhs_, const char * rhs) -> std::string {
+  const any& lhs = any::extractValue(lhs_);
+  assert(lhs.type == any::Type::StringLiteral || lhs.type == any::Type::String);
+  return lhs.type == any::Type::StringLiteral ? std::string(lhs.r) + rhs : *lhs.s + rhs;
 }
 
-auto operator+(const char * lhs, const any& rhs) -> string {
-  return lhs + rhs.cast<string>();
+auto operator+(const char * lhs, const any& rhs_) -> std::string {
+  const any& rhs = any::extractValue(rhs_);
+  assert(rhs.type == any::Type::StringLiteral || rhs.type == any::Type::String);
+  return rhs.type == any::Type::StringLiteral ? lhs + std::string(rhs.r) : lhs + *rhs.s;
 }
 
 auto operator-(const any& lhs_, const any& rhs_) -> any {

@@ -214,6 +214,13 @@ literals = mkPattern' match
       , return $ if null cpps then "" else "\n"
       , prettyStatements cpps
     ]
+  match (CppReturn value@(CppStringLiteral _)) = fmap concat $ sequence
+    [ return "return "
+    , return . runType $ CppAny []
+    , return "("
+    , prettyPrintCpp' value
+    , return ")"
+    ]
   match (CppReturn value) = fmap concat $ sequence
     [ return "return "
     , prettyPrintCpp' value
