@@ -29,9 +29,8 @@
 #include <functional>
 #include <string>
 #include <vector>
-#include <unordered_map>
+#include <utility>
 #include <stdexcept>
-#include "map_key.hh"
 
 #define DECLARE_OPERATOR(op, ty, rty) \
   friend auto operator op (const any&, ty) -> rty; \
@@ -48,8 +47,13 @@
 namespace PureScript {
 
 using string = const char *;
-using runtime_error = std::runtime_error;
 using nullptr_t = std::nullptr_t;
+
+// Workaround for missing C++11 version in gcc
+class runtime_error : public std::runtime_error {
+public:
+  runtime_error(const char message[]) : std::runtime_error(std::string(message)) {}
+};
 
 const bool undefined = false;
 
@@ -81,7 +85,7 @@ class any {
   };
   static constexpr as_thunk unthunk = as_thunk{};
 
-  using map     = std::unordered_map<const map_key_t, const any, map_key_t::hasher, map_key_t::equal>;
+  using map     = std::vector<std::pair<const char * const, const any>>;
   using vector  = std::vector<any>;
   using fn      = auto (*)(const any&) -> any;
   using closure = std::function<any(const any&)>;
@@ -214,13 +218,14 @@ class any {
   operator bool() const;
 
   operator string() const;
-  operator std::string() const;
   operator const map&() const;
   operator const vector&() const;
 
-  auto operator[](const map_key_t&) const -> const any&;
+  auto operator[](const char[]) const -> const any&;
   auto operator[](const vector::size_type) const -> const any&;
   auto operator[](const any&) const -> const any&;
+
+  auto contains(const char[]) const -> bool;
 
   auto extractPointer() const -> void*;
 

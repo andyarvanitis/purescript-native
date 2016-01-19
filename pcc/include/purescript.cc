@@ -17,7 +17,6 @@
 namespace PureScript {
 
 #define COPY_DATA(src) \
-  type = src.type; \
   switch (type) { \
     case Type::Integer:         i = src.i;                           break; \
     case Type::Double:          d = src.d;                           break; \
@@ -37,7 +36,6 @@ namespace PureScript {
   }
 
 #define MOVE_DATA(src) \
-  type = src.type; \
   switch (type) { \
     case Type::Integer:         i = src.i;                                      break; \
     case Type::Double:          d = src.d;                                      break; \
@@ -56,32 +54,34 @@ namespace PureScript {
     default: assert(false && "Unsupported type in move"); \
   }
 
-any::any(const any& other) {
+any::any(const any& other) : type(other.type) {
   COPY_DATA(other);
 }
 
-any::any(any&& other) noexcept {
+any::any(any&& other) noexcept : type(other.type) {
   MOVE_DATA(other);
 }
 
 auto any::operator=(const any& rhs) -> any& {
+  type = rhs.type;
   COPY_DATA(rhs);
   return *this;
 }
 
 // Takes ownership -- might need to reconsider this
 auto any::operator=(any& rhs) noexcept -> any& {
+  type = rhs.type;
   MOVE_DATA(rhs);
   return *this;
 }
 
 auto any::operator=(any&& rhs) noexcept -> any& {
+  type = rhs.type;
   MOVE_DATA(rhs);
   return *this;
 }
 
 any::~any() {
-  // std::cout << "destroy" << std::endl;
   switch (type) {
     case Type::Integer:         ;                          break;
     case Type::Double:          ;                          break;
@@ -225,10 +225,6 @@ any::operator string() const {
   return cast<string>();
 }
 
-any::operator std::string() const {
-  return cast<string>();
-}
-
 any::operator const map&() const {
   RETURN_VALUE(Type::Map, m, *)
 }
@@ -257,16 +253,38 @@ auto any::extractValue(const any& a) -> const any& {
   return a;
 }
 
-auto any::operator[](const map_key_t& rhs) const -> const any& {
-  RETURN_VALUE(Type::Map, m->at(rhs),)
+auto any::operator[](const char rhs[]) const -> const any& {
+  const any& val = extractValue(*this);
+  assert(val.type == Type::Map);
+  for (any::map::const_iterator it = val.m->begin(), end = val.m->end(); it != end; ++it) {
+    if (it->first == rhs || strcmp(it->first, rhs) == 0) {
+      return it->second;
+    }
+  }
+  throw runtime_error("map key not found");
 }
 
 auto any::operator[](const vector::size_type rhs) const -> const any& {
-  RETURN_VALUE(Type::Vector, v->at(rhs),)
+  const any& val = extractValue(*this);
+  assert(val.type == Type::Vector);
+  return (*val.v)[rhs];
 }
 
 auto any::operator[](const any& rhs) const -> const any& {
-  RETURN_VALUE(Type::Vector, v->at(rhs.cast<long>()),)
+  const any& val = extractValue(*this);
+  assert(val.type == Type::Vector);
+  return (*val.v)[rhs.cast<long>()];
+}
+
+auto any::contains(const char key[]) const -> bool {
+  const any& val = extractValue(*this);
+  assert(val.type == Type::Map);
+  for (any::map::const_iterator it = val.m->begin(), end = val.m->end(); it != end; ++it) {
+    if (it->first == key || strcmp(it->first, key) == 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 //-----------------------------------------------------------------------------
