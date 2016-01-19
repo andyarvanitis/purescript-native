@@ -257,8 +257,15 @@ auto any::extractValue(const any& a) -> const any& {
 auto any::operator[](const char rhs[]) const -> const any& {
   const any& val = extractValue(*this);
   assert(val.type == Type::Map);
-  for (any::map::const_iterator it = val.m->begin(), end = val.m->end(); it != end; ++it) {
-    if (it->first == rhs || strcmp(it->first, rhs) == 0) {
+  const any::map::const_iterator begin = val.m->begin();
+  const any::map::const_iterator end   = val.m->end();
+  for (any::map::const_iterator it = begin; it != end; ++it) {
+    if (it->first == rhs) {
+      return it->second;
+    }
+  }
+  for (any::map::const_iterator it = begin; it != end; ++it) {
+    if (strcmp(it->first, rhs) == 0) {
       return it->second;
     }
   }
