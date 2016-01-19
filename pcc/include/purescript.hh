@@ -229,7 +229,7 @@ class any {
 
   auto extractPointer() const -> void*;
 
-  static auto extractValue(const any&) -> const any&;
+  static auto unthunkVariant(const any&) -> const any&;
 
   DECLARE_COMPARISON_OPERATOR(==)
   DECLARE_COMPARISON_OPERATOR(!=)

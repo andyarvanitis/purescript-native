@@ -102,21 +102,10 @@ any::~any() {
   }
 };
 
-#define RETURN_VALUE(TYPE, VAL, FN) \
-  if (type == TYPE) { \
-    return FN(VAL); \
-  } \
-  const any* valuePtr = this; \
-  do { \
-    assert(valuePtr->type == Type::Thunk); \
-    const any& value = (*valuePtr->t)(unthunk); \
-    if (value.type == TYPE) { \
-      return FN(value.VAL); \
-    } \
-    valuePtr = &value; \
-  } while (valuePtr->type != Type::Unknown); \
-  assert(false && "Unknown value type"); \
-  return FN(VAL);
+#define RETURN_VALUE(TYPE, ACCESSOR, INDIRECTION) \
+  const any& variant = unthunkVariant(*this); \
+  assert(variant.type == TYPE); \
+  return INDIRECTION(variant.ACCESSOR); \
 
 template <typename T>
 auto any::cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type {
@@ -144,12 +133,12 @@ template auto any::cast<bool>() const -> bool;
 
 template <typename T>
 auto any::cast() const -> typename std::enable_if<std::is_same<T, string>::value, T>::type {
-  const any& val = extractValue(*this);
-  if (val.type == Type::StringLiteral) {
-    return val.r;
+  const any& variant = unthunkVariant(*this);
+  if (variant.type == Type::StringLiteral) {
+    return variant.r;
   }
-  assert(val.type == Type::String);
-  return val.s->c_str();
+  assert(variant.type == Type::String);
+  return variant.s->c_str();
 }
 template auto any::cast<string>() const -> string;
 
@@ -166,26 +155,12 @@ auto any::cast() const -> typename std::enable_if<std::is_same<T, vector>::value
 template auto any::cast<any::vector>() const -> const vector&;
 
 auto any::operator()(const any& arg) const -> any {
-  if (type == Type::Function) {
-    return (*f)(arg);
+  const any& variant = unthunkVariant(*this);
+  if (variant.type == Type::Closure) {
+    return (*variant.l)(arg);
   }
-  if (type == Type::Closure) {
-    return (*l)(arg);
-  }
-  const any* valuePtr = this;
-  do {
-    assert(valuePtr->type == Type::Thunk);
-    const any& value = (*valuePtr->t)(unthunk);
-    if (value.type == Type::Function) {
-      return (*value.f)(arg);
-    }
-    if (value.type == Type::Closure) {
-      return (*value.l)(arg);
-    }
-    valuePtr = &value;
-  } while (valuePtr->type != Type::Unknown);
-  assert(false && "Unknown value type");
-  return nullptr;
+  assert(variant.type == Type::Function);
+  return (*variant.f)(arg);
 }
 
 auto any::operator()(const as_thunk) const -> const any& {
@@ -194,32 +169,21 @@ auto any::operator()(const as_thunk) const -> const any& {
 }
 
 auto any::operator()() const -> any {
-  if (type == Type::EffFunction) {
-    return (*e)();
-  }
-  const any* valuePtr = this;
-  do {
-    assert(valuePtr->type == Type::Thunk);
-    const any& value = (*valuePtr->t)(unthunk);
-    if (value.type == Type::EffFunction) {
-      return (*value.e)();
-    }
-    valuePtr = &value;
-  } while (valuePtr->type != Type::Unknown);
-  assert(false && "Unknown value type");
-  return nullptr;
+  const any& variant = unthunkVariant(*this);
+  assert(variant.type == Type::EffFunction);
+  return (*variant.e)();
 }
 
 any::operator long() const {
-  RETURN_VALUE(Type::Integer, i,)
+  return cast<long>();
 }
 
 any::operator double() const {
-  RETURN_VALUE(Type::Double, d,)
+  return cast<double>();
 }
 
 any::operator bool() const {
-  RETURN_VALUE(Type::Boolean, b,)
+  return cast<bool>();
 }
 
 any::operator string() const {
@@ -227,38 +191,30 @@ any::operator string() const {
 }
 
 any::operator const map&() const {
-  RETURN_VALUE(Type::Map, m, *)
+  return cast<map>();
 }
 
 any::operator const vector&() const {
-  RETURN_VALUE(Type::Vector, v, *)
+  return cast<vector>();
 }
 
 auto any::extractPointer() const -> void* {
   RETURN_VALUE(Type::Pointer, p.get(),)
 }
 
-auto any::extractValue(const any& a) -> const any& {
-  if (a.type != Type::Thunk) {
-    return a;
+auto any::unthunkVariant(const any& a) -> const any& {
+  const any * variant = &a;
+  while (variant->type == Type::Thunk) {
+    variant = &((*variant->t)(unthunk));
   }
-  const any* valuePtr = &a;
-  do {
-    const any& value = (*valuePtr->t)(unthunk);
-    if (value.type != Type::Thunk) {
-      return value;
-    }
-    valuePtr = &value;
-  } while (valuePtr->type != Type::Unknown);
-  assert(false && "Unknown value type");
-  return a;
+  return *variant;
 }
 
 auto any::operator[](const char rhs[]) const -> const any& {
-  const any& val = extractValue(*this);
-  assert(val.type == Type::Map);
-  const any::map::const_iterator begin = val.m->begin();
-  const any::map::const_iterator end   = val.m->end();
+  const any& variant = unthunkVariant(*this);
+  assert(variant.type == Type::Map);
+  const any::map::const_iterator begin = variant.m->begin();
+  const any::map::const_iterator end = variant.m->end();
   for (any::map::const_iterator it = begin; it != end; ++it) {
     if (it->first == rhs) {
       return it->second;
@@ -273,21 +229,21 @@ auto any::operator[](const char rhs[]) const -> const any& {
 }
 
 auto any::operator[](const vector::size_type rhs) const -> const any& {
-  const any& val = extractValue(*this);
-  assert(val.type == Type::Vector);
-  return (*val.v)[rhs];
+  const any& variant = unthunkVariant(*this);
+  assert(variant.type == Type::Vector);
+  return (*variant.v)[rhs];
 }
 
 auto any::operator[](const any& rhs) const -> const any& {
-  const any& val = extractValue(*this);
-  assert(val.type == Type::Vector);
-  return (*val.v)[rhs.cast<long>()];
+  const any& variant = unthunkVariant(*this);
+  assert(variant.type == Type::Vector);
+  return (*variant.v)[rhs.cast<long>()];
 }
 
 auto any::contains(const char key[]) const -> bool {
-  const any& val = extractValue(*this);
-  assert(val.type == Type::Map);
-  for (any::map::const_iterator it = val.m->begin(), end = val.m->end(); it != end; ++it) {
+  const any& variant = unthunkVariant(*this);
+  assert(variant.type == Type::Map);
+  for (any::map::const_iterator it = variant.m->begin(), end = variant.m->end(); it != end; ++it) {
     if (it->first == key || strcmp(it->first, key) == 0) {
       return true;
     }
@@ -309,7 +265,7 @@ auto operator op (ty lhs, const any& rhs) -> rty { \
 
 #define DEFINE_CSTR_EQUALS_OPERATOR() \
   auto operator==(const any& lhs_, const char * rhs) -> bool { \
-    const any& lhs = any::extractValue(lhs_); \
+    const any& lhs = any::unthunkVariant(lhs_); \
     assert(lhs.type == any::Type::StringLiteral || lhs.type == any::Type::String); \
     if (lhs.type == any::Type::StringLiteral) { \
       return (lhs.r == rhs) || (strcmp(lhs.r, rhs) == 0); \
@@ -317,7 +273,7 @@ auto operator op (ty lhs, const any& rhs) -> rty { \
     return strcmp(lhs.s->c_str(), rhs) == 0; \
   } \
   auto operator==(const char * lhs, const any& rhs_) -> bool { \
-    const any& rhs = any::extractValue(rhs_); \
+    const any& rhs = any::unthunkVariant(rhs_); \
     assert(rhs.type == any::Type::StringLiteral || rhs.type == any::Type::String); \
     if (rhs.type == any::Type::StringLiteral) { \
       return (lhs == rhs.r) || (strcmp(lhs, rhs) == 0); \
@@ -335,8 +291,8 @@ auto operator op (ty lhs, const any& rhs) -> rty { \
 
 #define DEFINE_COMPARISON_OPERATOR(op) \
   auto operator op (const any& lhs_, const any& rhs_) -> bool { \
-    const any& lhs = any::extractValue(lhs_); \
-    const any& rhs = any::extractValue(rhs_); \
+    const any& lhs = any::unthunkVariant(lhs_); \
+    const any& rhs = any::unthunkVariant(rhs_); \
     switch (lhs.type) { \
       case any::Type::Integer:   assert(lhs.type == any::Type::Integer);   return lhs.i op rhs.i; \
       case any::Type::Double:    assert(lhs.type == any::Type::Double);    return lhs.d op rhs.d; \
@@ -379,8 +335,8 @@ DEFINE_CSTR_COMPARISON_OPERATOR(>)
 DEFINE_CSTR_COMPARISON_OPERATOR(>=)
 
 auto operator+(const any& lhs_, const any& rhs_) -> any {
-  const any& lhs = any::extractValue(lhs_);
-  const any& rhs = any::extractValue(rhs_);
+  const any& lhs = any::unthunkVariant(lhs_);
+  const any& rhs = any::unthunkVariant(rhs_);
   switch (lhs.type) {
     case any::Type::Integer:       assert(lhs.type == any::Type::Integer);   return lhs.i + rhs.i;
     case any::Type::Double:        assert(lhs.type == any::Type::Double);    return lhs.d + rhs.d;
@@ -403,20 +359,20 @@ DEFINE_OPERATOR(+, double, double)
 DEFINE_OPERATOR(+, char, char)
 
 auto operator+(const any& lhs_, const char * rhs) -> std::string {
-  const any& lhs = any::extractValue(lhs_);
+  const any& lhs = any::unthunkVariant(lhs_);
   assert(lhs.type == any::Type::StringLiteral || lhs.type == any::Type::String);
   return lhs.type == any::Type::StringLiteral ? std::string(lhs.r) + rhs : *lhs.s + rhs;
 }
 
 auto operator+(const char * lhs, const any& rhs_) -> std::string {
-  const any& rhs = any::extractValue(rhs_);
+  const any& rhs = any::unthunkVariant(rhs_);
   assert(rhs.type == any::Type::StringLiteral || rhs.type == any::Type::String);
   return rhs.type == any::Type::StringLiteral ? lhs + std::string(rhs.r) : lhs + *rhs.s;
 }
 
 auto operator-(const any& lhs_, const any& rhs_) -> any {
-  const any& lhs = any::extractValue(lhs_);
-  const any& rhs = any::extractValue(rhs_);
+  const any& lhs = any::unthunkVariant(lhs_);
+  const any& rhs = any::unthunkVariant(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case any::Type::Integer:   return lhs.i - rhs.i;
@@ -432,8 +388,8 @@ DEFINE_OPERATOR(-, double, double)
 DEFINE_OPERATOR(-, char, char)
 
 auto operator*(const any& lhs_, const any& rhs_) -> any {
-  const any& lhs = any::extractValue(lhs_);
-  const any& rhs = any::extractValue(rhs_);
+  const any& lhs = any::unthunkVariant(lhs_);
+  const any& rhs = any::unthunkVariant(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case any::Type::Integer:   return lhs.i * rhs.i;
@@ -449,8 +405,8 @@ DEFINE_OPERATOR(*, double, double)
 DEFINE_OPERATOR(*, char, char)
 
 auto operator/(const any& lhs_, const any& rhs_) -> any {
-  const any& lhs = any::extractValue(lhs_);
-  const any& rhs = any::extractValue(rhs_);
+  const any& lhs = any::unthunkVariant(lhs_);
+  const any& rhs = any::unthunkVariant(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case any::Type::Integer:   return lhs.i / rhs.i;
@@ -466,8 +422,8 @@ DEFINE_OPERATOR(/, double, double)
 DEFINE_OPERATOR(/, char, char)
 
 auto operator%(const any& lhs_, const any& rhs_) -> any {
-  const any& lhs = any::extractValue(lhs_);
-  const any& rhs = any::extractValue(rhs_);
+  const any& lhs = any::unthunkVariant(lhs_);
+  const any& rhs = any::unthunkVariant(rhs_);
   assert(lhs.type == rhs.type);
   switch (lhs.type) {
     case any::Type::Integer:   return lhs.i % rhs.i;
@@ -482,7 +438,7 @@ DEFINE_OPERATOR(%, char, char)
 
 // unary negate
 auto operator-(const any& rhs_) -> any {
-  const any& rhs = any::extractValue(rhs_);
+  const any& rhs = any::unthunkVariant(rhs_);
   switch (rhs.type) {
     case any::Type::Integer: return (- rhs.i);
     case any::Type::Double:  return (- rhs.d);
