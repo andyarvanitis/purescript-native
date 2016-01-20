@@ -26,6 +26,7 @@ module Language.PureScript.CodeGen.Cpp
   , P.prettyPrintCpp
   ) where
 
+import Data.Char (isLetter)
 import Data.List
 import Data.Function (on)
 import qualified Data.Map as M
@@ -149,7 +150,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                           CppLambda [CppCaptureAll] (farg <$> [f'])
                                                                     (Just $ CppAny [])
                                                                     (CppBlock $ fieldLambdas fs')]
-      | otherwise = [CppReturn (CppObjectLiteral ((ctorKey, CppStringLiteral name) : zip fields' (CppVar <$> fields')))]
+      | otherwise = [CppReturn (CppArrayLiteral (CppStringLiteral name : (CppVar <$> fields')))]
 
   declToCpp _ ident val = do
     val' <- valueToCpp val
@@ -407,7 +408,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return $ case ctorType of
       ProductType -> cpps
       SumType ->
-        [ CppIfElse (CppBinary Equal (CppIndexer (CppStringLiteral ctorKey) (CppVar varName))
+        [ CppIfElse (CppBinary Equal (CppIndexer (CppVar ctorKey) (CppVar varName))
                                      (CppStringLiteral ctor'))
                     (CppBlock cpps)
                     Nothing ]
@@ -420,8 +421,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       cpps <- binderToCpp argVar done'' binder
       return (CppVariableIntroduction (argVar, Nothing)
                                       []
-                                      (Just (CppIndexer (CppStringLiteral $ identToCpp field) (CppVar varName)))
+                                      (Just (CppIndexer (fieldToIndex field) (CppVar varName)))
               : cpps)
+    fieldToIndex :: Ident -> Cpp
+    fieldToIndex = CppNumericLiteral . Left . (+1) . read . dropWhile isLetter . runIdent
 
   binderToCpp _ _ b@(ConstructorBinder{}) =
     error $ "Invalid ConstructorBinder in binderToCpp: " ++ show b
