@@ -145,7 +145,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             | otherwise = ([], [])
     farg = \x -> (x, Just $ CppAny [CppConst, CppRef])
     fieldLambdas flds
-      | (f' : fs') <- flds = [CppReturn $ CppLambda [CppCaptureAll] (farg <$> [f'])
+      | (f' : fs') <- flds = [CppReturn . maybeRemCaps $
+                                          CppLambda [CppCaptureAll] (farg <$> [f'])
                                                                     (Just $ CppAny [])
                                                                     (CppBlock $ fieldLambdas fs')]
       | otherwise = [CppReturn (CppObjectLiteral ((ctorKey, CppStringLiteral name) : zip fields' (CppVar <$> fields')))]
@@ -155,17 +156,17 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return $ CppVariableIntroduction (identToCpp ident, Just $ CppAny [CppConst]) [] (Just val')
 
   -------------------------------------------------------------------------------------------------
-  toLambda :: [CppCaptureType] -> Cpp -> Cpp
+  fnToLambda :: Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  toLambda cs (CppFunction name args _ qs body) =
+  fnToLambda (CppFunction name args _ qs body) =
     CppVariableIntroduction (name, Just $ CppAny [CppConst])
                             (filter (==CppStatic) qs)
-                            (Just (CppLambda cs' args (Just $ CppAny []) body))
+                            (Just (CppLambda cs args (Just $ CppAny []) body))
     where
-    cs' | (not . null) (qs `intersect` [CppInline, CppStatic]) = []
-        | otherwise = cs
-  toLambda cs (CppComment com cpp) = CppComment com (toLambda cs cpp)
-  toLambda _ _ = error "Not a function!"
+    cs | (not . null) (qs `intersect` [CppInline, CppStatic]) = []
+       | otherwise = [CppCaptureAll]
+  fnToLambda (CppComment com cpp) = CppComment com (fnToLambda cpp)
+  fnToLambda _ = error "Not a function!"
 
   -------------------------------------------------------------------------------------------------
   asReturnBlock :: Cpp -> Cpp
@@ -178,8 +179,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   convertNestedLambdas = everywhereOnCpp go
     where
     go :: Cpp -> Cpp
-    go f@(CppFunction {}) = toLambda [CppCaptureAll] f
-    go (CppLambda [] args rtyp body) = CppLambda [CppCaptureAll] args rtyp body
+    go f@(CppFunction {}) = maybeRemCaps $ fnToLambda f
+    go (CppLambda _ args rtyp body) = maybeRemCaps $ CppLambda [CppCaptureAll] args rtyp body
     go cpp = cpp
 
   -------------------------------------------------------------------------------------------------
@@ -211,11 +212,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
     toelem :: Cpp -> (String, Cpp)
     toelem (CppFunction name args rtyp _ (CppBlock body)) =
-      (name, withdict $ CppLambda [CppCaptureAll] args rtyp (CppBlock $ (accessor localdict <$> fns) ++ body))
+      (name, withdict . maybeRemCaps $ CppLambda [CppCaptureAll]
+                                                 args rtyp (CppBlock $ (accessor localdict <$> fns) ++ body))
     toelem _ = error "not a function"
 
     withdict :: Cpp -> Cpp
-    withdict cpp' =
+    withdict cpp' = maybeRemCaps $
       CppLambda [CppCaptureAll] [(localdict, Just $ CppAny [CppConst, CppRef])]
                                 (Just $ CppAny [])
                                 (CppBlock [CppReturn cpp'])
