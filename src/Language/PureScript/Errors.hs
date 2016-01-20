@@ -1,6 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Language.PureScript.Errors where
@@ -9,6 +8,7 @@ import Prelude ()
 import Prelude.Compat
 
 import Data.Ord (comparing)
+import Data.Char (isSpace)
 import Data.Either (lefts, rights)
 import Data.List (intercalate, transpose, nub, nubBy, sortBy)
 import Data.Foldable (fold)
@@ -53,63 +53,63 @@ data SimpleErrorMessage
   | RedefinedIdent Ident
   | OverlappingNamesInLet
   | UnknownModule ModuleName
-  | UnknownType (Qualified ProperName)
-  | UnknownTypeClass (Qualified ProperName)
+  | UnknownType (Qualified (ProperName 'TypeName))
+  | UnknownTypeClass (Qualified (ProperName 'ClassName))
   | UnknownValue (Qualified Ident)
-  | UnknownDataConstructor (Qualified ProperName) (Maybe (Qualified ProperName))
-  | UnknownTypeConstructor (Qualified ProperName)
-  | UnknownImportType ModuleName ProperName
-  | UnknownExportType ProperName
-  | UnknownImportTypeClass ModuleName ProperName
-  | UnknownExportTypeClass ProperName
+  | UnknownDataConstructor (Qualified (ProperName 'ConstructorName)) (Maybe (Qualified (ProperName 'ConstructorName)))
+  | UnknownTypeConstructor (Qualified (ProperName 'TypeName))
+  | UnknownImportType ModuleName (ProperName 'TypeName)
+  | UnknownExportType (ProperName 'TypeName)
+  | UnknownImportTypeClass ModuleName (ProperName 'ClassName)
+  | UnknownExportTypeClass (ProperName 'ClassName)
   | UnknownImportValue ModuleName Ident
   | UnknownExportValue Ident
   | UnknownExportModule ModuleName
-  | UnknownImportDataConstructor ModuleName ProperName ProperName
-  | UnknownExportDataConstructor ProperName ProperName
+  | UnknownImportDataConstructor ModuleName (ProperName 'TypeName) (ProperName 'ConstructorName)
+  | UnknownExportDataConstructor (ProperName 'TypeName) (ProperName 'ConstructorName)
   | ScopeConflict String [ModuleName]
-  | ConflictingTypeDecls ProperName
-  | ConflictingCtorDecls ProperName
-  | TypeConflictsWithClass ProperName
-  | CtorConflictsWithClass ProperName
-  | ClassConflictsWithType ProperName
-  | ClassConflictsWithCtor ProperName
+  | ConflictingTypeDecls (ProperName 'TypeName)
+  | ConflictingCtorDecls (ProperName 'ConstructorName)
+  | TypeConflictsWithClass (ProperName 'TypeName)
+  | CtorConflictsWithClass (ProperName 'ConstructorName)
+  | ClassConflictsWithType (ProperName 'ClassName)
+  | ClassConflictsWithCtor (ProperName 'ClassName)
   | DuplicateModuleName ModuleName
-  | DuplicateClassExport ProperName
+  | DuplicateClassExport (ProperName 'ClassName)
   | DuplicateValueExport Ident
   | DuplicateTypeArgument String
   | InvalidDoBind
   | InvalidDoLet
   | CycleInDeclaration Ident
-  | CycleInTypeSynonym (Maybe ProperName)
+  | CycleInTypeSynonym (Maybe (ProperName 'TypeName))
   | CycleInModules [ModuleName]
   | NameIsUndefined Ident
-  | UndefinedTypeVariable ProperName
-  | PartiallyAppliedSynonym (Qualified ProperName)
+  | UndefinedTypeVariable (ProperName 'TypeName)
+  | PartiallyAppliedSynonym (Qualified (ProperName 'TypeName))
   | EscapedSkolem (Maybe Expr)
   | TypesDoNotUnify Type Type
   | KindsDoNotUnify Kind Kind
   | ConstrainedTypeUnified Type Type
-  | OverlappingInstances (Qualified ProperName) [Type] [Qualified Ident]
-  | NoInstanceFound (Qualified ProperName) [Type]
-  | PossiblyInfiniteInstance (Qualified ProperName) [Type]
-  | CannotDerive (Qualified ProperName) [Type]
-  | CannotFindDerivingType ProperName
+  | OverlappingInstances (Qualified (ProperName 'ClassName)) [Type] [Qualified Ident]
+  | NoInstanceFound (Qualified (ProperName 'ClassName)) [Type]
+  | PossiblyInfiniteInstance (Qualified (ProperName 'ClassName)) [Type]
+  | CannotDerive (Qualified (ProperName 'ClassName)) [Type]
+  | CannotFindDerivingType (ProperName 'TypeName)
   | DuplicateLabel String (Maybe Expr)
   | DuplicateValueDeclaration Ident
   | ArgListLengthsDiffer Ident
   | OverlappingArgNames (Maybe Ident)
   | MissingClassMember Ident
-  | ExtraneousClassMember Ident (Qualified ProperName)
+  | ExtraneousClassMember Ident (Qualified (ProperName 'ClassName))
   | ExpectedType Type Kind
-  | IncorrectConstructorArity (Qualified ProperName)
+  | IncorrectConstructorArity (Qualified (ProperName 'ConstructorName))
   | ExprDoesNotHaveType Expr Type
   | PropertyIsMissing String
   | AdditionalProperty String
   | CannotApplyFunction Type Expr
   | TypeSynonymInstance
-  | OrphanInstance Ident (Qualified ProperName) [Type]
-  | InvalidNewtype ProperName
+  | OrphanInstance Ident (Qualified (ProperName 'ClassName)) [Type]
+  | InvalidNewtype (ProperName 'TypeName)
   | InvalidInstanceHead Type
   | TransitiveExportError DeclarationRef [DeclarationRef]
   | ShadowedName Ident
@@ -120,17 +120,17 @@ data SimpleErrorMessage
   | NotExhaustivePattern [[Binder]] Bool
   | OverlappingPattern [[Binder]] Bool
   | IncompleteExhaustivityCheck
-  | ClassOperator ProperName Ident
-  | MisleadingEmptyTypeImport ModuleName ProperName
+  | ClassOperator (ProperName 'ClassName) Ident
+  | MisleadingEmptyTypeImport ModuleName (ProperName 'TypeName)
   | ImportHidingModule ModuleName
   | UnusedImport ModuleName
-  | UnusedExplicitImport ModuleName [String]
-  | UnusedDctorImport ProperName
-  | UnusedDctorExplicitImport ProperName [ProperName]
+  | UnusedExplicitImport ModuleName [String] (Maybe ModuleName) [DeclarationRef]
+  | UnusedDctorImport (ProperName 'TypeName)
+  | UnusedDctorExplicitImport (ProperName 'TypeName) [ProperName 'ConstructorName]
   | DeprecatedOperatorDecl String
   | DeprecatedQualifiedSyntax ModuleName ModuleName
-  | DeprecatedClassImport ModuleName ProperName
-  | DeprecatedClassExport ProperName
+  | DeprecatedClassImport ModuleName (ProperName 'ClassName)
+  | DeprecatedClassExport (ProperName 'ClassName)
   | RedundantUnqualifiedImport ModuleName ImportDeclarationType
   | DuplicateSelectiveImport ModuleName
   | DuplicateImport ModuleName ImportDeclarationType (Maybe ModuleName)
@@ -138,7 +138,9 @@ data SimpleErrorMessage
   | DuplicateExportRef String
   | IntOutOfRange Integer String Integer Integer
   | RedundantEmptyHidingImport ModuleName
+  | ImplicitQualifiedImport ModuleName ModuleName [DeclarationRef]
   | ImplicitImport ModuleName [DeclarationRef]
+  | HidingImport ModuleName [DeclarationRef]
   | CaseBinderLengthDiffers Int [Binder]
   deriving (Show)
 
@@ -147,7 +149,7 @@ data ErrorMessageHint
   = ErrorUnifyingTypes Type Type
   | ErrorInExpression Expr
   | ErrorInModule ModuleName
-  | ErrorInInstance (Qualified ProperName) [Type]
+  | ErrorInInstance (Qualified (ProperName 'ClassName)) [Type]
   | ErrorInSubsumption Type Type
   | ErrorCheckingAccessor Expr String
   | ErrorCheckingType Expr Type
@@ -155,11 +157,11 @@ data ErrorMessageHint
   | ErrorCheckingGuard
   | ErrorInferringType Expr
   | ErrorInApplication Expr Type Expr
-  | ErrorInDataConstructor ProperName
-  | ErrorInTypeConstructor ProperName
+  | ErrorInDataConstructor (ProperName 'ConstructorName)
+  | ErrorInTypeConstructor (ProperName 'TypeName)
   | ErrorInBindingGroup [Ident]
   | ErrorInDataBindingGroup
-  | ErrorInTypeSynonym ProperName
+  | ErrorInTypeSynonym (ProperName 'TypeName)
   | ErrorInValueDeclaration Ident
   | ErrorInTypeDeclaration Ident
   | ErrorInForeignImport Ident
@@ -176,6 +178,8 @@ data HintCategory
   deriving (Show, Eq)
 
 data ErrorMessage = ErrorMessage [ErrorMessageHint] SimpleErrorMessage deriving (Show)
+
+newtype ErrorSuggestion = ErrorSuggestion String
 
 -- | Get the source span for an error
 errorSpan :: ErrorMessage -> Maybe SourceSpan
@@ -309,7 +313,9 @@ errorCode em = case unwrapErrorMessage em of
   DuplicateExportRef{} -> "DuplicateExportRef"
   IntOutOfRange{} -> "IntOutOfRange"
   RedundantEmptyHidingImport{} -> "RedundantEmptyHidingImport"
+  ImplicitQualifiedImport{} -> "ImplicitQualifiedImport"
   ImplicitImport{} -> "ImplicitImport"
+  HidingImport{} -> "HidingImport"
   CaseBinderLengthDiffers{} -> "CaseBinderLengthDiffers"
 
 -- |
@@ -412,11 +418,48 @@ onTypesInErrorMessageM f (ErrorMessage hints simple) = ErrorMessage <$> traverse
   gHint (ErrorInInstance cl ts) = ErrorInInstance cl <$> traverse f ts
   gHint other = pure other
 
+wikiUri :: ErrorMessage -> String
+wikiUri e = "https://github.com/purescript/purescript/wiki/Error-Code-" ++ errorCode e
+
+-- TODO Other possible suggestions:
+-- WildcardInferredType - source span not small enough
+-- DuplicateSelectiveImport - would require 2 ranges to remove and 1 insert
+-- DeprecatedClassExport, DeprecatedClassImport,  would want to replace smaller span?
+errorSuggestion :: SimpleErrorMessage -> Maybe ErrorSuggestion
+errorSuggestion err = case err of
+  UnusedImport{} -> emptySuggestion
+  RedundantEmptyHidingImport{} -> emptySuggestion
+  DuplicateImport{} -> emptySuggestion
+  RedundantUnqualifiedImport{} -> emptySuggestion
+  DeprecatedQualifiedSyntax name qualName -> suggest $
+    "import " ++ runModuleName name ++ " as " ++ runModuleName qualName
+  UnusedExplicitImport mn _ qual refs -> suggest $ importSuggestion mn refs qual
+  ImplicitImport mn refs -> suggest $ importSuggestion mn refs Nothing
+  ImplicitQualifiedImport mn asModule refs -> suggest $ importSuggestion mn refs (Just asModule)
+  _ -> Nothing
+
+  where
+    emptySuggestion = Just $ ErrorSuggestion ""
+    suggest = Just . ErrorSuggestion
+
+    importSuggestion :: ModuleName -> [ DeclarationRef ] -> Maybe ModuleName -> String
+    importSuggestion mn refs qual =
+      "import " ++ runModuleName mn ++ " (" ++ intercalate ", " (map prettyPrintRef refs) ++ ")" ++ qstr qual
+
+    qstr :: Maybe ModuleName -> String
+    qstr (Just mn) = " as " ++ runModuleName mn
+    qstr Nothing = ""
+
+showSuggestion :: SimpleErrorMessage -> String
+showSuggestion suggestion = case errorSuggestion suggestion of
+  Just (ErrorSuggestion x) -> x
+  _ -> ""
+
 -- |
 -- Pretty print a single error, simplifying if necessary
 --
-prettyPrintSingleError :: Bool -> Level -> ErrorMessage -> Box.Box
-prettyPrintSingleError full level e = flip evalState defaultUnknownMap $ do
+prettyPrintSingleError :: Bool -> Level -> Bool -> ErrorMessage -> Box.Box
+prettyPrintSingleError full level showWiki e = flip evalState defaultUnknownMap $ do
   em <- onTypesInErrorMessageM replaceUnknowns (if full then e else simplifyErrorMessage e)
   um <- get
   return (prettyPrintErrorMessage um em)
@@ -425,20 +468,19 @@ prettyPrintSingleError full level e = flip evalState defaultUnknownMap $ do
   -- Pretty print an ErrorMessage
   prettyPrintErrorMessage :: TypeMap -> ErrorMessage -> Box.Box
   prettyPrintErrorMessage typeMap (ErrorMessage hints simple) =
-    paras
+    paras $
       [ foldr renderHint (indent (renderSimpleErrorMessage simple)) hints
-      , Box.moveDown 1 typeInformation
-      , Box.moveDown 1 $ paras [ line $ "See " ++ wikiUri ++ " for more information, "
-                               , line $ "or to contribute content related to this " ++ levelText ++ "."
-                               ]
+      ] ++
+      maybe [] (return . Box.moveDown 1) typeInformation ++
+      [ Box.moveDown 1 $ paras [ line $ "See " ++ wikiUri e ++ " for more information, "
+                                 , line $ "or to contribute content related to this " ++ levelText ++ "."
+                                 ]
+      | showWiki
       ]
     where
-    wikiUri :: String
-    wikiUri = "https://github.com/purescript/purescript/wiki/Error-Code-" ++ errorCode e
-
-    typeInformation :: Box.Box
-    typeInformation | not (null types) = Box.hsep 1 Box.left [ line "where", paras types]
-                    | otherwise = Box.emptyBox 0 0
+    typeInformation :: Maybe Box.Box
+    typeInformation | not (null types) = Just $ Box.hsep 1 Box.left [ line "where", paras types ]
+                    | otherwise = Nothing
       where
       types :: [Box.Box]
       types = map skolemInfo  (M.elems (umSkolemMap typeMap)) ++
@@ -790,9 +832,11 @@ prettyPrintSingleError full level e = flip evalState defaultUnknownMap $ do
     renderSimpleErrorMessage (UnusedImport name) =
       line $ "The import of module " ++ runModuleName name ++ " is redundant"
 
-    renderSimpleErrorMessage (UnusedExplicitImport name names) =
-      paras [ line $ "The import of module " ++ runModuleName name ++ " contains the following unused references:"
-            , indent $ paras $ map line names ]
+    renderSimpleErrorMessage msg@(UnusedExplicitImport mn names _ _) =
+      paras [ line $ "The import of module " ++ runModuleName mn ++ " contains the following unused references:"
+            , indent $ paras $ map line names
+            , line $ "It could be replaced with:"
+            , indent $ line $ showSuggestion msg ]
 
     renderSimpleErrorMessage (UnusedDctorImport name) =
       line $ "The import of type " ++ runProperName name ++ " includes data constructors but only the type is used"
@@ -854,8 +898,19 @@ prettyPrintSingleError full level e = flip evalState defaultUnknownMap $ do
     renderSimpleErrorMessage (RedundantEmptyHidingImport mn) =
       line $ "The import for module " ++ runModuleName mn ++ " is redundant as all members have been explicitly hidden."
 
-    renderSimpleErrorMessage (ImplicitImport mn refs) =
+    renderSimpleErrorMessage msg@(ImplicitQualifiedImport importedModule asModule _) =
+      paras [ line $ "Module " ++ runModuleName importedModule ++ " was imported as " ++ runModuleName asModule ++ " with unspecified imports."
+            , line $ "As there are multiple modules being imported as " ++ runModuleName asModule ++ ", consider using the explicit form:"
+            , indent $ line $ showSuggestion msg
+            ]
+
+    renderSimpleErrorMessage msg@(ImplicitImport mn _) =
       paras [ line $ "Module " ++ runModuleName mn ++ " has unspecified imports, consider using the explicit form: "
+            , indent $ line $ showSuggestion msg
+            ]
+
+    renderSimpleErrorMessage (HidingImport mn refs) =
+      paras [ line $ "Module " ++ runModuleName mn ++ " has unspecified imports, consider using the inclusive form: "
             , indent $ line $ "import " ++ runModuleName mn ++ " (" ++ intercalate ", " (map prettyPrintRef refs) ++ ")"
             ]
 
@@ -992,37 +1047,13 @@ prettyPrintSingleError full level e = flip evalState defaultUnknownMap $ do
   paras :: [Box.Box] -> Box.Box
   paras = Box.vcat Box.left
 
-  -- Pretty print and export declaration
-  prettyPrintExport :: DeclarationRef -> String
-  prettyPrintExport (TypeRef pn _) = runProperName pn
-  prettyPrintExport ref = prettyPrintRef ref
-
-  prettyPrintRef :: DeclarationRef -> String
-  prettyPrintRef (TypeRef pn Nothing) = runProperName pn ++ "(..)"
-  prettyPrintRef (TypeRef pn (Just [])) = runProperName pn
-  prettyPrintRef (TypeRef pn (Just dctors)) = runProperName pn ++ "(" ++ intercalate ", " (map runProperName dctors) ++ ")"
-  prettyPrintRef (ValueRef ident) = showIdent ident
-  prettyPrintRef (TypeClassRef pn) = "class " ++ runProperName pn
-  prettyPrintRef (ProperRef pn) = runProperName pn
-  prettyPrintRef (TypeInstanceRef ident) = showIdent ident
-  prettyPrintRef (ModuleRef name) = "module " ++ runModuleName name
-  prettyPrintRef (PositionedDeclarationRef _ _ ref) = prettyPrintExport ref
-
-  prettyPrintImport :: ModuleName -> ImportDeclarationType -> Maybe ModuleName -> String
-  prettyPrintImport mn idt qual =
-    let i = case idt of
-              Implicit -> runModuleName mn
-              Explicit refs -> runModuleName mn ++ " (" ++ intercalate ", " (map prettyPrintRef refs) ++ ")"
-              Hiding refs -> runModuleName mn ++ " hiding (" ++ intercalate "," (map prettyPrintRef refs) ++ ")"
-    in i ++ maybe "" (\q -> " as " ++ runModuleName q) qual
-
   -- | Simplify an error message
   simplifyErrorMessage :: ErrorMessage -> ErrorMessage
   simplifyErrorMessage (ErrorMessage hints simple) = ErrorMessage (simplifyHints hints) simple
     where
     -- Take the last instance of each "hint category"
     simplifyHints :: [ErrorMessageHint] -> [ErrorMessageHint]
-    simplifyHints = reverse . nubBy categoriesEqual . reverse
+    simplifyHints = reverse . nubBy categoriesEqual . stripRedudantHints simple . reverse
 
     -- Don't remove hints in the "other" category
     categoriesEqual :: ErrorMessageHint -> ErrorMessageHint -> Bool
@@ -1031,6 +1062,30 @@ prettyPrintSingleError full level e = flip evalState defaultUnknownMap $ do
         (OtherHint, _) -> False
         (_, OtherHint) -> False
         (c1, c2) -> c1 == c2
+
+    -- | See https://github.com/purescript/purescript/issues/1802
+    stripRedudantHints :: SimpleErrorMessage -> [ErrorMessageHint] -> [ErrorMessageHint]
+    stripRedudantHints CannotApplyFunction{} = stripFirst isApplicationHint
+      where
+      isApplicationHint ErrorInApplication{} = True
+      isApplicationHint _ = False
+    stripRedudantHints ExprDoesNotHaveType{} = stripFirst isCheckHint
+      where
+      isCheckHint ErrorCheckingType{} = True
+      isCheckHint _ = False
+    stripRedudantHints TypesDoNotUnify{} = stripFirst isUnifyHint
+      where
+      isUnifyHint ErrorUnifyingTypes{} = True
+      isUnifyHint _ = False
+    stripRedudantHints _ = id
+
+    stripFirst :: (ErrorMessageHint -> Bool) -> [ErrorMessageHint] -> [ErrorMessageHint]
+    stripFirst p (PositionedError pos : hs) = PositionedError pos : stripFirst p hs
+    stripFirst p (ErrorInModule mn    : hs) = ErrorInModule mn    : stripFirst p hs
+    stripFirst p (hint                : hs)
+      | p hint = hs
+      | otherwise = hint : hs
+    stripFirst _ [] = []
 
   hintCategory :: ErrorMessageHint -> HintCategory
   hintCategory ErrorCheckingType{}  = ExprHint
@@ -1042,6 +1097,30 @@ prettyPrintSingleError full level e = flip evalState defaultUnknownMap $ do
   hintCategory ErrorCheckingKind{}  = CheckHint
   hintCategory PositionedError{}    = PositionHint
   hintCategory _                    = OtherHint
+
+-- Pretty print and export declaration
+prettyPrintExport :: DeclarationRef -> String
+prettyPrintExport (TypeRef pn _) = runProperName pn
+prettyPrintExport ref = prettyPrintRef ref
+
+prettyPrintImport :: ModuleName -> ImportDeclarationType -> Maybe ModuleName -> String
+prettyPrintImport mn idt qual =
+  let i = case idt of
+            Implicit -> runModuleName mn
+            Explicit refs -> runModuleName mn ++ " (" ++ intercalate ", " (map prettyPrintRef refs) ++ ")"
+            Hiding refs -> runModuleName mn ++ " hiding (" ++ intercalate "," (map prettyPrintRef refs) ++ ")"
+  in i ++ maybe "" (\q -> " as " ++ runModuleName q) qual
+
+prettyPrintRef :: DeclarationRef -> String
+prettyPrintRef (TypeRef pn Nothing) = runProperName pn ++ "(..)"
+prettyPrintRef (TypeRef pn (Just [])) = runProperName pn
+prettyPrintRef (TypeRef pn (Just dctors)) = runProperName pn ++ "(" ++ intercalate ", " (map runProperName dctors) ++ ")"
+prettyPrintRef (ValueRef ident) = showIdent ident
+prettyPrintRef (TypeClassRef pn) = "class " ++ runProperName pn
+prettyPrintRef (ProperRef name) = name
+prettyPrintRef (TypeInstanceRef ident) = showIdent ident
+prettyPrintRef (ModuleRef name) = "module " ++ runModuleName name
+prettyPrintRef (PositionedDeclarationRef _ _ ref) = prettyPrintExport ref
 
 -- |
 -- Pretty print multiple errors
@@ -1065,12 +1144,12 @@ prettyPrintMultipleErrorsBox full = prettyPrintMultipleErrorsWith Error "Error f
 
 prettyPrintMultipleErrorsWith :: Level -> String -> String -> Bool -> MultipleErrors -> Box.Box
 prettyPrintMultipleErrorsWith level intro _ full (MultipleErrors [e]) =
-  let result = prettyPrintSingleError full level e
+  let result = prettyPrintSingleError full level True e
   in Box.vcat Box.left [ Box.text intro
                        , result
                        ]
 prettyPrintMultipleErrorsWith level _ intro full (MultipleErrors es) =
-  let result = map (prettyPrintSingleError full level) es
+  let result = map (prettyPrintSingleError full level True) es
   in Box.vsep 1 Box.left $ concat $ zipWith withIntro [1 :: Int ..] result
   where
   withIntro i err = [ Box.text (intro ++ " " ++ show i ++ " of " ++ show (length es) ++ ":")
@@ -1133,9 +1212,15 @@ line :: String -> Box.Box
 line = Box.text
 
 renderBox :: Box.Box -> String
-renderBox = unlines . map trimEnd . lines . Box.render
+renderBox = unlines
+            . map (dropWhileEnd isSpace)
+            . dropWhile whiteSpace
+            . dropWhileEnd whiteSpace
+            . lines
+            . Box.render
   where
-  trimEnd = reverse . dropWhile (== ' ') . reverse
+  dropWhileEnd p = reverse . dropWhile p . reverse
+  whiteSpace = all isSpace
 
 -- |
 -- Rethrow an error with a more detailed error message in the case of failure

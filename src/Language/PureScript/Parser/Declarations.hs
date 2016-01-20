@@ -122,7 +122,7 @@ parseFixityDeclaration :: TokenParser Declaration
 parseFixityDeclaration = do
   fixity <- parseFixity
   indented
-  alias <- P.optionMaybe $ (Ident <$> identifier) <* reserved "as"
+  alias <- P.optionMaybe $ parseQualified (Ident <$> identifier) <* reserved "as"
   name <- symbol
   return $ FixityDeclaration fixity name alias
 
@@ -165,7 +165,7 @@ parseDeclarationRef =
   parseProperRef = do
     name <- properName
     dctors <- P.optionMaybe $ parens (symbol' ".." *> pure Nothing <|> Just <$> commaSep properName)
-    return $ maybe (ProperRef name) (TypeRef name) dctors
+    return $ maybe (ProperRef (runProperName name)) (TypeRef name) dctors
 
 parseTypeClassDeclaration :: TokenParser Declaration
 parseTypeClassDeclaration = do
