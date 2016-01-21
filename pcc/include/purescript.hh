@@ -56,6 +56,7 @@ public:
 };
 
 const bool undefined = false;
+const std::vector<int>::size_type kDataCtor = 0;
 
 // A variant data class designed to provide some features of dynamic typing.
 //
