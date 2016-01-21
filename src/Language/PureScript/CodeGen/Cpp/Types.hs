@@ -28,10 +28,10 @@ import qualified Language.PureScript.Constants as C
 -- import Debug.Trace
 
 data CppType = CppPrimitive String | CppAuto | CppAny [CppTypeQual]
-  deriving (Eq, Show, Data, Typeable)
+  deriving (Show, Read, Eq)
 
 data CppTypeQual = CppConst | CppRef
-  deriving (Eq, Show, Data)
+  deriving (Show, Read, Eq)
 
 -- |
 -- Value C++11 qualifiers
@@ -57,14 +57,13 @@ data CppValueQual
   -- Function or lambda is involved in recursion
   --
   | CppRecursive
-
-  deriving (Show, Eq, Data, Typeable)
+  deriving (Show, Read, Eq)
 
 -- |
 -- C++ lambda capture list
 --
 data CppCaptureType = CppCaptureAll
-  deriving (Show, Eq, Data, Typeable)
+  deriving (Show, Read, Eq)
 
 runType :: CppType -> String
 runType (CppPrimitive t) = t

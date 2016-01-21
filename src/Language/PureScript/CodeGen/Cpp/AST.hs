@@ -51,7 +51,8 @@ data CppUnaryOp
   -- |
   -- Constructor
   --
-  | CppNew deriving (Show, Eq, Data, Typeable)
+  | CppNew
+  deriving (Show, Read, Eq)
 
 -- |
 -- Built-in binary operators
@@ -134,7 +135,7 @@ data BinaryOp
   --
   | ShiftRight
   --
-  deriving (Show, Eq, Data, Typeable)
+  deriving (Show, Read, Eq)
 
 -- |
 -- Data type for simplified C++11 expressions
@@ -263,7 +264,8 @@ data Cpp
   -- |
   -- Commented C++11
   --
-  | CppComment [Comment] Cpp deriving (Show, Eq, Data, Typeable)
+  | CppComment [Comment] Cpp
+  deriving (Show, Read, Eq)
 
 --
 -- Traversals
