@@ -443,7 +443,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                       Nothing]
 
   literalToBinderCpp varName done (StringLiteral str) =
-    return [CppIfElse (CppBinary Equal (CppCast stringType $ CppVar varName)
+    return [CppIfElse (CppBinary Equal (CppVar varName)
                                        (CppStringLiteral str))
                       (CppBlock done)
                       Nothing]
