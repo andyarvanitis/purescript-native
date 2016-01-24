@@ -123,6 +123,7 @@ toBody = catMaybes . map go
       objlam :: (String, Cpp) -> (String, Cpp)
       objlam (name, (CppLambda _ args rty body)) = (name , CppLambda [] args rty $ addCaptures body)
       objlam obj = obj
+    addCaptures (CppApp (CppLambda _ [] rty body) []) = CppApp (CppLambda [] [] rty (addCaptures body)) []
     addCaptures cpps' = everywhereOnCpp addCapture cpps'
       where
       addCapture :: Cpp -> Cpp
