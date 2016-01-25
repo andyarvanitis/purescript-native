@@ -89,9 +89,37 @@ class any {
   using map     = std::vector<std::pair<const char * const, const any>>;
   using vector  = std::vector<any>;
   using fn      = auto (*)(const any&) -> any;
-  using closure = std::function<any(const any&)>;
-  using eff_fn  = std::function<any()>;
   using thunk   = auto (*)(const as_thunk) -> const any&;
+
+  class closure {
+    public:
+      virtual any operator()(const any&) = 0;
+  };
+
+  template <typename T>
+  class _closure : public closure {
+    T lambda;
+  public:
+    _closure(const T& l) noexcept : lambda(l) {}
+    any operator()(const any& arg) {
+      return lambda(arg);
+    }
+  };
+
+  class eff_fn {
+    public:
+      virtual any operator()() = 0;
+  };
+
+  template <typename T>
+  class _eff_fn : public eff_fn {
+    T lambda;
+  public:
+    _eff_fn(const T& l) noexcept : lambda(l) {}
+    any operator()() {
+      return lambda();
+    }
+  };
 
   template <typename T>
   using shared = std::shared_ptr<T>;
@@ -151,12 +179,12 @@ class any {
 
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                            !std::is_convertible<T,fn>::value>::type>
-  any(const T& val, typename std::enable_if<std::is_assignable<closure,T>::value>::type* = 0)
-    : type(Type::Closure), l(make_shared<closure>(val)) {}
+  any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&)>,T>::value>::type* = 0)
+    : type(Type::Closure), l(make_shared<_closure<T>>(val)) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
-    : type(Type::EffFunction), e(make_shared<eff_fn>(val)) {}
+  any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
+    : type(Type::EffFunction), e(make_shared<_eff_fn<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0)
