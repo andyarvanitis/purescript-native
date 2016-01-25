@@ -93,30 +93,30 @@ class any {
 
   class closure {
     public:
-      virtual any operator()(const any&) = 0;
+      virtual auto operator()(const any&) const -> any = 0;
   };
 
   template <typename T>
   class _closure : public closure {
-    T lambda;
+    const T lambda;
   public:
     _closure(const T& l) noexcept : lambda(l) {}
-    any operator()(const any& arg) {
+    auto operator()(const any& arg) const -> any {
       return lambda(arg);
     }
   };
 
   class eff_fn {
     public:
-      virtual any operator()() = 0;
+      virtual auto operator()() const -> any = 0;
   };
 
   template <typename T>
   class _eff_fn : public eff_fn {
-    T lambda;
+    const T lambda;
   public:
     _eff_fn(const T& l) noexcept : lambda(l) {}
-    any operator()() {
+    auto operator()() const -> any {
       return lambda();
     }
   };
