@@ -117,7 +117,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     block <- asReturnBlock <$> valueToCpp body
     let fn' = CppFunction (identToCpp ident)
                           [(identToCpp arg, Just $ CppAny [CppConst, CppRef])]
-                          (Just $ CppAny [CppConst, CppRef])
+                          (Just $ CppAny [])
                           []
                           block
     return fn'
