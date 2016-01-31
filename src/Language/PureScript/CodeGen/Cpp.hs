@@ -140,7 +140,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                    []
                                    (CppBlock (fieldLambdas fs))
     where
-    name = qualifiedToStr (ModuleName []) id (Qualified (Just mn) ident)
+    name = identToCpp ident
     fields' = identToCpp <$> fields
     (f, fs) | (f' : fs') <- fields' = ([f'], fs')
             | otherwise = ([], [])
@@ -402,14 +402,16 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   binderToCpp varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
     binderToCpp varName done b
 
-  binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields)) _ ctor bs) = do
+  binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields))
+                                              _
+                                              (Qualified _ (ProperName ctor))
+                                              bs) = do
     cpps <- go (zip fields bs) done
-    let ctor' = qualifiedToStr (ModuleName []) (Ident . runProperName) ctor
     return $ case ctorType of
       ProductType -> cpps
       SumType ->
         [ CppIfElse (CppBinary Equal (CppIndexer (CppVar ctorKey) (CppVar varName))
-                                     (CppStringLiteral ctor'))
+                                     (CppStringLiteral ctor))
                     (CppBlock cpps)
                     Nothing ]
     where
