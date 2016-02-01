@@ -1,24 +1,12 @@
------------------------------------------------------------------------------
---
--- Module      :  Language.PureScript.Exhaustive
--- Copyright   :  (c) 2013-15 Phil Freeman, (c) 2014-15 Gary Burgess
--- License     :  MIT (http://opensource.org/licenses/MIT)
---
--- Maintainer  :  Phil Freeman <paf31@cantab.net>
--- Stability   :  experimental
--- Portability :
---
--- |
--- | Module for exhaustivity checking over pattern matching definitions
--- | The algorithm analyses the clauses of a definition one by one from top
--- | to bottom, where in each step it has the cases already missing (uncovered),
--- | and it generates the new set of missing cases.
---
------------------------------------------------------------------------------
-
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- |
+-- Module for exhaustivity checking over pattern matching definitions
+-- The algorithm analyses the clauses of a definition one by one from top
+-- to bottom, where in each step it has the cases already missing (uncovered),
+-- and it generates the new set of missing cases.
+--
 module Language.PureScript.Linter.Exhaustive (checkExhaustiveModule) where
 
 import Prelude ()
@@ -43,18 +31,22 @@ import Language.PureScript.Kinds
 import Language.PureScript.Types as P
 import Language.PureScript.Errors
 
--- | There are two modes of failure for the redudancy check:
+-- | There are two modes of failure for the redundancy check:
 --
 -- 1. Exhaustivity was incomplete due to too many cases, so we couldn't determine redundancy.
 -- 2. We didn't attempt to determine redundancy for a binder, e.g. an integer binder.
 --
 -- We want to warn the user in the first case.
-data RedudancyError = Incomplete | Unknown
+data RedundancyError = Incomplete | Unknown
 
 -- |
 -- Qualifies a propername from a given qualified propername and a default module name
 --
-qualifyName :: a -> ModuleName -> Qualified a -> Qualified a
+qualifyName
+  :: (ProperName a)
+  -> ModuleName
+  -> Qualified (ProperName b)
+  -> Qualified (ProperName a)
 qualifyName n defmn qn = Qualified (Just mn) n
   where
   (mn, _) = qualify defmn qn
@@ -65,31 +57,28 @@ qualifyName n defmn qn = Qualified (Just mn) n
 -- where: - ProperName is the name of the constructor (for example, "Nothing" in Maybe)
 --        - [Type] is the list of arguments, if it has (for example, "Just" has [TypeVar "a"])
 --
-getConstructors :: Environment -> ModuleName -> Qualified ProperName -> [(ProperName, [Type])]
+getConstructors :: Environment -> ModuleName -> Qualified (ProperName 'ConstructorName) -> [(ProperName 'ConstructorName, [Type])]
 getConstructors env defmn n = extractConstructors lnte
   where
-  qpn :: Qualified ProperName
-  qpn = getConsDataName n
 
-  getConsDataName :: Qualified ProperName -> Qualified ProperName
-  getConsDataName con = qualifyName nm defmn con
-    where
-    nm = case getConsInfo con of
-           Nothing -> error $ "Constructor " ++ showQualified runProperName con ++ " not in the scope of the current environment in getConsDataName."
-           Just (_, pm, _, _) -> pm
-
-  getConsInfo :: Qualified ProperName -> Maybe (DataDeclType, ProperName, Type, [Ident])
-  getConsInfo con = M.lookup con dce
-    where
-    dce :: M.Map (Qualified ProperName) (DataDeclType, ProperName, Type, [Ident])
-    dce = dataConstructors env
+  extractConstructors :: Maybe (Kind, TypeKind) -> [(ProperName 'ConstructorName, [Type])]
+  extractConstructors (Just (_, DataType _ pt)) = pt
+  extractConstructors _ = internalError "Data name not in the scope of the current environment in extractConstructors"
 
   lnte :: Maybe (Kind, TypeKind)
   lnte = M.lookup qpn (types env)
 
-  extractConstructors :: Maybe (Kind, TypeKind) -> [(ProperName, [Type])]
-  extractConstructors (Just (_, DataType _ pt)) = pt
-  extractConstructors _ = internalError "Data name not in the scope of the current environment in extractConstructors"
+  qpn :: Qualified (ProperName 'TypeName)
+  qpn = getConsDataName n
+
+  getConsDataName :: Qualified (ProperName 'ConstructorName) -> Qualified (ProperName 'TypeName)
+  getConsDataName con =
+    case getConsInfo con of
+      Nothing -> internalError $ "Constructor " ++ showQualified runProperName con ++ " not in the scope of the current environment in getConsDataName."
+      Just (_, pm, _, _) -> qualifyName pm defmn con
+
+  getConsInfo :: Qualified (ProperName 'ConstructorName) -> Maybe (DataDeclType, ProperName 'TypeName, Type, [Ident])
+  getConsInfo con = M.lookup con (dataConstructors env)
 
 -- |
 -- Replicates a wildcard binder
@@ -117,7 +106,7 @@ genericMerge f bsl@((s, b):bs) bsr@((s', b'):bs')
 -- Find the uncovered set between two binders:
 -- the first binder is the case we are trying to cover, the second one is the matching binder
 --
-missingCasesSingle :: Environment -> ModuleName -> Binder -> Binder -> ([Binder], Either RedudancyError Bool)
+missingCasesSingle :: Environment -> ModuleName -> Binder -> Binder -> ([Binder], Either RedundancyError Bool)
 missingCasesSingle _ _ _ NullBinder = ([], return True)
 missingCasesSingle _ _ _ (VarBinder _) = ([], return True)
 missingCasesSingle env mn (VarBinder _) b = missingCasesSingle env mn NullBinder b
@@ -186,7 +175,7 @@ missingCasesSingle _ _ b _ = ([b], Left Unknown)
 --       redundant or not, but uncovered at least. If we use `y` instead, we'll need to have a redundancy checker
 --       (which ought to be available soon), or increase the complexity of the algorithm.
 --
-missingCasesMultiple :: Environment -> ModuleName -> [Binder] -> [Binder] -> ([[Binder]], Either RedudancyError Bool)
+missingCasesMultiple :: Environment -> ModuleName -> [Binder] -> [Binder] -> ([[Binder]], Either RedundancyError Bool)
 missingCasesMultiple env mn = go
   where
   go [] [] = ([], pure True)
@@ -214,16 +203,17 @@ isExhaustiveGuard (Left gs) = not . null $ filter (\(g, _) -> isOtherwise g) gs
   isOtherwise :: Expr -> Bool
   isOtherwise (TypedValue _ (BooleanLiteral True) _) = True
   isOtherwise (TypedValue _ (Var (Qualified (Just (ModuleName [ProperName "Prelude"])) (Ident "otherwise"))) _) = True
+  isOtherwise (TypedValue _ (Var (Qualified (Just (ModuleName [ProperName "Data", ProperName "Boolean"])) (Ident "otherwise"))) _) = True
   isOtherwise _ = False
 isExhaustiveGuard (Right _) = True
 
 -- |
 -- Returns the uncovered set of case alternatives
 --
-missingCases :: Environment -> ModuleName -> [Binder] -> CaseAlternative -> ([[Binder]], Either RedudancyError Bool)
+missingCases :: Environment -> ModuleName -> [Binder] -> CaseAlternative -> ([[Binder]], Either RedundancyError Bool)
 missingCases env mn uncovered ca = missingCasesMultiple env mn uncovered (caseAlternativeBinders ca)
 
-missingAlternative :: Environment -> ModuleName -> CaseAlternative -> [Binder] -> ([[Binder]], Either RedudancyError Bool)
+missingAlternative :: Environment -> ModuleName -> CaseAlternative -> [Binder] -> ([[Binder]], Either RedundancyError Bool)
 missingAlternative env mn ca uncovered
   | isExhaustiveGuard (caseAlternativeResult ca) = mcases
   | otherwise = ([uncovered], snd mcases)
@@ -239,13 +229,13 @@ missingAlternative env mn ca uncovered
 checkExhaustive :: forall m. (MonadWriter MultipleErrors m) => Bool -> Environment -> ModuleName -> Int -> [CaseAlternative] -> m ()
 checkExhaustive hasConstraint env mn numArgs cas = makeResult . first nub $ foldl' step ([initialize numArgs], (pure True, [])) cas
   where
-  step :: ([[Binder]], (Either RedudancyError Bool, [[Binder]])) -> CaseAlternative -> ([[Binder]], (Either RedudancyError Bool, [[Binder]]))
+  step :: ([[Binder]], (Either RedundancyError Bool, [[Binder]])) -> CaseAlternative -> ([[Binder]], (Either RedundancyError Bool, [[Binder]]))
   step (uncovered, (nec, redundant)) ca =
     let (missed, pr) = unzip (map (missingAlternative env mn ca) uncovered)
         (missed', approx) = splitAt 10000 (nub (concat missed))
-        cond = liftA2 (&&) (or <$> sequenceA pr) nec
+        cond = or <$> sequenceA pr
     in (missed', ( if null approx
-                     then cond
+                     then liftA2 (&&) cond nec
                      else Left Incomplete
                  , if either (const True) id cond
                      then redundant
@@ -253,7 +243,7 @@ checkExhaustive hasConstraint env mn numArgs cas = makeResult . first nub $ fold
                  )
        )
 
-  makeResult :: ([[Binder]], (Either RedudancyError Bool, [[Binder]])) -> m ()
+  makeResult :: ([[Binder]], (Either RedundancyError Bool, [[Binder]])) -> m ()
   makeResult (bss, (rr, bss')) =
     do unless (hasConstraint || null bss) tellNonExhaustive
        unless (null bss') tellRedundant
@@ -303,14 +293,14 @@ checkExhaustiveDecls env mn = mapM_ onDecl
   hasPartialConstraint :: Type -> Bool
   hasPartialConstraint (ConstrainedType cs _) = any (go . fst) cs
     where
-    go :: Qualified ProperName -> Bool
+    go :: Qualified (ProperName 'ClassName) -> Bool
     go qname
       | qname == partialClass = True
       | otherwise =
           case qname `M.lookup` typeClasses env of
             Just ([], _, cs') -> any (go . fst) cs'
             _ -> False
-    partialClass :: Qualified ProperName
+    partialClass :: Qualified (ProperName 'ClassName)
     partialClass = primName "Partial"
   hasPartialConstraint _ = False
 

@@ -55,8 +55,7 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
   declToCoreFn ss com (A.ValueDeclaration name _ _ (Right e)) =
     [NonRec name (exprToCoreFn ss com Nothing e)]
   declToCoreFn ss com (A.FixityDeclaration _ name (Just alias)) =
-    let qname = Qualified (Just mn) alias
-    in [NonRec (Op name) (Var (ss, com, Nothing, getValueMeta qname) (Qualified Nothing alias))]
+    [NonRec (Op name) (Var (ss, com, Nothing, getValueMeta alias) alias)]
   declToCoreFn ss _   (A.BindingGroupDeclaration ds) =
     [Rec $ map (\(name, _, e) -> (name, exprToCoreFn ss [] Nothing e)) ds]
   declToCoreFn ss com (A.TypeClassDeclaration name _ supers members) =
@@ -171,7 +170,7 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
   -- |
   -- Gets metadata for data constructors.
   --
-  getConstructorMeta :: Qualified ProperName -> Meta
+  getConstructorMeta :: Qualified (ProperName 'ConstructorName) -> Meta
   getConstructorMeta ctor =
     case lookupConstructor env ctor of
       (Newtype, _, _, _) -> IsNewtype
@@ -179,9 +178,15 @@ moduleToCoreFn env (A.Module _ coms mn decls (Just exps)) =
         let constructorType = if numConstructors (ctor, dc) == 1 then ProductType else SumType
         in IsConstructor constructorType fields
     where
-    numConstructors :: (Qualified ProperName, (DataDeclType, ProperName, Type, [Ident])) -> Int
+
+    numConstructors
+      :: (Qualified (ProperName 'ConstructorName), (DataDeclType, ProperName 'TypeName, Type, [Ident]))
+      -> Int
     numConstructors ty = length $ filter (((==) `on` typeConstructor) ty) $ M.toList $ dataConstructors env
-    typeConstructor :: (Qualified ProperName, (DataDeclType, ProperName, Type, [Ident])) -> (ModuleName, ProperName)
+
+    typeConstructor
+      :: (Qualified (ProperName 'ConstructorName), (DataDeclType, ProperName 'TypeName, Type, [Ident]))
+      -> (ModuleName, ProperName 'TypeName)
     typeConstructor (Qualified (Just mn') _, (_, tyCtor, _, _)) = (mn', tyCtor)
     typeConstructor _ = internalError "Invalid argument to typeConstructor"
 
@@ -197,6 +202,7 @@ findQualModules decls =
   where
   fqDecls :: A.Declaration -> [ModuleName]
   fqDecls (A.TypeInstanceDeclaration _ _ (Qualified (Just mn) _) _ _) = [mn]
+  fqDecls (A.FixityDeclaration _ _ (Just (Qualified (Just mn) _))) = [mn]
   fqDecls _ = []
 
   fqValues :: A.Expr -> [ModuleName]
@@ -255,5 +261,5 @@ mkTypeClassConstructor ss com supers members =
 -- |
 -- Converts a ProperName to an Ident.
 --
-properToIdent :: ProperName -> Ident
+properToIdent :: ProperName a -> Ident
 properToIdent = Ident . runProperName

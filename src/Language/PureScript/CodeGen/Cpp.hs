@@ -67,8 +67,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   let cppImports' = "PureScript" : cppImports
   cppDecls <- concat <$> mapM bindToCpp decls
   optimized <- traverse optimize cppDecls
-  -- datas <- datasToCpps env mn
-  synonyms <- synonymsToCpp env mn
   let moduleHeader = fileBegin mn "HH"
                   ++ P.linebreak
                   ++ ((\i -> CppInclude i i) <$> cppImports')
@@ -79,7 +77,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                   ++ P.linebreak
                   ++ [CppNamespace (runModuleName mn) $
                        (CppUseNamespace <$> cppImports') ++ P.linebreak
-                                                         ++ synonyms
                                                          ++ toHeader optimized
                                                          ++ toHeaderFns optimized
                      ]
@@ -509,27 +506,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -- |
   -- Find a class in scope by name, retrieving its list of constraints, function names and types.
   --
-  findClass :: Qualified ProperName -> Maybe ([String], [T.Constraint], [(String, T.Type)])
+  findClass :: Qualified (ProperName ClassName) -> Maybe ([String], [T.Constraint], [(String, T.Type)])
   findClass name
     | Just (params, fns, constraints) <- M.lookup name (E.typeClasses env),
       fns' <- (\(i,t) -> (runIdent i, t)) <$> fns
       = Just (fst <$> params, constraints, (sortBy (compare `on` normalizedName . fst) fns'))
   findClass _ = Nothing
-
--------------------------------------------------------------------------------------------------
-synonymsToCpp :: Monad m => E.Environment -> ModuleName -> m [Cpp]
--------------------------------------------------------------------------------------------------
-synonymsToCpp env mn
-  | tcs <- E.typeClasses env,
-    ds@(_:_) <-  M.toList
-               . M.filterWithKey (\k@(Qualified mn' _) _ -> mn' == Just mn && M.lookup k tcs == Nothing)
-               $ E.typeSynonyms env = do
-    let names' = qualifiedToStr mn (Ident . runProperName) . fst <$> ds
-        typs = replicate (length ds) (CppAny [])
-        syns = zip names' typs
-        cpps = toTypeAlias <$> syns
-    return $ cpps
-  | otherwise = return []
-  where
-  toTypeAlias :: (String, CppType) -> Cpp
-  toTypeAlias (n, t) = CppTypeAlias (n, []) t []
