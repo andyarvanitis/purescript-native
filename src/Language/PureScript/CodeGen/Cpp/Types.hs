@@ -119,4 +119,4 @@ unthunkMarkerValue :: String
 unthunkMarkerValue = "any::unthunk"
 
 ctorKey :: String
-ctorKey = "constructor"
+ctorKey = "kDataCtor"

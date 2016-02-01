@@ -29,93 +29,121 @@
 #include <functional>
 #include <string>
 #include <vector>
-#include <unordered_map>
+#include <utility>
 #include <stdexcept>
+
+#define DECLARE_OPERATOR(op, ty, rty) \
+  friend auto operator op (const any&, ty) -> rty; \
+  friend auto operator op (ty, const any&) -> rty;
+
+#define DECLARE_COMPARISON_OPERATOR(op) \
+  friend auto operator op (const any&, const any&) -> bool; \
+  DECLARE_OPERATOR(op, long, bool) \
+  DECLARE_OPERATOR(op, double, bool) \
+  DECLARE_OPERATOR(op, char, bool) \
+  DECLARE_OPERATOR(op, const char *, bool)
+
 
 namespace PureScript {
 
-using string = std::string;
-using runtime_error = std::runtime_error;
+using string = const char *;
 using nullptr_t = std::nullptr_t;
 
-const bool undefined = false;
+// Workaround for missing C++11 version in gcc
+class runtime_error : public std::runtime_error {
+public:
+  runtime_error(const char message[]) : std::runtime_error(std::string(message)) {}
+};
 
-// TODO: deprecated -- remove
-#define KEY(k) k
+const bool undefined = false;
+const std::vector<int>::size_type kDataCtor = 0;
 
 // A variant data class designed to provide some features of dynamic typing.
 //
 class any {
 
   public:
-  enum class Type : std::int8_t {
+  enum class Type : int8_t {
     Unknown,
     Integer,
     Double,
     Character,
     Boolean,
+    StringLiteral,
     String,
     Map,
     Vector,
     Function,
+    Closure,
     EffFunction,
     Thunk,
     Pointer
   };
 
-  Type type = Type::Unknown;
+  mutable Type type = Type::Unknown;
 
   struct as_thunk {
   };
   static constexpr as_thunk unthunk = as_thunk{};
 
-  using map    = std::unordered_map<std::string, const any>;
-  using vector = std::vector<any>;
-  using fn     = std::function<any(const any&)>;
-  using eff_fn = std::function<any()>;
-  using thunk  = std::function<const any& (const as_thunk)>;
+  using map     = std::vector<std::pair<const char * const, const any>>;
+  using vector  = std::vector<any>;
+  using fn      = auto (*)(const any&) -> any;
+  using thunk   = auto (*)(const as_thunk) -> const any&;
 
-  using shared_string = std::shared_ptr<string>;
-  using shared_map    = std::shared_ptr<map>;
-  using shared_vector = std::shared_ptr<vector>;
+  class closure {
+    public:
+      virtual auto operator()(const any&) const -> any = 0;
+  };
 
-  using shared_fn     = std::shared_ptr<fn>;
-  using shared_eff_fn = std::shared_ptr<eff_fn>;
-  using shared_thunk  = std::shared_ptr<thunk>;
+  template <typename T>
+  class _closure : public closure {
+    const T lambda;
+  public:
+    _closure(const T& l) noexcept : lambda(l) {}
+    auto operator()(const any& arg) const -> any {
+      return lambda(arg);
+    }
+  };
+
+  class eff_fn {
+    public:
+      virtual auto operator()() const -> any = 0;
+  };
+
+  template <typename T>
+  class _eff_fn : public eff_fn {
+    const T lambda;
+  public:
+    _eff_fn(const T& l) noexcept : lambda(l) {}
+    auto operator()() const -> any {
+      return lambda();
+    }
+  };
 
   template <typename T>
   using shared = std::shared_ptr<T>;
 
-  using shared_void_ptr = std::shared_ptr<void>;
-
-  template <typename T>
-  static constexpr auto make_shared(const T& arg) -> shared<T> {
-    return std::make_shared<T>(arg);
-  }
-
-  template <typename T>
-  static constexpr auto make_shared(T&& arg) -> shared<T> {
-    return std::make_shared<T>(std::move(arg));
-  }
-
-  template <typename T, typename U>
-  static constexpr auto static_cast_shared(U arg) -> T* {
-    return static_cast<T*>(arg.get());
+  template <typename T, typename... Args>
+  inline static auto make_shared(Args&&... args) -> decltype(std::make_shared<T>(std::forward<Args>(args)...)) {
+    return std::make_shared<T>(std::forward<Args>(args)...);
   }
 
   private:
   union {
-    long            i;
-    double          d;
-    char            c;
-    bool            b;
-    shared_string   s;
-    shared_map      m;
-    shared_vector   v;
-    shared_fn       f;
-    shared_eff_fn   e;
-    shared_thunk    t;
-    shared_void_ptr p;
+    mutable long                 i;
+    mutable double               d;
+    mutable char                 c;
+    mutable bool                 b;
+    mutable string               r;
+    mutable shared<std::string>  s;
+    mutable shared<map>          m;
+    mutable shared<vector>       v;
+    mutable fn                   f;
+    mutable shared<closure>      l;
+    mutable shared<eff_fn>       e;
+    mutable thunk                t;
+    mutable shared<void>         p;
   };
 
   public:
@@ -123,80 +151,61 @@ class any {
   any(const long val) : type(Type::Integer), i(val) {}
   any(const int val) : type(Type::Integer), i(val) {}
   any(const unsigned int val) : type(Type::Integer), i(val) {}
-
   any(const double val) : type(Type::Double), d(val) {}
-
   any(const char val) : type(Type::Character), c(val) {}
 
-  any(const bool val) : type(Type::Boolean), b(val) {}
+  template <typename T, typename = typename std::enable_if<std::is_same<bool,T>::value>::type>
+  any(const T val) : type(Type::Boolean), b(val) {}
 
-  any(const string& val) : type(Type::String), s(make_shared<string>(val)) {}
-  any(string&& val) : type(Type::String), s(make_shared<string>(std::move(val))) {}
+  template <size_t N>
+  any(const char (&val)[N]) : type(Type::StringLiteral), r(val) {}
+  any(char * val) : type(Type::String), s(make_shared<std::string>(val)) {}
 
-  any(const char val[]) : type(Type::String), s(make_shared<string>(val)) {}
+  any(const std::string& val) : type(Type::String), s(make_shared<std::string>(val)) {}
+  any(std::string&& val) : type(Type::String), s(make_shared<std::string>(std::move(val))) {}
 
-  any(const shared_string& val) : type(Type::String), s(val) {}
-  any(shared_string&& val) : type(Type::String), s(std::move(val)) {}
+  any(const shared<std::string>& val) : type(Type::String), s(val) {}
+  any(shared<std::string>&& val) noexcept : type(Type::String), s(std::move(val)) {}
 
   any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
-  any(map&& val) : type(Type::Map), m(make_shared<map>(std::move(val))) {}
-
-  any(const shared_map& val) : type(Type::Map), m(val) {}
-  any(shared_map&& val) : type(Type::Map), m(std::move(val)) {}
+  any(map&& val) noexcept : type(Type::Map), m(make_shared<map>(std::move(val))) {}
 
   any(const vector& val) : type(Type::Vector), v(make_shared<vector>(val)) {}
-  any(vector&& val) : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
-
-  any(const shared_vector& val) : type(Type::Vector), v(val) {}
-  any(shared_vector&& val) : type(Type::Vector), v(std::move(val)) {}
-
-  any(const shared_fn& val) : type(Type::Function), f(val) {}
-  any(shared_fn&& val) : type(Type::Function), f(std::move(val)) {}
+  any(vector&& val) noexcept : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
-    : type(Type::Function), f(make_shared<fn>(val)) {}
+  any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0)
+    : type(Type::Function), f(val) {}
 
-  // template <typename T>
-  // any(T&& val, typename std::enable_if<std::is_assignable<fn,T>::value>::type* = 0)
-  //   : type(Type::Function), f(std::move(val)) {}
-
-  any(const shared_eff_fn& val) : type(Type::EffFunction), e(val) {}
-  any(shared_eff_fn&& val) : type(Type::EffFunction), e(std::move(val)) {}
+  template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
+                                                           !std::is_convertible<T,fn>::value>::type>
+  any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&)>,T>::value>::type* = 0)
+    : type(Type::Closure), l(make_shared<_closure<T>>(val)) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<eff_fn,T>::value>::type* = 0)
-    : type(Type::EffFunction), e(make_shared<eff_fn>(val)) {}
-
-  any(const shared_thunk& val) : type(Type::Thunk), t(val) {}
-  any(shared_thunk&& val) : type(Type::Thunk), t(std::move(val)) {}
+  any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
+    : type(Type::EffFunction), e(make_shared<_eff_fn<T>>(val)) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<thunk,T>::value>::type* = 0)
-    : type(Type::Thunk), t(make_shared<thunk>(val)) {}
+  any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0)
+    : type(Type::Thunk), t(val) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value>::type* = 0)
+  any(const T& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0)
     : type(Type::Pointer), p(val) {}
+
+  template <typename T>
+  any(T&& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0) noexcept
+    : type(Type::Pointer), p(std::move(val)) {}
 
   any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
 
-  template <typename T>
-  any(T&& val, typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value>::type* = 0)
-    : type(Type::Pointer), p(std::move(val)) {}
-
   any(const any&);
+  any(any&&) noexcept;
 
-  void swap(any&&);
-
-  any(any&& val) {
-    swap(std::move(val));
-  }
-
-  auto operator=(any val) -> any& {
-    swap(std::move(val));
-    return *this;
-  }
+  auto operator=(const any&) -> any&;
+  auto operator=(any&) noexcept -> any&;
+  auto operator=(any&&) noexcept -> any&;
 
   any() = delete;
   ~any();
@@ -214,10 +223,7 @@ class any {
   auto cast() const -> typename std::enable_if<std::is_same<T, bool>::value, T>::type;
 
   template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, const T&>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, const char*>::value, const T>::type;
+  auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, T>::type;
 
   template <typename T>
   auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type;
@@ -226,23 +232,11 @@ class any {
   auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type;
 
   template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_assignable<shared_void_ptr,T>::value, typename T::element_type*>::type {
-    if (type == Type::Pointer) {
-      return static_cast_shared<typename T::element_type>(p);
-    }
-    const any* valuePtr = this;
-    do {
-      assert(valuePtr->type == Type::Thunk);
-      const any& value = (*valuePtr->t)(unthunk);
-      if (value.type == Type::Pointer) {
-        return static_cast_shared<typename T::element_type>(value.p);
-      }
-      valuePtr = &value;
-    } while (valuePtr->type != Type::Unknown);
-    return nullptr;
+  auto cast() const -> typename std::enable_if<std::is_assignable<shared<void>,T>::value, typename T::element_type*>::type {
+    return static_cast<typename T::element_type*>(extractPointer());
   }
 
-  auto operator()(const any) const -> any;
+  auto operator()(const any&) const -> any;
 
   auto operator()(const as_thunk) const -> const any&;
 
@@ -252,152 +246,63 @@ class any {
   operator double() const;
   operator bool() const;
 
-  operator const string&() const;
+  operator string() const;
   operator const map&() const;
   operator const vector&() const;
 
-  auto operator[](const char []) const -> const any&;
+  auto operator[](const char[]) const -> const any&;
   auto operator[](const vector::size_type) const -> const any&;
   auto operator[](const any&) const -> const any&;
 
-  auto extractPointer() const -> const void*;
+  auto contains(const char[]) const -> bool;
 
-  static auto extract_value(const any&) -> const any&;
+  auto extractPointer() const -> void*;
 
-  auto operator==(const any&) const -> bool;
-  auto operator==(const long) const -> bool;
-  auto operator==(const double) const -> bool;
-  auto operator==(const char) const -> bool;
-  auto operator==(const bool) const -> bool;
-  auto operator==(const string&) const -> bool;
-  auto operator==(const char * const) const -> bool;
+  static auto unthunkVariant(const any&) -> const any&;
 
-  auto operator!=(const any&) const -> bool;
-  auto operator!=(const long) const -> bool;
-  auto operator!=(const double) const -> bool;
-  auto operator!=(const char) const -> bool;
-  auto operator!=(const bool) const -> bool;
-  auto operator!=(const string&) const -> bool;
-  auto operator!=(const char * const) const -> bool;
+  DECLARE_COMPARISON_OPERATOR(==)
+  DECLARE_COMPARISON_OPERATOR(!=)
+  DECLARE_COMPARISON_OPERATOR(<)
+  DECLARE_COMPARISON_OPERATOR(<=)
+  DECLARE_COMPARISON_OPERATOR(>)
+  DECLARE_COMPARISON_OPERATOR(>=)
 
-  auto operator<(const any&) const -> bool;
-  auto operator<(const long) const -> bool;
-  auto operator<(const double) const -> bool;
-  auto operator<(const char) const -> bool;
-  auto operator<(const bool) const -> bool;
-  auto operator<(const string&) const -> bool;
-  auto operator<(const char * const) const -> bool;
+  friend auto operator+(const any&, const any&) -> any;
 
-  auto operator<=(const any&) const -> bool;
-  auto operator<=(const long) const -> bool;
-  auto operator<=(const double) const -> bool;
-  auto operator<=(const char) const -> bool;
-  auto operator<=(const bool) const -> bool;
-  auto operator<=(const string&) const -> bool;
-  auto operator<=(const char * const) const -> bool;
+  DECLARE_OPERATOR(+, long, long)
+  DECLARE_OPERATOR(+, double, double)
+  DECLARE_OPERATOR(+, char, char)
+  DECLARE_OPERATOR(+, const char *, std::string)
 
-  auto operator>(const any&) const -> bool;
-  auto operator>(const long) const -> bool;
-  auto operator>(const double) const -> bool;
-  auto operator>(const char) const -> bool;
-  auto operator>(const bool) const -> bool;
-  auto operator>(const string&) const -> bool;
-  auto operator>(const char * const) const -> bool;
+  friend auto operator-(const any&, const any&) -> any;
 
-  auto operator>=(const any&) const -> bool;
-  auto operator>=(const long) const -> bool;
-  auto operator>=(const double) const -> bool;
-  auto operator>=(const char) const -> bool;
-  auto operator>=(const bool) const -> bool;
-  auto operator>=(const string&) const -> bool;
-  auto operator>=(const char * const) const -> bool;
+  DECLARE_OPERATOR(-, long, long)
+  DECLARE_OPERATOR(-, double, double)
+  DECLARE_OPERATOR(-, char, char)
 
-  auto operator+(const any&) const -> any;
-  auto operator+(const long) const -> long;
-  auto operator+(const double) const -> double;
-  auto operator+(const char) const -> char;
-  auto operator+(const string&) const -> string;
-  auto operator+(const char * const) const -> string;
+  friend auto operator*(const any&, const any&) -> any;
 
-  auto operator-(const any&) const -> any;
-  auto operator-(const long) const -> long;
-  auto operator-(const double) const -> double;
-  auto operator-(const char) const -> char;
+  DECLARE_OPERATOR(*, long, long)
+  DECLARE_OPERATOR(*, double, double)
+  DECLARE_OPERATOR(*, char, char)
 
-  auto operator*(const any&) const -> any;
-  auto operator*(const long) const -> long;
-  auto operator*(const double) const -> double;
+  friend auto operator/(const any&, const any&) -> any;
 
-  auto operator/(const any&) const -> any;
-  auto operator/(const long) const -> long;
-  auto operator/(const double) const -> double;
+  DECLARE_OPERATOR(/, long, long)
+  DECLARE_OPERATOR(/, double, double)
+  DECLARE_OPERATOR(/, char, char)
 
-  auto operator%(const any&) const -> any;
-  auto operator%(const long) const -> long;
+  friend auto operator%(const any&, const any&) -> any;
 
-  auto operator-() const -> any; // unary negate
+  DECLARE_OPERATOR(%, long, long)
+  DECLARE_OPERATOR(%, char, char)
 
-  friend auto operator==(const long, const any&) -> bool;
-  friend auto operator!=(const long, const any&) -> bool;
-  friend auto operator< (const long, const any&) -> bool;
-  friend auto operator<=(const long, const any&) -> bool;
-  friend auto operator> (const long, const any&) -> bool;
-  friend auto operator>=(const long, const any&) -> bool;
-
-  friend auto operator==(const double, const any&) -> bool;
-  friend auto operator!=(const double, const any&) -> bool;
-  friend auto operator< (const double, const any&) -> bool;
-  friend auto operator<=(const double, const any&) -> bool;
-  friend auto operator> (const double, const any&) -> bool;
-  friend auto operator>=(const double, const any&) -> bool;
-
-  friend auto operator==(const char, const any&) -> bool;
-  friend auto operator!=(const char, const any&) -> bool;
-  friend auto operator< (const char, const any&) -> bool;
-  friend auto operator<=(const char, const any&) -> bool;
-  friend auto operator> (const char, const any&) -> bool;
-  friend auto operator>=(const char, const any&) -> bool;
-
-  friend auto operator==(const bool, const any&) -> bool;
-  friend auto operator!=(const bool, const any&) -> bool;
-  friend auto operator< (const bool, const any&) -> bool;
-  friend auto operator<=(const bool, const any&) -> bool;
-  friend auto operator> (const bool, const any&) -> bool;
-  friend auto operator>=(const bool, const any&) -> bool;
-
-  friend auto operator==(const string&, const any&) -> bool;
-  friend auto operator!=(const string&, const any&) -> bool;
-  friend auto operator< (const string&, const any&) -> bool;
-  friend auto operator<=(const string&, const any&) -> bool;
-  friend auto operator> (const string&, const any&) -> bool;
-  friend auto operator>=(const string&, const any&) -> bool;
-
-  friend auto operator==(const char* const, const any&) -> bool;
-  friend auto operator!=(const char* const, const any&) -> bool;
-  friend auto operator< (const char* const, const any&) -> bool;
-  friend auto operator<=(const char* const, const any&) -> bool;
-  friend auto operator> (const char* const, const any&) -> bool;
-  friend auto operator>=(const char* const, const any&) -> bool;
-
-  friend auto operator+(const long, const any&) -> long;
-  friend auto operator-(const long, const any&) -> long;
-  friend auto operator*(const long, const any&) -> long;
-  friend auto operator/(const long, const any&) -> long;
-  friend auto operator%(const long, const any&) -> long;
-
-  friend auto operator+(const double, const any&) -> double;
-  friend auto operator-(const double, const any&) -> double;
-  friend auto operator*(const double, const any&) -> double;
-  friend auto operator/(const double, const any&) -> double;
-
-  friend auto operator+(const char, const any&) -> char;
-  friend auto operator-(const char, const any&) -> char;
-
-  friend auto operator+(const string&, const any&) -> string;
-  friend auto operator+(const char* const, const any&) -> string;
-
+  friend auto operator-(const any&) -> any; // unary negate
 };
 
 } // namespace PureScript
+
+#undef DECLARE_OPERATOR
+#undef DECLARE_COMPARISON_OPERATOR
 
 #endif // PureScript_HH

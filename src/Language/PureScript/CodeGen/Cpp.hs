@@ -26,6 +26,7 @@ module Language.PureScript.CodeGen.Cpp
   , P.prettyPrintCpp
   ) where
 
+import Data.Char (isLetter)
 import Data.List
 import Data.Function (on)
 import qualified Data.Map as M
@@ -119,7 +120,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     block <- asReturnBlock <$> valueToCpp body
     let fn' = CppFunction (identToCpp ident)
                           [(identToCpp arg, Just $ CppAny [CppConst, CppRef])]
-                          (Just $ CppAny [CppConst, CppRef])
+                          (Just $ CppAny [])
                           []
                           block
     return fn'
@@ -139,33 +140,34 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                    []
                                    (CppBlock (fieldLambdas fs))
     where
-    name = qualifiedToStr (ModuleName []) id (Qualified (Just mn) ident)
+    name = identToCpp ident
     fields' = identToCpp <$> fields
     (f, fs) | (f' : fs') <- fields' = ([f'], fs')
             | otherwise = ([], [])
     farg = \x -> (x, Just $ CppAny [CppConst, CppRef])
     fieldLambdas flds
-      | (f' : fs') <- flds = [CppReturn $ CppLambda [CppCaptureAll] (farg <$> [f'])
+      | (f' : fs') <- flds = [CppReturn . maybeRemCaps $
+                                          CppLambda [CppCaptureAll] (farg <$> [f'])
                                                                     (Just $ CppAny [])
                                                                     (CppBlock $ fieldLambdas fs')]
-      | otherwise = [CppReturn (CppObjectLiteral ((ctorKey, CppStringLiteral name) : zip fields' (CppVar <$> fields')))]
+      | otherwise = [CppReturn (CppArrayLiteral (CppStringLiteral name : (CppVar <$> fields')))]
 
   declToCpp _ ident val = do
     val' <- valueToCpp val
     return $ CppVariableIntroduction (identToCpp ident, Just $ CppAny [CppConst]) [] (Just val')
 
   -------------------------------------------------------------------------------------------------
-  toLambda :: [CppCaptureType] -> Cpp -> Cpp
+  fnToLambda :: Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  toLambda cs (CppFunction name args _ qs body) =
+  fnToLambda (CppFunction name args _ qs body) =
     CppVariableIntroduction (name, Just $ CppAny [CppConst])
                             (filter (==CppStatic) qs)
-                            (Just (CppLambda cs' args (Just $ CppAny []) body))
+                            (Just (CppLambda cs args (Just $ CppAny []) body))
     where
-    cs' | (not . null) (qs `intersect` [CppInline, CppStatic]) = []
-        | otherwise = cs
-  toLambda cs (CppComment com cpp) = CppComment com (toLambda cs cpp)
-  toLambda _ _ = error "Not a function!"
+    cs | (not . null) (qs `intersect` [CppInline, CppStatic]) = []
+       | otherwise = [CppCaptureAll]
+  fnToLambda (CppComment com cpp) = CppComment com (fnToLambda cpp)
+  fnToLambda _ = error "Not a function!"
 
   -------------------------------------------------------------------------------------------------
   asReturnBlock :: Cpp -> Cpp
@@ -178,8 +180,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   convertNestedLambdas = everywhereOnCpp go
     where
     go :: Cpp -> Cpp
-    go f@(CppFunction {}) = toLambda [CppCaptureAll] f
-    go (CppLambda [] args rtyp body) = CppLambda [CppCaptureAll] args rtyp body
+    go f@(CppFunction {}) = maybeRemCaps $ fnToLambda f
+    go (CppLambda _ args rtyp body) = maybeRemCaps $ CppLambda [CppCaptureAll] args rtyp body
     go cpp = cpp
 
   -------------------------------------------------------------------------------------------------
@@ -211,11 +213,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
     toelem :: Cpp -> (String, Cpp)
     toelem (CppFunction name args rtyp _ (CppBlock body)) =
-      (name, withdict $ CppLambda [CppCaptureAll] args rtyp (CppBlock $ (accessor localdict <$> fns) ++ body))
+      (name, withdict . maybeRemCaps $ CppLambda [CppCaptureAll]
+                                                 args rtyp (CppBlock $ (accessor localdict <$> fns) ++ body))
     toelem _ = error "not a function"
 
     withdict :: Cpp -> Cpp
-    withdict cpp' =
+    withdict cpp' = maybeRemCaps $
       CppLambda [CppCaptureAll] [(localdict, Just $ CppAny [CppConst, CppRef])]
                                 (Just $ CppAny [])
                                 (CppBlock [CppReturn cpp'])
@@ -399,14 +402,16 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   binderToCpp varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
     binderToCpp varName done b
 
-  binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields)) _ ctor bs) = do
+  binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields))
+                                              _
+                                              (Qualified _ (ProperName ctor))
+                                              bs) = do
     cpps <- go (zip fields bs) done
-    let ctor' = qualifiedToStr (ModuleName []) (Ident . runProperName) ctor
     return $ case ctorType of
       ProductType -> cpps
       SumType ->
-        [ CppIfElse (CppBinary Equal (CppIndexer (CppStringLiteral ctorKey) (CppVar varName))
-                                     (CppStringLiteral ctor'))
+        [ CppIfElse (CppBinary Equal (CppIndexer (CppVar ctorKey) (CppVar varName))
+                                     (CppStringLiteral ctor))
                     (CppBlock cpps)
                     Nothing ]
     where
@@ -418,8 +423,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       cpps <- binderToCpp argVar done'' binder
       return (CppVariableIntroduction (argVar, Nothing)
                                       []
-                                      (Just (CppIndexer (CppStringLiteral $ identToCpp field) (CppVar varName)))
+                                      (Just (CppIndexer (fieldToIndex field) (CppVar varName)))
               : cpps)
+    fieldToIndex :: Ident -> Cpp
+    fieldToIndex = CppNumericLiteral . Left . (+1) . read . dropWhile isLetter . runIdent
 
   binderToCpp _ _ b@(ConstructorBinder{}) =
     error $ "Invalid ConstructorBinder in binderToCpp: " ++ show b
@@ -441,7 +448,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                       Nothing]
 
   literalToBinderCpp varName done (StringLiteral str) =
-    return [CppIfElse (CppBinary Equal (CppCast stringType $ CppVar varName)
+    return [CppIfElse (CppBinary Equal (CppVar varName)
                                        (CppStringLiteral str))
                       (CppBlock done)
                       Nothing]
