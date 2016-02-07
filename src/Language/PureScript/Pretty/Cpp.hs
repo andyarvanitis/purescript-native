@@ -97,13 +97,45 @@ literals = mkPattern' match
           return $ ' ' : cpps
         else return ""
     ]
-  match (CppBlock sts) = fmap concat $ sequence
+  match (CppBlock sts) = concat <$> sequence
     [ return "{\n"
-    , withIndent $ prettyStatements sts
+    , withIndent $ prettyStatements (compact sts)
     , return $ if null sts then "" else "\n"
     , currentIndent
     , return "}"
     ]
+    where
+    compact :: [Cpp] -> [Cpp]
+    compact (st'@(CppIfElse (CppBinary Equal a _) _ Nothing) : sts') =
+      if length (fst cpps') > 1
+        then CppSwitch a (mkCases <$> fst cpps') : snd cpps'
+        else st' : sts'
+      where
+      cpps' = span (isIntEq a) (st' : sts')
+    compact ((CppIfElse cond1 body1 Nothing) : (CppIfElse cond2 body2 Nothing) : _)
+      | returns body1 && returns body2 &&
+        (CppUnary CppNot cond1 == cond2 ||
+         CppUnary CppNot cond2 == cond1) = [CppIfElse cond1 body1 (Just body2)]
+        where
+        returns :: Cpp -> Bool
+        returns (CppBlock rets@(_:_)) | CppReturn{} <- last rets = True
+        returns CppReturn{} = True
+        returns _ = False
+    compact (cpp' : cpps') = cpp' : compact cpps'
+    compact cpps' = cpps'
+    isIntEq :: Cpp -> Cpp -> Bool
+    isIntEq a (CppIfElse (CppBinary Equal a' (CppNumericLiteral (Left _))) (CppBlock [CppReturn _]) Nothing)
+      | a == a' = True
+    isIntEq a (CppIfElse (CppBinary Equal a' (CppCharLiteral _)) (CppBlock [CppReturn _]) Nothing)
+      | a == a' = True
+    isIntEq a (CppIfElse (CppBinary Equal a' (CppBooleanLiteral _)) (CppBlock [CppReturn _]) Nothing)
+      | a == a' = True
+    isIntEq _ _ = False
+    mkCases :: Cpp -> (Cpp, Cpp)
+    mkCases (CppIfElse (CppBinary Equal _ b') (CppBlock [body]) Nothing) = (b', body)
+    mkCases (CppIfElse (CppUnary CppNot _) (CppBlock [body]) Nothing) = (CppBooleanLiteral False, body)
+    mkCases (CppIfElse _ (CppBlock [body]) Nothing) = (CppBooleanLiteral True, body)
+    mkCases _ = error ""
   match (CppNamespace _ []) = return []
   match (CppNamespace (':':':':name) sts) = fmap concat $ sequence $
     [ return "\n"
@@ -208,6 +240,27 @@ literals = mkPattern' match
     , prettyPrintCpp' thens
     , maybe (return "") (fmap (" else " ++) . prettyPrintCpp') elses
     ]
+  match (CppSwitch cond cases@((case1,_):_:_)) = fmap concat $ sequence
+    [ return "switch "
+    , return . parens $ prettyPrintCpp1 (cast case1 cond)
+    , return " {\n"
+    , withIndent $ do
+        cpps <- forM cases $ \(c, s) -> do
+                              c' <- prettyPrintCpp' c
+                              s' <- prettyPrintCpp' s
+                              return $ "case " ++ c' ++ ": " ++ s' ++ ";"
+        indentString <- currentIndent
+        return $ intercalate "\n" $ map (indentString ++) cpps
+    , return "\n"
+    , currentIndent
+    , return "}"
+    ]
+    where
+    cast :: Cpp -> Cpp -> Cpp
+    cast CppNumericLiteral{} cpp' = CppCast intType cpp'
+    cast CppBooleanLiteral{} cpp' = CppCast boolType cpp'
+    cast CppCharLiteral{} cpp' = CppCast charType cpp'
+    cast _ cpp' = cpp'
   match (CppReturn (CppBlock (cpp:cpps))) = fmap concat $ sequence
     [   do s <- prettyPrintCpp' cpp
            return $ dropWhile isSpace s

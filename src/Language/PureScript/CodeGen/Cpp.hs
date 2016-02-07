@@ -439,7 +439,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return [CppIfElse (CppBinary Equal (CppVar varName) (CppNumericLiteral num)) (CppBlock done) Nothing]
 
   literalToBinderCpp varName done (CharLiteral c) =
-    return [CppIfElse (CppBinary Equal (CppCast charType $ CppVar varName)
+    return [CppIfElse (CppBinary Equal (CppVar varName)
                                        (CppCharLiteral c))
                       (CppBlock done)
                       Nothing]
