@@ -34,6 +34,8 @@ toHeader = catMaybes . map go
   go :: Cpp -> Maybe Cpp
   go (CppNamespace name cpps) = Just (CppNamespace name (toHeader cpps))
   go cpp@(CppUseNamespace{}) = Just cpp
+  go (CppFunction name args rtyp qs body)
+    | CppInline `elem` qs = Just CppNoOp
   go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just CppAuto
     = Just CppNoOp
   go (CppFunction name args rtyp qs _) =
@@ -60,6 +62,8 @@ toHeaderFns = catMaybes . map go
   where
   go :: Cpp -> Maybe Cpp
   go (CppNamespace name cpps) = Just (CppNamespace name (toHeaderFns cpps))
+  go cpp@(CppFunction _ _ _ qs _)
+    | CppInline `elem` qs = Just cpp
   go (CppFunction name [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp cpp [_])]))
     | atyp == Just CppAuto
     = Just (CppVariableIntroduction (name, Nothing) [] (Just cpp))
@@ -103,6 +107,8 @@ toBody = catMaybes . map go
     isNoOp (CppRaw _) = True
     isNoOp _ = False
   go cpp@(CppUseNamespace{}) = Just cpp
+  go (CppFunction name args rtyp qs body)
+    | CppInline `elem` qs = Just CppNoOp
   go cpp@(CppFunction {}) = Just cpp
   go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
     Nothing

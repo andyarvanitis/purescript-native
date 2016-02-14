@@ -131,11 +131,22 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                              block'
     return (CppComment com fn')
 
-  declToCpp _ ident (Constructor _ _ (ProperName _) fields) = return $
-    CppFunction (identToCpp ident) (farg <$> f)
-                                   (Just $ CppAny [])
-                                   []
-                                   (CppBlock (fieldLambdas fs))
+  declToCpp _ ident (Constructor _ _ (ProperName _) []) = return $
+    CppFunction (identToCpp ident)
+                [] (Just $ CppAny [])
+                [CppInline]
+                (CppBlock [CppReturn (CppArrayLiteral [CppStringLiteral (identToCpp ident)])])
+
+  declToCpp _ ident (Constructor _ _ (ProperName _) fields) = return . CppNamespace [] $
+    [ CppFunction ('$' : identToCpp ident) (farg <$> fields')
+                                           (Just $ CppAny [])
+                                           [CppInline]
+                                           (CppBlock fullyConstructed)
+    , CppFunction (identToCpp ident) (farg <$> f)
+                                     (Just $ CppAny [])
+                                     []
+                                     (CppBlock (fieldLambdas fs))
+    ]
     where
     name = identToCpp ident
     fields' = identToCpp <$> fields
@@ -147,7 +158,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                           CppLambda [CppCaptureAll] (farg <$> [f'])
                                                                     (Just $ CppAny [])
                                                                     (CppBlock $ fieldLambdas fs')]
-      | otherwise = [CppReturn (CppArrayLiteral (CppStringLiteral name : (CppVar <$> fields')))]
+      | otherwise = fullyConstructed
+    fullyConstructed = [CppReturn (CppArrayLiteral (CppStringLiteral name : (CppVar <$> fields')))]
 
   declToCpp _ ident val = do
     val' <- valueToCpp val
@@ -290,6 +302,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     args' <- mapM valueToCpp args
     case f of
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
+      Var (_, _, _, Just (IsConstructor _ fields)) (Qualified qual (Ident name)) | length args == length fields ->
+        return $ CppApp (qualifiedToCpp id . Qualified qual . Ident $ '$' : name) args'
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return . CppObjectLiteral $ zip ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns)) args'

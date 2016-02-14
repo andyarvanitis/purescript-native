@@ -137,6 +137,10 @@ literals = mkPattern' match
     mkCases (CppIfElse _ (CppBlock [body]) Nothing) = (CppBooleanLiteral True, body)
     mkCases _ = error ""
   match (CppNamespace _ []) = return []
+  match (CppNamespace [] sts) = fmap concat $ sequence $
+    [ return "\n"
+    , prettyStatements sts
+    ]
   match (CppNamespace (':':':':name) sts) = fmap concat $ sequence $
     [ return "\n"
     , currentIndent

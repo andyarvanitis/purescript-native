@@ -50,7 +50,7 @@ identCharToString :: Char -> String
 identCharToString c | isAlphaNum c = [c]
 identCharToString '_' = "_"
 identCharToString '.' = "_dot_"
-identCharToString '$' = "_dollar_"
+identCharToString '$' = "$"
 identCharToString '~' = "_tilde_"
 identCharToString '=' = "_eq_"
 identCharToString '<' = "_less_"
