@@ -108,11 +108,8 @@ charType = CppPrimitive "char"
 mapType :: CppType
 mapType = CppPrimitive "any::map"
 
-dataType :: CppType
-dataType = CppPrimitive "any::data"
-
 arrayType :: CppType
-arrayType = CppPrimitive "any::array"
+arrayType = CppPrimitive "any::vector"
 
 thunkMarkerType :: CppType
 thunkMarkerType = CppPrimitive "any::as_thunk"

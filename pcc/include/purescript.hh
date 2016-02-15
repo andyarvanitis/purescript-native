@@ -29,7 +29,6 @@
 #include <functional>
 #include <string>
 #include <vector>
-#include <deque>
 #include <utility>
 #include <stdexcept>
 
@@ -57,7 +56,7 @@ public:
 };
 
 const bool undefined = false;
-const size_t kDataCtor = 0;
+const std::vector<int>::size_type kDataCtor = 0;
 
 // A variant data class designed to provide some features of dynamic typing.
 //
@@ -74,7 +73,6 @@ class any {
     String,
     Map,
     Vector,
-    Array,
     Function,
     Closure,
     EffFunction,
@@ -82,22 +80,17 @@ class any {
     Pointer
   };
 
-  private:
   mutable Type type = Type::Unknown;
-  using vector = std::vector<any>;
 
-  public:
   struct as_thunk {
   };
   static constexpr as_thunk unthunk = as_thunk{};
 
   using map     = std::vector<std::pair<const char * const, const any>>;
-  using data    = vector;
-  using array   = std::deque<any>;
+  using vector  = std::vector<any>;
   using fn      = auto (*)(const any&) -> any;
   using thunk   = auto (*)(const as_thunk) -> const any&;
 
-  private:
   class closure {
     public:
       virtual auto operator()(const any&) const -> any = 0;
@@ -128,7 +121,6 @@ class any {
     }
   };
 
-  public:
   template <typename T>
   using shared = std::shared_ptr<T>;
 
@@ -147,7 +139,6 @@ class any {
     mutable shared<std::string>  s;
     mutable shared<map>          m;
     mutable shared<vector>       v;
-    mutable shared<array>        a;
     mutable fn                   f;
     mutable shared<closure>      l;
     mutable shared<eff_fn>       e;
@@ -181,9 +172,6 @@ class any {
 
   any(const vector& val) : type(Type::Vector), v(make_shared<vector>(val)) {}
   any(vector&& val) noexcept : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
-
-  any(const array& val) : type(Type::Array), a(make_shared<array>(val)) {}
-  any(array&& val) noexcept : type(Type::Array), a(make_shared<array>(std::move(val))) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0)
@@ -240,14 +228,8 @@ class any {
   template <typename T>
   auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type;
 
-  // These cannot be thunked
   template <typename T>
-  inline auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
-    return *v;
-  }
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, array>::value, const T&>::type;
+  auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type;
 
   template <typename T>
   auto cast() const -> typename std::enable_if<std::is_assignable<shared<void>,T>::value, typename T::element_type*>::type {
@@ -267,10 +249,9 @@ class any {
   operator string() const;
   operator const map&() const;
   operator const vector&() const;
-  operator const array&() const;
 
   auto operator[](const char[]) const -> const any&;
-  auto operator[](const size_t) const -> const any&;
+  auto operator[](const vector::size_type) const -> const any&;
   auto operator[](const any&) const -> const any&;
 
   auto contains(const char[]) const -> bool;

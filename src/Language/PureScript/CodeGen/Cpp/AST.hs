@@ -170,10 +170,6 @@ data Cpp
   --
   | CppArrayLiteral [Cpp]
   -- |
-  -- A data literal
-  --
-  | CppDataLiteral [Cpp]
-  -- |
   -- An array indexer expression
   --
   | CppIndexer Cpp Cpp
@@ -286,7 +282,6 @@ everywhereOnCpp f = go
   go (CppUnary op j) = f (CppUnary op (go j))
   go (CppBinary op j1 j2) = f (CppBinary op (go j1) (go j2))
   go (CppArrayLiteral cpp) = f (CppArrayLiteral (map go cpp))
-  go (CppDataLiteral cpp) = f (CppDataLiteral (map go cpp))
   go (CppIndexer j1 j2) = f (CppIndexer (go j1) (go j2))
   go (CppObjectLiteral cpp) = f (CppObjectLiteral (map (fmap go) cpp))
   go (CppAccessor prop j) = f (CppAccessor (go prop) (go j))
@@ -316,7 +311,6 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppUnary op j) = CppUnary op <$> f' j
   go (CppBinary op j1 j2) = CppBinary op <$> f' j1 <*> f' j2
   go (CppArrayLiteral cpp) = CppArrayLiteral <$> traverse f' cpp
-  go (CppDataLiteral cpp) = CppDataLiteral <$> traverse f' cpp
   go (CppIndexer j1 j2) = CppIndexer <$> f' j1 <*> f' j2
   go (CppObjectLiteral cpp) = CppObjectLiteral <$> traverse (sndM f') cpp
   go (CppAccessor prop j) = CppAccessor prop <$> f' j
@@ -342,7 +336,6 @@ everythingOnCpp (<>) f = go
   go j@(CppUnary _ j1) = f j <> go j1
   go j@(CppBinary _ j1 j2) = f j <> go j1 <> go j2
   go j@(CppArrayLiteral cpp) = foldl (<>) (f j) (map go cpp)
-  go j@(CppDataLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppIndexer j1 j2) = f j <> go j1 <> go j2
   go j@(CppObjectLiteral cpp) = foldl (<>) (f j) (map (go . snd) cpp)
   go j@(CppAccessor j1 j2) = f j <> go j1 <> go j2

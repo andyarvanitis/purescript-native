@@ -135,7 +135,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     CppFunction (identToCpp ident)
                 [] (Just $ CppAny [])
                 [CppInline]
-                (CppBlock [CppReturn (CppDataLiteral [CppStringLiteral (identToCpp ident)])])
+                (CppBlock [CppReturn (CppArrayLiteral [CppStringLiteral (identToCpp ident)])])
 
   declToCpp _ ident (Constructor _ _ (ProperName _) fields) = return . CppNamespace [] $
     [ CppFunction ('$' : identToCpp ident) (farg <$> fields')
@@ -159,7 +159,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                                                     (Just $ CppAny [])
                                                                     (CppBlock $ fieldLambdas fs')]
       | otherwise = fullyConstructed
-    fullyConstructed = [CppReturn (CppDataLiteral (CppStringLiteral name : (CppVar <$> fields')))]
+    fullyConstructed = [CppReturn (CppArrayLiteral (CppStringLiteral name : (CppVar <$> fields')))]
 
   declToCpp _ ident val = do
     val' <- valueToCpp val
@@ -421,7 +421,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return $ case ctorType of
       ProductType -> cpps
       SumType ->
-        [ CppIfElse (CppBinary Equal (CppIndexer (CppVar ctorKey) (CppCast dataType $ CppVar varName))
+        [ CppIfElse (CppBinary Equal (CppIndexer (CppVar ctorKey) (CppVar varName))
                                      (CppStringLiteral ctor))
                     (CppBlock cpps)
                     Nothing ]
@@ -434,7 +434,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       cpps <- binderToCpp argVar done'' binder
       return (CppVariableIntroduction (argVar, Nothing)
                                       []
-                                      (Just (CppIndexer (fieldToIndex field) (CppCast dataType $ CppVar varName)))
+                                      (Just (CppIndexer (fieldToIndex field) (CppVar varName)))
               : cpps)
     fieldToIndex :: Ident -> Cpp
     fieldToIndex = CppNumericLiteral . Left . (+1) . read . dropWhile isLetter . runIdent
