@@ -27,6 +27,7 @@ namespace PureScript {
     case Type::String:          new (&s) shared<std::string>(src.s); break; \
     case Type::Map:             new (&m) shared<map>(src.m);         break; \
     case Type::Vector:          new (&v) shared<vector>(src.v);      break; \
+    case Type::Array:           new (&a) shared<array>(src.a);       break; \
     case Type::Function:        f = src.f;                           break; \
     case Type::Closure:         new (&l) shared<closure>(src.l);     break; \
     case Type::EffFunction:     new (&e) shared<eff_fn>(src.e);      break; \
@@ -46,6 +47,7 @@ namespace PureScript {
     case Type::String:          new (&s) shared<std::string>(std::move(src.s)); break; \
     case Type::Map:             new (&m) shared<map>(std::move(src.m));         break; \
     case Type::Vector:          new (&v) shared<vector>(std::move(src.v));      break; \
+    case Type::Array:           new (&a) shared<array>(std::move(src.a));       break; \
     case Type::Function:        f = src.f;                                      break; \
     case Type::Closure:         new (&l) shared<closure>(std::move(src.l));     break; \
     case Type::EffFunction:     new (&e) shared<eff_fn>(std::move(src.e));      break; \
@@ -92,6 +94,7 @@ any::~any() {
     case Type::String:          s.~shared<std::string>();  break;
     case Type::Map:             m.~shared<map>();          break;
     case Type::Vector:          v.~shared<vector>();       break;
+    case Type::Array:           a.~shared<array>();        break;
     case Type::Function:        ;                          break;
     case Type::Closure:         l.~shared<closure>();      break;
     case Type::EffFunction:     e.~shared<eff_fn>();       break;
@@ -149,10 +152,10 @@ auto any::cast() const -> typename std::enable_if<std::is_same<T, map>::value, c
 template auto any::cast<any::map>() const -> const map&;
 
 template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
-  RETURN_VALUE(Type::Vector, v, *)
+auto any::cast() const -> typename std::enable_if<std::is_same<T, array>::value, const T&>::type {
+  RETURN_VALUE(Type::Array, a, *)
 }
-template auto any::cast<any::vector>() const -> const vector&;
+template auto any::cast<any::array>() const -> const array&;
 
 auto any::operator()(const any& arg) const -> any {
   const any& variant = unthunkVariant(*this);
@@ -198,6 +201,10 @@ any::operator const vector&() const {
   return cast<vector>();
 }
 
+any::operator const array&() const {
+  return cast<array>();
+}
+
 auto any::extractPointer() const -> void* {
   RETURN_VALUE(Type::Pointer, p.get(),)
 }
@@ -228,16 +235,16 @@ auto any::operator[](const char rhs[]) const -> const any& {
   throw runtime_error("map key not found");
 }
 
-auto any::operator[](const vector::size_type rhs) const -> const any& {
+auto any::operator[](const size_t rhs) const -> const any& {
   const any& variant = unthunkVariant(*this);
-  assert(variant.type == Type::Vector);
-  return (*variant.v)[rhs];
+  assert(variant.type == Type::Array);
+  return (*variant.a)[rhs];
 }
 
 auto any::operator[](const any& rhs) const -> const any& {
   const any& variant = unthunkVariant(*this);
-  assert(variant.type == Type::Vector);
-  return (*variant.v)[rhs.cast<long>()];
+  assert(variant.type == Type::Array);
+  return (*variant.a)[rhs.cast<long>()];
 }
 
 auto any::contains(const char key[]) const -> bool {
