@@ -240,11 +240,8 @@ class any {
   template <typename T>
   auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type;
 
-  // These cannot be thunked
   template <typename T>
-  inline auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
-    return *v;
-  }
+  auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type;
 
   template <typename T>
   auto cast() const -> typename std::enable_if<std::is_same<T, array>::value, const T&>::type;

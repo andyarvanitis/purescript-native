@@ -152,6 +152,12 @@ auto any::cast() const -> typename std::enable_if<std::is_same<T, map>::value, c
 template auto any::cast<any::map>() const -> const map&;
 
 template <typename T>
+auto any::cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
+  RETURN_VALUE(Type::Vector, v, *)
+}
+template auto any::cast<any::vector>() const -> const vector&;
+
+template <typename T>
 auto any::cast() const -> typename std::enable_if<std::is_same<T, array>::value, const T&>::type {
   RETURN_VALUE(Type::Array, a, *)
 }

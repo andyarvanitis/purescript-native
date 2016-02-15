@@ -24,7 +24,6 @@ import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Names
 
 import qualified Language.PureScript.Pretty.Cpp as P
-import qualified Language.PureScript.Pretty.Common as P
 
 ---------------------------------------------------------------------------------------------------
 toHeader :: [Cpp] -> [Cpp]
@@ -34,7 +33,7 @@ toHeader = catMaybes . map go
   go :: Cpp -> Maybe Cpp
   go (CppNamespace name cpps) = Just (CppNamespace name (toHeader cpps))
   go cpp@(CppUseNamespace{}) = Just cpp
-  go (CppFunction name args rtyp qs body)
+  go (CppFunction _ _ _ qs _)
     | CppInline `elem` qs = Just CppNoOp
   go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just CppAuto
     = Just CppNoOp
@@ -107,7 +106,7 @@ toBody = catMaybes . map go
     isNoOp (CppRaw _) = True
     isNoOp _ = False
   go cpp@(CppUseNamespace{}) = Just cpp
-  go (CppFunction name args rtyp qs body)
+  go (CppFunction _ _ _ qs _)
     | CppInline `elem` qs = Just CppNoOp
   go cpp@(CppFunction {}) = Just cpp
   go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
@@ -127,7 +126,7 @@ toBody = catMaybes . map go
     addCaptures (CppObjectLiteral objs) = CppObjectLiteral (objlam <$> objs)
       where
       objlam :: (String, Cpp) -> (String, Cpp)
-      objlam (name, (CppLambda _ args rty body)) = (name , CppLambda [] args rty $ addCaptures body)
+      objlam (name', (CppLambda _ args rty body)) = (name' , CppLambda [] args rty $ addCaptures body)
       objlam obj = obj
     addCaptures (CppApp (CppLambda _ [] rty body) []) = CppApp (CppLambda [] [] rty (addCaptures body)) []
     addCaptures cpps' = everywhereOnCpp addCapture cpps'
