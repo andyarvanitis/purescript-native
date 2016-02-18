@@ -19,7 +19,6 @@
 module Language.PureScript.CodeGen.Cpp.Types where
 
 import Data.List
-import Data.Data
 
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.Names
@@ -57,6 +56,10 @@ data CppValueQual
   -- Function or lambda is involved in recursion
   --
   | CppRecursive
+  -- |
+  -- Function or lambda is involved in recursion
+  --
+  | CppTopLevel
   deriving (Show, Read, Eq)
 
 -- |
@@ -79,6 +82,7 @@ runValueQual CppInline    = "inline"
 runValueQual CppConstExpr = "constexpr"
 runValueQual CppExtern    = "extern"
 runValueQual CppRecursive = ""
+runValueQual CppTopLevel  = ""
 
 runCaptureType :: CppCaptureType -> String
 runCaptureType CppCaptureAll = "="

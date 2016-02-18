@@ -68,7 +68,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $
         imps
     let cppImports' = "PureScript" : cppImports
-    cppDecls <- concat <$> mapM bindToCpp decls
+    cppDecls <- concat <$> mapM (bindToCpp [CppTopLevel]) decls
     optimized <- traverse optimize cppDecls
     let moduleHeader =
             fileBegin mn "HH" ++
@@ -101,10 +101,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -- Generate code in the simplified C++1x intermediate representation for a declaration
   --
   -------------------------------------------------------------------------------------------------
-  bindToCpp :: Bind Ann -> m [Cpp]
+  bindToCpp :: [CppValueQual] -> Bind Ann -> m [Cpp]
   -------------------------------------------------------------------------------------------------
-  bindToCpp (NonRec ident val) = return <$> declToCpp [] ident val
-  bindToCpp (Rec vals) = forM vals (uncurry $ declToCpp [CppRecursive])
+  bindToCpp qs (NonRec ident val) = return <$> declToCpp qs ident val
+  bindToCpp qs (Rec vals) = forM vals (uncurry $ declToCpp (CppRecursive:qs))
 
   -- |
   -- Desugar a declaration into a variable introduction or named function
@@ -176,6 +176,33 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                    (CppBlock $ fieldLambdas fs') ]
       | otherwise = fullyConstructed
     fullyConstructed = [CppReturn (CppDataLiteral (CppStringLiteral name : (CppVar <$> fields')))]
+
+  declToCpp qs ident e@(App (_, _, Just ty, _) _ _)
+    | CppTopLevel `elem` qs,
+      count <- countArgs ty,
+      count > 0 = do
+        argNames <- replicateM count freshName
+        block <- flip (foldl (\fn a -> CppApp fn [a])) (CppVar <$> argNames) <$> valueToCpp e
+        return $ CppFunction
+                     (identToCpp ident)
+                     [(head argNames, Just $ CppAny [CppConst, CppRef])]
+                     (Just $ CppAny [])
+                     []
+                     (asReturnBlock $ curried (tail argNames) block)
+    where
+    curried :: [String] -> Cpp -> Cpp
+    curried args vals = foldl (\val arg -> CppLambda
+                                               [CppCaptureAll]
+                                               [(arg, Just $ CppAny [CppConst, CppRef])]
+                                               (Just $ CppAny [])
+                                               (asReturnBlock val)
+                               ) vals args
+    countArgs :: T.Type -> Int
+    countArgs = go 0
+      where
+      go argcnt (T.ForAll _ t _) = go argcnt t
+      go argcnt (T.TypeApp (T.TypeApp fn _) t) | fn == E.tyFunction = go (argcnt + 1) t
+      go argcnt _ = argcnt
 
   declToCpp _ ident val = do
     val' <- valueToCpp val
@@ -351,7 +378,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     bindersToCpp maybeSpan ty binders vals
 
   valueToCpp (Let _ ds val) = do
-    ds' <- concat <$> mapM bindToCpp ds
+    ds' <- concat <$> mapM (bindToCpp []) ds
     ret <- valueToCpp val
     let ds'' = tco defaultOptions <$> ds'
     let rs = if hasRecursion ds''
