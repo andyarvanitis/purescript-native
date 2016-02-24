@@ -182,7 +182,7 @@ data Cpp
   --
   | CppObjectLiteral [(String, Cpp)]
   -- |
-  -- An general property accessor expression (optional type, property, expr)
+  -- An general property accessor expression (property, expr)
   --
   | CppAccessor Cpp Cpp
   -- |

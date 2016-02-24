@@ -79,6 +79,14 @@ evaluateIifes = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
   convert (CppApp (CppLambda _ [] _ (CppBlock [CppReturn ret])) []) = ret
+  convert (CppReturn cpp@(CppApp _ _))
+    | (f, args@(_:_)) <- unApp cpp [],
+      CppApp (CppLambda _ [] _ (CppBlock cpps)) [] <- f,
+      CppReturn ret <- last cpps = CppBlock $ init cpps ++ [CppReturn $foldl (\fn a -> CppApp fn [a]) ret args]
+    where
+    unApp :: Cpp -> [Cpp] -> (Cpp, [Cpp])
+    unApp (CppApp f [arg]) args = unApp f (arg : args)
+    unApp other args = (other, args)
   convert cpp = cpp
 
 inlineVariables :: Cpp -> Cpp
