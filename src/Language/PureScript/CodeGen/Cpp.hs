@@ -52,8 +52,6 @@ import qualified Language.PureScript.Environment as E
 import qualified Language.PureScript.Pretty.Cpp as P
 import qualified Language.PureScript.Types as T
 
--- import Debug.Trace
-
 -- |
 -- Generate code in the simplified C++1x intermediate representation for all declarations in a
 -- module.
@@ -120,20 +118,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   declToCpp _ (Op _) (Var (_, _, Nothing, _) _) =
     return CppNoOp -- skip operator aliases
 
-  declToCpp _ ident (Abs _ arg@(Ident "dict")
-                           body@(Accessor _ _ (Var _ (Qualified Nothing arg'))))
-    | arg' == arg = do
-    block <- asReturnBlock <$> valueToCpp body
-    let fn' = CppFunction
-                  (identToCpp ident)
-                  [(identToCpp arg, Just $ CppAny [CppConst, CppRef])]
-                  (Just $ CppAny [])
-                  []
-                  block
-    return fn'
-
   declToCpp vqs ident (Abs (_, com, ty, _) arg body) = do
-    fn <- if argcnt > 0 && CppTopLevel `elem` vqs
+    fn <- if argcnt > 1 && CppTopLevel `elem` vqs
             then do
               argNames <- replicateM (argcnt - length args' - 1) freshName
               let args'' = zip argNames (repeat aty)
@@ -231,10 +217,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         block <- valueToCpp $
                    curriedApp
                        (tail argNames)
-                       (App
-                         (Nothing, [], Just ty, Nothing)
-                         e
-                         (Var nullAnn . Qualified Nothing . Ident $ head argNames))
+                       (App nullAnn e (Var nullAnn . Qualified Nothing . Ident $ head argNames))
         let fn' = CppFunction
                      (curriedName name)
                      [(head argNames, Just $ CppAny [CppConst, CppRef])]
@@ -245,15 +228,16 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                               (tail argNames)
                               (CppApp (CppVar name)
                                       (CppVar <$> argNames)))
-        return $ CppNamespace ""
+        return $ CppNamespace "" $
                      [ CppFunction
                            name
                            (zip argNames $ repeat aty)
                            rty
                            []
                            (asReturnBlock block)
-                     , fn'
-                     ]
+                     ] ++ if argcnt > 1
+                            then [fn']
+                            else []
     where
     name = identToCpp ident
     aty = Just $ CppAny [CppConst, CppRef]
@@ -362,10 +346,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp :: Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
   valueToCpp (Var (_, _, _, Just (IsConstructor _ [])) ident) =
-    return $ CppApp (CppVar $ qualifiedToStr' id ident) []
+    return $ CppApp (varToCpp ident) []
 
   valueToCpp (Var (_, _, _, Just (IsConstructor _ [_])) ident) =
-    return . CppVar $ qualifiedToStr' id ident
+    return $ varToCpp ident
 
   valueToCpp (Var (_, _, _, Just (IsConstructor _ _)) ident) =
     return . curriedName' $ varToCpp ident
@@ -437,14 +421,23 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return . CppObjectLiteral $ zip ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns)) args'
-      Var (_, _, Just ty, _) (Qualified (Just _) _)
-        | argcnt <- countArgs ty,
-          argcnt > 1,
-          length args >= argcnt -> do
+      Var ann (Qualified (Just mn') ident)
+        | argcnt <- maybe 0 countArgs ty,
+          argcnt > 1 -> do
             f' <- valueToCpp f
-            let (uncurArgs, curArgs) = splitAt argcnt args'
-                uncurApp = CppApp (uncurried' f') uncurArgs
-            return $ foldl (\fn a -> CppApp fn [a]) uncurApp curArgs
+            let (uncurriedArgs, curriedArgs) =
+                  if length args' >= argcnt
+                    then splitAt argcnt args'
+                    else ([], args')
+                fn' =
+                  if null uncurriedArgs
+                    then curriedName' f'
+                    else CppApp (uncurried' f') uncurriedArgs
+            return $ foldl (\fn a -> CppApp fn [a]) fn' curriedArgs
+        where
+        ty | (_, _, Just t, _) <- ann = Just t
+           | Just (t, _, _) <- M.lookup (mn', ident) (E.names env) = Just t
+           | otherwise = Nothing
       _ ->
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
 
@@ -788,18 +781,17 @@ curriedApp args vals = foldl (\val arg -> App
 ---------------------------------------------------------------------------------------------------
 countArgs :: T.Type -> Int
 ---------------------------------------------------------------------------------------------------
-countArgs = go 0 . T.everywhereOnTypes rmForAll
+countArgs = go 0
   where
-  go argcnt (T.TypeApp (T.TypeApp fn _) (T.ConstrainedType _ _)) | fn == E.tyFunction = argcnt
+  go argcnt (T.ForAll _ t _) = go argcnt t
   go argcnt (T.TypeApp (T.TypeApp fn _) t) | fn == E.tyFunction = go (argcnt + 1) t
+  go argcnt (T.ConstrainedType ts t) = go (argcnt + length ts) t
   go argcnt _ = argcnt
-  rmForAll :: T.Type -> T.Type
-  rmForAll (T.ForAll _ t _) = t
-  rmForAll t = t
 
 ---------------------------------------------------------------------------------------------------
 curriedName :: String -> String
 ---------------------------------------------------------------------------------------------------
+curriedName name@('$' : _) = name
 curriedName name = '$' : name
 
 ---------------------------------------------------------------------------------------------------

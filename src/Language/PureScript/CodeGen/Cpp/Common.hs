@@ -33,6 +33,7 @@ import Language.PureScript.Names
 --
 identToCpp :: Ident -> String
 identToCpp (Ident name) | nameIsCppReserved name = '_' : name ++ "_"
+identToCpp (Ident name@('$' : s)) | all isDigit s = name
 identToCpp (Ident name) = concatMap identCharToString name
 identToCpp (Op op) = concatMap identCharToString op
 
@@ -50,7 +51,7 @@ identCharToString :: Char -> String
 identCharToString c | isAlphaNum c = [c]
 identCharToString '_' = "_"
 identCharToString '.' = "_dot_"
-identCharToString '$' = "$"
+identCharToString '$' = "_dollar_"
 identCharToString '~' = "_tilde_"
 identCharToString '=' = "_eq_"
 identCharToString '<' = "_less_"

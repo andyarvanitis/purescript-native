@@ -109,11 +109,17 @@ inlineValues = everywhereOnCpp convert
                             | isDict semiringInt dict && isFn fnOne fn = CppNumericLiteral (Left 1)
                             | isDict boundedBoolean dict && isFn fnBottom fn = CppBooleanLiteral False
                             | isDict boundedBoolean dict && isFn fnTop fn = CppBooleanLiteral True
+  convert (CppApp fn [dict, x, y])
+    | isDict semiringInt dict && isFn fnAdd fn = CppBinary Add x y
+    | isDict semiringInt dict && isFn fnMultiply fn = CppBinary Multiply x y
+    | isDict moduloSemiringInt dict && isFn fnDivide fn = CppBinary Divide x y
+    | isDict ringInt dict && isFn fnSubtract fn = CppBinary Subtract x y
   convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y])
     | isDict semiringInt dict && isFn fnAdd fn = CppBinary Add x y
     | isDict semiringInt dict && isFn fnMultiply fn = CppBinary Multiply x y
     | isDict moduloSemiringInt dict && isFn fnDivide fn = CppBinary Divide x y
     | isDict ringInt dict && isFn fnSubtract fn = CppBinary Subtract x y
+
   convert other = other
   fnZero = (C.prelude, C.zero)
   fnOne = (C.prelude, C.one)
@@ -128,6 +134,7 @@ inlineOperator :: (String, String) -> (Cpp -> Cpp -> Cpp) -> Cpp -> Cpp
 inlineOperator (m, op) f = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
+  convert (CppApp op' [x, y]) | isOp op' = f x y
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
   isOp (CppAccessor (CppVar longForm) (CppVar m')) = m == m' && longForm == identToCpp (Op op)
@@ -188,6 +195,7 @@ inlineCommonOperators = applyAll $
   binary dict opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
+    convert (CppApp fn [dict', x, y]) | isDict dict dict' && isPreludeFn opString fn = CppBinary op x y
     convert (CppApp (CppApp (CppApp fn [dict']) [CppStringLiteral x]) [CppStringLiteral y])
       | isDict dict dict' && isPreludeFn opString fn = CppStringLiteral (x ++ y)
     convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isDict dict dict' && isPreludeFn opString fn = CppBinary op x y
@@ -196,18 +204,21 @@ inlineCommonOperators = applyAll $
   binary' moduleName opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
+    convert (CppApp fn [x, y]) | isFn (moduleName, opString) fn = CppBinary op x y
     convert (CppApp (CppApp fn [x]) [y]) | isFn (moduleName, opString) fn = CppBinary op x y
     convert other = other
   binaryFunction :: (String, String) -> String -> BinaryOp -> Cpp -> Cpp
   binaryFunction dict fnName op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
+    convert (CppApp fn [dict', x, y]) | isPreludeFn fnName fn && isDict dict dict' = CppBinary op x y
     convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isPreludeFn fnName fn && isDict dict dict' = CppBinary op x y
     convert other = other
   unary :: (String, String) -> String -> CppUnaryOp -> Cpp -> Cpp
   unary dict fnName op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
+    convert (CppApp fn [dict', x]) | isPreludeFn fnName fn && isDict dict dict' = CppUnary op x
     convert (CppApp (CppApp fn [dict']) [x]) | isPreludeFn fnName fn && isDict dict dict' = CppUnary op x
     convert other = other
   unary' :: String -> String -> CppUnaryOp -> Cpp -> Cpp
@@ -258,6 +269,9 @@ inlineFnComposition :: (Applicative m, MonadSupply m) => Cpp -> m Cpp
 inlineFnComposition = everywhereOnCppTopDownM convert
   where
   convert :: (MonadSupply m) => Cpp -> m Cpp
+  convert (CppApp fn [dict', x, y]) | isFnCompose dict' fn = do
+    arg <- freshName
+    return $ CppLambda [CppCaptureAll] [(arg, Just (CppAny [CppConst, CppRef]))] (Just $ CppAny []) (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
   convert (CppApp (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) [z]) | isFnCompose dict' fn =
     return $ CppApp x [CppApp y [z]]
   convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isFnCompose dict' fn = do

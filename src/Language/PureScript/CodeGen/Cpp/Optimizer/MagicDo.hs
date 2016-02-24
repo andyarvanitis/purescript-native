@@ -53,19 +53,27 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   -- Desugar monomorphic calls to >>= and return for the Eff monad
   convert :: Cpp -> Cpp
   -- Desugar return
+  convert (CppApp (CppApp ret [effDict, val]) []) | isRetPoly ret && isEffDict C.monadEffDictionary effDict = val
   convert (CppApp (CppApp ret [val]) []) | isReturn ret = val
   -- Desugar pure
+  convert (CppApp (CppApp pure' [effDict, val]) []) | isPurePoly pure' && isEffDict C.applicativeEffDictionary effDict = val
   convert (CppApp (CppApp pure' [val]) []) | isPure pure' = val
   -- Desugar >>
+  convert (CppApp bind [effDict, m, CppLambda _ [] rty (CppBlock cpp)]) | isBindPoly bind && isEffDict C.bindEffDictionary effDict =
+    CppFunction fnName [] rty [] $ CppBlock (CppApp m [] : map applyReturns cpp )
   convert (CppApp (CppApp bind [m]) [CppLambda _ [] rty (CppBlock cpp)]) | isBind bind =
     CppFunction fnName [] rty [] $ CppBlock (CppApp m [] : map applyReturns cpp )
   -- Desugar >>=
+  convert (CppApp bind [effDict, m, CppLambda _ [arg] rty (CppBlock cpp)]) | isBindPoly bind && isEffDict C.bindEffDictionary effDict =
+    CppFunction fnName [] rty [] $ CppBlock (CppVariableIntroduction arg [] (Just (CppApp m [])) : map applyReturns cpp)
   convert (CppApp (CppApp bind [m]) [CppLambda _ [arg] rty (CppBlock cpp)]) | isBind bind =
     CppFunction fnName [] rty [] $ CppBlock (CppVariableIntroduction arg [] (Just (CppApp m [])) : map applyReturns cpp)
   -- Desugar untilE
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =
     CppApp (CppLambda [CppCaptureAll] [] (Just $ CppAny []) (CppBlock [ CppWhile (CppUnary CppNot (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
   -- Desugar whileE
+  convert (CppApp (CppApp f [arg1, arg2]) []) | isEffFunc C.whileE f =
+    CppApp (CppLambda [CppCaptureAll] [] (Just $ CppAny []) (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
   convert (CppApp (CppApp (CppApp f [arg1]) [arg2]) []) | isEffFunc C.whileE f =
     CppApp (CppLambda [CppCaptureAll] [] (Just $ CppAny []) (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
   convert other = other
