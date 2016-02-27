@@ -57,7 +57,7 @@ public:
 };
 
 const bool undefined = false;
-const size_t kDataCtor = 0;
+const size_t constructor = 0;
 
 // A variant data class designed to provide some features of dynamic typing.
 //
