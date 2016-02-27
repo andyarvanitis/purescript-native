@@ -105,47 +105,16 @@ literals = mkPattern' match
     ]
   match (CppBlock sts) = concat <$> sequence
     [ return "{\n"
-    , withIndent $ prettyStatements (compact sts)
+    , withIndent $ prettyStatements sts
     , return $ if null sts then "" else "\n"
     , currentIndent
     , return "}"
     ]
-    where
-    compact :: [Cpp] -> [Cpp]
-    compact (st'@(CppIfElse (CppBinary Equal a _) _ Nothing) : sts') =
-      if length (fst cpps') > 1
-        then CppSwitch a (mkCases <$> fst cpps') : snd cpps'
-        else st' : sts'
-      where
-      cpps' = span (isIntEq a) (st' : sts')
-    compact ((CppIfElse cond1 body1 Nothing) : (CppIfElse cond2 body2 Nothing) : _)
-      | returns body1 && returns body2 &&
-        (CppUnary CppNot cond1 == cond2 ||
-         CppUnary CppNot cond2 == cond1) = [CppIfElse cond1 body1 (Just body2)]
-        where
-        returns :: Cpp -> Bool
-        returns (CppBlock rets@(_:_)) | CppReturn{} <- last rets = True
-        returns CppReturn{} = True
-        returns _ = False
-    compact (cpp' : cpps') = cpp' : compact cpps'
-    compact cpps' = cpps'
-    isIntEq :: Cpp -> Cpp -> Bool
-    isIntEq a (CppIfElse (CppBinary Equal a' (CppNumericLiteral (Left _))) (CppBlock [CppReturn _]) Nothing)
-      | a == a' = True
-    isIntEq a (CppIfElse (CppBinary Equal a' (CppCharLiteral _)) (CppBlock [CppReturn _]) Nothing)
-      | a == a' = True
-    isIntEq a (CppIfElse (CppBinary Equal a' (CppBooleanLiteral _)) (CppBlock [CppReturn _]) Nothing)
-      | a == a' = True
-    isIntEq _ _ = False
-    mkCases :: Cpp -> (Cpp, Cpp)
-    mkCases (CppIfElse (CppBinary Equal _ b') (CppBlock [body]) Nothing) = (b', body)
-    mkCases (CppIfElse (CppUnary CppNot _) (CppBlock [body]) Nothing) = (CppBooleanLiteral False, body)
-    mkCases (CppIfElse _ (CppBlock [body]) Nothing) = (CppBooleanLiteral True, body)
-    mkCases _ = error ""
   match (CppNamespace _ []) = return []
   match (CppNamespace [] sts) = fmap concat $ sequence $
     [ return "\n"
     , prettyStatements sts
+    , return "#"
     ]
   match (CppNamespace (':':':':name) sts) = fmap concat $ sequence $
     [ return "\n"
@@ -154,7 +123,7 @@ literals = mkPattern' match
     , withIndent $ prettyStatements sts
     , return "\n"
     , currentIndent
-    , return "}"
+    , return "}#"
     ]
   match (CppNamespace name sts) = fmap concat $ sequence $
     [ return "\n"
@@ -163,7 +132,7 @@ literals = mkPattern' match
     , withIndent $ prettyStatements sts'
     , return "\n"
     , currentIndent
-    , return "}"
+    , return "}#"
     ]
     ++ let (cpp', cpps') = fromNested nested' in
        map match cpp'
@@ -426,6 +395,7 @@ prettyStatements sts = do
   addsemi [] = []
   addsemi s | all isSpace s = []
   addsemi s@('#':_) = s
+  addsemi s | last s == '#' = init s
   addsemi s = s ++ ";"
 
 -- |

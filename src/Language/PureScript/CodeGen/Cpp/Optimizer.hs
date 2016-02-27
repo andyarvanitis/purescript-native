@@ -69,6 +69,7 @@ optimize' cpp = do
   untilFixedPoint (inlineFnComposition . applyAll
     [ collapseNestedBlocks
     , collapseNestedIfs
+    , collapseIfElses
     , tco opts
     , magicDo opts
     , removeCodeAfterReturnStatements
