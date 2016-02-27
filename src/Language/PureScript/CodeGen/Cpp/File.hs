@@ -31,12 +31,14 @@ toHeader :: [Cpp] -> [Cpp]
 toHeader = catMaybes . map go
   where
   go :: Cpp -> Maybe Cpp
-  go (CppNamespace name cpps) = Just (CppNamespace name (toHeader cpps))
+  go (CppNamespace name cpps)
+    | cpps'@(_:_) <- toHeader cpps = Just (CppNamespace name cpps')
+    | otherwise = Nothing
   go cpp@(CppUseNamespace{}) = Just cpp
   go (CppFunction _ _ _ qs _)
-    | CppInline `elem` qs = Just CppNoOp
+    | CppInline `elem` qs = Nothing
   go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just CppAuto
-    = Just CppNoOp
+    = Nothing
   go (CppFunction name args rtyp qs _) =
     let args' = (\(_,t) -> ("", t)) <$> args in
     Just (CppFunction name args' rtyp qs CppNoOp)
@@ -60,13 +62,14 @@ toHeaderFns :: [Cpp] -> [Cpp]
 toHeaderFns = catMaybes . map go
   where
   go :: Cpp -> Maybe Cpp
-  go (CppNamespace name cpps) = Just (CppNamespace name (toHeaderFns cpps))
+  go (CppNamespace name cpps)
+    | cpps'@(_:_) <- toHeaderFns cpps = Just (CppNamespace name cpps')
+    | otherwise = Nothing
   go cpp@(CppFunction _ _ _ qs _)
     | CppInline `elem` qs = Just cpp
   go (CppFunction name [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp cpp [_])]))
     | atyp == Just CppAuto
     = Just (CppVariableIntroduction (name, Nothing) [] (Just cpp))
-
   go cpp@(CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
     Just cpp
   go cpp@(CppVariableIntroduction _ _ (Just CppStringLiteral {})) =
@@ -92,22 +95,12 @@ toBody :: [Cpp] -> [Cpp]
 toBody = catMaybes . map go
   where
   go :: Cpp -> Maybe Cpp
-  go (CppNamespace name cpps) =
-    let cpps' = toBody cpps in
-    if all isNoOp cpps'
-      then Nothing
-      else Just (CppNamespace name cpps')
-    where
-    isNoOp :: Cpp -> Bool
-    isNoOp CppNoOp = True
-    isNoOp (CppComment _ cpp) | isNoOp cpp = True
-    isNoOp (CppUseNamespace{}) = True
-    isNoOp (CppNamespace _ cpps') = all isNoOp cpps'
-    isNoOp (CppRaw _) = True
-    isNoOp _ = False
+  go (CppNamespace name cpps)
+    | cpps'@(_:_) <- toBody cpps = Just (CppNamespace name cpps')
+    | otherwise = Nothing
   go cpp@(CppUseNamespace{}) = Just cpp
   go (CppFunction _ _ _ qs _)
-    | CppInline `elem` qs = Just CppNoOp
+    | CppInline `elem` qs = Nothing
   go cpp@(CppFunction {}) = Just cpp
   go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
     Nothing

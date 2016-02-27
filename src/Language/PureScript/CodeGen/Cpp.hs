@@ -132,14 +132,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                         nullAnn
                                         (snd abs')
                                         (Var nullAnn . Qualified Nothing . Ident $ head argNames)))
-              let block' = convertNestedLambdas block
               return $ CppNamespace ""
                            [ CppFunction
                                  name
                                  (arg' : args' ++ args'')
                                  rty
-                                 vqs
-                                 block'
+                                 (vqs ++ if isAccessor (snd abs') then [CppInline] else [])
+                                 (convertNestedLambdas block)
                            , CppFunction
                                  (curriedName name)
                                  [arg']
@@ -152,8 +151,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                                   (CppVar . fst <$> (arg' : args' ++ args''))))
                            ]
             else do
-              block <- asReturnBlock <$> valueToCpp body
-              return $ CppFunction name [arg'] rty vqs (convertNestedLambdas block)
+              block <- valueToCpp body
+              return $ CppFunction
+                           name
+                           [arg']
+                           rty
+                           (vqs ++ if isIndexer block then [CppInline] else [])
+                           (convertNestedLambdas $ asReturnBlock block)
     return (CppComment com fn)
     where
     argcnt = maybe 0 countArgs ty
@@ -163,6 +167,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     arg' = (identToCpp arg, aty)
     args' = (\i -> (identToCpp i, aty)) <$> fst abs'
     abs' = unAbs body []
+    isAccessor :: Expr Ann -> Bool
+    isAccessor Accessor{} = True
+    isAccessor _ = False
+    isIndexer :: Cpp -> Bool
+    isIndexer (CppIndexer (CppStringLiteral _) (CppVar _)) = True
+    isIndexer _ = False
 
   declToCpp _ ident (Constructor _ _ (ProperName _) []) =
     return $
@@ -420,7 +430,21 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           return $  CppApp (uncurried' $ qualifiedToCpp id ident) args'
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
-        return . CppObjectLiteral $ zip ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns)) args'
+        return . CppObjectLiteral $
+                     zip
+                       ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
+                       (arity2or3 <$> args')
+        where
+        -- For arity 2/3 optimization
+        arity2or3 :: Cpp -> Cpp
+        arity2or3 (CppLambda cs [a1] rty
+                      (CppBlock [CppReturn (CppLambda _ [a2] _
+                                               (CppBlock [CppReturn (CppLambda _ [a3] _ ret)]))])) =
+          CppLambda cs [a1, a2, a3] rty ret
+        arity2or3 (CppLambda cs [a1] rty
+                      (CppBlock [CppReturn (CppLambda _ [a2] _ ret)])) =
+          CppLambda cs [a1, a2] rty ret
+        arity2or3 cpp' = cpp'
       Var ann (Qualified (Just mn') ident)
         | argcnt <- maybe 0 countArgs ty,
           argcnt > 1 -> do
@@ -438,6 +462,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         ty | (_, _, Just t, _) <- ann = Just t
            | Just (t, _, _) <- M.lookup (mn', ident) (E.names env) = Just t
            | otherwise = Nothing
+      Accessor (_, _, Nothing, Nothing) _ (Var _ (Qualified Nothing (Ident _)))
+        | length args' == 2 || length args' == 3 -> do -- arity 2 optimization
+            f' <- valueToCpp f
+            return $ CppApp f' args'
       _ ->
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
 

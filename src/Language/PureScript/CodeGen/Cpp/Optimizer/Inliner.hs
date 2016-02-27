@@ -195,6 +195,8 @@ inlineCommonOperators = applyAll $
   binary dict opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
+    convert (CppApp fn [dict', CppStringLiteral x, CppStringLiteral y])
+      | isDict dict dict' && isPreludeFn opString fn = CppStringLiteral (x ++ y)
     convert (CppApp fn [dict', x, y]) | isDict dict dict' && isPreludeFn opString fn = CppBinary op x y
     convert (CppApp (CppApp (CppApp fn [dict']) [CppStringLiteral x]) [CppStringLiteral y])
       | isDict dict dict' && isPreludeFn opString fn = CppStringLiteral (x ++ y)
