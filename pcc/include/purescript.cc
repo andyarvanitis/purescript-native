@@ -274,8 +274,15 @@ auto any::operator[](const any& rhs) const -> const any& {
 auto any::contains(const char key[]) const -> bool {
   const any& variant = unthunkVariant(*this);
   assert(variant.type == Type::Map);
-  for (any::map::const_iterator it = variant.m->begin(), end = variant.m->end(); it != end; ++it) {
-    if (it->first == key || strcmp(it->first, key) == 0) {
+  const any::map::const_iterator begin = variant.m->begin();
+  const any::map::const_iterator end = variant.m->end();
+  for (any::map::const_iterator it = begin; it != end; ++it) {
+    if (it->first == key) {
+      return true;
+    }
+  }
+  for (any::map::const_iterator it = begin; it != end; ++it) {
+    if (strcmp(it->first, key) == 0) {
       return true;
     }
   }
