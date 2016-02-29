@@ -29,6 +29,7 @@ module Language.PureScript.CodeGen.Cpp
 import Data.Char (isLetter)
 import Data.List
 import Data.Function (on)
+import Data.Maybe (catMaybes)
 import qualified Data.Map as M
 
 import Control.Monad (forM, replicateM)
@@ -79,9 +80,14 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                  else []) ++
             P.linebreak ++
             [ CppNamespace (runModuleName mn) $
-              (CppUseNamespace <$> cppImports') ++
-              P.linebreak ++ toHeader optimized ++ toHeaderFns optimized ] ++
-            P.linebreak ++ fileEnd mn "HH"
+                  (CppUseNamespace <$> cppImports') ++
+                  P.linebreak ++
+                  dataCtors ++
+                  toHeader optimized ++
+                  toHeaderFns optimized
+            ] ++
+            P.linebreak ++
+            fileEnd mn "HH"
     let bodyCpps = toBodyDecl optimized ++ toBody optimized
         moduleBody =
             CppInclude (runModuleName mn) (runModuleName mn) :
@@ -181,7 +187,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           []
           (Just $ CppAny [])
           [CppInline]
-          (asReturnBlock (CppDataLiteral [CppStringLiteral (identToCpp ident)]))
+          (asReturnBlock $
+               CppDataLiteral [CppAccessor (CppVar $ identToCpp ident) (CppVar "data")])
 
   declToCpp _ ident (Constructor _ _ (ProperName _) fields) =
     return . CppNamespace "" $
@@ -190,7 +197,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           (farg <$> fields')
           (Just $ CppAny [])
           [CppInline]
-          (asReturnBlock (CppDataLiteral (CppStringLiteral name : (CppVar <$> fields'))))
+          (asReturnBlock $
+               CppDataLiteral $
+                   CppAccessor (CppVar name) (CppVar "data") : (CppVar <$> fields'))
     ] ++
     if length fields > 1
       then
@@ -427,7 +436,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
       Var (_, _, _, Just (IsConstructor _ fields)) ident
         | length args == length fields ->
-          return $  CppApp (uncurried' $ qualifiedToCpp id ident) args'
+          return $ CppApp (uncurried' $ qualifiedToCpp id ident) args'
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return . CppObjectLiteral $
@@ -587,7 +596,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields))
                                               _
-                                              (Qualified _ (ProperName ctor))
+                                              (Qualified mn' (ProperName ctor))
                                               bs) = do
     cpps <- go (zip fields bs) done
     return $
@@ -600,7 +609,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                        (CppIndexer
                             (CppVar ctorKey)
                             (CppCast dataType $ CppVar varName))
-                       (CppStringLiteral ctor))
+                       ctorCpp)
                   (CppBlock cpps)
                   Nothing]
     where
@@ -620,6 +629,11 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         : cpps
     fieldToIndex :: Ident -> Cpp
     fieldToIndex = CppNumericLiteral . Left . (+1) . read . dropWhile isLetter . runIdent
+    ctor' :: Cpp
+    ctor' = CppAccessor (CppVar . identToCpp $ Ident ctor) (CppVar "data")
+    ctorCpp :: Cpp
+    ctorCpp | Just mn'' <- mn', mn'' /= mn = CppAccessor ctor' (CppVar $ moduleNameToCpp mn'')
+            | otherwise = ctor'
 
   binderToCpp _ _ b@(ConstructorBinder{}) =
     error $ "Invalid ConstructorBinder in binderToCpp: " ++ show b
@@ -752,6 +766,17 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       fns' <- (\(i,t) -> (runIdent i, t)) <$> fns
       = Just (fst <$> params, constraints, (sortBy (compare `on` normalizedName . fst) fns'))
   findClass _ = Nothing
+
+  -------------------------------------------------------------------------------------------------
+  dataCtors :: [Cpp]
+  -------------------------------------------------------------------------------------------------
+  dataCtors = [CppNamespace "data"
+                   [CppEnum Nothing (Just intType) . ("_" :) .
+                        catMaybes . map modCtor . M.keys $ E.dataConstructors env]]
+    where
+    modCtor :: Qualified (ProperName a) -> Maybe String
+    modCtor (Qualified (Just mn') (ProperName name)) | mn' == mn = Just name
+    modCtor _ = Nothing
 
   -------------------------------------------------------------------------------------------------
   curriedForeigns :: m [Cpp]

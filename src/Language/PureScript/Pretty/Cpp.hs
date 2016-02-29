@@ -77,6 +77,14 @@ literals = mkPattern' match
     , fmap (intercalate ", ") $ forM xs prettyPrintCpp'
     , return " }"
     ]
+  match (CppEnum name ty es) = fmap concat $ sequence
+    [ return "enum"
+    , return $ maybe "" (" " ++) name
+    , return $ maybe "" ((" : " ++) . runType) ty
+    , return " { "
+    , return $ intercalate ", " es
+    , return " }"
+    ]
   match (CppObjectLiteral ps) = fmap concat $ sequence
     [ return $ runType mapType ++ "{\n"
     , withIndent $ do

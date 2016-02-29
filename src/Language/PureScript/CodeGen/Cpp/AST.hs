@@ -174,6 +174,10 @@ data Cpp
   --
   | CppDataLiteral [Cpp]
   -- |
+  -- An enum definition (optional name, optional type)
+  --
+  | CppEnum (Maybe String) (Maybe CppType) [String]
+  -- |
   -- An array indexer expression
   --
   | CppIndexer Cpp Cpp
