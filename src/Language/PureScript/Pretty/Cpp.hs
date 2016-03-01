@@ -214,11 +214,14 @@ literals = mkPattern' match
     , return " = "
     , prettyPrintCpp' value
     ]
-  match (CppWhile cond sts) = fmap concat $ sequence
+  match (CppWhile _ (CppBlock [])) = return []
+  match (CppWhile cond sts@(CppBlock sts')) = fmap concat $ sequence
     [ return "while ("
     , prettyPrintCpp' cond
     , return ") "
-    , prettyPrintCpp' sts
+    , prettyPrintCpp' $ if last sts' == CppContinue
+                          then CppBlock (init sts')
+                          else sts
     ]
   match (CppIfElse cond thens elses) = fmap concat $ sequence
     [ return "if ("
@@ -269,7 +272,7 @@ literals = mkPattern' match
     [ return "throw "
     , prettyPrintCpp' value
     ]
-  match CppContinue = return "continue;"
+  match CppContinue = return "continue"
   match (CppComment [] cpp) = match cpp
   match (CppComment com cpp) = fmap concat $ sequence $
     [ return "\n"

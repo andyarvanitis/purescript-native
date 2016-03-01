@@ -29,6 +29,14 @@ removeCodeAfterReturnStatements = everywhereOnCpp (removeFromBlock go)
   isCppReturn (CppReturn _) = True
   isCppReturn _ = False
 
+removeCodeAfterContinueStatements :: Cpp -> Cpp
+removeCodeAfterContinueStatements = everywhereOnCpp (removeFromBlock go)
+  where
+  go :: [Cpp] -> [Cpp]
+  go cpps | not (any isCppContinue cpps) = cpps
+          | otherwise = let (body, ret : _) = span (not . isCppContinue) cpps in body ++ [ret]
+  isCppContinue = (== CppContinue)
+
 removeUnusedArg :: Cpp -> Cpp
 removeUnusedArg = everywhereOnCpp convert
   where

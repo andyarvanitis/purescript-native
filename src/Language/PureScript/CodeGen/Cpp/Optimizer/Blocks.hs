@@ -20,6 +20,7 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Blocks
   ) where
 
 import Language.PureScript.CodeGen.Cpp.AST
+import qualified Language.PureScript.Constants as C
 
 -- |
 -- Collapse blocks which appear nested directly below another block
@@ -78,4 +79,5 @@ collapseIfElses = everywhereOnCpp collapse
       returns _ = False
     go (cpp' : cpps') = cpp' : go cpps'
     go cpp' = cpp'
+  collapse (CppIfElse (CppAccessor (CppVar "otherwise") (CppVar mn')) body _) | mn' == C.prelude = body
   collapse cpp = cpp

@@ -73,6 +73,7 @@ optimize' cpp = do
     , tco opts
     , magicDo opts
     , removeCodeAfterReturnStatements
+    , removeCodeAfterContinueStatements
     , removeUnusedArg
     , unThunk
     , etaConvert
