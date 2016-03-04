@@ -73,7 +73,7 @@ class any {
     StringLiteral,
     String,
     Map,
-    Vector,
+    Data,
     Array,
     Function,
     Closure,
@@ -84,7 +84,6 @@ class any {
 
   private:
   mutable Type type = Type::Unknown;
-  using vector = std::vector<any>;
 
   public:
   struct as_thunk {
@@ -92,7 +91,7 @@ class any {
   static constexpr as_thunk unthunk = as_thunk{};
 
   using map     = std::vector<std::pair<const char * const, const any>>;
-  using data    = vector;
+  using data    = std::vector<any>;
   using array   = std::deque<any>;
   using fn      = auto (*)(const any&) -> any;
   using thunk   = auto (*)(const as_thunk) -> const any&;
@@ -194,7 +193,7 @@ class any {
     mutable string               r;
     mutable shared<std::string>  s;
     mutable shared<map>          m;
-    mutable shared<vector>       v;
+    mutable shared<data>         v;
     mutable shared<array>        a;
     mutable fn                   f;
     mutable shared<closure>      l;
@@ -227,8 +226,8 @@ class any {
   any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
   any(map&& val) noexcept : type(Type::Map), m(make_shared<map>(std::move(val))) {}
 
-  any(const vector& val) : type(Type::Vector), v(make_shared<vector>(val)) {}
-  any(vector&& val) noexcept : type(Type::Vector), v(make_shared<vector>(std::move(val))) {}
+  any(const data& val) : type(Type::Data), v(make_shared<data>(val)) {}
+  any(data&& val) noexcept : type(Type::Data), v(make_shared<data>(std::move(val))) {}
 
   any(const array& val) : type(Type::Array), a(make_shared<array>(val)) {}
   any(array&& val) noexcept : type(Type::Array), a(make_shared<array>(std::move(val))) {}
@@ -302,7 +301,7 @@ class any {
   auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type;
 
   template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type;
+  auto cast() const -> typename std::enable_if<std::is_same<T, data>::value, const T&>::type;
 
   template <typename T>
   auto cast() const -> typename std::enable_if<std::is_same<T, array>::value, const T&>::type;
@@ -326,7 +325,7 @@ class any {
 
   operator string() const;
   operator const map&() const;
-  operator const vector&() const;
+  operator const data&() const;
   operator const array&() const;
 
   auto operator[](const char[]) const -> const any&;

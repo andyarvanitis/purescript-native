@@ -26,7 +26,7 @@ namespace PureScript {
     case Type::StringLiteral:   r = src.r;                           break; \
     case Type::String:          new (&s) shared<std::string>(src.s); break; \
     case Type::Map:             new (&m) shared<map>(src.m);         break; \
-    case Type::Vector:          new (&v) shared<vector>(src.v);      break; \
+    case Type::Data:            new (&v) shared<data>(src.v);        break; \
     case Type::Array:           new (&a) shared<array>(src.a);       break; \
     case Type::Function:        f = src.f;                           break; \
     case Type::Closure:         new (&l) shared<closure>(src.l);     break; \
@@ -46,7 +46,7 @@ namespace PureScript {
     case Type::StringLiteral:   r = src.r;                                      break; \
     case Type::String:          new (&s) shared<std::string>(std::move(src.s)); break; \
     case Type::Map:             new (&m) shared<map>(std::move(src.m));         break; \
-    case Type::Vector:          new (&v) shared<vector>(std::move(src.v));      break; \
+    case Type::Data:            new (&v) shared<data>(std::move(src.v));        break; \
     case Type::Array:           new (&a) shared<array>(std::move(src.a));       break; \
     case Type::Function:        f = src.f;                                      break; \
     case Type::Closure:         new (&l) shared<closure>(std::move(src.l));     break; \
@@ -93,7 +93,7 @@ any::~any() {
     case Type::StringLiteral:   ;                          break;
     case Type::String:          s.~shared<std::string>();  break;
     case Type::Map:             m.~shared<map>();          break;
-    case Type::Vector:          v.~shared<vector>();       break;
+    case Type::Data:            v.~shared<data>();         break;
     case Type::Array:           a.~shared<array>();        break;
     case Type::Function:        ;                          break;
     case Type::Closure:         l.~shared<closure>();      break;
@@ -152,10 +152,10 @@ auto any::cast() const -> typename std::enable_if<std::is_same<T, map>::value, c
 template auto any::cast<any::map>() const -> const map&;
 
 template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, vector>::value, const T&>::type {
-  RETURN_VALUE(Type::Vector, v, *)
+auto any::cast() const -> typename std::enable_if<std::is_same<T, data>::value, const T&>::type {
+  RETURN_VALUE(Type::Data, v, *)
 }
-template auto any::cast<any::vector>() const -> const vector&;
+template auto any::cast<any::data>() const -> const data&;
 
 template <typename T>
 auto any::cast() const -> typename std::enable_if<std::is_same<T, array>::value, const T&>::type {
@@ -221,8 +221,8 @@ any::operator const map&() const {
   return cast<map>();
 }
 
-any::operator const vector&() const {
-  return cast<vector>();
+any::operator const data&() const {
+  return cast<data>();
 }
 
 any::operator const array&() const {
