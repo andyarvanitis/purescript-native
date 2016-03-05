@@ -244,14 +244,14 @@ auto any::unthunkVariant(const any& a) -> const any& {
 auto any::operator[](const char rhs[]) const -> const any& {
   const any& variant = unthunkVariant(*this);
   assert(variant.type == Type::Map);
-  const any::map::const_iterator begin = variant.m->begin();
-  const any::map::const_iterator end = variant.m->end();
-  for (any::map::const_iterator it = begin; it != end; ++it) {
+  const auto begin = variant.m->cbegin();
+  const auto end = variant.m->cend();
+  for (auto it = begin; it != end; ++it) {
     if (it->first == rhs) {
       return it->second;
     }
   }
-  for (any::map::const_iterator it = begin; it != end; ++it) {
+  for (auto it = begin; it != end; ++it) {
     if (strcmp(it->first, rhs) == 0) {
       return it->second;
     }
@@ -274,14 +274,14 @@ auto any::operator[](const any& rhs) const -> const any& {
 auto any::contains(const char key[]) const -> bool {
   const any& variant = unthunkVariant(*this);
   assert(variant.type == Type::Map);
-  const any::map::const_iterator begin = variant.m->begin();
-  const any::map::const_iterator end = variant.m->end();
-  for (any::map::const_iterator it = begin; it != end; ++it) {
+  const auto begin = variant.m->cbegin();
+  const auto end = variant.m->cend();
+  for (auto it = begin; it != end; ++it) {
     if (it->first == key) {
       return true;
     }
   }
-  for (any::map::const_iterator it = begin; it != end; ++it) {
+  for (auto it = begin; it != end; ++it) {
     if (strcmp(it->first, key) == 0) {
       return true;
     }
