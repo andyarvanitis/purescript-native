@@ -71,10 +71,9 @@ auto any::operator=(const any& rhs) -> any& {
   return *this;
 }
 
-// Takes ownership -- might need to reconsider this
 auto any::operator=(any& rhs) noexcept -> any& {
   type = rhs.type;
-  MOVE_DATA(rhs);
+  COPY_DATA(rhs);
   return *this;
 }
 
