@@ -37,6 +37,7 @@ import qualified Language.PureScript as P
 import qualified Paths_purescript as Paths
 
 import Make
+import Makefile
 
 data PCCOptions = PCCOptions
   { pccmInput        :: [FilePath]
@@ -52,6 +53,7 @@ data InputOptions = InputOptions
 
 compile :: PCCOptions -> IO ()
 compile (PCCOptions input _ outputDir opts usePrefix) = do
+  when (null input) generateMakefile
   moduleFiles <- readInput (InputOptions input)
   case runWriterT (parseInputs moduleFiles []) of
     Left errs -> do

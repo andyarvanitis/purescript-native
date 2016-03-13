@@ -119,7 +119,6 @@ buildMakeActions outputDir filePathMap usePrefix =
       let supportDir = outputDir </> "PureScript"
       supportFilesExist <- dirExists supportDir
       when (not supportFilesExist) $ do
-        writeTextFile (outputDir  </> "CMakeLists.txt") (fromString cmakeListsTxt)
         writeTextFile (supportDir </> "PureScript.hh") $ B.unpack $(embedFile "pcc/include/purescript.hh")
         writeTextFile (supportDir </> "PureScript.cc") $ B.unpack $(embedFile "pcc/include/purescript.cc")
 
@@ -173,15 +172,3 @@ buildMakeActions outputDir filePathMap usePrefix =
 
 dotsTo :: Char -> String -> String
 dotsTo chr = map (\c -> if c == '.' then chr else c)
-
--- TODO: quick and dirty for now -- explicit file list would be better
-cmakeListsTxt :: String
-cmakeListsTxt = intercalate "\n" lines'
-  where lines' = [ "cmake_minimum_required (VERSION 3.0)"
-                 , "project (Main)"
-                 , "file (GLOB_RECURSE SRCS *.cc)"
-                 , "file (GLOB_RECURSE HDRS *.hh)"
-                 , "add_executable (Main ${SRCS} ${HDRS})"
-                 , "include_directories (${CMAKE_CURRENT_SOURCE_DIR})"
-                 , "set (CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} \"-std=c++11 -DDEBUG\")"
-                 ]

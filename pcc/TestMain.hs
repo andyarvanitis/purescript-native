@@ -44,14 +44,12 @@ main = do
   let srcDir = outputDir </> "src"
   createDirectory srcDir
 
-  let buildDir = outputDir </> "build"
-  createDirectory buildDir
-
-  let makefile = outputDir </> "Makefile"
-  writeFile makefile makefileText
-
   let passingDir = baseDir </> "examples" </> "passing"
   passingTestCases <- sort . filter (".purs" `isSuffixOf`) <$> getDirectoryContents passingDir
+
+  -- Auto-generate Makefile
+  setCurrentDirectory outputDir
+  callProcess "../.cabal-sandbox/bin/pcc" []
 
   let tests = filter (`notElem` skipped) passingTestCases
 
@@ -59,19 +57,17 @@ main = do
   --
   forM_ tests $ \inputFile -> do
     --
-    -- Compile PureScript file
+    -- Compile/build
     --
     putStrLn $ "Compiling test " ++ inputFile ++ " ..."
     setCurrentDirectory outputDir
     copyFile (passingDir </> inputFile) (srcDir </> inputFile)
-    callProcess "make" ["clean", "main"]
+    callProcess "make" ["clean"]
+    callProcess "make" ["debug"]
     --
-    -- Build and run C++ files
+    -- Run C++ files
     --
-    setCurrentDirectory buildDir
-    callProcess "cmake" ["../output"]
-    callProcess "make" []
-    callProcess (buildDir </> "Main") []
+    callProcess ("output" </> "bin" </> "main") []
 
     removeFile (srcDir </> inputFile)
 
@@ -115,22 +111,6 @@ fetchPackages = do
   forM_ packages $ \package -> let branch = snd package in
     callProcess "git" $ ["clone"] ++ (if null branch then [] else ["--branch", branch]) ++ [repo ++ (fst package) ++ ".git"]
   setCurrentDirectory baseDir
-
--------------------------------------------------------------------------------
-makefileText :: String
--------------------------------------------------------------------------------
-makefileText = intercalate "\n" lines'
-  where lines' = [ "PCC := '../.cabal-sandbox/bin/pcc'"
-                 , "MODULE_DIR='packages'"
-                 , "SOURCE_DIR='src'"
-                 , "MODULES := $(shell find $(MODULE_DIR) -name '*.purs' | grep -v \\/test\\/ | grep -v \\/example\\/ | grep -v \\/examples\\/)"
-                 , "SOURCES := $(shell find $(SOURCE_DIR) -name '*.purs')"
-                 , "all: main"
-                 , "main:"
-                 , "\t$(PCC) $(MODULES) $(SOURCES)"
-                 , "clean:"
-                 , "\t@rm -rf output/*"
-                 ]
 
 -------------------------------------------------------------------------------
 skipped :: [String]
