@@ -13,13 +13,17 @@
 --
 -----------------------------------------------------------------------------
 
-module Directive where
+module PSCi.Directive where
+
+import Prelude ()
+import Prelude.Compat
+
 
 import Data.Maybe (fromJust, listToMaybe)
 import Data.List (isPrefixOf)
 import Data.Tuple (swap)
 
-import Types
+import PSCi.Types
 
 -- |
 -- List of all avaliable directives.

@@ -73,7 +73,7 @@ packageName :: Package a -> PackageName
 packageName = bowerName . pkgMeta
 
 data Module = Module
-  { modName         :: String
+  { modName         :: P.ModuleName
   , modComments     :: Maybe String
   , modDeclarations :: [Declaration]
   -- Re-exported values from other modules
@@ -133,7 +133,7 @@ data DeclarationInfo
   -- An operator alias declaration, with the member the alias is for and the
   -- operator's fixity.
   --
-  | AliasDeclaration (P.Qualified P.Ident) P.Fixity
+  | AliasDeclaration (Either (P.Qualified P.Ident) (P.Qualified (P.ProperName 'P.ConstructorName))) P.Fixity
   deriving (Show, Eq, Ord)
 
 declInfoToString :: DeclarationInfo -> String
@@ -346,7 +346,7 @@ parseVersion' str =
 
 asModule :: Parse PackageError Module
 asModule =
-  Module <$> key "name" asString
+  Module <$> key "name" (P.moduleNameFromString <$> asString)
          <*> key "comments" (perhaps asString)
          <*> key "declarations" (eachInArray asDeclaration)
          <*> key "reExports" (eachInArray asReExport)
@@ -406,10 +406,13 @@ asDeclarationInfo = do
       TypeClassDeclaration <$> key "arguments" asTypeArguments
                            <*> key "superclasses" (eachInArray asConstraint)
     "alias" ->
-      AliasDeclaration <$> key "for" asQualifiedIdent
+      AliasDeclaration <$> key "for" asAliasFor
                        <*> key "fixity" asFixity
     other ->
       throwCustomError (InvalidDeclarationType other)
+
+asAliasFor :: Parse e (Either (P.Qualified P.Ident) (P.Qualified (P.ProperName 'P.ConstructorName)))
+asAliasFor = fromAesonParser
 
 asTypeArguments :: Parse PackageError [(String, Maybe P.Kind)]
 asTypeArguments = eachInArray asTypeArgument
@@ -512,7 +515,7 @@ instance A.ToJSON NotYetKnown where
 
 instance A.ToJSON Module where
   toJSON Module{..} =
-    A.object [ "name"         .= modName
+    A.object [ "name"         .= P.runModuleName modName
              , "comments"     .= modComments
              , "declarations" .= modDeclarations
              , "reExports"    .= map toObj modReExports
