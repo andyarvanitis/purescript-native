@@ -38,12 +38,42 @@ import qualified Control.Arrow as A
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Comments
-import Language.PureScript.Pretty.Common
+-- import Language.PureScript.Pretty.Common
 import qualified Language.PureScript.Constants as C
-
 import Numeric
-
 -- import Debug.Trace
+
+---------------------------------------------------------------------------------------------------
+-- TODO: Go back to using Pretty.Common? (will require some work)
+--
+newtype PrinterState = PrinterState { indent :: Int } deriving (Show, Read, Eq, Ord)
+-- |
+-- Pretty print with a new indentation level
+--
+withIndent :: StateT PrinterState Maybe String -> StateT PrinterState Maybe String
+withIndent action = do
+  modify $ \st -> st { indent = indent st + blockIndent }
+  result <- action
+  modify $ \st -> st { indent = indent st - blockIndent }
+  return result
+
+-- |
+-- Get the current indentation level
+--
+currentIndent :: StateT PrinterState Maybe String
+currentIndent = do
+  current <- get
+  return $ replicate (indent current) ' '
+
+blockIndent :: Int
+blockIndent = 2
+
+-- |
+-- Wrap a string in parentheses
+--
+parens :: String -> String
+parens s = '(':s ++ ")"
+---------------------------------------------------------------------------------------------------
 
 literals :: Pattern PrinterState Cpp String
 literals = mkPattern' match

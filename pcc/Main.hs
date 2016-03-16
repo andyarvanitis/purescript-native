@@ -145,6 +145,11 @@ noPrefix = switch $
   <> long "no-prefix"
   <> help "Do not include comment header"
 
+sourceMaps :: Parser Bool
+sourceMaps = switch $
+     long "source-maps"
+  <> help "Generate source maps"
+
 options :: Parser P.Options
 options = P.Options <$> noTco
                     <*> noMagicDo
@@ -153,6 +158,7 @@ options = P.Options <$> noTco
                     <*> verboseErrors
                     <*> (not <$> comments)
                     <*> requirePath
+                    <*> sourceMaps
 
 pccOptions :: Parser PCCOptions
 pccOptions = PCCOptions <$> many inputFile

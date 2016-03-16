@@ -65,7 +65,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     cppImports <-
         traverse (pure . runModuleName) .
         delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $
-        imps
+        (snd <$> imps)
     let cppImports' = "PureScript" : cppImports
     cppDecls <- concat <$> mapM (bindToCpp [CppTopLevel]) decls
     cppDecls' <- traverse optimize cppDecls
@@ -109,22 +109,22 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   bindToCpp :: [CppValueQual] -> Bind Ann -> m [Cpp]
   -------------------------------------------------------------------------------------------------
-  bindToCpp qs (NonRec ident val) = return <$> declToCpp qs ident val
+  bindToCpp qs (NonRec ann ident val) = return <$> declToCpp qs (ann, ident) val
   bindToCpp qs (Rec vals) = forM vals (uncurry $ declToCpp (CppRecursive:qs))
 
   -- |
   -- Desugar a declaration into a variable introduction or named function
   -- declaration.
   -------------------------------------------------------------------------------------------------
-  declToCpp :: [CppValueQual] -> Ident -> Expr Ann -> m Cpp
+  declToCpp :: [CppValueQual] -> (Ann, Ident) -> Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
   declToCpp _ _ (Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
     return CppNoOp
 
-  declToCpp _ (Op _) (Var (_, _, Nothing, _) _) =
+  declToCpp _ (_, Op _) (Var (_, _, Nothing, _) _) =
     return CppNoOp -- skip operator aliases
 
-  declToCpp vqs ident (Abs (_, com, ty, _) arg body) = do
+  declToCpp vqs (_, ident) (Abs (_, com, ty, _) arg body) = do
     fn <- if argcnt > 1 && CppTopLevel `elem` vqs
             then do
               argNames <- replicateM (argcnt - length args' - 1) freshName
@@ -180,7 +180,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     isIndexer (CppIndexer (CppStringLiteral _) (CppVar _)) = True
     isIndexer _ = False
 
-  declToCpp _ ident (Constructor _ _ (ProperName _) []) =
+  declToCpp _ (_, ident) (Constructor _ _ (ProperName _) []) =
     return $
       CppFunction
           (identToCpp ident)
@@ -190,7 +190,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           (asReturnBlock $
                CppDataLiteral [CppAccessor (CppVar $ identToCpp ident) (CppVar "data")])
 
-  declToCpp _ ident (Constructor _ _ (ProperName _) fields) =
+  declToCpp _ (_, ident) (Constructor _ _ (ProperName _) fields) =
     return . CppNamespace "" $
     [ CppFunction
           name
@@ -227,7 +227,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                    (CppBlock $ fieldLambdas fs') ]
       | otherwise = [CppReturn $ CppApp (CppVar name) (CppVar <$> fields')]
 
-  declToCpp qs ident e
+  declToCpp qs (_, ident) e
     | Just ty <- exprType e,
       CppTopLevel `elem` qs,
       argcnt <- countArgs ty,
@@ -262,7 +262,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     aty = Just $ CppAny [CppConst, CppRef]
     rty = Just $ CppAny []
 
-  declToCpp _ ident val = do
+  declToCpp _ (_, ident) val = do
     val' <- valueToCpp val
     return $
       CppVariableIntroduction
@@ -750,16 +750,11 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     | mn /= mn' = CppAccessor (CppVar . identToCpp $ f a) (CppVar (moduleNameToCpp mn'))
   qualifiedToCpp f (Qualified _ a) = CppVar $ identToCpp (f a)
 
-  -------------------------------------------------------------------------------------------------
-  qualifiedToStr' :: (a -> Ident) -> Qualified a -> String
-  -------------------------------------------------------------------------------------------------
-  qualifiedToStr' = qualifiedToStr mn
-
   -- |
   -- Find a class in scope by name, retrieving its list of constraints, function names and types.
   --
   -------------------------------------------------------------------------------------------------
-  findClass :: Qualified (ProperName ClassName) -> Maybe ([String], [T.Constraint], [(String, T.Type)])
+  findClass :: Qualified (ProperName 'ClassName) -> Maybe ([String], [T.Constraint], [(String, T.Type)])
   -------------------------------------------------------------------------------------------------
   findClass name
     | Just (params, fns, constraints) <- M.lookup name (E.typeClasses env),
