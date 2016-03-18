@@ -166,7 +166,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                            (convertNestedLambdas $ asReturnBlock block)
     return (CppComment com fn)
     where
-    argcnt = maybe 0 countArgs ty
+    argcnt | Just t <- ty = countArgs t
+           | Just (t, _, _) <- M.lookup (mn, ident) (E.names env) = countArgs t
+           | otherwise = 0
     name = identToCpp ident
     aty = Just $ CppAny [CppConst, CppRef]
     rty = Just $ CppAny []
