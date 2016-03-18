@@ -34,13 +34,13 @@ INCLUDES := -I $(OUTPUT)
 BIN_DIR := $(OUTPUT)/bin
 
 release: codegen
-	$(MAKE) $(BIN) CXXFLAGS=$(RELEASE)
+	@$(MAKE) $(BIN) CXXFLAGS=$(RELEASE)
 
 debug: codegen
-	$(MAKE) $(BIN) CXXFLAGS=$(DEBUG)
+	@$(MAKE) $(BIN) CXXFLAGS=$(DEBUG)
 
 codegen:
-	$(PCC) $(PCCFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
+	@$(PCC) $(PCCFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
 
 SRCS := $(shell find $(OUTPUT) 2>/dev/null -name '*.cc')
 
@@ -48,13 +48,15 @@ OBJS = $(SRCS:.cc=.o)
 DEPS = $(SRCS:.cc=.d)
 
 $(BIN): $(OBJS)
+	@echo "Linking" $(BIN_DIR)/$(BIN)
 	@mkdir -p $(BIN_DIR)
-	$(CXX) $(LDFLAGS) $^ -o $(BIN_DIR)/$@
+	@$(CXX) $(LDFLAGS) $^ -o $(BIN_DIR)/$@
 
 -include $(DEPS)
 
 %.o: %.cc
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
+	@echo "Creating" $@
+	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
 .PHONY: clean
 clean:
