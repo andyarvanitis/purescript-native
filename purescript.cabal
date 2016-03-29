@@ -362,7 +362,7 @@ executable psc-ide-client
 
 executable pcc
     build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
-                   file-embed >= 0.0.7 && < 0.0.8,
+                   file-embed -any,
                    bytestring -any,
                    mtl -any, optparse-applicative >= 0.10.0, parsec -any, purescript -any,
                    time -any, transformers -any, transformers-compat -any
