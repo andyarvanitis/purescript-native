@@ -6,6 +6,8 @@ A small strongly typed programming language with expressive types that compiles 
 
 **Pure14** is an experimental C++14 compiler/backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane" and performant C++14 code (instead of JavaScript), in the spirit of PureScript.
 
+Please also see **[Pure11](https://github.com/andyarvanitis/pure11)**, which is currently more actively maintained.
+
 #### Status:
 
 * Alpha (0.3) — very early, contributions welcome!
