@@ -12,6 +12,7 @@ import Data.Char (isSpace)
 import Data.Either (lefts, rights)
 import Data.List (intercalate, transpose, nub, nubBy, sortBy)
 import Data.Foldable (fold)
+import Data.Maybe (maybeToList)
 
 import qualified Data.Map as M
 
@@ -28,6 +29,7 @@ import Language.PureScript.Pretty.Common (before)
 import Language.PureScript.Types
 import Language.PureScript.Names
 import Language.PureScript.Kinds
+import qualified Language.PureScript.Bundle as Bundle
 
 import qualified Text.PrettyPrint.Boxes as Box
 
@@ -37,11 +39,13 @@ import Text.Parsec.Error (Message(..))
 
 -- | A type of error messages
 data SimpleErrorMessage
-  = ErrorParsingFFIModule FilePath
+  = ErrorParsingFFIModule FilePath (Maybe Bundle.ErrorMessage)
   | ErrorParsingModule P.ParseError
   | MissingFFIModule ModuleName
   | MultipleFFIModules ModuleName [FilePath]
   | UnnecessaryFFIModule ModuleName FilePath
+  | MissingFFIImplementations ModuleName [Ident]
+  | UnusedFFIImplementations ModuleName [Ident]
   | CannotGetFileInfo FilePath
   | CannotReadFile FilePath
   | CannotWriteFile FilePath
@@ -149,6 +153,7 @@ data SimpleErrorMessage
   | IncorrectAnonymousArgument
   | InvalidOperatorInBinder Ident Ident
   | DeprecatedRequirePath
+  | CannotGeneralizeRecursiveFunction Ident Type
   deriving (Show)
 
 -- | Error message hints, providing more detailed information about failure.
@@ -223,6 +228,8 @@ errorCode em = case unwrapErrorMessage em of
   MissingFFIModule{} -> "MissingFFIModule"
   MultipleFFIModules{} -> "MultipleFFIModules"
   UnnecessaryFFIModule{} -> "UnnecessaryFFIModule"
+  MissingFFIImplementations{} -> "MissingFFIImplementations"
+  UnusedFFIImplementations{} -> "UnusedFFIImplementations"
   CannotGetFileInfo{} -> "CannotGetFileInfo"
   CannotReadFile{} -> "CannotReadFile"
   CannotWriteFile{} -> "CannotWriteFile"
@@ -330,6 +337,7 @@ errorCode em = case unwrapErrorMessage em of
   IncorrectAnonymousArgument -> "IncorrectAnonymousArgument"
   InvalidOperatorInBinder{} -> "InvalidOperatorInBinder"
   DeprecatedRequirePath{} -> "DeprecatedRequirePath"
+  CannotGeneralizeRecursiveFunction{} -> "CannotGeneralizeRecursiveFunction"
 
 -- |
 -- A stack trace for an error
@@ -420,6 +428,7 @@ onTypesInErrorMessageM f (ErrorMessage hints simple) = ErrorMessage <$> traverse
   gSimple (OrphanInstance nm cl ts) = OrphanInstance nm cl <$> traverse f ts
   gSimple (WildcardInferredType ty) = WildcardInferredType <$> f ty
   gSimple (MissingTypeDeclaration nm ty) = MissingTypeDeclaration nm <$> f ty
+  gSimple (CannotGeneralizeRecursiveFunction nm ty) = CannotGeneralizeRecursiveFunction nm <$> f ty
 
   gSimple other = pure other
 
@@ -522,10 +531,11 @@ prettyPrintSingleError full level showWiki e = flip evalState defaultUnknownMap 
       paras [ line "Unable to write file: "
             , indent . line $ path
             ]
-    renderSimpleErrorMessage (ErrorParsingFFIModule path) =
-      paras [ line "Unable to parse foreign module:"
-            , indent . line $ path
-            ]
+    renderSimpleErrorMessage (ErrorParsingFFIModule path extra) =
+      paras $ [ line "Unable to parse foreign module:"
+              , indent . line $ path
+              ] ++
+              (map (indent . line) (concatMap Bundle.printErrorMessage (maybeToList extra)))
     renderSimpleErrorMessage (ErrorParsingModule err) =
       paras [ line "Unable to parse module: "
             , prettyPrintParseError err
@@ -536,6 +546,14 @@ prettyPrintSingleError full level showWiki e = flip evalState defaultUnknownMap 
       paras [ line $ "An unnecessary foreign module implementation was provided for module " ++ runModuleName mn ++ ": "
             , indent . line $ path
             , line $ "Module " ++ runModuleName mn ++ " does not contain any foreign import declarations, so a foreign module is not necessary."
+            ]
+    renderSimpleErrorMessage (MissingFFIImplementations mn idents) =
+      paras [ line $ "The following values are not defined in the foreign module for module " ++ runModuleName mn ++ ": "
+            , indent . paras $ map (line . runIdent) idents
+            ]
+    renderSimpleErrorMessage (UnusedFFIImplementations mn idents) =
+      paras [ line $ "The following definitions in the foreign module for module " ++ runModuleName mn ++ " are unused: "
+            , indent . paras $ map (line . runIdent) idents
             ]
     renderSimpleErrorMessage (MultipleFFIModules mn paths) =
       paras [ line $ "Multiple foreign module implementations have been provided for module " ++ runModuleName mn ++ ": "
@@ -981,6 +999,13 @@ prettyPrintSingleError full level showWiki e = flip evalState defaultUnknownMap 
     renderSimpleErrorMessage DeprecatedRequirePath =
       line "The require-path option is deprecated and will be removed in PureScript 0.9."
 
+    renderSimpleErrorMessage (CannotGeneralizeRecursiveFunction ident ty) =
+      paras [ line $ "Unable to generalize the type of the recursive function " ++ showIdent ident ++ "."
+            , line $ "The inferred type of " ++ showIdent ident ++ " was:"
+            , indent $ typeAsBox ty
+            , line "Try adding a type signature."
+            ]
+
     renderHint :: ErrorMessageHint -> Box.Box -> Box.Box
     renderHint (ErrorUnifyingTypes t1 t2) detail =
       paras [ detail
@@ -1202,7 +1227,7 @@ prettyPrintMultipleWarningsBox = prettyPrintMultipleErrorsWith Warning "Warning 
 
 -- | Pretty print errors as a Box
 prettyPrintMultipleErrorsBox :: Bool -> MultipleErrors -> [Box.Box]
-prettyPrintMultipleErrorsBox = prettyPrintMultipleErrorsWith Error "Error found:" "Error" 
+prettyPrintMultipleErrorsBox = prettyPrintMultipleErrorsWith Error "Error found:" "Error"
 
 prettyPrintMultipleErrorsWith :: Level -> String -> String -> Bool -> MultipleErrors -> [Box.Box]
 prettyPrintMultipleErrorsWith level intro _ full (MultipleErrors [e]) =
