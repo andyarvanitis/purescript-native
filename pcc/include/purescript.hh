@@ -83,7 +83,8 @@ class any {
   };
 
   private:
-  mutable Type type = Type::Unknown;
+  mutable Type type;
+  mutable bool is_shared;
 
   public:
   struct as_thunk {
@@ -102,6 +103,7 @@ class any {
       virtual auto operator()(const any&) const -> any = 0;
       virtual auto operator()(const any&, const any&) const -> any = 0;
       virtual auto operator()(const any&, const any&, const any&) const -> any = 0;
+      virtual ~closure() {}
   };
 
   template <typename T>
@@ -204,83 +206,129 @@ class any {
 
   public:
 
-  any(const long val) : type(Type::Integer), i(val) {}
-  any(const int val) : type(Type::Integer), i(val) {}
-  any(const unsigned int val) : type(Type::Integer), i(val) {}
-  any(const double val) : type(Type::Double), d(val) {}
-  any(const char val) : type(Type::Character), c(val) {}
+  any(const long val) : type(Type::Integer), is_shared(false), i(val) {}
+  any(const int val) : type(Type::Integer), is_shared(false), i(val) {}
+  any(const unsigned int val) : type(Type::Integer), is_shared(false), i(val) {}
+  any(const double val) : type(Type::Double), is_shared(false), d(val) {}
+  any(const char val) : type(Type::Character), is_shared(false), c(val) {}
 
   template <typename T, typename = typename std::enable_if<std::is_same<bool,T>::value>::type>
-  any(const T val) : type(Type::Boolean), b(val) {}
+  any(const T val) : type(Type::Boolean), is_shared(false), b(val) {}
 
   template <size_t N>
-  any(const char (&val)[N]) : type(Type::StringLiteral), r(val) {}
-  any(char * val) : type(Type::String), s(make_shared<std::string>(val)) {}
+  any(const char (&val)[N]) : type(Type::StringLiteral), is_shared(false), r(val) {}
+  any(char * val) : type(Type::String), is_shared(true), s(make_shared<std::string>(val)) {}
 
-  any(const std::string& val) : type(Type::String), s(make_shared<std::string>(val)) {}
-  any(std::string&& val) : type(Type::String), s(make_shared<std::string>(std::move(val))) {}
+  any(const std::string& val) : type(Type::String), is_shared(true), s(make_shared<std::string>(val)) {}
+  any(std::string&& val) : type(Type::String), is_shared(true), s(make_shared<std::string>(std::move(val))) {}
 
-  any(const shared<std::string>& val) : type(Type::String), s(val) {}
-  any(shared<std::string>&& val) noexcept : type(Type::String), s(std::move(val)) {}
+  any(const shared<std::string>& val) : type(Type::String), is_shared(true), s(val) {}
+  any(shared<std::string>&& val) noexcept : type(Type::String), is_shared(true), s(std::move(val)) {}
 
-  any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
-  any(map&& val) noexcept : type(Type::Map), m(make_shared<map>(std::move(val))) {}
+  any(const map& val) : type(Type::Map), is_shared(true), m(make_shared<map>(val)) {}
+  any(map&& val) noexcept : type(Type::Map), is_shared(true), m(make_shared<map>(std::move(val))) {}
 
-  any(const data& val) : type(Type::Data), v(make_shared<data>(val)) {}
-  any(data&& val) noexcept : type(Type::Data), v(make_shared<data>(std::move(val))) {}
+  any(const data& val) : type(Type::Data), is_shared(true), v(make_shared<data>(val)) {}
+  any(data&& val) noexcept : type(Type::Data), is_shared(true), v(make_shared<data>(std::move(val))) {}
 
-  any(const array& val) : type(Type::Array), a(make_shared<array>(val)) {}
-  any(array&& val) noexcept : type(Type::Array), a(make_shared<array>(std::move(val))) {}
+  any(const array& val) : type(Type::Array), is_shared(true), a(make_shared<array>(val)) {}
+  any(array&& val) noexcept : type(Type::Array), is_shared(true), a(make_shared<array>(std::move(val))) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0)
-    : type(Type::Function), f(val) {}
+    : type(Type::Function), is_shared(false), f(val) {}
 
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                            !std::is_convertible<T,fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&)>,T>::value>::type* = 0)
-    : type(Type::Closure), l(make_shared<_closure<T>>(val)) {}
+    : type(Type::Closure), is_shared(true), l(make_shared<_closure<T>>(val)) {}
 
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                            !std::is_convertible<T,fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&,
                                                                                  const any&)>,T>::value>::type* = 0)
-    : type(Type::Closure), l(make_shared<_closure2<T>>(val)) {}
+    : type(Type::Closure), is_shared(true), l(make_shared<_closure2<T>>(val)) {}
 
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                            !std::is_convertible<T,fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&,
                                                                                  const any&,
                                                                                  const any&)>,T>::value>::type* = 0)
-    : type(Type::Closure), l(make_shared<_closure3<T>>(val)) {}
+    : type(Type::Closure), is_shared(true), l(make_shared<_closure3<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
-    : type(Type::EffFunction), e(make_shared<_eff_fn<T>>(val)) {}
+    : type(Type::EffFunction), is_shared(true), e(make_shared<_eff_fn<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0)
-    : type(Type::Thunk), t(val) {}
+    : type(Type::Thunk), is_shared(false), t(val) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0)
-    : type(Type::Pointer), p(val) {}
+    : type(Type::Pointer), is_shared(true), p(val) {}
 
   template <typename T>
   any(T&& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0) noexcept
-    : type(Type::Pointer), p(std::move(val)) {}
+    : type(Type::Pointer), is_shared(true), p(std::move(val)) {}
 
-  any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
+  any(std::nullptr_t) : type(Type::Pointer), is_shared(true), p(nullptr) {}
 
-  any(const any&);
-  any(any&&) noexcept;
+  private:
 
-  auto operator=(const any&) -> any&;
-  auto operator=(any&) noexcept -> any&;
-  auto operator=(any&&) noexcept -> any&;
+  auto copy(const any& other) const -> void {
+    if (is_shared) {
+      new (&p) shared<void>(other.p);
+    } else {
+      f = other.f;
+    }
+  }
+
+  auto move(any& other) const noexcept -> void {
+    if (is_shared) {
+      new (&p) shared<void>(std::move(other.p));
+    } else {
+      f = other.f;
+    }
+  }
+
+  auto del() noexcept -> void {
+    if (is_shared) {
+      p.~shared<void>();
+    }
+  }
+
+  public:
+
+  any(const any& other) : type(other.type), is_shared(other.is_shared) {
+    copy(other);
+  }
+
+  any(any&& other) noexcept : type(other.type), is_shared(other.is_shared) {
+    move(other);
+  }
+
+  auto operator=(const any& rhs) -> any& {
+    del();
+    type = rhs.type;
+    is_shared = rhs.is_shared;
+    copy(rhs);
+    return *this;
+  }
+
+  auto operator=(any&& rhs) noexcept -> any& {
+    del();
+    type = rhs.type;
+    is_shared = rhs.is_shared;
+    move(rhs);
+    return *this;
+  }
 
   any() = delete;
-  ~any();
+
+  ~any() {
+    del();
+  }
 
   template <typename T>
   auto cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type;
