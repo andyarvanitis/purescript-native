@@ -42,6 +42,7 @@ import Language.PureScript.CodeGen.Cpp.File
 import Language.PureScript.CodeGen.Cpp.Optimizer
 import Language.PureScript.CodeGen.Cpp.Optimizer.TCO
 import Language.PureScript.CodeGen.Cpp.Types
+import Language.PureScript.Comments
 import Language.PureScript.CoreFn
 import Language.PureScript.Names
 import Language.PureScript.Options
@@ -118,8 +119,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   declToCpp :: [CppValueQual] -> (Ann, Ident) -> Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
-  declToCpp _ _ (Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
-    return CppNoOp
+  declToCpp _ (_, ident) e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
+    let className = identToCpp ident
+        (supers, members) = span (C.__superclass_ `isPrefixOf`) (identToCpp <$> (fst $ unAbs e []))
+    in return $ CppStruct className [CppEnum Nothing Nothing (sort supers ++ members)]
 
   declToCpp _ (_, Op _) (Var (_, _, Nothing, _) _) =
     return CppNoOp -- skip operator aliases
@@ -144,7 +147,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                  (arg' : args' ++ args'')
                                  rty
                                  (vqs ++ if isAccessor (snd abs') then [CppInline] else [])
-                                 (convertNestedLambdas block)
+                                 (convertNestedLambdas $ convertDictIndexers block)
                            , CppFunction
                                  (curriedName name)
                                  [arg']
@@ -163,12 +166,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                            [arg']
                            rty
                            (vqs ++ if isIndexer block then [CppInline] else [])
-                           (convertNestedLambdas $ asReturnBlock block)
+                           (convertNestedLambdas . asReturnBlock $ convertDictIndexers block)
     return (CppComment com fn)
     where
-    argcnt | Just t <- ty = countArgs t
-           | Just (t, _, _) <- M.lookup (mn, ident) (E.names env) = countArgs t
-           | otherwise = 0
+    ty' | Just t <- ty = Just t
+        | Just (t, _, _) <- M.lookup (mn, ident) (E.names env) = Just t
+        | otherwise = Nothing
+    argcnt = maybe 0 countArgs ty'
     name = identToCpp ident
     aty = Just $ CppAny [CppConst, CppRef]
     rty = Just $ CppAny []
@@ -181,6 +185,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     isIndexer :: Cpp -> Bool
     isIndexer (CppIndexer (CppStringLiteral _) (CppVar _)) = True
     isIndexer _ = False
+    classes = qualifiedToCpp (Ident . runProperName) . fst <$>
+                  maybe [] extractConstraints ty'
+    dictClasses = zip (CppVar . fst <$> arg' : args') classes
+    convertDictIndexers = everywhereOnCpp (dictIndexerToEnum dictClasses)
 
   declToCpp _ (_, ident) (Constructor _ _ (ProperName _) []) =
     return $
@@ -427,10 +435,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           [(identToCpp arg, Just $ CppAny [CppConst, CppRef])]
           (Just $ CppAny [])
           (asReturnBlock cpp')
-
-  -- valueToCpp (App _ e (Var _ (Qualified (Just (ModuleName [ProperName "Prim"])) (Ident "undefined")))) =
-  --   valueToCpp e
-
   valueToCpp e@App{} = do
     let (f, args) = unApp e []
     args' <- mapM valueToCpp args
@@ -837,6 +841,28 @@ countArgs = go 0
   go argcnt (T.TypeApp (T.TypeApp fn _) t) | fn == E.tyFunction = go (argcnt + 1) t
   go argcnt (T.ConstrainedType ts t) = go (argcnt + length ts) t
   go argcnt _ = argcnt
+
+---------------------------------------------------------------------------------------------------
+extractConstraints :: T.Type -> [T.Constraint]
+---------------------------------------------------------------------------------------------------
+extractConstraints = go []
+  where
+  go cs (T.ForAll _ t _) = go cs t
+  go cs (T.TypeApp (T.TypeApp fn _) t) | fn == E.tyFunction = go cs t
+  go cs (T.ConstrainedType ts t) = go (cs ++ ts) t
+  go cs _ = cs
+
+---------------------------------------------------------------------------------------------------
+dictIndexerToEnum :: [(Cpp,Cpp)] -> Cpp -> Cpp
+---------------------------------------------------------------------------------------------------
+dictIndexerToEnum repls (CppIndexer (CppStringLiteral prop) dict)
+  | Just cls <- lookup dict repls =
+    CppBinary Dot
+      (CppIndexer
+          (CppAccessor (CppVar . identToCpp $ Ident prop) cls)
+          (CppCast mapType dict))
+      (CppVar "second")
+dictIndexerToEnum _ cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
 curriedName :: String -> String

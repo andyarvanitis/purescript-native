@@ -218,6 +218,10 @@ data Cpp
   --
   | CppNamespace String [Cpp]
   -- |
+  -- An C++ struct declaration (name, members)
+  --
+  | CppStruct String [Cpp]
+  -- |
   -- A C++ #include
   --
   | CppInclude String String
@@ -300,6 +304,7 @@ everywhereOnCpp f = go
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
+  go (CppStruct name cpp) = f (CppStruct name (map go cpp))
   go (CppVariableIntroduction name qs j) = f (CppVariableIntroduction name qs (fmap go j))
   go (CppAssignment j1 j2) = f (CppAssignment (go j1) (go j2))
   go (CppWhile j1 j2) = f (CppWhile (go j1) (go j2))
@@ -330,6 +335,7 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppApp j cpp) = CppApp <$> f' j <*> traverse f' cpp
   go (CppBlock cpp) = CppBlock <$> traverse f' cpp
   go (CppNamespace name cpp) = CppNamespace name <$> traverse f' cpp
+  go (CppStruct name cpp) = CppStruct name <$> traverse f' cpp
   go (CppVariableIntroduction name qs j) = CppVariableIntroduction name qs <$> traverse f' j
   go (CppAssignment j1 j2) = CppAssignment <$> f' j1 <*> f' j2
   go (CppWhile j1 j2) = CppWhile <$> f' j1 <*> f' j2
@@ -356,6 +362,7 @@ everythingOnCpp (<>) f = go
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)
+  go j@(CppStruct _ cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppVariableIntroduction _ _ (Just j1)) = f j <> go j1
   go j@(CppAssignment j1 j2) = f j <> go j1 <> go j2
   go j@(CppWhile j1 j2) = f j <> go j1 <> go j2

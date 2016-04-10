@@ -51,6 +51,8 @@ toHeader = catMaybes . map go
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just _)) =
     Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [CppExtern] Nothing
+  go cpp@(CppStruct {}) =
+    Just cpp
   go (CppComment comms cpp')
     | Just cpp <- go cpp' = Just $ case cpp of CppFunction {} -> cpp
                                                _ -> CppComment comms cpp
@@ -76,7 +78,6 @@ toHeaderFns = catMaybes . map go
     Just cpp
   go cpp@(CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
     Just cpp
-
   go (CppComment comms cpp') | Just cpp <- go cpp' = Just (CppComment comms cpp)
   go _ = Nothing
 

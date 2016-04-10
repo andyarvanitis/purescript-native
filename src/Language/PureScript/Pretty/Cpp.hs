@@ -193,6 +193,15 @@ literals = mkPattern' match
     isUseNamespace :: Cpp -> Bool
     isUseNamespace (CppUseNamespace{}) = True
     isUseNamespace _ = False
+  match (CppStruct (name) mems) = fmap concat $ sequence $
+    [ return "\n"
+    , currentIndent
+    , return $ "struct " ++ name ++ " {\n"
+    , withIndent $ prettyStatements mems
+    , return "\n"
+    , currentIndent
+    , return "}"
+    ]
   match (CppInclude path name) =
     let fullpath
           | null path = last . words . dotsTo ' ' $ name
