@@ -84,24 +84,6 @@ auto any::operator()(const any& arg) const -> any {
   return (*variant.f)(arg);
 }
 
-auto any::operator()(const any& arg1, const any& arg2) const -> any {
-  const any& variant = unthunkVariant(*this);
-  if (variant.type == Type::Closure) {
-    return (*variant.l)(arg1, arg2);
-  }
-  assert(variant.type == Type::Function);
-  return (*variant.f)(arg1)(arg2);
-}
-
-auto any::operator()(const any& arg1, const any& arg2, const any& arg3) const -> any {
-  const any& variant = unthunkVariant(*this);
-  if (variant.type == Type::Closure) {
-    return (*variant.l)(arg1, arg2, arg3);
-  }
-  assert(variant.type == Type::Function);
-  return (*variant.f)(arg1)(arg2)(arg3);
-}
-
 auto any::operator()(const as_thunk) const -> const any& {
   assert(type == Type::Thunk);
   return (*t)(unthunk);

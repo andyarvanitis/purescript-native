@@ -101,8 +101,6 @@ class any {
   class closure {
     public:
       virtual auto operator()(const any&) const -> any = 0;
-      virtual auto operator()(const any&, const any&) const -> any = 0;
-      virtual auto operator()(const any&, const any&, const any&) const -> any = 0;
       virtual ~closure() {}
   };
 
@@ -113,52 +111,6 @@ class any {
     _closure(const T& l) noexcept : lambda(l) {}
     auto operator()(const any& arg) const -> any {
       return lambda(arg);
-    }
-    auto operator()(const any& arg1, const any& arg2) const -> any {
-      return lambda(arg1)(arg2);
-    }
-    auto operator()(const any& arg1, const any& arg2, const any& arg3) const -> any {
-      return lambda(arg1)(arg2)(arg3);
-    }
-  };
-
-  template <typename T>
-  class _closure2 : public closure {
-    const T lambda;
-  public:
-    _closure2(const T& l) noexcept : lambda(l) {}
-    auto operator()(const any& arg1) const -> any {
-      return [=](const any& arg2) -> any {
-        return lambda(arg1, arg2);
-      };
-    }
-    auto operator()(const any& arg1, const any& arg2) const -> any {
-      return lambda(arg1, arg2);
-    }
-    auto operator()(const any& arg1, const any& arg2, const any& arg3) const -> any {
-      return lambda(arg1, arg2)(arg3);
-    }
-  };
-
-  template <typename T>
-  class _closure3 : public closure {
-    const T lambda;
-  public:
-    _closure3(const T& l) noexcept : lambda(l) {}
-    auto operator()(const any& arg1) const -> any {
-      return [=](const any& arg2) -> any {
-        return [=](const any& arg3) -> any {
-          return lambda(arg1, arg2, arg3);
-        };
-      };
-    }
-    auto operator()(const any& arg1, const any& arg2) const -> any {
-      return [=](const any& arg3) -> any {
-        return lambda(arg1, arg2, arg3);
-      };
-    }
-    auto operator()(const any& arg1, const any& arg2, const any& arg3) const -> any {
-      return lambda(arg1, arg2, arg3);
     }
   };
 
@@ -242,19 +194,6 @@ class any {
                                                            !std::is_convertible<T,fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&)>,T>::value>::type* = 0)
     : type(Type::Closure), is_shared(true), l(make_shared<_closure<T>>(val)) {}
-
-  template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
-                                                           !std::is_convertible<T,fn>::value>::type>
-  any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&,
-                                                                                 const any&)>,T>::value>::type* = 0)
-    : type(Type::Closure), is_shared(true), l(make_shared<_closure2<T>>(val)) {}
-
-  template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
-                                                           !std::is_convertible<T,fn>::value>::type>
-  any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&,
-                                                                                 const any&,
-                                                                                 const any&)>,T>::value>::type* = 0)
-    : type(Type::Closure), is_shared(true), l(make_shared<_closure3<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
@@ -360,11 +299,7 @@ class any {
   }
 
   auto operator()(const any&) const -> any;
-  auto operator()(const any&, const any&) const -> any;
-  auto operator()(const any&, const any&, const any&) const -> any;
-
   auto operator()(const as_thunk) const -> const any&;
-
   auto operator()() const -> any;
 
   operator long() const;

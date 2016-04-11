@@ -448,18 +448,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         return . CppObjectLiteral $
                      zip
                        ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
-                       (arity2or3 <$> args')
-        where
-        -- For arity 2/3 optimization
-        arity2or3 :: Cpp -> Cpp
-        arity2or3 (CppLambda cs [a1] rty
-                      (CppBlock [CppReturn (CppLambda _ [a2] _
-                                               (CppBlock [CppReturn (CppLambda _ [a3] _ ret)]))])) =
-          CppLambda cs [a1, a2, a3] rty ret
-        arity2or3 (CppLambda cs [a1] rty
-                      (CppBlock [CppReturn (CppLambda _ [a2] _ ret)])) =
-          CppLambda cs [a1, a2] rty ret
-        arity2or3 cpp' = cpp'
+                       args'
       Var ann (Qualified (Just mn') ident)
         | argcnt <- maybe 0 countArgs ty,
           argcnt > 1 -> do
@@ -477,10 +466,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         ty | (_, _, Just t, _) <- ann = Just t
            | Just (t, _, _) <- M.lookup (mn', ident) (E.names env) = Just t
            | otherwise = Nothing
-      Accessor (_, _, Nothing, Nothing) _ (Var _ (Qualified Nothing (Ident _)))
-        | length args' == 2 || length args' == 3 -> do -- arity 2 optimization
-            f' <- valueToCpp f
-            return $ CppApp f' args'
       _ ->
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
 
