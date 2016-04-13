@@ -32,6 +32,7 @@
 #include <deque>
 #include <utility>
 #include <stdexcept>
+#include <iso646.h> // mostly for MS Visual Studio compiler
 
 #define DECLARE_OPERATOR(op, ty, rty) \
   friend auto operator op (const any&, ty) -> rty; \
@@ -328,6 +329,10 @@ class any {
   DECLARE_COMPARISON_OPERATOR(>)
   DECLARE_COMPARISON_OPERATOR(>=)
 
+  // For MS Visual Studio compiler: broken typed-enum workaround
+  DECLARE_OPERATOR(==, int, bool)
+  DECLARE_OPERATOR(!=, int, bool)
+
   friend auto operator+(const any&, const any&) -> any;
 
   DECLARE_OPERATOR(+, long, long)
@@ -360,6 +365,14 @@ class any {
 
   friend auto operator-(const any&) -> any; // unary negate
 };
+
+// For MS Visual Studio compiler: broken typed-enum workaround
+inline auto operator==(const any& lhs, int rhs) -> bool {
+  return lhs == (long)rhs;
+}
+inline auto operator!=(const any& lhs, int rhs) -> bool {
+  return lhs != (long)rhs;
+}
 
 } // namespace PureScript
 
