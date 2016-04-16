@@ -232,7 +232,7 @@ class any {
     }
   }
 
-  auto del() noexcept -> void {
+  auto destruct() noexcept -> void {
     if (is_shared) {
       p.~shared<void>();
     }
@@ -249,7 +249,7 @@ class any {
   }
 
   auto operator=(const any& rhs) -> any& {
-    del();
+    destruct();
     type = rhs.type;
     is_shared = rhs.is_shared;
     copy(rhs);
@@ -257,7 +257,7 @@ class any {
   }
 
   auto operator=(any&& rhs) noexcept -> any& {
-    del();
+    destruct();
     type = rhs.type;
     is_shared = rhs.is_shared;
     move(rhs);
@@ -267,7 +267,7 @@ class any {
   any() = delete;
 
   ~any() {
-    del();
+    destruct();
   }
 
   template <typename T>
