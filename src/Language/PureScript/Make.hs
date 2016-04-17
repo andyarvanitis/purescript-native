@@ -14,6 +14,7 @@ module Language.PureScript.Make
   , ProgressMessage(..), renderProgressMessage
   , MakeActions(..)
   , Externs()
+  , rebuildModule
   , make
 
   -- * Implementation of Make API using files on disk
@@ -42,6 +43,7 @@ import Control.Concurrent.Lifted as C
 
 import Data.List (foldl', sort)
 import Data.Maybe (fromMaybe, catMaybes, isJust)
+import Data.Either (partitionEithers)
 import Data.Time.Clock
 import Data.String (fromString)
 import Data.Foldable (for_)
@@ -146,6 +148,28 @@ data RebuildPolicy
   -- | Always rebuild this module
   | RebuildAlways deriving (Show, Read, Eq, Ord)
 
+-- | Rebuild a single module
+rebuildModule :: forall m. (Monad m, MonadBaseControl IO m, MonadReader Options m, MonadError MultipleErrors m, MonadWriter MultipleErrors m)
+     => MakeActions m
+     -> [ExternsFile]
+     -> Module
+     -> m ExternsFile
+rebuildModule MakeActions{..} externs m@(Module _ _ moduleName _ _) = do
+  progress $ CompilingModule moduleName
+  let env = foldl' (flip applyExternsFileToEnvironment) initEnvironment externs
+  lint m
+  ((checked@(Module ss coms _ elaborated exps), env'), nextVar) <- runSupplyT 0 $ do
+    [desugared] <- desugar externs [m]
+    runCheck' env $ typeCheckModule desugared
+  checkExhaustiveModule env' checked
+  regrouped <- createBindingGroups moduleName . collapseBindingGroups $ elaborated
+  let mod' = Module ss coms moduleName regrouped exps
+      corefn = CF.moduleToCoreFn env' mod'
+      [renamed] = renameInModules [corefn]
+      exts = moduleToExternsFile mod' env'
+  evalSupplyT nextVar . codegen renamed env' . BU8.toString . B.toStrict . encode $ exts
+  return exts
+
 -- |
 -- Compiles in "make" mode, compiling each module separately to a js files and an externs file
 --
@@ -156,7 +180,7 @@ make :: forall m. (Monad m, MonadBaseControl IO m, MonadReader Options m, MonadE
      => MakeActions m
      -> [Module]
      -> m Environment
-make MakeActions{..} ms = do
+make ma@MakeActions{..} ms = do
   requirePath <- asks optionsRequirePath
   when (isJust requirePath) $ tell $ errorMessage DeprecatedRequirePath
 
@@ -220,21 +244,7 @@ make MakeActions{..} ms = do
                               _ -> True
 
         let rebuild = do
-              (exts, warnings) <- listen $ do
-                progress $ CompilingModule moduleName
-                let env = foldl' (flip applyExternsFileToEnvironment) initEnvironment externs
-                lint m
-                ((checked@(Module ss coms _ elaborated exps), env'), nextVar) <- runSupplyT 0 $ do
-                  [desugared] <- desugar externs [m]
-                  runCheck' env $ typeCheckModule desugared
-                checkExhaustiveModule env' checked
-                regrouped <- createBindingGroups moduleName . collapseBindingGroups $ elaborated
-                let mod' = Module ss coms moduleName regrouped exps
-                    corefn = CF.moduleToCoreFn env' mod'
-                    [renamed] = renameInModules [corefn]
-                    exts = moduleToExternsFile mod' env'
-                evalSupplyT nextVar . codegen renamed env' . BU8.toString . B.toStrict . encode $ exts
-                return exts
+              (exts, warnings) <- listen $ rebuildModule ma externs m
               markComplete (Just (warnings, exts)) Nothing
 
         if shouldRebuild
@@ -417,11 +427,10 @@ checkForeignDecls m path = do
   js <- either (errorParsingModule . Bundle.UnableToParseModule) pure $ JS.parse jsStr path
 
   foreignIdentsStrs <- either errorParsingModule pure $ getExps js
-  let foreignIdents =
-        either
-          (internalError . ("checkForeignDecls: unexpected idents: " ++) . show)
-          S.fromList
-          (traverse parseIdent foreignIdentsStrs)
+  foreignIdents <- either
+                     errorInvalidForeignIdentifiers
+                     (pure . S.fromList)
+                     (parseIdents foreignIdentsStrs)
   let importedIdents = S.fromList $ map fst (CF.moduleForeign m)
 
   let unusedFFI = foreignIdents S.\\ importedIdents
@@ -443,10 +452,24 @@ checkForeignDecls m path = do
   getExps :: JS.JSAST -> Either Bundle.ErrorMessage [String]
   getExps = Bundle.getExportedIdentifiers (runModuleName mname)
 
+  errorInvalidForeignIdentifiers :: [String] -> SupplyT Make a
+  errorInvalidForeignIdentifiers =
+    throwError . mconcat . map (errorMessage . InvalidFFIIdentifier mname)
+
+  parseIdents :: [String] -> Either [String] [Ident]
+  parseIdents strs =
+    case partitionEithers (map parseIdent strs) of
+      ([], idents) ->
+        Right idents
+      (errs, _) ->
+        Left errs
+
   -- TODO: Handling for parenthesised operators should be removed after 0.9.
+  -- We ignore the error message here, just being told it's an invalid
+  -- identifier should be enough.
   parseIdent :: String -> Either String Ident
   parseIdent str = try str <|> try ("(" ++ str ++ ")")
     where
-    try s = either (Left . show) Right $ do
+    try s = either (const (Left str)) Right $ do
       ts <- PSParser.lex "" s
       PSParser.runTokenParser "" (PSParser.parseIdent <* Parsec.eof) ts
