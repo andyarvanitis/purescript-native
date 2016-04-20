@@ -113,8 +113,8 @@ toBody = catMaybes . map go
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [] (Just lambda)
     where
-    val = CppVariableIntroduction ("_value_", Just $ CppAny [CppConst]) [CppStatic] (Just $ addCaptures cpp)
-    block = CppBlock [val, CppReturn (CppVar "_value_")]
+    val = CppVariableIntroduction ("$value$", Just $ CppAny [CppConst]) [CppStatic] (Just $ addCaptures cpp)
+    block = CppBlock [val, CppReturn (CppVar "$value$")]
     lambda = CppLambda [] [("", Just $ thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) block
     addCaptures :: Cpp -> Cpp
     addCaptures (CppObjectLiteral objs) = CppObjectLiteral (objlam <$> objs)
