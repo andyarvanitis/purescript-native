@@ -34,17 +34,30 @@
 #include <stdexcept>
 #include <iso646.h> // mostly for MS Visual Studio compiler
 
-#define DECLARE_OPERATOR(op, ty, rty) \
-  friend auto operator op (const any&, ty) -> rty; \
-  friend auto operator op (ty, const any&) -> rty;
+#define DEFINE_OPERATOR(op, ty, rty) \
+  inline friend auto operator op (const any& lhs, ty rhs) -> rty { \
+    return lhs.cast<ty>() op rhs; \
+  } \
+  inline friend auto operator op (ty lhs, const any& rhs) -> rty { \
+    return lhs op rhs.cast<ty>(); \
+  } \
+
+#define DEFINE_INT_OPERATOR(op, rty) \
+  inline friend auto operator op (const any& lhs, int rhs) -> rty { \
+    return lhs.cast<long>() op (long)rhs; \
+  } \
+  inline friend auto operator op (int lhs, const any& rhs) -> rty { \
+    return (long)lhs op rhs.cast<long>(); \
+  }
 
 #define DECLARE_COMPARISON_OPERATOR(op) \
   friend auto operator op (const any&, const any&) -> bool; \
-  DECLARE_OPERATOR(op, long, bool) \
-  DECLARE_OPERATOR(op, double, bool) \
-  DECLARE_OPERATOR(op, char, bool) \
-  DECLARE_OPERATOR(op, const char *, bool)
-
+  DEFINE_OPERATOR(op, long, bool) \
+  DEFINE_OPERATOR(op, double, bool) \
+  DEFINE_OPERATOR(op, char, bool) \
+  DEFINE_INT_OPERATOR(op, bool) \
+  friend auto operator op (const any&, const char * const) -> bool; \
+  friend auto operator op (const char * const, const any&) -> bool;
 
 namespace PureScript {
 
@@ -326,54 +339,49 @@ class any {
   DECLARE_COMPARISON_OPERATOR(>)
   DECLARE_COMPARISON_OPERATOR(>=)
 
-  // For MS Visual Studio compiler: broken typed-enum workaround
-  DECLARE_OPERATOR(==, int, bool)
-  DECLARE_OPERATOR(!=, int, bool)
-
   friend auto operator+(const any&, const any&) -> any;
 
-  DECLARE_OPERATOR(+, long, long)
-  DECLARE_OPERATOR(+, double, double)
-  DECLARE_OPERATOR(+, char, char)
-  DECLARE_OPERATOR(+, const char *, std::string)
+  DEFINE_OPERATOR(+, long, long)
+  DEFINE_OPERATOR(+, double, double)
+  DEFINE_OPERATOR(+, char, char)
+  DEFINE_INT_OPERATOR(+, long)
+  friend auto operator+(const any& lhs, const char * const rhs) -> std::string;
+  friend auto operator+(const char * const lhs, const any& rhs) -> std::string;
 
   friend auto operator-(const any&, const any&) -> any;
 
-  DECLARE_OPERATOR(-, long, long)
-  DECLARE_OPERATOR(-, double, double)
-  DECLARE_OPERATOR(-, char, char)
+  DEFINE_OPERATOR(-, long, long)
+  DEFINE_OPERATOR(-, double, double)
+  DEFINE_OPERATOR(-, char, char)
+  DEFINE_INT_OPERATOR(-, long)
 
   friend auto operator*(const any&, const any&) -> any;
 
-  DECLARE_OPERATOR(*, long, long)
-  DECLARE_OPERATOR(*, double, double)
-  DECLARE_OPERATOR(*, char, char)
+  DEFINE_OPERATOR(*, long, long)
+  DEFINE_OPERATOR(*, double, double)
+  DEFINE_OPERATOR(*, char, char)
+  DEFINE_INT_OPERATOR(*, long)
 
   friend auto operator/(const any&, const any&) -> any;
 
-  DECLARE_OPERATOR(/, long, long)
-  DECLARE_OPERATOR(/, double, double)
-  DECLARE_OPERATOR(/, char, char)
+  DEFINE_OPERATOR(/, long, long)
+  DEFINE_OPERATOR(/, double, double)
+  DEFINE_OPERATOR(/, char, char)
+  DEFINE_INT_OPERATOR(/, long)
 
   friend auto operator%(const any&, const any&) -> any;
 
-  DECLARE_OPERATOR(%, long, long)
-  DECLARE_OPERATOR(%, char, char)
+  DEFINE_OPERATOR(%, long, long)
+  DEFINE_OPERATOR(%, char, char)
+  DEFINE_INT_OPERATOR(%, long)
 
   friend auto operator-(const any&) -> any; // unary negate
 };
 
-// For MS Visual Studio compiler: broken typed-enum workaround
-inline auto operator==(const any& lhs, int rhs) -> bool {
-  return lhs == (long)rhs;
-}
-inline auto operator!=(const any& lhs, int rhs) -> bool {
-  return lhs != (long)rhs;
-}
-
 } // namespace PureScript
 
-#undef DECLARE_OPERATOR
+#undef DEFINE_OPERATOR
+#undef DEFINE_INT_OPERATOR
 #undef DECLARE_COMPARISON_OPERATOR
 
 #endif // PureScript_HH

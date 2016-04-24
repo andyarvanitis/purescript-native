@@ -81,7 +81,7 @@ literals = mkPattern' match
   match :: Cpp -> StateT PrinterState Maybe String
   match CppNoOp = return []
   match CppEndOfHeader = return []
-  match (CppNumericLiteral (Left n)) = return $ show n ++ "L"
+  match (CppNumericLiteral (Left n)) = return $ show n
   match (CppNumericLiteral n) = return $ either show show n
   match (CppStringLiteral s) | all isAscii s = return $ string s
   match (CppStringLiteral s) = return $ "u8" ++ string s

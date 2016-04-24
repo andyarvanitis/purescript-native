@@ -187,14 +187,6 @@ auto any::contains(const char key[]) const -> bool {
 // Operator helper macros
 //-----------------------------------------------------------------------------
 
-#define DEFINE_OPERATOR(op, ty, rty) \
-auto operator op (const any& lhs, ty rhs) -> rty { \
-  return lhs.cast<typename std::remove_const<std::remove_reference<ty>::type>::type>() op rhs; \
-} \
-auto operator op (ty lhs, const any& rhs) -> rty { \
-  return lhs op rhs.cast<typename std::remove_const<std::remove_reference<ty>::type>::type>(); \
-}
-
 #define DEFINE_CSTR_EQUALS_OPERATOR() \
   auto operator==(const any& lhs_, const char * rhs) -> bool { \
     const any& lhs = any::unthunkVariant(lhs_); \
@@ -242,11 +234,7 @@ auto operator op (ty lhs, const any& rhs) -> rty { \
       default: assert(false && "Unsupported type for operator " #op); \
     } \
     return false; \
-  } \
-  DEFINE_OPERATOR(op, long, bool) \
-  DEFINE_OPERATOR(op, double, bool) \
-  DEFINE_OPERATOR(op, char, bool) \
-  DEFINE_OPERATOR(op, bool, bool) \
+  }
 
 //-----------------------------------------------------------------------------
 // Operator definitions
@@ -286,10 +274,6 @@ auto operator+(const any& lhs_, const any& rhs_) -> any {
   return nullptr;
 }
 
-DEFINE_OPERATOR(+, long, long)
-DEFINE_OPERATOR(+, double, double)
-DEFINE_OPERATOR(+, char, char)
-
 auto operator+(const any& lhs_, const char * rhs) -> std::string {
   const any& lhs = any::unthunkVariant(lhs_);
   assert(lhs.type == any::Type::StringLiteral || lhs.type == any::Type::String);
@@ -315,10 +299,6 @@ auto operator-(const any& lhs_, const any& rhs_) -> any {
   return nullptr;
 }
 
-DEFINE_OPERATOR(-, long, long)
-DEFINE_OPERATOR(-, double, double)
-DEFINE_OPERATOR(-, char, char)
-
 auto operator*(const any& lhs_, const any& rhs_) -> any {
   const any& lhs = any::unthunkVariant(lhs_);
   const any& rhs = any::unthunkVariant(rhs_);
@@ -331,10 +311,6 @@ auto operator*(const any& lhs_, const any& rhs_) -> any {
   }
   return nullptr;
 }
-
-DEFINE_OPERATOR(*, long, long)
-DEFINE_OPERATOR(*, double, double)
-DEFINE_OPERATOR(*, char, char)
 
 auto operator/(const any& lhs_, const any& rhs_) -> any {
   const any& lhs = any::unthunkVariant(lhs_);
@@ -349,10 +325,6 @@ auto operator/(const any& lhs_, const any& rhs_) -> any {
   return nullptr;
 }
 
-DEFINE_OPERATOR(/, long, long)
-DEFINE_OPERATOR(/, double, double)
-DEFINE_OPERATOR(/, char, char)
-
 auto operator%(const any& lhs_, const any& rhs_) -> any {
   const any& lhs = any::unthunkVariant(lhs_);
   const any& rhs = any::unthunkVariant(rhs_);
@@ -364,9 +336,6 @@ auto operator%(const any& lhs_, const any& rhs_) -> any {
   }
   return nullptr;
 }
-
-DEFINE_OPERATOR(%, long, long)
-DEFINE_OPERATOR(%, char, char)
 
 // unary negate
 auto operator-(const any& rhs_) -> any {
