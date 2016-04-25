@@ -22,59 +22,6 @@ namespace PureScript {
   assert(variant.type == TYPE); \
   return INDIRECTION(variant.ACCESSOR); \
 
-template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type {
-  RETURN_VALUE(Type::Integer, i,)
-}
-template auto any::cast<long>() const -> long;
-
-template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, double>::value, T>::type {
-  RETURN_VALUE(Type::Double, d,)
-}
-template auto any::cast<double>() const -> double;
-
-template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, char>::value, T>::type {
-  RETURN_VALUE(Type::Character, c,)
-}
-template auto any::cast<char>() const -> char;
-
-template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, bool>::value, T>::type {
-  RETURN_VALUE(Type::Boolean, b,)
-}
-template auto any::cast<bool>() const -> bool;
-
-template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, string>::value, T>::type {
-  const any& variant = unthunkVariant(*this);
-  if (variant.type == Type::StringLiteral) {
-    return variant.r;
-  }
-  assert(variant.type == Type::String);
-  return variant.s->c_str();
-}
-template auto any::cast<string>() const -> string;
-
-template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type {
-  RETURN_VALUE(Type::Map, m, *)
-}
-template auto any::cast<any::map>() const -> const map&;
-
-template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, data>::value, const T&>::type {
-  RETURN_VALUE(Type::Data, v, *)
-}
-template auto any::cast<any::data>() const -> const data&;
-
-template <typename T>
-auto any::cast() const -> typename std::enable_if<std::is_same<T, array>::value, const T&>::type {
-  RETURN_VALUE(Type::Array, a, *)
-}
-template auto any::cast<any::array>() const -> const array&;
-
 auto any::operator()(const any& arg) const -> any {
   const any& variant = unthunkVariant(*this);
   if (variant.type == Type::Closure) {
@@ -96,31 +43,40 @@ auto any::operator()() const -> any {
 }
 
 any::operator long() const {
-  return cast<long>();
+  RETURN_VALUE(Type::Integer, i,)
 }
 
 any::operator double() const {
-  return cast<double>();
+  RETURN_VALUE(Type::Double, d,)
 }
 
 any::operator bool() const {
-  return cast<bool>();
+  RETURN_VALUE(Type::Boolean, b,)
 }
 
-any::operator string() const {
-  return cast<string>();
+any::operator char() const {
+  RETURN_VALUE(Type::Character, c,)
+}
+
+any::operator cstring() const {
+  const any& variant = unthunkVariant(*this);
+  if (variant.type == Type::StringLiteral) {
+    return variant.r;
+  }
+  assert(variant.type == Type::String);
+  return variant.s->c_str();
 }
 
 any::operator const map&() const {
-  return cast<map>();
+  RETURN_VALUE(Type::Map, m, *)
 }
 
 any::operator const data&() const {
-  return cast<data>();
+  RETURN_VALUE(Type::Data, v, *)
 }
 
 any::operator const array&() const {
-  return cast<array>();
+  RETURN_VALUE(Type::Array, a, *)
 }
 
 auto any::extractPointer() const -> void* {
@@ -162,7 +118,7 @@ auto any::operator[](const size_t rhs) const -> const any& {
 auto any::operator[](const any& rhs) const -> const any& {
   const any& variant = unthunkVariant(*this);
   assert(variant.type == Type::Array);
-  return (*variant.a)[rhs.cast<long>()];
+  return (*variant.a)[cast<long>(rhs)];
 }
 
 auto any::contains(const char key[]) const -> bool {
@@ -207,10 +163,10 @@ auto any::contains(const char key[]) const -> bool {
 
 #define DEFINE_CSTR_COMPARISON_OPERATOR(op) \
   auto operator op (const any& lhs, const char * rhs) -> bool { \
-    return strcmp(lhs.cast<string>(), rhs) op 0; \
+    return strcmp(cast<cstring>(lhs), rhs) op 0; \
   } \
   auto operator op (const char * lhs, const any& rhs) -> bool { \
-    return strcmp(lhs, rhs.cast<string>()) op 0; \
+    return strcmp(lhs, cast<cstring>(rhs)) op 0; \
   }
 
 #define DEFINE_COMPARISON_OPERATOR(op) \

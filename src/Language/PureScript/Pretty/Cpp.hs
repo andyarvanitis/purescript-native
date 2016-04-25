@@ -229,7 +229,7 @@ literals = mkPattern' match
       CppNumericLiteral {} -> vstr
       CppStringLiteral {}  -> vstr
       CppBooleanLiteral {} -> vstr
-      _ -> val' ++ ".cast" ++ angles (runType typ) ++ parens []
+      _ -> "cast" ++ angles (runType typ) ++ parens val'
     where
     vstr = prettyPrintCpp1 val
     val' | '(' `elem` vstr || '[' `elem` vstr = parens vstr

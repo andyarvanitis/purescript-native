@@ -34,34 +34,9 @@
 #include <stdexcept>
 #include <iso646.h> // mostly for MS Visual Studio compiler
 
-#define DEFINE_OPERATOR(op, ty, rty) \
-  inline friend auto operator op (const any& lhs, ty rhs) -> rty { \
-    return lhs.cast<ty>() op rhs; \
-  } \
-  inline friend auto operator op (ty lhs, const any& rhs) -> rty { \
-    return lhs op rhs.cast<ty>(); \
-  } \
-
-#define DEFINE_INT_OPERATOR(op, rty) \
-  inline friend auto operator op (const any& lhs, int rhs) -> rty { \
-    return lhs.cast<long>() op (long)rhs; \
-  } \
-  inline friend auto operator op (int lhs, const any& rhs) -> rty { \
-    return (long)lhs op rhs.cast<long>(); \
-  }
-
-#define DECLARE_COMPARISON_OPERATOR(op) \
-  friend auto operator op (const any&, const any&) -> bool; \
-  DEFINE_OPERATOR(op, long, bool) \
-  DEFINE_OPERATOR(op, double, bool) \
-  DEFINE_OPERATOR(op, char, bool) \
-  DEFINE_INT_OPERATOR(op, bool) \
-  friend auto operator op (const any&, const char * const) -> bool; \
-  friend auto operator op (const char * const, const any&) -> bool;
-
 namespace PureScript {
 
-using string = const char *;
+using cstring = const char *;
 using nullptr_t = std::nullptr_t;
 
 // Workaround for missing C++11 version in gcc
@@ -158,7 +133,7 @@ class any {
     mutable double               d;
     mutable char                 c;
     mutable bool                 b;
-    mutable string               r;
+    mutable cstring              r;
     mutable fn                   f;
     mutable shared<std::string>  s;
     mutable shared<map>          m;
@@ -280,35 +255,6 @@ class any {
     destruct();
   }
 
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, long>::value, T>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, double>::value, T>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, char>::value, T>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, bool>::value, T>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, string>::value, T>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, map>::value, const T&>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, data>::value, const T&>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_same<T, array>::value, const T&>::type;
-
-  template <typename T>
-  auto cast() const -> typename std::enable_if<std::is_assignable<shared<void>,T>::value, typename T::element_type*>::type {
-    return static_cast<typename T::element_type*>(extractPointer());
-  }
-
   auto operator()(const any&) const -> any;
   auto operator()(const as_thunk) const -> const any&;
   auto operator()() const -> any;
@@ -316,8 +262,8 @@ class any {
   operator long() const;
   operator double() const;
   operator bool() const;
-
-  operator string() const;
+  operator char() const;
+  operator cstring() const;
   operator const map&() const;
   operator const data&() const;
   operator const array&() const;
@@ -331,6 +277,31 @@ class any {
   auto extractPointer() const -> void*;
 
   static auto unthunkVariant(const any&) -> const any&;
+
+  #define DEFINE_OPERATOR(op, ty, rty) \
+    inline friend auto operator op (const any& lhs, ty rhs) -> rty { \
+      return (ty)lhs op rhs; \
+    } \
+    inline friend auto operator op (ty lhs, const any& rhs) -> rty { \
+      return lhs op (ty)rhs; \
+    } \
+
+  #define DEFINE_INT_OPERATOR(op, rty) \
+    inline friend auto operator op (const any& lhs, int rhs) -> rty { \
+      return (long)lhs op (long)rhs; \
+    } \
+    inline friend auto operator op (int lhs, const any& rhs) -> rty { \
+      return (long)lhs op (long)rhs; \
+    }
+
+  #define DECLARE_COMPARISON_OPERATOR(op) \
+    friend auto operator op (const any&, const any&) -> bool; \
+    DEFINE_OPERATOR(op, long, bool) \
+    DEFINE_OPERATOR(op, double, bool) \
+    DEFINE_OPERATOR(op, char, bool) \
+    DEFINE_INT_OPERATOR(op, bool) \
+    friend auto operator op (const any&, const char * const) -> bool; \
+    friend auto operator op (const char * const, const any&) -> bool;
 
   DECLARE_COMPARISON_OPERATOR(==)
   DECLARE_COMPARISON_OPERATOR(!=)
@@ -377,6 +348,29 @@ class any {
 
   friend auto operator-(const any&) -> any; // unary negate
 };
+
+template <typename T>
+inline auto cast(const any& a) ->
+    typename std::enable_if<std::is_arithmetic<T>::value ||
+                            std::is_same<T,cstring>::value, T>::type {
+  return a;
+}
+
+template <typename T>
+inline auto cast(const any& a) ->
+    typename std::enable_if<std::is_same<T, any::map>::value  ||
+                            std::is_same<T, any::data>::value ||
+                            std::is_same<T, any::array>::value, const T&>::type {
+  return a;
+}
+
+template <typename T, typename = typename std::enable_if<std::is_class<T>::value>::type>
+inline auto cast(const any& a) ->
+    typename std::enable_if<!std::is_same<T, any::map>::value  &&
+                            !std::is_same<T, any::data>::value &&
+                            !std::is_same<T, any::array>::value, T&>::type {
+  return *static_cast<T*>(a.extractPointer());
+}
 
 } // namespace PureScript
 
