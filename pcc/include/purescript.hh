@@ -146,23 +146,23 @@ class any {
 
   public:
 
-  any(const long val) : type(Type::Integer), i(val) {}
-  any(const int val) : type(Type::Integer), i(val) {}
-  any(const unsigned int val) : type(Type::Integer), i(val) {}
-  any(const double val) : type(Type::Double), d(val) {}
-  any(const char val) : type(Type::Character), c(val) {}
+  any(const long val) noexcept : type(Type::Integer), i(val) {}
+  any(const int val) noexcept : type(Type::Integer), i(val) {}
+  any(const unsigned int val) noexcept : type(Type::Integer), i(val) {}
+  any(const double val) noexcept : type(Type::Double), d(val) {}
+  any(const char val) noexcept : type(Type::Character), c(val) {}
 
   template <typename T, typename = typename std::enable_if<std::is_same<bool,T>::value>::type>
-  any(const T val) : type(Type::Boolean), b(val) {}
+  any(const T val) noexcept : type(Type::Boolean), b(val) {}
 
   template <size_t N>
-  any(const char (&val)[N]) : type(Type::StringLiteral), r(val) {}
+  any(const char (&val)[N]) noexcept : type(Type::StringLiteral), r(val) {}
   any(char * val) : type(Type::String), s(make_shared<std::string>(val)) {}
 
   any(const std::string& val) : type(Type::String), s(make_shared<std::string>(val)) {}
-  any(std::string&& val) : type(Type::String), s(make_shared<std::string>(std::move(val))) {}
+  any(std::string&& val) noexcept : type(Type::String), s(make_shared<std::string>(std::move(val))) {}
 
-  any(const shared<std::string>& val) : type(Type::String), s(val) {}
+  any(const shared<std::string>& val) noexcept : type(Type::String), s(val) {}
   any(shared<std::string>&& val) noexcept : type(Type::String), s(std::move(val)) {}
 
   any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
@@ -175,7 +175,7 @@ class any {
   any(array&& val) noexcept : type(Type::Array), a(make_shared<array>(std::move(val))) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0)
+  any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0) noexcept
     : type(Type::Function), f(val) {}
 
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
@@ -188,22 +188,22 @@ class any {
     : type(Type::EffFunction), e(make_shared<_eff_fn<T>>(val)) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0)
+  any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0) noexcept
     : type(Type::Thunk), t(val) {}
 
   template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0)
+  any(const T& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0) noexcept
     : type(Type::Pointer), p(val) {}
 
   template <typename T>
   any(T&& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0) noexcept
     : type(Type::Pointer), p(std::move(val)) {}
 
-  any(std::nullptr_t) : type(Type::Pointer), p(nullptr) {}
+  any(std::nullptr_t) noexcept : type(Type::Pointer), p(nullptr) {}
 
   private:
 
-  auto copy(const any& other) const -> void {
+  auto copy(const any& other) const noexcept -> void {
     if (type & Type::Shared) {
       new (&p) shared<void>(other.p);
     } else {
@@ -211,7 +211,7 @@ class any {
     }
   }
 
-  auto move(any& other) const noexcept -> void {
+  auto move(any&& other) const noexcept -> void {
     if (type & Type::Shared) {
       new (&p) shared<void>(std::move(other.p));
     } else {
@@ -219,7 +219,7 @@ class any {
     }
   }
 
-  auto destruct() noexcept -> void {
+  auto destruct() -> void {
     if (type & Type::Shared) {
       p.~shared<void>();
     }
@@ -227,15 +227,15 @@ class any {
 
   public:
 
-  any(const any& other) : type(other.type) {
+  any(const any& other) noexcept : type(other.type) {
     copy(other);
   }
 
   any(any&& other) noexcept : type(other.type) {
-    move(other);
+    move(std::move(other));
   }
 
-  auto operator=(const any& rhs) -> any& {
+  auto operator=(const any& rhs) noexcept -> any& {
     destruct();
     type = rhs.type;
     copy(rhs);
@@ -245,7 +245,7 @@ class any {
   auto operator=(any&& rhs) noexcept -> any& {
     destruct();
     type = rhs.type;
-    move(rhs);
+    move(std::move(rhs));
     return *this;
   }
 
