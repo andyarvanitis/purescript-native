@@ -61,13 +61,14 @@ class any {
     Boolean       = 0x04,
     StringLiteral = 0x05,
     Function      = 0x06,
+    EffFunction   = 0x07,
     Shared = 0x08,
     String        = 0x08,
     Map           = 0x09,
     Data          = 0x0A,
     Array         = 0x0B,
     Closure       = 0x0C,
-    EffFunction   = 0x0D,
+    EffClosure    = 0x0D,
     Pointer       = 0x0E
   };
 
@@ -83,6 +84,7 @@ class any {
   using data    = std::vector<any>;
   using array   = std::deque<any>;
   using fn      = auto (*)(const any&) -> any;
+  using eff_fn  = auto (*)() -> any;
   using thunk   = auto (*)(const as_thunk) -> const any&;
 
   private:
@@ -102,16 +104,16 @@ class any {
     }
   };
 
-  class eff_fn {
+  class eff_closure {
     public:
       virtual auto operator()() const -> any = 0;
   };
 
   template <typename T>
-  class _eff_fn : public eff_fn {
+  class _eff_closure : public eff_closure {
     const T lambda;
   public:
-    _eff_fn(const T& l) noexcept : lambda(l) {}
+    _eff_closure(const T& l) noexcept : lambda(l) {}
     auto operator()() const -> any {
       return lambda();
     }
@@ -135,12 +137,13 @@ class any {
     mutable bool                 b;
     mutable cstring              r;
     mutable fn                   f;
+    mutable eff_fn               e;
     mutable shared<std::string>  s;
     mutable shared<map>          m;
     mutable shared<data>         v;
     mutable shared<array>        a;
     mutable shared<closure>      l;
-    mutable shared<eff_fn>       e;
+    mutable shared<eff_closure>  el;
     mutable shared<void>         p;
   };
 
@@ -184,8 +187,14 @@ class any {
     : type(Type::Closure), l(make_shared<_closure<T>>(val)) {}
 
   template <typename T>
+  any(const T& val, typename std::enable_if<std::is_convertible<T,eff_fn>::value>::type* = 0) noexcept
+    : type(Type::EffFunction), e(val) {}
+
+  template <typename T,
+            typename = typename std::enable_if<!std::is_same<any,T>::value &&
+                                               !std::is_convertible<T,eff_fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
-    : type(Type::EffFunction), e(make_shared<_eff_fn<T>>(val)) {}
+    : type(Type::EffClosure), el(make_shared<_eff_closure<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0) noexcept
