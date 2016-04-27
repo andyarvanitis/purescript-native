@@ -33,7 +33,7 @@ import Data.Maybe (catMaybes)
 import qualified Data.Map as M
 
 import Control.Monad (forM, replicateM)
-import Control.Monad.Reader (MonadReader)
+import Control.Monad.Reader (MonadReader, ask)
 import Control.Monad.Supply.Class
 import Language.PureScript.AST.SourcePos
 import Language.PureScript.CodeGen.Cpp.AST as AST
@@ -476,7 +476,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Let _ ds val) = do
     ds' <- concat <$> mapM (bindToCpp []) ds
     ret <- valueToCpp val
-    let ds'' = tco defaultOptions <$> ds'
+    opts <- ask
+    let ds'' = tco opts <$> ds'
     let rs = if hasRecursion ds''
                then convertRecursiveFns ds''
                else ds''
