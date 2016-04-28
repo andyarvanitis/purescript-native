@@ -99,7 +99,7 @@ class any {
     const T lambda;
   public:
     _closure(const T& l) noexcept : lambda(l) {}
-    auto operator()(const any& arg) const -> any {
+    auto operator()(const any& arg) const -> any override {
       return lambda(arg);
     }
   };
@@ -107,6 +107,7 @@ class any {
   class eff_closure {
     public:
       virtual auto operator()() const -> any = 0;
+      virtual ~eff_closure() {}
   };
 
   template <typename T>
@@ -114,7 +115,7 @@ class any {
     const T lambda;
   public:
     _eff_closure(const T& l) noexcept : lambda(l) {}
-    auto operator()() const -> any {
+    auto operator()() const -> any override {
       return lambda();
     }
   };
