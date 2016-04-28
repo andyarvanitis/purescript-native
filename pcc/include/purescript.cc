@@ -83,7 +83,7 @@ any::operator const array&() const {
 }
 
 auto any::extractPointer() const -> void* {
-  RETURN_VALUE(Type::Pointer, p.get(),)
+  RETURN_VALUE(Type::Pointer, POINTER_FROM_MEMBER(p),)
 }
 
 auto any::unthunkVariant(const any& a) -> const any& {

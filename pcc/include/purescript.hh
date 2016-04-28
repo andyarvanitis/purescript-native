@@ -25,7 +25,6 @@
   #define assert(x)
 #endif
 
-#include <memory>
 #include <functional>
 #include <string>
 #include <vector>
@@ -33,6 +32,7 @@
 #include <utility>
 #include <stdexcept>
 #include <iso646.h> // mostly for MS Visual Studio compiler
+#include "PureScript_GC.hh"
 
 namespace PureScript {
 
@@ -80,12 +80,13 @@ class any {
   };
   static constexpr as_thunk unthunk = as_thunk{};
 
-  using map     = std::vector<std::pair<const char * const, const any>>;
-  using data    = std::vector<any>;
-  using array   = std::deque<any>;
-  using fn      = auto (*)(const any&) -> any;
-  using eff_fn  = auto (*)() -> any;
-  using thunk   = auto (*)(const as_thunk) -> const any&;
+  using map_pair = std::pair<const char * const, const any>;
+  using map      = std::vector<map_pair WITH_ALLOCATOR(map_pair)>;
+  using data     = std::vector<any WITH_ALLOCATOR(any)>;
+  using array    = std::deque<any WITH_ALLOCATOR(any)>;
+  using fn       = auto (*)(const any&) -> any;
+  using eff_fn   = auto (*)() -> any;
+  using thunk    = auto (*)(const as_thunk) -> const any&;
 
   private:
   class closure {
@@ -122,11 +123,11 @@ class any {
 
   public:
   template <typename T>
-  using shared = std::shared_ptr<T>;
+  using shared = SHARED_TYPE(T);
 
   template <typename T, typename... Args>
-  inline static auto make_shared(Args&&... args) -> decltype(std::make_shared<T>(std::forward<Args>(args)...)) {
-    return std::make_shared<T>(std::forward<Args>(args)...);
+  inline static auto make_shared(Args&&... args) -> SHARED_TYPE(T) {
+    return MAKE_SHARED(T)(std::forward<Args>(args)...);
   }
 
   private:
@@ -201,8 +202,9 @@ class any {
   any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0) noexcept
     : type(Type::Thunk), t(val) {}
 
-  template <typename T>
-  any(const T& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0) noexcept
+  template <typename T,
+            typename = typename std::enable_if<std::is_class<typename std::remove_pointer<T>::type>::value>::type>
+  any(const T& val, typename std::enable_if<IS_POINTER_TYPE(T)::value>::type* = 0) noexcept
     : type(Type::Pointer), p(val) {}
 
   template <typename T>
@@ -211,8 +213,9 @@ class any {
 
   any(std::nullptr_t) noexcept : type(Type::Pointer), p(nullptr) {}
 
-  private:
 
+#if !defined(USE_GC)
+  private:
   auto copy(const any& other) const noexcept -> void {
     if (type & Type::Shared) {
       new (&p) shared<void>(other.p);
@@ -236,7 +239,6 @@ class any {
   }
 
   public:
-
   any(const any& other) noexcept : type(other.type) {
     copy(other);
   }
@@ -259,11 +261,13 @@ class any {
     return *this;
   }
 
-  any() = delete;
-
   ~any() {
     destruct();
   }
+#endif // !defined(USE_GC)
+
+  public:
+  any() = delete;
 
   auto operator()(const any&) const -> any;
   auto operator()(const as_thunk) const -> const any&;
@@ -384,6 +388,10 @@ inline auto cast(const any& a) ->
 
 } // namespace PureScript
 
+#undef WITH_ALLOCATOR
+#undef SHARED_TYPE
+#undef MAKE_SHARED
+#undef IS_POINTER_TYPE
 #undef DEFINE_OPERATOR
 #undef DEFINE_INT_OPERATOR
 #undef DECLARE_COMPARISON_OPERATOR

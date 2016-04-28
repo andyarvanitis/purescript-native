@@ -121,6 +121,7 @@ buildMakeActions outputDir filePathMap usePrefix =
       when (not supportFilesExist) $ do
         writeTextFile (supportDir </> "PureScript.hh") $ B.unpack $(embedFile "pcc/include/purescript.hh")
         writeTextFile (supportDir </> "PureScript.cc") $ B.unpack $(embedFile "pcc/include/purescript.cc")
+        writeTextFile (supportDir </> "PureScript_GC.hh") $ B.unpack $(embedFile "pcc/include/purescript_gc.hh")
 
       let inputPath = dropExtension $ getInputFile mn
           hfile = addExtension inputPath "hh"

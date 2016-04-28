@@ -24,6 +24,11 @@ override PCCFLAGS += --comments
 override CXXFLAGS += -std=c++11
 override LDFLAGS  +=
 
+ifeq ($(USE_GC),yes)
+  override CXXFLAGS += -DUSE_GC
+  override LDFLAGS += -lgc
+endif
+
 DEBUG := "-DDEBUG -g"
 RELEASE := "-O3 -flto"
 
@@ -34,10 +39,10 @@ INCLUDES := -I $(OUTPUT)
 BIN_DIR := $(OUTPUT)/bin
 
 release: codegen
-	@$(MAKE) $(BIN) CXXFLAGS=$(RELEASE)
+	@$(MAKE) $(BIN) CXXFLAGS+=$(RELEASE)
 
 debug: codegen
-	@$(MAKE) $(BIN) CXXFLAGS=$(DEBUG)
+	@$(MAKE) $(BIN) CXXFLAGS+=$(DEBUG)
 
 codegen:
 	@$(PCC) $(PCCFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
