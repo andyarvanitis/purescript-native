@@ -426,7 +426,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp (ObjectUpdate _ _ _) = error $ "Bad Type in object update!"
 
-  valueToCpp (Abs _ arg body) = do
+  valueToCpp (Abs (_, _, ty, _) arg body) = do
     cpp <- valueToCpp body
     let cpp' = convertNestedLambdas cpp
     return $
@@ -434,7 +434,14 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           []
           [(identToCpp arg, Just $ CppAny [CppConst, CppRef])]
           (Just $ CppAny [])
-          (asReturnBlock cpp')
+          (asReturnBlock $ convertDictIndexers cpp')
+    where
+      arg' = identToCpp arg
+      args' = identToCpp <$> (fst $ unAbs body [])
+      classes = qualifiedToCpp (Ident . runProperName) . fst <$>
+                    maybe [] extractConstraints ty
+      dictClasses = zip (CppVar <$> arg' : args') classes
+      convertDictIndexers = everywhereOnCpp (dictIndexerToEnum dictClasses)
   valueToCpp e@App{} = do
     let (f, args) = unApp e []
     args' <- mapM valueToCpp args
