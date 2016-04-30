@@ -121,8 +121,5 @@ arrayType = CppPrimitive "any::array"
 thunkMarkerType :: CppType
 thunkMarkerType = CppPrimitive "any::as_thunk"
 
-unthunkMarkerValue :: String
-unthunkMarkerValue = "any::unthunk"
-
 ctorKey :: String
 ctorKey = "constructor"

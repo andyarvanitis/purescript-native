@@ -173,8 +173,6 @@ nativeMain = CppFunction "main"
                []
                (CppBlock [ CppUseNamespace "Main"
                          , CppApp (CppVar "INITIALIZE_GC") []
-                         , CppApp (CppApp (CppAccessor (CppVar "main") (CppVar "Main"))
-                                          [CppVar unthunkMarkerValue])
-                                  []
+                         , CppApp (CppAccessor (CppVar "main") (CppVar "Main")) []
                          , CppReturn (CppNumericLiteral (Left 0))
                          ])
