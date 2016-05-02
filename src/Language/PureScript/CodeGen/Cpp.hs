@@ -29,7 +29,7 @@ module Language.PureScript.CodeGen.Cpp
 import Data.Char (isLetter)
 import Data.List
 import Data.Function (on)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromJust)
 import qualified Data.Map as M
 
 import Control.Monad (forM, replicateM)
@@ -314,13 +314,19 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     go cpp = cpp
 
   -------------------------------------------------------------------------------------------------
-  convertRecursiveFns :: [Cpp] -> [Cpp]
+  convertRecursiveFns :: [Cpp] -> Cpp -> [Cpp]
   -------------------------------------------------------------------------------------------------
-  convertRecursiveFns cpps
-    | not $ null fns = dict : (accessor topdict <$> fns) ++ (everywhereOnCpp removeRec <$> cpps)
+  convertRecursiveFns cpps otherCpp
+    | not $ null fns = dict : (accessor topdict <$> filteredFns allCpps) ++ cpps'
     where
+    cpps' = everywhereOnCpp removeRec <$> cpps
+    allCpps = CppBlock $ otherCpp : cpps'
+
     fns :: [(String, Cpp)]
     fns = toelem <$> concatMap (everythingOnCpp (++) recursive) cpps
+
+    filteredFns :: Cpp -> [(String, Cpp)]
+    filteredFns cpp = filter (\(f,_) -> everythingOnCpp (||) (== CppVar f) cpp) fns
 
     recursive :: Cpp -> [Cpp]
     recursive cpp'@(CppFunction _ _ _ qs _) | CppRecursive `elem` qs = [cpp']
@@ -334,7 +340,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     dict = CppVariableIntroduction
                (topdict, Just $ CppAny [CppConst])
                []
-               (Just $ CppObjectLiteral fns)
+               (Just $ CppDataLiteral ((\(f,cpp) -> CppComment [LineComment f] cpp) <$> fns))
 
     accessor :: String -> (String, Cpp) -> Cpp
     accessor dictname (name, _) =
@@ -344,15 +350,23 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           (Just accessed)
       where
       dict' = CppVar dictname
-      accessed = CppApp (CppIndexer (CppStringLiteral name) dict') [dict']
+      dict'' = CppCast dataType dict'
+      accessed = CppApp
+                   (CppIndexer
+                      (CppNumericLiteral .
+                       Left .
+                       fromIntegral .
+                       fromJust $ findIndex ((== name) . fst) fns)
+                      dict'')
+                   [dict']
 
     toelem :: Cpp -> (String, Cpp)
-    toelem (CppFunction name args rtyp _ (CppBlock body)) =
+    toelem (CppFunction name args rtyp _ body'@(CppBlock body)) =
       (name, withdict . maybeRemCaps $ CppLambda
                                            [CppCaptureAll]
                                            args
                                            rtyp
-                                           (CppBlock $ (accessor localdict <$> fns) ++ body))
+                                           (CppBlock $ (accessor localdict <$> filteredFns body') ++ body))
     toelem _ = error "not a function"
 
     withdict :: Cpp -> Cpp
@@ -362,11 +376,11 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                        (Just $ CppAny [])
                                        (asReturnBlock cpp')
     topdict :: String
-    topdict = "__dict__"
+    topdict = "_$dict$_"
     localdict :: String
-    localdict = "_dict_"
+    localdict = "$dict$"
 
-  convertRecursiveFns cpps = cpps
+  convertRecursiveFns cpps _ = cpps
 
   -- |
   -- Generate code in the simplified C++1x intermediate representation for a value or expression.
@@ -486,7 +500,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     opts <- ask
     let ds'' = tco opts <$> ds'
     let rs = if hasRecursion ds''
-               then convertRecursiveFns ds''
+               then convertRecursiveFns ds'' ret
                else ds''
     let cpps = convertNestedLambdas <$> rs
     return $ CppApp
