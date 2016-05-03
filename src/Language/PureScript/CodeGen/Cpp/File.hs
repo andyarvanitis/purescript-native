@@ -48,6 +48,8 @@ toHeader = catMaybes . map go
     Nothing
   go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
     Nothing
+  go (CppVariableIntroduction (name, _) _ (Just (CppLambda _ [] rty _))) =
+    Just $ CppFunction name [] rty [] CppNoOp
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just _)) =
     Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [CppExtern] Nothing
@@ -109,6 +111,8 @@ toBody = catMaybes . map go
     Nothing
   go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
     Nothing
+  go (CppVariableIntroduction (name, _) _ (Just (CppLambda _ [] rty body))) =
+    Just $ CppFunction name [] rty [] body
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [] (Just lambda)
