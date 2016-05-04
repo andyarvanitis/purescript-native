@@ -21,7 +21,7 @@ This is an experimental native compiler/backend for [PureScript](https://github.
 
 * PureScript arrays are implmented using [`std::deque`](http://en.cppreference.com/w/cpp/container/deque) (random access *O(1)*)
 * `String` types are implmented using either C-strings (for literals) or `std::string`
-* `Number` is C++ `double`, `Int` is C++ `long`, `Char` is `char`, `Boolean` is `bool`
+* `Number` is C++ `double`, `Int` is C++ `long` (or `long long`), `Char` is `char`, `Boolean` is `bool`
 * [Standard packages currently building (lightly tested)](https://github.com/andyarvanitis/pure11/wiki/Packages)
 
 #### TO-DO:
@@ -69,7 +69,7 @@ namespace Main {
   using namespace Control_Monad_Eff;
 
   auto fib(const any& v) -> any {
-    switch (cast<long>(v)) {
+    switch (cast<integer>(v)) {
       case 0: return 0;
       case 1: return 1;
     };
