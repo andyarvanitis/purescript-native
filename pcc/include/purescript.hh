@@ -36,6 +36,7 @@
 
 namespace PureScript {
 
+using integer = std::intptr_t;
 using cstring = const char *;
 using nullptr_t = std::nullptr_t;
 
@@ -44,6 +45,9 @@ class runtime_error : public std::runtime_error {
 public:
   runtime_error(const char message[]) : std::runtime_error(std::string(message)) {}
 };
+
+const integer INTEGER_MIN = INTPTR_MIN;
+const integer INTEGER_MAX = INTPTR_MAX;
 
 const bool undefined = false;
 const size_t constructor = 0;
@@ -133,7 +137,7 @@ class any {
   private:
   union {
     mutable thunk                t;
-    mutable long                 i;
+    mutable integer              i;
     mutable double               d;
     mutable char                 c;
     mutable bool                 b;
@@ -151,7 +155,7 @@ class any {
 
   public:
 
-  any(const long val) noexcept : type(Type::Integer), i(val) {}
+  any(const integer val) noexcept : type(Type::Integer), i(val) {}
   any(const int val) noexcept : type(Type::Integer), i(val) {}
   any(const unsigned int val) noexcept : type(Type::Integer), i(val) {}
   any(const double val) noexcept : type(Type::Double), d(val) {}
@@ -273,7 +277,7 @@ class any {
   auto operator()(const as_thunk) const -> const any&;
   auto operator()() const -> any;
 
-  operator long() const;
+  operator integer() const;
   operator double() const;
   operator bool() const;
   operator char() const;
@@ -302,15 +306,15 @@ class any {
 
   #define DEFINE_INT_OPERATOR(op, rty) \
     inline friend auto operator op (const any& lhs, int rhs) -> rty { \
-      return (long)lhs op (long)rhs; \
+      return (integer)lhs op (integer)rhs; \
     } \
     inline friend auto operator op (int lhs, const any& rhs) -> rty { \
-      return (long)lhs op (long)rhs; \
+      return (integer)lhs op (integer)rhs; \
     }
 
   #define DECLARE_COMPARISON_OPERATOR(op) \
     friend auto operator op (const any&, const any&) -> bool; \
-    DEFINE_OPERATOR(op, long, bool) \
+    DEFINE_OPERATOR(op, integer, bool) \
     DEFINE_OPERATOR(op, double, bool) \
     DEFINE_OPERATOR(op, char, bool) \
     DEFINE_INT_OPERATOR(op, bool) \
@@ -326,39 +330,39 @@ class any {
 
   friend auto operator+(const any&, const any&) -> any;
 
-  DEFINE_OPERATOR(+, long, long)
+  DEFINE_OPERATOR(+, integer, integer)
   DEFINE_OPERATOR(+, double, double)
   DEFINE_OPERATOR(+, char, char)
-  DEFINE_INT_OPERATOR(+, long)
+  DEFINE_INT_OPERATOR(+, integer)
   friend auto operator+(const any& lhs, const char * const rhs) -> std::string;
   friend auto operator+(const char * const lhs, const any& rhs) -> std::string;
 
   friend auto operator-(const any&, const any&) -> any;
 
-  DEFINE_OPERATOR(-, long, long)
+  DEFINE_OPERATOR(-, integer, integer)
   DEFINE_OPERATOR(-, double, double)
   DEFINE_OPERATOR(-, char, char)
-  DEFINE_INT_OPERATOR(-, long)
+  DEFINE_INT_OPERATOR(-, integer)
 
   friend auto operator*(const any&, const any&) -> any;
 
-  DEFINE_OPERATOR(*, long, long)
+  DEFINE_OPERATOR(*, integer, integer)
   DEFINE_OPERATOR(*, double, double)
   DEFINE_OPERATOR(*, char, char)
-  DEFINE_INT_OPERATOR(*, long)
+  DEFINE_INT_OPERATOR(*, integer)
 
   friend auto operator/(const any&, const any&) -> any;
 
-  DEFINE_OPERATOR(/, long, long)
+  DEFINE_OPERATOR(/, integer, integer)
   DEFINE_OPERATOR(/, double, double)
   DEFINE_OPERATOR(/, char, char)
-  DEFINE_INT_OPERATOR(/, long)
+  DEFINE_INT_OPERATOR(/, integer)
 
   friend auto operator%(const any&, const any&) -> any;
 
-  DEFINE_OPERATOR(%, long, long)
+  DEFINE_OPERATOR(%, integer, integer)
   DEFINE_OPERATOR(%, char, char)
-  DEFINE_INT_OPERATOR(%, long)
+  DEFINE_INT_OPERATOR(%, integer)
 
   friend auto operator-(const any&) -> any; // unary negate
 };
