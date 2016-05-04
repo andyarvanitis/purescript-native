@@ -45,7 +45,7 @@ auto any::operator()() const -> any {
   return (*variant.e)();
 }
 
-any::operator long() const {
+any::operator integer() const {
   RETURN_VALUE(Type::Integer, i,)
 }
 
@@ -121,7 +121,7 @@ auto any::operator[](const size_t rhs) const -> const any& {
 auto any::operator[](const any& rhs) const -> const any& {
   const any& variant = unthunkVariant(*this);
   assert(variant.type == Type::Array);
-  return (*variant.a)[cast<long>(rhs)];
+  return (*variant.a)[cast<integer>(rhs)];
 }
 
 auto any::contains(const char key[]) const -> bool {
