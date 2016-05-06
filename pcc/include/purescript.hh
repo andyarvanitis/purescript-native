@@ -66,14 +66,15 @@ class any {
     StringLiteral = 0x05,
     Function      = 0x06,
     EffFunction   = 0x07,
-    Shared = 0x08,
-    String        = 0x08,
-    Map           = 0x09,
-    Data          = 0x0A,
-    Array         = 0x0B,
-    Closure       = 0x0C,
-    EffClosure    = 0x0D,
-    Pointer       = 0x0E
+    RawPointer    = 0x08,
+    Shared = 0x10,
+    String        = 0x10,
+    Map           = 0x11,
+    Data          = 0x12,
+    Array         = 0x13,
+    Closure       = 0x14,
+    EffClosure    = 0x15,
+    Pointer       = 0x16
   };
 
   private:
@@ -144,6 +145,7 @@ class any {
     mutable cstring              r;
     mutable fn                   f;
     mutable eff_fn               e;
+    mutable void *               u;
     mutable shared<std::string>  s;
     mutable shared<map>          m;
     mutable shared<data>         v;
@@ -214,6 +216,11 @@ class any {
   template <typename T>
   any(T&& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0) noexcept
     : type(Type::Pointer), p(std::move(val)) {}
+
+  // Explicit void* to raw pointer value
+  template <typename T>
+  any(const T& val, typename std::enable_if<std::is_same<T,void*>::value>::type* = 0) noexcept
+    : type(Type::RawPointer), u(val) {}
 
   any(std::nullptr_t) noexcept : type(Type::Pointer), p(nullptr) {}
 
@@ -293,6 +300,12 @@ class any {
   auto contains(const char[]) const -> bool;
 
   auto extractPointer() const -> void*;
+
+  auto rawPointer() const -> void* {
+    const any& variant = unthunkVariant(*this);
+    assert(type == Type::RawPointer);
+    return variant.u;
+  }
 
   static auto unthunkVariant(const any&) -> const any&;
 
@@ -388,6 +401,12 @@ inline auto cast(const any& a) ->
                             !std::is_same<T, any::data>::value &&
                             !std::is_same<T, any::array>::value, T&>::type {
   return *static_cast<T*>(a.extractPointer());
+}
+
+template <typename T>
+inline auto cast(const any& a) ->
+    typename std::enable_if<std::is_same<void*, T>::value, T>::type {
+  return a.rawPointer();
 }
 
 } // namespace PureScript
