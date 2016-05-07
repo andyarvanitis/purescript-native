@@ -57,24 +57,23 @@ const size_t constructor = 0;
 class any {
 
   public:
-  enum Type {
-    Thunk         = 0x00,
-    Integer       = 0x01,
-    Double        = 0x02,
-    Character     = 0x03,
-    Boolean       = 0x04,
-    StringLiteral = 0x05,
-    Function      = 0x06,
-    EffFunction   = 0x07,
-    RawPointer    = 0x08,
-    Shared = 0x10,
-    String        = 0x10,
-    Map           = 0x11,
-    Data          = 0x12,
-    Array         = 0x13,
-    Closure       = 0x14,
-    EffClosure    = 0x15,
-    Pointer       = 0x16
+  enum class Type {
+    Thunk = 0x10,
+    Integer,
+    Double,
+    Character,
+    Boolean,
+    StringLiteral,
+    Function,
+    EffFunction,
+    RawPointer,
+    String,
+    Map,
+    Data,
+    Array,
+    Closure,
+    EffClosure,
+    Pointer
   };
 
   private:
@@ -151,7 +150,7 @@ class any {
     mutable shared<data>         v;
     mutable shared<array>        a;
     mutable shared<closure>      l;
-    mutable shared<eff_closure>  el;
+    mutable shared<eff_closure>  k;
     mutable shared<void>         p;
   };
 
@@ -202,7 +201,7 @@ class any {
             typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                !std::is_convertible<T,eff_fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
-    : type(Type::EffClosure), el(make_shared<_eff_closure<T>>(val)) {}
+    : type(Type::EffClosure), k(make_shared<_eff_closure<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0) noexcept
@@ -227,48 +226,79 @@ class any {
 
 #if !defined(USE_GC)
   private:
-  auto copy(const any& other) const noexcept -> void {
-    if (type & Type::Shared) {
-      new (&p) shared<void>(other.p);
-    } else {
-      f = other.f;
-    }
+  template <typename T,
+            typename U,
+            typename = typename std::enable_if<!std::is_reference<T>::value>::type>
+  static constexpr auto move_if_rvalue(U&& u) noexcept -> U&& {
+    return static_cast<U&&>(u);
   }
 
-  auto move(any&& other) const noexcept -> void {
-    if (type & Type::Shared) {
-      new (&p) shared<void>(std::move(other.p));
-    } else {
-      f = other.f;
+  template <typename T,
+            typename U,
+            typename = typename std::enable_if<std::is_reference<T>::value>::type>
+  static constexpr auto move_if_rvalue(U& u) noexcept -> U& {
+    return static_cast<U&>(u);
+  }
+
+  template <typename T>
+  auto assign(T&& other) const noexcept -> void {
+    switch (other.type) {
+      case Type::Thunk:          t = other.t;  break;
+      case Type::Integer:        i = other.i;  break;
+      case Type::Double:         d = other.d;  break;
+      case Type::Character:      c = other.c;  break;
+      case Type::Boolean:        b = other.b;  break;
+      case Type::StringLiteral:  r = other.r;  break;
+      case Type::Function:       f = other.f;  break;
+      case Type::EffFunction:    e = other.e;  break;
+      case Type::RawPointer:     u = other.u;  break;
+
+      case Type::String:      new (&s) shared<std::string>(move_if_rvalue<T>(other.s));  break;
+      case Type::Map:         new (&m) shared<map>(move_if_rvalue<T>(other.m));          break;
+      case Type::Data:        new (&v) shared<data>(move_if_rvalue<T>(other.v));         break;
+      case Type::Array:       new (&a) shared<array>(move_if_rvalue<T>(other.a));        break;
+      case Type::Closure:     new (&l) shared<closure>(move_if_rvalue<T>(other.l));      break;
+      case Type::EffClosure:  new (&k) shared<eff_closure>(move_if_rvalue<T>(other.k));  break;
+      case Type::Pointer:     new (&p) shared<void>(move_if_rvalue<T>(other.p));         break;
+
+      default: assert(false && "Bad 'any' type"); break;
     }
   }
 
   auto destruct() -> void {
-    if (type & Type::Shared) {
-      p.~shared<void>();
+    switch (type) {
+      case Type::String:      s.~shared<std::string>();   break;
+      case Type::Map:         m.~shared<map>();           break;
+      case Type::Data:        v.~shared<data>();          break;
+      case Type::Array:       a.~shared<array>();         break;
+      case Type::Closure:     l.~shared<closure>();       break;
+      case Type::EffClosure:  k.~shared<eff_closure>();   break;
+      case Type::Pointer:     p.~shared<void>();          break;
+
+      default: break;
     }
   }
 
   public:
   any(const any& other) noexcept : type(other.type) {
-    copy(other);
+    assign(other);
   }
 
   any(any&& other) noexcept : type(other.type) {
-    move(std::move(other));
+    assign(std::move(other));
   }
 
   auto operator=(const any& rhs) noexcept -> any& {
     destruct();
     type = rhs.type;
-    copy(rhs);
+    assign(rhs);
     return *this;
   }
 
   auto operator=(any&& rhs) noexcept -> any& {
     destruct();
     type = rhs.type;
-    move(std::move(rhs));
+    assign(std::move(rhs));
     return *this;
   }
 
