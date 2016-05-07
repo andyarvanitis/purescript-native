@@ -39,7 +39,7 @@ auto any::operator()(const as_thunk) const -> const any& {
 auto any::operator()() const -> any {
   const any& variant = unthunkVariant(*this);
   if (variant.type == Type::EffClosure) {
-    return (*variant.el)();
+    return (*variant.k)();
   }
   assert(variant.type == Type::EffFunction);
   return (*variant.e)();
