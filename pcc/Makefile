@@ -24,7 +24,7 @@ override PCCFLAGS += --comments
 override CXXFLAGS += -std=c++11
 override LDFLAGS  +=
 
-ifeq ($(USE_GC),yes)
+ifneq ($(GC),no)
   override CXXFLAGS += -DUSE_GC
   override LDFLAGS += -lgc
 endif
