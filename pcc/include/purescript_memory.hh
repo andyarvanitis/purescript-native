@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
-// Module      :  purescript.hh
+// Module      :  purescript_memory.hh
 // Copyright   :  (c) Andy Arvanitis 2016
 // License     :  MIT
 //
@@ -12,8 +12,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 //
-#ifndef PureScript_GC_HH
-#define PureScript_GC_HH
+#ifndef PureScript_MEMORY_HH
+#define PureScript_MEMORY_HH
 
 #if defined(USE_GC)
   #define GC_THREADS
@@ -56,4 +56,4 @@ namespace PureScript {
 #undef MAKE_MANAGED
 #undef MAKE_MANAGED_FINALIZED
 
-#endif // PureScript_GC_HH
+#endif // PureScript_MEMORY_HH

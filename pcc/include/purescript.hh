@@ -32,7 +32,7 @@
 #include <utility>
 #include <stdexcept>
 #include <iso646.h> // mostly for MS Visual Studio compiler
-#include "PureScript_GC.hh"
+#include "purescript_memory.hh"
 
 namespace PureScript {
 
