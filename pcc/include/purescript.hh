@@ -32,7 +32,7 @@
 #include <utility>
 #include <stdexcept>
 #include <iso646.h> // mostly for MS Visual Studio compiler
-#include "PureScript_GC.hh"
+#include "purescript_memory.hh"
 
 namespace PureScript {
 
@@ -125,33 +125,24 @@ class any {
     }
   };
 
-  public:
-  template <typename T>
-  using shared = SHARED_TYPE(T);
-
-  template <typename T, typename... Args>
-  inline static auto make_shared(Args&&... args) -> SHARED_TYPE(T) {
-    return MAKE_SHARED(T)(std::forward<Args>(args)...);
-  }
-
   private:
   union {
-    mutable thunk                t;
-    mutable integer              i;
-    mutable double               d;
-    mutable char                 c;
-    mutable bool                 b;
-    mutable cstring              r;
-    mutable fn                   f;
-    mutable eff_fn               e;
-    mutable void *               u;
-    mutable shared<std::string>  s;
-    mutable shared<map>          m;
-    mutable shared<data>         v;
-    mutable shared<array>        a;
-    mutable shared<closure>      l;
-    mutable shared<eff_closure>  k;
-    mutable shared<void>         p;
+    mutable thunk                 t;
+    mutable integer               i;
+    mutable double                d;
+    mutable char                  c;
+    mutable bool                  b;
+    mutable cstring               r;
+    mutable fn                    f;
+    mutable eff_fn                e;
+    mutable void *                u;
+    mutable managed<std::string>  s;
+    mutable managed<map>          m;
+    mutable managed<data>         v;
+    mutable managed<array>        a;
+    mutable managed<closure>      l;
+    mutable managed<eff_closure>  k;
+    mutable managed<void>         p;
   };
 
   public:
@@ -167,22 +158,22 @@ class any {
 
   template <size_t N>
   any(const char (&val)[N]) noexcept : type(Type::StringLiteral), r(val) {}
-  any(char * val) : type(Type::String), s(make_shared<std::string>(val)) {}
+  any(char * val) : type(Type::String), s(make_managed<std::string>(val)) {}
 
-  any(const std::string& val) : type(Type::String), s(make_shared<std::string>(val)) {}
-  any(std::string&& val) noexcept : type(Type::String), s(make_shared<std::string>(std::move(val))) {}
+  any(const std::string& val) : type(Type::String), s(make_managed<std::string>(val)) {}
+  any(std::string&& val) noexcept : type(Type::String), s(make_managed<std::string>(std::move(val))) {}
 
-  any(const shared<std::string>& val) noexcept : type(Type::String), s(val) {}
-  any(shared<std::string>&& val) noexcept : type(Type::String), s(std::move(val)) {}
+  any(const managed<std::string>& val) noexcept : type(Type::String), s(val) {}
+  any(managed<std::string>&& val) noexcept : type(Type::String), s(std::move(val)) {}
 
-  any(const map& val) : type(Type::Map), m(make_shared<map>(val)) {}
-  any(map&& val) noexcept : type(Type::Map), m(make_shared<map>(std::move(val))) {}
+  any(const map& val) : type(Type::Map), m(make_managed<map>(val)) {}
+  any(map&& val) noexcept : type(Type::Map), m(make_managed<map>(std::move(val))) {}
 
-  any(const data& val) : type(Type::Data), v(make_shared<data>(val)) {}
-  any(data&& val) noexcept : type(Type::Data), v(make_shared<data>(std::move(val))) {}
+  any(const data& val) : type(Type::Data), v(make_managed<data>(val)) {}
+  any(data&& val) noexcept : type(Type::Data), v(make_managed<data>(std::move(val))) {}
 
-  any(const array& val) : type(Type::Array), a(make_shared<array>(val)) {}
-  any(array&& val) noexcept : type(Type::Array), a(make_shared<array>(std::move(val))) {}
+  any(const array& val) : type(Type::Array), a(make_managed<array>(val)) {}
+  any(array&& val) noexcept : type(Type::Array), a(make_managed<array>(std::move(val))) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0) noexcept
@@ -191,7 +182,7 @@ class any {
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                            !std::is_convertible<T,fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&)>,T>::value>::type* = 0)
-    : type(Type::Closure), l(make_shared<_closure<T>>(val)) {}
+    : type(Type::Closure), l(make_managed<_closure<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,eff_fn>::value>::type* = 0) noexcept
@@ -201,7 +192,7 @@ class any {
             typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                !std::is_convertible<T,eff_fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
-    : type(Type::EffClosure), k(make_shared<_eff_closure<T>>(val)) {}
+    : type(Type::EffClosure), k(make_managed<_eff_closure<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0) noexcept
@@ -213,7 +204,7 @@ class any {
     : type(Type::Pointer), p(val) {}
 
   template <typename T>
-  any(T&& val, typename std::enable_if<std::is_assignable<shared<void>,T>::value>::type* = 0) noexcept
+  any(T&& val, typename std::enable_if<std::is_assignable<managed<void>,T>::value>::type* = 0) noexcept
     : type(Type::Pointer), p(std::move(val)) {}
 
   // Explicit void* to raw pointer value
@@ -253,13 +244,13 @@ class any {
       case Type::EffFunction:    e = other.e;  break;
       case Type::RawPointer:     u = other.u;  break;
 
-      case Type::String:      new (&s) shared<std::string>(move_if_rvalue<T>(other.s));  break;
-      case Type::Map:         new (&m) shared<map>(move_if_rvalue<T>(other.m));          break;
-      case Type::Data:        new (&v) shared<data>(move_if_rvalue<T>(other.v));         break;
-      case Type::Array:       new (&a) shared<array>(move_if_rvalue<T>(other.a));        break;
-      case Type::Closure:     new (&l) shared<closure>(move_if_rvalue<T>(other.l));      break;
-      case Type::EffClosure:  new (&k) shared<eff_closure>(move_if_rvalue<T>(other.k));  break;
-      case Type::Pointer:     new (&p) shared<void>(move_if_rvalue<T>(other.p));         break;
+      case Type::String:      new (&s) managed<std::string>(move_if_rvalue<T>(other.s));  break;
+      case Type::Map:         new (&m) managed<map>(move_if_rvalue<T>(other.m));          break;
+      case Type::Data:        new (&v) managed<data>(move_if_rvalue<T>(other.v));         break;
+      case Type::Array:       new (&a) managed<array>(move_if_rvalue<T>(other.a));        break;
+      case Type::Closure:     new (&l) managed<closure>(move_if_rvalue<T>(other.l));      break;
+      case Type::EffClosure:  new (&k) managed<eff_closure>(move_if_rvalue<T>(other.k));  break;
+      case Type::Pointer:     new (&p) managed<void>(move_if_rvalue<T>(other.p));         break;
 
       default: assert(false && "Bad 'any' type"); break;
     }
@@ -267,13 +258,13 @@ class any {
 
   auto destruct() -> void {
     switch (type) {
-      case Type::String:      s.~shared<std::string>();   break;
-      case Type::Map:         m.~shared<map>();           break;
-      case Type::Data:        v.~shared<data>();          break;
-      case Type::Array:       a.~shared<array>();         break;
-      case Type::Closure:     l.~shared<closure>();       break;
-      case Type::EffClosure:  k.~shared<eff_closure>();   break;
-      case Type::Pointer:     p.~shared<void>();          break;
+      case Type::String:      s.~managed<std::string>();   break;
+      case Type::Map:         m.~managed<map>();           break;
+      case Type::Data:        v.~managed<data>();          break;
+      case Type::Array:       a.~managed<array>();         break;
+      case Type::Closure:     l.~managed<closure>();       break;
+      case Type::EffClosure:  k.~managed<eff_closure>();   break;
+      case Type::Pointer:     p.~managed<void>();          break;
 
       default: break;
     }
@@ -442,8 +433,6 @@ inline auto cast(const any& a) ->
 } // namespace PureScript
 
 #undef WITH_ALLOCATOR
-#undef SHARED_TYPE
-#undef MAKE_SHARED
 #undef IS_POINTER_TYPE
 #undef DEFINE_OPERATOR
 #undef DEFINE_INT_OPERATOR
