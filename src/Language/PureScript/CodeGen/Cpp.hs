@@ -26,6 +26,8 @@ module Language.PureScript.CodeGen.Cpp
   , P.prettyPrintCpp
   ) where
 
+import Prelude.Compat
+
 import Data.Char (isLetter)
 import Data.List
 import Data.Function (on)
@@ -185,7 +187,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     isIndexer :: Cpp -> Bool
     isIndexer (CppIndexer (CppStringLiteral _) (CppVar _)) = True
     isIndexer _ = False
-    classes = qualifiedToCpp (Ident . runProperName) . fst <$>
+    classes = qualifiedToCpp (Ident . runProperName) . T.constraintClass <$>
                   maybe [] extractConstraints ty'
     dictClasses = zip (CppVar . fst <$> arg' : args') classes
     convertDictIndexers = everywhereOnCpp (dictIndexerToEnum dictClasses)
@@ -452,7 +454,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     where
       arg' = identToCpp arg
       args' = identToCpp <$> (fst $ unAbs body [])
-      classes = qualifiedToCpp (Ident . runProperName) . fst <$>
+      classes = qualifiedToCpp (Ident . runProperName) . T.constraintClass <$>
                     maybe [] extractConstraints ty
       dictClasses = zip (CppVar <$> arg' : args') classes
       convertDictIndexers = everywhereOnCpp (dictIndexerToEnum dictClasses)

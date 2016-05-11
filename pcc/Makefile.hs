@@ -10,13 +10,13 @@
 --
 -------------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Makefile where
 
 import Control.Monad (when)
 import Data.FileEmbed (embedFile)
-import Data.List
 import System.Environment (getExecutablePath)
 import System.Directory (doesFileExist)
 

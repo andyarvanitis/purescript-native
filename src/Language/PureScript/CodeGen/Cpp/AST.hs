@@ -18,6 +18,8 @@
 
 module Language.PureScript.CodeGen.Cpp.AST where
 
+import Prelude.Compat
+
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative, (<$>), (<*>))
 import Data.Traversable (traverse)

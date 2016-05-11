@@ -19,6 +19,8 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Blocks
   , collapseIfElses
   ) where
 
+import Prelude.Compat
+
 import Language.PureScript.CodeGen.Cpp.AST
 import qualified Language.PureScript.Constants as C
 
@@ -49,12 +51,12 @@ collapseIfElses = everywhereOnCpp collapse
   collapse :: Cpp -> Cpp
   collapse (CppBlock cpps) = CppBlock (go cpps)
     where
-    go (st'@(CppIfElse (CppBinary Equal a _) _ Nothing) : sts') =
+    go (st'@(CppIfElse (CppBinary Equal lhs _) _ Nothing) : sts') =
       if length (fst cpps') > 1
-        then CppSwitch a (mkCases <$> fst cpps') : snd cpps'
+        then CppSwitch lhs (mkCases <$> fst cpps') : snd cpps'
         else st' : sts'
       where
-      cpps' = span (isIntEq a) (st' : sts')
+      cpps' = span (isIntEq lhs) (st' : sts')
       isIntEq :: Cpp -> Cpp -> Bool
       isIntEq a (CppIfElse (CppBinary Equal a' (CppNumericLiteral (Left _))) (CppBlock [CppReturn _]) Nothing)
         | a == a' = True

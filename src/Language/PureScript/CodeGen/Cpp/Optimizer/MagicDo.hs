@@ -18,6 +18,8 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo (
   magicDo
 ) where
 
+import Prelude.Compat
+
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.Types

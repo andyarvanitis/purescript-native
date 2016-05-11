@@ -22,6 +22,8 @@ module Language.PureScript.Pretty.Cpp (
     prettyPrintCpp,
 ) where
 
+import Prelude.Compat
+
 import Data.Bits
 import Data.Char
 import Data.List

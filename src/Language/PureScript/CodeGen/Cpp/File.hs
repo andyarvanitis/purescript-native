@@ -17,6 +17,8 @@
 
 module Language.PureScript.CodeGen.Cpp.File where
 
+import Prelude.Compat
+
 import Data.Maybe
 
 import Language.PureScript.CodeGen.Cpp.AST

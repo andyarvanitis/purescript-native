@@ -26,6 +26,8 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner (
   evaluateIifes
 ) where
 
+import Prelude.Compat
+
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative)
 #endif

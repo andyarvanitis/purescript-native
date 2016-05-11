@@ -15,6 +15,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -29,9 +30,7 @@ import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.Reader
 
 import Data.FileEmbed (embedFile)
-import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
-import Data.String (fromString)
 import Data.Time.Clock
 import Data.Version (showVersion)
 import qualified Data.Map as M

@@ -18,6 +18,8 @@
 
 module Language.PureScript.CodeGen.Cpp.Types where
 
+import Prelude.Compat
+
 import Data.List
 
 import Language.PureScript.CodeGen.Cpp.Common

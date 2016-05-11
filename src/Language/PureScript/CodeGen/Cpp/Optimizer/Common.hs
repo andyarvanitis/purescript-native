@@ -15,6 +15,8 @@
 
 module Language.PureScript.CodeGen.Cpp.Optimizer.Common where
 
+import Prelude.Compat
+
 import Data.Maybe (fromMaybe)
 
 import Language.PureScript.CodeGen.Cpp.AST

@@ -15,6 +15,8 @@
 
 module Language.PureScript.CodeGen.Cpp.Optimizer.Unused where
 
+import Prelude.Compat
+
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Optimizer.Common
 
