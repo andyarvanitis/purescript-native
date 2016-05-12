@@ -7,5 +7,5 @@ test 100.0 = 100.0
 test n = test(1.0 + n)
 
 main = do
-  logShow $ test 0.0
+  logShow (test 0)
   log "Done"

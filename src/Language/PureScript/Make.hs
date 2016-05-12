@@ -19,7 +19,6 @@ module Language.PureScript.Make
 
 import Prelude.Compat
 
-import Control.Applicative ((<|>))
 import Control.Concurrent.Lifted as C
 import Control.Monad hiding (sequence)
 import Control.Monad.Base (MonadBase(..))
@@ -147,9 +146,10 @@ rebuildModule :: forall m. (Monad m, MonadBaseControl IO m, MonadReader Options 
 rebuildModule MakeActions{..} externs m@(Module _ _ moduleName _ _) = do
   progress $ CompilingModule moduleName
   let env = foldl' (flip applyExternsFileToEnvironment) initEnvironment externs
-  lint m
+      withPrim = importPrim m
+  lint withPrim
   ((Module ss coms _ elaborated exps, env'), nextVar) <- runSupplyT 0 $ do
-    [desugared] <- desugar externs [m]
+    [desugared] <- desugar externs [withPrim]
     runCheck' env $ typeCheckModule desugared
   regrouped <- createBindingGroups moduleName . collapseBindingGroups $ elaborated
   let mod' = Module ss coms moduleName regrouped exps
@@ -168,7 +168,7 @@ rebuildModule MakeActions{..} externs m@(Module _ _ moduleName _ _) = do
 make :: forall m. (Monad m, MonadBaseControl IO m, MonadReader Options m, MonadError MultipleErrors m, MonadWriter MultipleErrors m)
      => MakeActions m
      -> [Module]
-     -> m Environment
+     -> m [ExternsFile]
 make ma@MakeActions{..} ms = do
   checkModuleNamesAreUnique
 
@@ -188,7 +188,7 @@ make ma@MakeActions{..} ms = do
 
   -- Bundle up all the externs and return them as an Environment
   (_, externs) <- unzip . fromMaybe (internalError "make: externs were missing but no errors reported.") . sequence <$> for barriers (takeMVar . fst . snd)
-  return $ foldl' (flip applyExternsFileToEnvironment) initEnvironment externs
+  return externs
 
   where
   checkModuleNamesAreUnique :: m ()
@@ -361,7 +361,7 @@ buildMakeActions outputDir filePathMap foreigns usePrefix =
   genSourceMap dir mapFile extraLines mappings = do
     let pathToDir = iterate (".." </>) ".." !! length (splitPath $ normalise outputDir)
         sourceFile = case mappings of
-                      ((SMap file _ _):_) -> Just $ pathToDir </> makeRelative dir file
+                      (SMap file _ _ : _) -> Just $ pathToDir </> makeRelative dir file
                       _ -> Nothing
     let rawMapping = SourceMapping { smFile = "index.js", smSourceRoot = Nothing, smMappings =
       map (\(SMap _ orig gen) -> Mapping {
@@ -450,11 +450,10 @@ checkForeignDecls m path = do
       (errs, _) ->
         Left errs
 
-  -- TODO: Handling for parenthesised operators should be removed after 0.9.
   -- We ignore the error message here, just being told it's an invalid
   -- identifier should be enough.
   parseIdent :: String -> Either String Ident
-  parseIdent str = try str <|> try ("(" ++ str ++ ")")
+  parseIdent str = try str
     where
     try s = either (const (Left str)) Right $ do
       ts <- PSParser.lex "" s
