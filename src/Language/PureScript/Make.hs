@@ -14,6 +14,8 @@ module Language.PureScript.Make
   -- * Implementation of Make API using files on disk
   , Make(..)
   , runMake
+  , makeIO
+  , readTextFile
   , buildMakeActions
   ) where
 
@@ -290,10 +292,10 @@ makeIO f io = do
   e <- liftIO $ tryIOError io
   either (throwError . singleError . f) return e
 
--- Traverse (Either e) instance (base 4.7)
-traverseEither :: Applicative f => (a -> f b) -> Either e a -> f (Either e b)
-traverseEither _ (Left x) = pure (Left x)
-traverseEither f (Right y) = Right <$> f y
+-- | Read a text file in the 'Make' monad, capturing any errors using the
+-- 'MonadError' instance.
+readTextFile :: FilePath -> Make String
+readTextFile path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ readUTF8File path
 
 -- |
 -- A set of make actions that read and write modules from the given directory.
@@ -310,7 +312,7 @@ buildMakeActions outputDir filePathMap foreigns usePrefix =
   getInputTimestamp :: ModuleName -> Make (Either RebuildPolicy (Maybe UTCTime))
   getInputTimestamp mn = do
     let path = fromMaybe (internalError "Module has no filename in 'make'") $ M.lookup mn filePathMap
-    e1 <- traverseEither getTimestamp path
+    e1 <- traverse getTimestamp path
     fPath <- maybe (return Nothing) getTimestamp $ M.lookup mn foreigns
     return $ fmap (max fPath) e1
 
@@ -399,9 +401,6 @@ buildMakeActions outputDir filePathMap foreigns usePrefix =
 
   progress :: ProgressMessage -> Make ()
   progress = liftIO . putStrLn . renderProgressMessage
-
-readTextFile :: FilePath -> Make String
-readTextFile path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ readUTF8File path
 
 -- |
 -- Check that the declarations in a given PureScript module match with those

@@ -27,33 +27,36 @@ module Language.PureScript.Ide.Integration
        , projectDirectory
        , deleteFileIfExists
          -- sending commands
-       , loadModule
-       , loadModuleWithDeps
-       , getFlexCompletions
-       , getType
        , addImport
        , addImplicitImport
+       , loadModule
+       , loadModuleWithDeps
+       , getCwd
+       , getFlexCompletions
+       , getType
        , rebuildModule
+       , reset
          -- checking results
        , resultIsSuccess
        , parseCompletions
        , parseTextResult
        ) where
 
-import           Control.Concurrent                (threadDelay)
+import           Control.Concurrent           (threadDelay)
 import           Control.Exception
-import           Control.Monad                     (join, when)
+import           Control.Monad                (join, when)
 import           Data.Aeson
 import           Data.Aeson.Types
-import qualified Data.ByteString.Lazy.UTF8         as BSL
-import           Data.Either                       (isRight)
-import           Data.Maybe                        (fromJust)
-import qualified Data.Text                         as T
-import qualified Data.Vector                       as V
+import qualified Data.ByteString.Lazy.UTF8    as BSL
+import           Data.Either                  (isRight)
+import           Data.Maybe                   (fromJust, isNothing)
+import qualified Data.Text                    as T
+import qualified Data.Vector                  as V
 import           Language.PureScript.Ide.Util
 import           System.Directory
 import           System.Exit
 import           System.FilePath
+import           System.IO.Error              (mkIOError, userErrorType)
 import           System.Process
 
 projectDirectory :: IO FilePath
@@ -64,7 +67,9 @@ projectDirectory = do
 startServer :: IO ProcessHandle
 startServer = do
   pdir <- projectDirectory
-  (_, _, _, procHandle) <- createProcess $ (shell "psc-ide-server") {cwd=Just pdir}
+  -- Turn off filewatching since it creates race condition in a testing environment
+  (_, _, _, procHandle) <- createProcess $
+    (shell "psc-ide-server --no-watch") {cwd = Just pdir}
   threadDelay 500000 -- give the server 500ms to start up
   return procHandle
 
@@ -74,9 +79,15 @@ stopServer = terminateProcess
 withServer :: IO a -> IO a
 withServer s = do
   _ <- startServer
+  started <- tryNTimes 5 (shush <$> (try getCwd :: IO (Either SomeException String)))
+  when (isNothing started) $
+    throwIO (mkIOError userErrorType "psc-ide-server didn't start in time" Nothing Nothing)
   r <- s
   quitServer
-  return r
+  pure r
+
+shush :: Either a b -> Maybe b
+shush = either (const Nothing) Just
 
 -- project management utils
 
@@ -89,6 +100,16 @@ compileTestProject = do
                                  ,std_err=CreatePipe
                                  }
   isSuccess <$> waitForProcess procHandle
+
+tryNTimes :: Int -> IO (Maybe a) -> IO (Maybe a)
+tryNTimes 0 _ = pure Nothing
+tryNTimes n action = do
+  r <- action
+  case r of
+    Nothing -> do
+      threadDelay 500000
+      tryNTimes (n - 1) action
+    Just a -> pure (Just a)
 
 deleteOutputFolder :: IO ()
 deleteOutputFolder = do
@@ -127,6 +148,17 @@ quitServer = do
   let quitCommand = object ["command" .= ("quit" :: String)]
   _ <- try $ sendCommand quitCommand :: IO (Either SomeException String)
   return ()
+
+reset :: IO ()
+reset = do
+  let resetCommand = object ["command" .= ("reset" :: String)]
+  _ <- try $ sendCommand resetCommand :: IO (Either SomeException String)
+  return ()
+
+getCwd :: IO String
+getCwd = do
+  let cwdCommand = object ["command" .= ("cwd" :: String)]
+  sendCommand cwdCommand
 
 loadModuleWithDeps :: String -> IO String
 loadModuleWithDeps m = sendCommand $ load [] [m]
