@@ -25,7 +25,6 @@ import Control.Applicative (Applicative, (<$>), (<*>))
 import Data.Traversable (traverse)
 #endif
 import Control.Monad.Identity
-import Data.Data
 import Language.PureScript.Comments
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Traversals

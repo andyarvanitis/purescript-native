@@ -38,7 +38,6 @@ identToCpp :: Ident -> String
 identToCpp (Ident name) | nameIsCppReserved name = '_' : name ++ "_"
 identToCpp (Ident name@('$' : s)) | all isDigit s = name
 identToCpp (Ident name) = concatMap identCharToString name
-identToCpp (Op op) = concatMap identCharToString op
 identToCpp (GenIdent _ _) = internalError "GenIdent in identToJs"
 
 -- |
