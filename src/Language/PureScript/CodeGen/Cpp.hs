@@ -620,7 +620,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         SumType ->
             [ CppIfElse
                   (CppBinary
-                       Equal
+                       EqualTo
                        (CppIndexer
                             (CppVar ctorKey)
                             (CppCast dataType $ CppVar varName))
@@ -667,19 +667,19 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   literalToBinderCpp varName done (NumericLiteral num) =
     return [ CppIfElse
-                 (CppBinary Equal (CppVar varName) (CppNumericLiteral num))
+                 (CppBinary EqualTo (CppVar varName) (CppNumericLiteral num))
                  (CppBlock done)
                  Nothing ]
 
   literalToBinderCpp varName done (CharLiteral c) =
     return [ CppIfElse
-                 (CppBinary Equal (CppVar varName) (CppCharLiteral c))
+                 (CppBinary EqualTo (CppVar varName) (CppCharLiteral c))
                  (CppBlock done)
                  Nothing ]
 
   literalToBinderCpp varName done (StringLiteral str) =
     return [ CppIfElse
-                 (CppBinary Equal (CppVar varName) (CppStringLiteral str))
+                 (CppBinary EqualTo (CppVar varName) (CppStringLiteral str))
                  (CppBlock done)
                  Nothing ]
 
@@ -692,7 +692,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   literalToBinderCpp varName done (BooleanLiteral False) =
     return [ CppIfElse
                  (CppUnary
-                      CppNot
+                      Not
                       (CppVar varName))
                  (CppBlock done)
                  Nothing ]
@@ -724,7 +724,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                        (CppApp (CppVar "empty") [])
               n -> let var = CppCast arrayType $ CppVar varName
                    in CppBinary
-                          Equal
+                          EqualTo
                           (CppBinary Dot var (CppApp (CppVar "size") []))
                           (CppNumericLiteral (Left (fromIntegral n)))
     return [ CppIfElse cond (CppBlock cpp) Nothing ]

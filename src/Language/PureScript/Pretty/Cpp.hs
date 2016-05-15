@@ -411,7 +411,7 @@ app = mkPattern' match
     return (intercalate ", " cpps, val)
   match _ = mzero
 
-unary' :: CppUnaryOp -> (Cpp -> String) -> Operator PrinterState Cpp String
+unary' :: UnaryOperator -> (Cpp -> String) -> Operator PrinterState Cpp String
 unary' op mkStr = Wrap match (++)
   where
   match :: Pattern PrinterState Cpp (String, Cpp)
@@ -420,16 +420,16 @@ unary' op mkStr = Wrap match (++)
     match' (CppUnary op' val) | op' == op = Just (mkStr val, val)
     match' _ = Nothing
 
-unary :: CppUnaryOp -> String -> Operator PrinterState Cpp String
+unary :: UnaryOperator -> String -> Operator PrinterState Cpp String
 unary op str = unary' op (const str)
 
 negateOperator :: Operator PrinterState Cpp String
-negateOperator = unary' CppNegate (\v -> if isNegate v then "- " else "-")
+negateOperator = unary' Negate (\v -> if isNegate v then "- " else "-")
   where
-  isNegate (CppUnary CppNegate _) = True
+  isNegate (CppUnary Negate _) = True
   isNegate _ = False
 
-binary :: BinaryOp -> String -> Operator PrinterState Cpp String
+binary :: BinaryOperator -> String -> Operator PrinterState Cpp String
 binary op str = AssocL match (\v1 v2 -> v1 ++ str ++ v2)
   where
   match :: Pattern PrinterState Cpp (Cpp, Cpp)
@@ -476,16 +476,16 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ parens args ]
-                  , [ unary CppNew "new " ]
+                  , [ unary New "new " ]
                   , [ Wrap lam $ \(caps, args, rty) ret -> '[' : caps ++ "]"
                         ++ let args' = argstr <$> args in
                            parens (intercalate ", " args')
                         ++ maybe "" ((" -> " ++) . runType) rty
                         ++ " "
                         ++ ret ]
-                  , [ unary     CppNot                "!"
-                    , unary     CppBitwiseNot         "~"
-                    , unary     CppPositive           "+"
+                  , [ unary     Not                  "!"
+                    , unary     BitwiseNot           "~"
+                    , unary     Positive             "+"
                     , negateOperator ]
                   , [ binary    Multiply             " * "
                     , binary    Divide               " / "
@@ -496,11 +496,11 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ binary    ShiftLeft            " << "
                     , binary    ShiftRight           " >> " ]
                   , [ binary    LessThan             " < "
-                    , binary    LessThanOrEqual      " <= "
+                    , binary    LessThanOrEqualTo    " <= "
                     , binary    GreaterThan          " > "
-                    , binary    GreaterThanOrEqual   " >= "
-                    , binary    Equal                " == "
-                    , binary    NotEqual             " != " ]
+                    , binary    GreaterThanOrEqualTo " >= "
+                    , binary    EqualTo                " == "
+                    , binary    NotEqualTo             " != " ]
                   , [ binary    BitwiseAnd           " & " ]
                   , [ binary    BitwiseXor           " ^ " ]
                   , [ binary    BitwiseOr            " | " ]

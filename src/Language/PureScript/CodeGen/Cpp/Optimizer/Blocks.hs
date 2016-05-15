@@ -51,29 +51,29 @@ collapseIfElses = everywhereOnCpp collapse
   collapse :: Cpp -> Cpp
   collapse (CppBlock cpps) = CppBlock (go cpps)
     where
-    go (st'@(CppIfElse (CppBinary Equal lhs _) _ Nothing) : sts') =
+    go (st'@(CppIfElse (CppBinary EqualTo lhs _) _ Nothing) : sts') =
       if length (fst cpps') > 1
         then CppSwitch lhs (mkCases <$> fst cpps') : snd cpps'
         else st' : sts'
       where
       cpps' = span (isIntEq lhs) (st' : sts')
       isIntEq :: Cpp -> Cpp -> Bool
-      isIntEq a (CppIfElse (CppBinary Equal a' (CppNumericLiteral (Left _))) (CppBlock [CppReturn _]) Nothing)
+      isIntEq a (CppIfElse (CppBinary EqualTo a' (CppNumericLiteral (Left _))) (CppBlock [CppReturn _]) Nothing)
         | a == a' = True
-      isIntEq a (CppIfElse (CppBinary Equal a' (CppCharLiteral _)) (CppBlock [CppReturn _]) Nothing)
+      isIntEq a (CppIfElse (CppBinary EqualTo a' (CppCharLiteral _)) (CppBlock [CppReturn _]) Nothing)
         | a == a' = True
-      isIntEq a (CppIfElse (CppBinary Equal a' (CppBooleanLiteral _)) (CppBlock [CppReturn _]) Nothing)
+      isIntEq a (CppIfElse (CppBinary EqualTo a' (CppBooleanLiteral _)) (CppBlock [CppReturn _]) Nothing)
         | a == a' = True
       isIntEq _ _ = False
       mkCases :: Cpp -> (Cpp, Cpp)
-      mkCases (CppIfElse (CppBinary Equal _ b') (CppBlock [body]) Nothing) = (b', body)
-      mkCases (CppIfElse (CppUnary CppNot _) (CppBlock [body]) Nothing) = (CppBooleanLiteral False, body)
+      mkCases (CppIfElse (CppBinary EqualTo _ b') (CppBlock [body]) Nothing) = (b', body)
+      mkCases (CppIfElse (CppUnary Not _) (CppBlock [body]) Nothing) = (CppBooleanLiteral False, body)
       mkCases (CppIfElse _ (CppBlock [body]) Nothing) = (CppBooleanLiteral True, body)
       mkCases _ = error ""
     go ((CppIfElse cond1 body1 Nothing) : (CppIfElse cond2 body2 Nothing) : _)
       | returns body1 && returns body2 &&
-        (CppUnary CppNot cond1 == cond2 ||
-         CppUnary CppNot cond2 == cond1) = [CppIfElse cond1 body1 (Just body2)]
+        (CppUnary Not cond1 == cond2 ||
+         CppUnary Not cond2 == cond1) = [CppIfElse cond1 body1 (Just body2)]
       where
       returns :: Cpp -> Bool
       returns (CppBlock rets@(_:_)) | CppReturn{} <- last rets = True

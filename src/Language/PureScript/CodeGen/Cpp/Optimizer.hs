@@ -81,7 +81,7 @@ optimize' cpp = do
     , etaConvert
     , evaluateIifes
     , inlineVariables
-    , inlineValues
+    , inlineCommonValues
     , inlineOperator (C.prelude, (C.$)) $ \f x -> CppApp f [x]
     , inlineOperator (C.prelude, (C.#)) $ \x f -> CppApp f [x]
     , inlineOperator (C.dataArrayUnsafe, C.unsafeIndex) $ flip CppIndexer

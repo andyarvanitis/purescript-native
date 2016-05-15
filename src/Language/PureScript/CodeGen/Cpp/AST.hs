@@ -32,33 +32,33 @@ import Language.PureScript.Traversals
 -- |
 -- Built-in unary operators
 --
-data CppUnaryOp
+data UnaryOperator
   -- |
   -- Numeric negation
   --
-  = CppNegate
+  = Negate
   -- |
   -- Boolean negation
   --
-  | CppNot
+  | Not
   -- |
   -- Bitwise negation
   --
-  | CppBitwiseNot
+  | BitwiseNot
   -- |
   -- Numeric unary \'plus\'
   --
-  | CppPositive
+  | Positive
   -- |
   -- Constructor
   --
-  | CppNew
+  | New
   deriving (Show, Read, Eq)
 
 -- |
 -- Built-in binary operators
 --
-data BinaryOp
+data BinaryOperator
   -- |
   -- Numeric addition
   --
@@ -86,11 +86,11 @@ data BinaryOp
   -- |
   -- Generic equality test
   --
-  | Equal
+  | EqualTo
   -- |
   -- Generic inequality test
   --
-  | NotEqual
+  | NotEqualTo
   -- |
   -- Numeric less-than
   --
@@ -98,7 +98,7 @@ data BinaryOp
   -- |
   -- Numeric less-than-or-equal
   --
-  | LessThanOrEqual
+  | LessThanOrEqualTo
   -- |
   -- Numeric greater-than
   --
@@ -106,7 +106,7 @@ data BinaryOp
   -- |
   -- Numeric greater-than-or-equal
   --
-  | GreaterThanOrEqual
+  | GreaterThanOrEqualTo
   -- |
   -- Boolean and
   --
@@ -161,11 +161,11 @@ data Cpp
   -- |
   -- A unary operator application
   --
-  | CppUnary CppUnaryOp Cpp
+  | CppUnary UnaryOperator Cpp
   -- |
   -- A binary operator application
   --
-  | CppBinary BinaryOp Cpp Cpp
+  | CppBinary BinaryOperator Cpp Cpp
   -- |
   -- An array literal
   --

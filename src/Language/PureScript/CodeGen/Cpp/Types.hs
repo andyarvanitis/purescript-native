@@ -125,3 +125,6 @@ thunkMarkerType = CppPrimitive "any::as_thunk"
 
 ctorKey :: String
 ctorKey = "constructor"
+
+constAnyRef :: Maybe CppType
+constAnyRef = Just $ CppAny [CppConst, CppRef]
