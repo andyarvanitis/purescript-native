@@ -126,9 +126,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         (supers, members) = span (C.__superclass_ `isPrefixOf`) (identToCpp <$> (fst $ unAbs e []))
     in return $ CppStruct className [CppEnum Nothing Nothing (sort supers ++ members)]
 
-  declToCpp _ (_, Op _) (Var (_, _, Nothing, _) _) =
-    return CppNoOp -- skip operator aliases
-
   declToCpp vqs (_, ident) (Abs (_, com, ty, _) arg body) = do
     fn <- if argcnt > 1 && CppTopLevel `elem` vqs
             then do
