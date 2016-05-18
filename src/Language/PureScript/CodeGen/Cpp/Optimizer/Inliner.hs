@@ -105,11 +105,16 @@ inlineCommonValues = everywhereOnCpp convert
     | isDict' [semiringNumber, semiringInt] dict && isFn fnOne fn = CppNumericLiteral (Left 1)
     | isDict boundedBoolean dict && isFn fnBottom fn = CppBooleanLiteral False
     | isDict boundedBoolean dict && isFn fnTop fn = CppBooleanLiteral True
+  convert (CppApp fn [dict, x, y])
+    | isDict semiringInt dict && isFn fnAdd fn = CppBinary Add x y
+    | isDict semiringInt dict && isFn fnMultiply fn = CppBinary Multiply x y
+    | isDict euclideanRingInt dict && isFn fnDivide fn = CppBinary Divide x y
+    | isDict ringInt dict && isFn fnSubtract fn = CppBinary Subtract x y
   convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y])
-    | isDict semiringInt dict && isFn fnAdd fn = intOp Add x y
-    | isDict semiringInt dict && isFn fnMultiply fn = intOp Multiply x y
-    | isDict euclideanRingInt dict && isFn fnDivide fn = intOp Divide x y
-    | isDict ringInt dict && isFn fnSubtract fn = intOp Subtract x y
+    | isDict semiringInt dict && isFn fnAdd fn = CppBinary Add x y
+    | isDict semiringInt dict && isFn fnMultiply fn = CppBinary Multiply x y
+    | isDict euclideanRingInt dict && isFn fnDivide fn = CppBinary Divide x y
+    | isDict ringInt dict && isFn fnSubtract fn = CppBinary Subtract x y
   convert other = other
   fnZero = (C.dataSemiring, C.zero)
   fnOne = (C.dataSemiring, C.one)
@@ -119,7 +124,6 @@ inlineCommonValues = everywhereOnCpp convert
   fnDivide = (C.dataEuclideanRing, C.div)
   fnMultiply = (C.dataSemiring, C.mul)
   fnSubtract = (C.dataRing, C.sub)
-  intOp op x y = CppBinary BitwiseOr (CppBinary op x y) (CppNumericLiteral (Left 0))
 
 inlineOperator :: (String, String) -> (Cpp -> Cpp -> Cpp) -> Cpp -> Cpp
 inlineOperator (m, op) f = everywhereOnCpp convert
@@ -198,18 +202,21 @@ inlineCommonOperators = applyAll $
   binary dict fns op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
+    convert (CppApp fn [dict', x, y]) | isDict dict dict' && isFn fns fn = CppBinary op x y
     convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isDict dict dict' && isFn fns fn = CppBinary op x y
     convert other = other
   binary' :: String -> String -> BinaryOperator -> Cpp -> Cpp
   binary' moduleName opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
+    convert (CppApp fn [x, y]) | isFn (moduleName, opString) fn = CppBinary op x y
     convert (CppApp (CppApp fn [x]) [y]) | isFn (moduleName, opString) fn = CppBinary op x y
     convert other = other
   unary :: (String, String) -> (String, String) -> UnaryOperator -> Cpp -> Cpp
   unary dicts fns op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
+    convert (CppApp fn [dict', x]) | isDict dicts dict' && isFn fns fn = CppUnary op x
     convert (CppApp (CppApp fn [dict']) [x]) | isDict dicts dict' && isFn fns fn = CppUnary op x
     convert other = other
   unary' :: String -> String -> UnaryOperator -> Cpp -> Cpp
