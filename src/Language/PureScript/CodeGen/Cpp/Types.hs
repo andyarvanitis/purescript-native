@@ -98,7 +98,7 @@ boolType :: CppType
 boolType = CppPrimitive "bool"
 
 intType :: CppType
-intType = CppPrimitive "long"
+intType = CppPrimitive "integer"
 
 doubleType :: CppType
 doubleType = CppPrimitive "double"
