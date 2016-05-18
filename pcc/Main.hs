@@ -15,83 +15,93 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
 module Main where
 
-import Control.Applicative
-import Control.Monad
-import Control.Monad.Error.Class (MonadError(..))
-import Control.Monad.Writer.Strict
+import           Control.Applicative
+import           Control.Monad
+import           Control.Monad.Writer.Strict
 
-import Data.Version (showVersion)
+import qualified Data.Aeson as A
+import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString.UTF8 as BU8
 import qualified Data.Map as M
-
-import Options.Applicative as Opts
-
-import System.Exit (exitSuccess, exitFailure)
-import System.IO (hPutStrLn, stderr)
-import System.IO.UTF8
+import           Data.Version (showVersion)
 
 import qualified Language.PureScript as P
+import           Language.PureScript.Errors.JSON
+import           Language.PureScript.Make
+
+import           Options.Applicative as Opts
+
 import qualified Paths_purescript as Paths
 
-import Make
-import Makefile
+import           System.Exit (exitSuccess, exitFailure)
+import           System.FilePath.Glob (glob)
+import           System.IO (hSetEncoding, hPutStrLn, stdout, stderr, utf8)
+import           System.IO.UTF8
 
-data PCCOptions = PCCOptions
+data PCCMakeOptions = PCCMakeOptions
   { pccmInput        :: [FilePath]
-  , pccmForeignInput :: [FilePath]
   , pccmOutputDir    :: FilePath
   , pccmOpts         :: P.Options
   , pccmUsePrefix    :: Bool
+  , pccmJSONErrors   :: Bool
   }
 
-data InputOptions = InputOptions
-  { ioInputFiles  :: [FilePath]
-  }
-
-compile :: PCCOptions -> IO ()
-compile (PCCOptions input _ outputDir opts usePrefix) = do
-  when (null input) generateMakefile
-  moduleFiles <- readInput (InputOptions input)
-  case runWriterT (parseInputs moduleFiles []) of
+-- | Argumnets: verbose, use JSON, warnings, errors
+printWarningsAndErrors :: Bool -> Bool -> P.MultipleErrors -> Either P.MultipleErrors a -> IO ()
+printWarningsAndErrors verbose False warnings errors = do
+  when (P.nonEmpty warnings) $
+    hPutStrLn stderr (P.prettyPrintMultipleWarnings verbose warnings)
+  case errors of
     Left errs -> do
-      hPutStrLn stderr (P.prettyPrintMultipleErrors (P.optionsVerboseErrors opts) errs)
+      hPutStrLn stderr (P.prettyPrintMultipleErrors verbose errs)
       exitFailure
-    Right ((ms, _), warnings) -> do
-      when (P.nonEmpty warnings) $
-        hPutStrLn stderr (P.prettyPrintMultipleWarnings (P.optionsVerboseErrors opts) warnings)
-      let filePathMap = M.fromList $ map (\(fp, P.Module _ _ mn _ _) -> (mn, fp)) ms
-          makeActions = buildMakeActions outputDir filePathMap usePrefix
-      (e, warnings') <- runMake opts $ P.make makeActions (map snd ms)
-      case e of
-        Left errs -> do
-          putStrLn (P.prettyPrintMultipleErrors (P.optionsVerboseErrors opts) errs)
-          exitFailure
-        Right _ -> exitSuccess
+    Right _ -> return ()
+printWarningsAndErrors verbose True warnings errors = do
+  hPutStrLn stderr . BU8.toString . B.toStrict . A.encode $
+    JSONResult (toJSONErrors verbose P.Warning warnings)
+               (either (toJSONErrors verbose P.Error) (const []) errors)
+  either (const exitFailure) (const (return ())) errors
 
-readInput :: InputOptions -> IO [(Either P.RebuildPolicy FilePath, String)]
-readInput InputOptions{..} = forM ioInputFiles $ \inFile -> (Right inFile, ) <$> readUTF8File inFile
+compile :: PCCMakeOptions -> IO ()
+compile PCCMakeOptions{..} = do
+  input <- globWarningOnMisses (unless pccmJSONErrors . warnFileTypeNotFound) pccmInput
+  when (null input && not pccmJSONErrors) $ do
+    hPutStrLn stderr "pcc: No input files."
+    exitFailure
+  moduleFiles <- readInput input
+  (makeErrors, makeWarnings) <- runMake pccmOpts $ do
+    ms <- P.parseModulesFromFiles id moduleFiles
+    let filePathMap = M.fromList $ map (\(fp, P.Module _ _ mn _ _) -> (mn, Right fp)) ms
+    foreigns <- inferForeignModules filePathMap
+    let makeActions = buildMakeActions pccmOutputDir filePathMap foreigns pccmUsePrefix
+    P.make makeActions (map snd ms)
+  printWarningsAndErrors (P.optionsVerboseErrors pccmOpts) pccmJSONErrors makeWarnings makeErrors
+  exitSuccess
 
-parseInputs :: (Functor m, Applicative m, MonadError P.MultipleErrors m, MonadWriter P.MultipleErrors m)
-            => [(Either P.RebuildPolicy FilePath, String)]
-            -> [(FilePath, P.ForeignJS)]
-            -> m ([(Either P.RebuildPolicy FilePath, P.Module)], M.Map P.ModuleName FilePath)
-parseInputs modules foreigns =
-  (,) <$> P.parseModulesFromFiles (either (const "") id) modules
-      <*> P.parseForeignModulesFromFiles foreigns
+warnFileTypeNotFound :: String -> IO ()
+warnFileTypeNotFound = hPutStrLn stderr . ("pcc: No files found using pattern: " ++)
+
+globWarningOnMisses :: (String -> IO ()) -> [FilePath] -> IO [FilePath]
+globWarningOnMisses warn = concatMapM globWithWarning
+  where
+  globWithWarning pattern = do
+    paths <- glob pattern
+    when (null paths) $ warn pattern
+    return paths
+  concatMapM f = liftM concat . mapM f
+
+readInput :: [FilePath] -> IO [(FilePath, String)]
+readInput inputFiles = forM inputFiles $ \inFile -> (inFile, ) <$> readUTF8File inFile
 
 inputFile :: Parser FilePath
 inputFile = strArgument $
      metavar "FILE"
   <> help "The input .purs file(s)"
-
-inputForeignFile :: Parser FilePath
-inputForeignFile = strOption $
-     short 'f'
-  <> long "ffi"
-  <> help "The input .js file(s) providing foreign import implementations"
 
 outputDirectory :: Parser FilePath
 outputDirectory = strOption $
@@ -106,26 +116,21 @@ noTco = switch $
      long "no-tco"
   <> help "Disable tail call optimizations"
 
-noPrelude :: Parser Bool
-noPrelude = switch $
-     long "no-prelude"
-  <> help "Omit the automatic Prelude import"
-
 noMagicDo :: Parser Bool
 noMagicDo = switch $
      long "no-magic-do"
-  <> help "Disable the optimization that overloads the do keyword to generate efficient code specifically for the Eff monad."
+  <> help "Disable the optimization that overloads the do keyword to generate efficient code specifically for the Eff monad"
 
 noOpts :: Parser Bool
 noOpts = switch $
      long "no-opts"
-  <> help "Skip the optimization phase."
+  <> help "Skip the optimization phase"
 
 comments :: Parser Bool
 comments = switch $
      short 'c'
   <> long "comments"
-  <> help "Include comments in the generated code."
+  <> help "Include comments in the generated code"
 
 verboseErrors :: Parser Bool
 verboseErrors = switch $
@@ -139,10 +144,15 @@ noPrefix = switch $
   <> long "no-prefix"
   <> help "Do not include comment header"
 
+jsonErrors :: Parser Bool
+jsonErrors = switch $
+     long "json-errors"
+  <> help "Print errors to stderr as JSON"
 sourceMaps :: Parser Bool
 sourceMaps = switch $
      long "source-maps"
   <> help "Generate source maps"
+
 
 options :: Parser P.Options
 options = P.Options <$> noTco
@@ -153,17 +163,20 @@ options = P.Options <$> noTco
                     <*> (not <$> comments)
                     <*> sourceMaps
 
-pccOptions :: Parser PCCOptions
-pccOptions = PCCOptions <$> many inputFile
-                        <*> many inputForeignFile
-                        <*> outputDirectory
-                        <*> options
-                        <*> (not <$> noPrefix)
+pccMakeOptions :: Parser PCCMakeOptions
+pccMakeOptions = PCCMakeOptions <$> many inputFile
+                                <*> outputDirectory
+                                <*> options
+                                <*> (not <$> noPrefix)
+                                <*> jsonErrors
 
 main :: IO ()
-main = execParser opts >>= compile
+main = do
+  hSetEncoding stdout utf8
+  hSetEncoding stderr utf8
+  execParser opts >>= compile
   where
-  opts        = info (version <*> helper <*> pccOptions) infoModList
+  opts        = info (version <*> helper <*> pccMakeOptions) infoModList
   infoModList = fullDesc <> headerInfo <> footerInfo
   headerInfo  = header   "pcc - Compiles PureScript to C++11"
   footerInfo  = footer $ "pcc " ++ showVersion Paths.version

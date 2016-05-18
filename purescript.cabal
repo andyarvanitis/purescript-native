@@ -458,16 +458,29 @@ executable psc-ide-client
   hs-source-dirs:      psc-ide-client
 
 executable pcc
-    build-depends: base >=4 && <5, containers -any, directory -any, filepath -any,
-                   file-embed -any,
+    build-depends: base >=4 && <5,
+                   purescript -any,
+                   aeson >= 0.8 && < 0.12,
+                   base-compat >=0.6.0,
                    bytestring -any,
-                   mtl -any, optparse-applicative >= 0.10.0, parsec -any, purescript -any,
-                   time -any, transformers -any, transformers-compat -any
+                   containers -any,
+                   directory -any,
+                   filepath -any,
+                   file-embed -any,
+                   Glob >= 0.7 && < 0.8,
+                   mtl -any,
+                   optparse-applicative >= 0.12.1,
+                   parsec -any,
+                   time -any,
+                   transformers -any,
+                   transformers-compat -any,
+                   utf8-string >= 1 && < 2
     main-is: Main.hs
     buildable: True
     hs-source-dirs: pcc
-    other-modules:
-    ghc-options: -Wall -O2 -fno-warn-unused-do-bind
+    other-modules: Paths_purescript
+    ghc-options: -Wall -O2 -fno-warn-unused-do-bind -threaded -rtsopts "-with-rtsopts=-N"
+
 
 test-suite tests
     build-depends: base >=4 && <5,
