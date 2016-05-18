@@ -32,7 +32,6 @@ import           Data.Version (showVersion)
 
 import qualified Language.PureScript as P
 import           Language.PureScript.Errors.JSON
-import           Language.PureScript.Make
 
 import           Options.Applicative as Opts
 
@@ -42,6 +41,9 @@ import           System.Exit (exitSuccess, exitFailure)
 import           System.FilePath.Glob (glob)
 import           System.IO (hSetEncoding, hPutStrLn, stdout, stderr, utf8)
 import           System.IO.UTF8
+
+import           Make
+import           Makefile
 
 data PCCMakeOptions = PCCMakeOptions
   { pccmInput        :: [FilePath]
@@ -71,14 +73,13 @@ compile :: PCCMakeOptions -> IO ()
 compile PCCMakeOptions{..} = do
   input <- globWarningOnMisses (unless pccmJSONErrors . warnFileTypeNotFound) pccmInput
   when (null input && not pccmJSONErrors) $ do
-    hPutStrLn stderr "pcc: No input files."
-    exitFailure
+    generateMakefile
+    exitSuccess
   moduleFiles <- readInput input
   (makeErrors, makeWarnings) <- runMake pccmOpts $ do
     ms <- P.parseModulesFromFiles id moduleFiles
     let filePathMap = M.fromList $ map (\(fp, P.Module _ _ mn _ _) -> (mn, Right fp)) ms
-    foreigns <- inferForeignModules filePathMap
-    let makeActions = buildMakeActions pccmOutputDir filePathMap foreigns pccmUsePrefix
+    let makeActions = buildMakeActions pccmOutputDir filePathMap pccmUsePrefix
     P.make makeActions (map snd ms)
   printWarningsAndErrors (P.optionsVerboseErrors pccmOpts) pccmJSONErrors makeWarnings makeErrors
   exitSuccess
