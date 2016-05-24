@@ -5,12 +5,14 @@ module Language.PureScript.Parser.Declarations
   ( parseDeclaration
   , parseModule
   , parseModulesFromFiles
+  , parseModuleFromFile
   , parseValue
   , parseGuard
   , parseBinder
   , parseBinderNoParens
   , parseImportDeclaration'
   , parseLocalDeclaration
+  , toPositionedError
   ) where
 
 import Prelude hiding (lex)
@@ -232,7 +234,6 @@ parseDeclaration = positioned (P.choice
                    , parseValueDeclaration
                    , parseExternDeclaration
                    , parseFixityDeclaration
-                   , parseImportDeclaration
                    , parseTypeClassDeclaration
                    , parseTypeInstanceDeclaration
                    , parseDerivingInstanceDeclaration
@@ -256,7 +257,13 @@ parseModule = do
   name <- moduleName
   exports <- P.optionMaybe $ parens $ commaSep1 parseDeclarationRef
   reserved "where"
-  decls <- mark (P.many (same *> parseDeclaration))
+  decls <- mark $ do
+    -- TODO: extract a module header structure here, and provide a
+    -- parseModuleHeader function. This should allow us to speed up rebuilds
+    -- by only parsing as far as the module header. See PR #2054.
+    imports <- P.many (same *> parseImportDeclaration)
+    decls   <- P.many (same *> parseDeclaration)
+    return (imports ++ decls)
   _ <- P.eof
   end <- P.getPosition
   let ss = SourceSpan (P.sourceName start) (C.toSourcePos start) (C.toSourcePos end)
@@ -270,11 +277,7 @@ parseModulesFromFiles
   -> [(k, String)]
   -> m [(k, Module)]
 parseModulesFromFiles toFilePath input =
-  flip parU wrapError . inParallel . flip map input $ \(k, content) -> do
-    let filename = toFilePath k
-    ts <- lex filename content
-    m <- runTokenParser filename parseModule ts
-    return (k, m)
+  flip parU wrapError . inParallel . flip map input $ parseModuleFromFile toFilePath
   where
   wrapError :: Either P.ParseError a -> m a
   wrapError = either (throwError . MultipleErrors . pure . toPositionedError) return
@@ -285,6 +288,18 @@ parseModulesFromFiles toFilePath input =
   inParallel = withStrategy (parList rseq)
 
 
+-- | Parses a single module with FilePath for eventual parsing errors
+parseModuleFromFile
+  :: (k -> FilePath)
+  -> (k, String)
+  -> Either P.ParseError (k, Module)
+parseModuleFromFile toFilePath (k, content) = do
+    let filename = toFilePath k
+    ts <- lex filename content
+    m <- runTokenParser filename parseModule ts
+    pure (k, m)
+
+-- | Converts a @ParseError@ into a @PositionedError@
 toPositionedError :: P.ParseError -> ErrorMessage
 toPositionedError perr = ErrorMessage [ PositionedError (SourceSpan name start end) ] (ErrorParsingModule perr)
   where
@@ -494,12 +509,12 @@ parseNullBinder = underscore *> return NullBinder
 
 parseIdentifierAndBinder :: TokenParser (String, Binder)
 parseIdentifierAndBinder =
-  do name <- lname
-     b <- P.option (VarBinder (Ident name)) rest
-     return (name, b)
-  <|> (,) <$> stringLiteral <*> rest
+    do name <- lname
+       b <- P.option (VarBinder (Ident name)) rest
+       return (name, b)
+    <|> (,) <$> stringLiteral <*> rest
   where
-  rest = C.indented *> (equals <|> colon) *> C.indented *> parseBinder
+    rest = C.indented *> colon *> C.indented *> parseBinder
 
 -- |
 -- Parse a binder

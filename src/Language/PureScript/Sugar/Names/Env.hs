@@ -2,7 +2,7 @@ module Language.PureScript.Sugar.Names.Env
   ( ImportRecord(..)
   , ImportProvenance(..)
   , Imports(..)
-  , nullImports
+  , primImports
   , Exports(..)
   , nullExports
   , Env
@@ -58,6 +58,7 @@ data ImportProvenance
   = FromImplicit
   | FromExplicit
   | Local
+  | Prim
   deriving (Eq, Ord, Show, Read)
 
 type ImportMap a = M.Map (Qualified a) [ImportRecord a]
@@ -98,17 +99,32 @@ data Imports = Imports
   --
   , importedModules :: S.Set ModuleName
   -- |
-  -- The names of "virtual" modules that come into existence when "import as"
-  -- is used.
+  -- The "as" names of modules that have been imported qualified.
   --
-  , importedVirtualModules :: S.Set ModuleName
+  , importedQualModules :: S.Set ModuleName
   } deriving (Show, Read)
 
--- |
--- An empty 'Imports' value.
---
 nullImports :: Imports
 nullImports = Imports M.empty M.empty M.empty M.empty M.empty M.empty S.empty S.empty
+
+-- |
+-- An 'Imports' value with imports for the `Prim` module.
+--
+primImports :: Imports
+primImports =
+  nullImports
+    { importedTypes = M.fromList $ mkEntries `concatMap` M.keys primTypes
+    , importedTypeClasses = M.fromList $ mkEntries `concatMap` M.keys primClasses
+    }
+  where
+  mkEntries :: Qualified a -> [(Qualified a, [ImportRecord a])]
+  mkEntries fullName@(Qualified _ name) =
+    [ (fullName, [ImportRecord fullName primModuleName Prim])
+    , (Qualified Nothing name, [ImportRecord fullName primModuleName Prim])
+    ]
+
+primModuleName :: ModuleName
+primModuleName = ModuleName [ProperName "Prim"]
 
 -- |
 -- The exported declarations from a module.
@@ -186,7 +202,7 @@ primExports =
 -- | Environment which only contains the Prim module.
 primEnv :: Env
 primEnv = M.singleton
-  (ModuleName [ProperName "Prim"])
+  primModuleName
   (internalModuleSourceSpan "<Prim>", nullImports, primExports)
 
 -- |
@@ -203,9 +219,8 @@ exportType
 exportType exps name dctors mn = do
   let exTypes = exportedTypes exps
   let exClasses = exportedTypeClasses exps
-  case name `M.lookup` exTypes of
-    Just (_, mn') | mn /= mn' -> throwConflictError ConflictingTypeDecls name
-    _ -> return ()
+  forM_ (name `M.lookup` exTypes) $ \(_, mn') ->
+    when (mn /= mn') $ throwConflictError ConflictingTypeDecls name
   when (coerceProperName name `M.member` exClasses) $
     throwConflictError TypeConflictsWithClass name
   forM_ dctors $ \dctor -> do
@@ -213,9 +228,11 @@ exportType exps name dctors mn = do
       throwConflictError ConflictingCtorDecls dctor
     when (coerceProperName dctor `M.member` exClasses) $
       throwConflictError CtorConflictsWithClass dctor
-  return $ exps { exportedTypes = M.insert name (dctors, mn) exTypes }
+  return $ exps { exportedTypes = M.alter updateOrInsert name exTypes }
   where
   dctorExists dctor (dctors', mn') = mn /= mn' && elem dctor dctors'
+  updateOrInsert Nothing = Just (dctors, mn)
+  updateOrInsert (Just (dctors', _)) = Just (dctors ++ dctors', mn)
 
 -- |
 -- Safely adds a type operator to some exports, returning an error if a

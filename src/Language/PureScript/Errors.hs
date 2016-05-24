@@ -24,6 +24,7 @@ import Language.PureScript.Crash
 import Language.PureScript.Kinds
 import Language.PureScript.Names
 import Language.PureScript.Pretty
+import Language.PureScript.Traversals
 import Language.PureScript.Types
 import qualified Language.PureScript.Bundle as Bundle
 import qualified Language.PureScript.Constants as C
@@ -112,7 +113,7 @@ data SimpleErrorMessage
   | ShadowedTypeVar String
   | UnusedTypeVar String
   | WildcardInferredType Type
-  | HoleInferredType String Type
+  | HoleInferredType String Type [(Ident, Type)]
   | MissingTypeDeclaration Ident Type
   | OverlappingPattern [[Binder]] Bool
   | IncompleteExhaustivityCheck
@@ -127,7 +128,6 @@ data SimpleErrorMessage
   | DuplicateImportRef Name
   | DuplicateExportRef Name
   | IntOutOfRange Integer String Integer Integer
-  | RedundantEmptyHidingImport ModuleName
   | ImplicitQualifiedImport ModuleName ModuleName [DeclarationRef]
   | ImplicitImport ModuleName [DeclarationRef]
   | HidingImport ModuleName [DeclarationRef]
@@ -297,7 +297,6 @@ errorCode em = case unwrapErrorMessage em of
   DuplicateImportRef{} -> "DuplicateImportRef"
   DuplicateExportRef{} -> "DuplicateExportRef"
   IntOutOfRange{} -> "IntOutOfRange"
-  RedundantEmptyHidingImport{} -> "RedundantEmptyHidingImport"
   ImplicitQualifiedImport{} -> "ImplicitQualifiedImport"
   ImplicitImport{} -> "ImplicitImport"
   HidingImport{} -> "HidingImport"
@@ -339,14 +338,17 @@ addHint hint = onErrorMessages $ \(ErrorMessage hints se) -> ErrorMessage (hint 
 
 -- | A map from rigid type variable name/unknown variable pairs to new variables.
 data TypeMap = TypeMap
-  { umSkolemMap :: M.Map Int (String, Int, Maybe SourceSpan)
-  , umNextSkolem :: Int
-  , umUnknownMap :: M.Map Int Int
-  , umNextUnknown :: Int
+  { umSkolemMap   :: M.Map Int (String, Int, Maybe SourceSpan)
+  -- ^ a map from skolems to their new names, including source and naming info
+  , umUnknownMap  :: M.Map Int Int
+  -- ^ a map from unification variables to their new names
+  , umNextIndex   :: Int
+  -- ^ unknowns and skolems share a source of names during renaming, to
+  -- avoid overlaps in error messages. This is the next label for either case.
   } deriving Show
 
 defaultUnknownMap :: TypeMap
-defaultUnknownMap = TypeMap M.empty 0 M.empty 0
+defaultUnknownMap = TypeMap M.empty M.empty 0
 
 -- | How critical the issue is
 data Level = Error | Warning deriving Show
@@ -365,16 +367,16 @@ replaceUnknowns = everywhereOnTypesM replaceTypes
     m <- get
     case M.lookup u (umUnknownMap m) of
       Nothing -> do
-        let u' = umNextUnknown m
-        put $ m { umUnknownMap = M.insert u u' (umUnknownMap m), umNextUnknown = u' + 1 }
+        let u' = umNextIndex m
+        put $ m { umUnknownMap = M.insert u u' (umUnknownMap m), umNextIndex = u' + 1 }
         return (TUnknown u')
       Just u' -> return (TUnknown u')
   replaceTypes (Skolem name s sko ss) = do
     m <- get
     case M.lookup s (umSkolemMap m) of
       Nothing -> do
-        let s' = umNextSkolem m
-        put $ m { umSkolemMap = M.insert s (name, s', ss) (umSkolemMap m), umNextSkolem = s' + 1 }
+        let s' = umNextIndex m
+        put $ m { umSkolemMap = M.insert s (name, s', ss) (umSkolemMap m), umNextIndex = s' + 1 }
         return (Skolem name s' sko ss)
       Just (_, s', _) -> return (Skolem name s' sko ss)
   replaceTypes other = return other
@@ -395,7 +397,7 @@ onTypesInErrorMessageM f (ErrorMessage hints simple) = ErrorMessage <$> traverse
   gSimple (ExpectedType ty k) = ExpectedType <$> f ty <*> pure k
   gSimple (OrphanInstance nm cl ts) = OrphanInstance nm cl <$> traverse f ts
   gSimple (WildcardInferredType ty) = WildcardInferredType <$> f ty
-  gSimple (HoleInferredType name ty) = HoleInferredType name <$> f ty
+  gSimple (HoleInferredType name ty env) = HoleInferredType name <$> f ty <*> traverse (sndM f) env
   gSimple (MissingTypeDeclaration nm ty) = MissingTypeDeclaration nm <$> f ty
   gSimple (CannotGeneralizeRecursiveFunction nm ty) = CannotGeneralizeRecursiveFunction nm <$> f ty
 
@@ -418,7 +420,6 @@ wikiUri e = "https://github.com/purescript/purescript/wiki/Error-Code-" ++ error
 errorSuggestion :: SimpleErrorMessage -> Maybe ErrorSuggestion
 errorSuggestion err = case err of
   UnusedImport{} -> emptySuggestion
-  RedundantEmptyHidingImport{} -> emptySuggestion
   DuplicateImport{} -> emptySuggestion
   UnusedExplicitImport mn _ qual refs -> suggest $ importSuggestion mn refs qual
   ImplicitImport mn refs -> suggest $ importSuggestion mn refs Nothing
@@ -494,7 +495,7 @@ prettyPrintSingleError full level showWiki e = flip evalState defaultUnknownMap 
           : foldMap (return . line . ("  bound at " ++) . displayStartEndPos) ss
 
       unknownInfo :: Int -> Box.Box
-      unknownInfo u = line $ "_" ++ show u ++ " is an unknown type"
+      unknownInfo u = line $ "t" ++ show u ++ " is an unknown type"
 
     renderSimpleErrorMessage :: SimpleErrorMessage -> Box.Box
     renderSimpleErrorMessage (CannotGetFileInfo path) =
@@ -576,7 +577,7 @@ prettyPrintSingleError full level showWiki e = flip evalState defaultUnknownMap 
       paras [ line $ "Cannot import " ++ printName (Qualified Nothing name) ++ " from module " ++ runModuleName mn
             , line "It either does not exist or the module does not export it."
             ]
-    renderSimpleErrorMessage (UnknownImportDataConstructor mn dcon tcon) =
+    renderSimpleErrorMessage (UnknownImportDataConstructor mn tcon dcon) =
       line $ "Module " ++ runModuleName mn ++ " does not export data constructor " ++ runProperName dcon ++ " for type " ++ runProperName tcon
     renderSimpleErrorMessage (UnknownExport name) =
       line $ "Cannot export unknown " ++ printName (Qualified Nothing name)
@@ -817,10 +818,20 @@ prettyPrintSingleError full level showWiki e = flip evalState defaultUnknownMap 
       paras [ line "Wildcard type definition has the inferred type "
             , indent $ typeAsBox ty
             ]
-    renderSimpleErrorMessage (HoleInferredType name ty) =
-      paras [ line $ "Hole '" ++ name ++ "' has the inferred type "
-            , indent $ typeAsBox ty
-            ]
+    renderSimpleErrorMessage (HoleInferredType name ty env) =
+      paras $ [ line $ "Hole '" ++ name ++ "' has the inferred type "
+              , indent $ typeAsBox ty
+              ] ++ if null env then [] else envInfo
+      where
+        envInfo :: [Box.Box]
+        envInfo = [ line "in the following context:"
+                  , indent $ paras
+                      [ Box.hcat Box.left [ Box.text (showIdent ident <> " :: ")
+                                          , typeAsBox ty'
+                                          ]
+                      | (ident, ty') <- take 5 env
+                      ]
+                  ]
     renderSimpleErrorMessage (MissingTypeDeclaration ident ty) =
       paras [ line $ "No type declaration was provided for the top-level declaration of " ++ showIdent ident ++ "."
             , line "It is good practice to provide type declarations as a form of documentation."
@@ -867,9 +878,6 @@ prettyPrintSingleError full level showWiki e = flip evalState defaultUnknownMap 
     renderSimpleErrorMessage (IntOutOfRange value backend lo hi) =
       paras [ line $ "Integer value " ++ show value ++ " is out of range for the " ++ backend ++ " backend."
             , line $ "Acceptable values fall within the range " ++ show lo ++ " to " ++ show hi ++ " (inclusive)." ]
-
-    renderSimpleErrorMessage (RedundantEmptyHidingImport mn) =
-      line $ "The import for module " ++ runModuleName mn ++ " is redundant as all members have been explicitly hidden."
 
     renderSimpleErrorMessage msg@(ImplicitQualifiedImport importedModule asModule _) =
       paras [ line $ "Module " ++ runModuleName importedModule ++ " was imported as " ++ runModuleName asModule ++ " with unspecified imports."

@@ -21,6 +21,7 @@ tested-with: GHC==7.10.3
 
 extra-source-files: examples/passing/*.purs
                   , examples/passing/2018/*.purs
+                  , examples/passing/2138/*.purs
                   , examples/passing/ClassRefSyntax/*.purs
                   , examples/passing/DctorOperatorAlias/*.purs
                   , examples/passing/ExplicitImportReExport/*.purs
@@ -38,6 +39,7 @@ extra-source-files: examples/passing/*.purs
                   , examples/passing/ModuleExportSelf/*.purs
                   , examples/passing/NonConflictingExports/*.purs
                   , examples/passing/OperatorAliasElsewhere/*.purs
+                  , examples/passing/Operators/*.purs
                   , examples/passing/PendingConflictingImports/*.purs
                   , examples/passing/PendingConflictingImports2/*.purs
                   , examples/passing/QualifiedNames/*.purs
@@ -66,6 +68,8 @@ extra-source-files: examples/passing/*.purs
                   , examples/failing/InstanceExport/*.purs
                   , examples/failing/OrphanInstance/*.purs
                   , examples/failing/OverlappingReExport/*.purs
+                  , examples/warning/*.purs
+                  , examples/warning/*.js
                   , examples/docs/bower_components/purescript-prelude/src/*.purs
                   , examples/docs/bower.json
                   , examples/docs/src/*.purs
