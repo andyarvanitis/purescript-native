@@ -1,5 +1,5 @@
 name: purescript
-version: 0.9.0
+version: 0.9.2
 cabal-version: >=1.8
 build-type: Simple
 license: MIT
@@ -20,6 +20,7 @@ author: Phil Freeman <paf31@cantab.net>,
 tested-with: GHC==7.10.3
 
 extra-source-files: examples/passing/*.purs
+                  , examples/passing/*.js
                   , examples/passing/2018/*.purs
                   , examples/passing/2138/*.purs
                   , examples/passing/ClassRefSyntax/*.purs
@@ -59,6 +60,12 @@ extra-source-files: examples/passing/*.purs
                   , examples/failing/ConflictingImports2/*.purs
                   , examples/failing/ConflictingQualifiedImports/*.purs
                   , examples/failing/ConflictingQualifiedImports2/*.purs
+                  , examples/failing/ExportConflictClass/*.purs
+                  , examples/failing/ExportConflictCtor/*.purs
+                  , examples/failing/ExportConflictType/*.purs
+                  , examples/failing/ExportConflictTypeOp/*.purs
+                  , examples/failing/ExportConflictValue/*.purs
+                  , examples/failing/ExportConflictValueOp/*.purs
                   , examples/failing/ExportExplicit1/*.purs
                   , examples/failing/ExportExplicit3/*.purs
                   , examples/failing/ImportExplicit/*.purs
@@ -67,12 +74,13 @@ extra-source-files: examples/passing/*.purs
                   , examples/failing/ImportModule/*.purs
                   , examples/failing/InstanceExport/*.purs
                   , examples/failing/OrphanInstance/*.purs
-                  , examples/failing/OverlappingReExport/*.purs
                   , examples/warning/*.purs
                   , examples/warning/*.js
                   , examples/docs/bower_components/purescript-prelude/src/*.purs
                   , examples/docs/bower.json
                   , examples/docs/src/*.purs
+                  , psci/static/index.html
+                  , psci/static/index.js
                   , tests/support/package.json
                   , tests/support/bower.json
                   , tests/support/setup-win.cmd
@@ -95,11 +103,13 @@ library
     build-depends: base >=4.8 && <5,
                    aeson >= 0.8 && < 0.12,
                    aeson-better-errors >= 0.8,
+                   ansi-terminal >= 0.6.2 && < 0.7,
                    base-compat >=0.6.0,
                    bower-json >= 0.8,
                    boxes >= 0.1.4 && < 0.2.0,
                    bytestring -any,
                    containers -any,
+                   clock -any,
                    directory >= 1.2,
                    dlist -any,
                    edit-distance -any,
@@ -116,9 +126,10 @@ library
                    parallel >= 3.2 && < 3.3,
                    parsec >=3.1.10,
                    pattern-arrows >= 0.0.2 && < 0.1,
-                   pipes >= 4.0.0 && < 4.2.0,
+                   pipes >= 4.0.0 && < 4.3.0,
                    pipes-http -any,
                    process >= 1.2.0 && < 1.5,
+                   protolude >= 0.1.5,
                    regex-tdfa -any,
                    safe >= 0.3.9 && < 0.4,
                    semigroups >= 0.16.2 && < 0.19,
@@ -260,22 +271,23 @@ library
                      Language.PureScript.Publish.BoxesHelpers
 
                      Language.PureScript.Ide
+                     Language.PureScript.Ide.CaseSplit
                      Language.PureScript.Ide.Command
+                     Language.PureScript.Ide.Completion
+                     Language.PureScript.Ide.Conversions
                      Language.PureScript.Ide.Externs
                      Language.PureScript.Ide.Error
-                     Language.PureScript.Ide.Pursuit
-                     Language.PureScript.Ide.Completion
-                     Language.PureScript.Ide.Matcher
-                     Language.PureScript.Ide.Filter
-                     Language.PureScript.Ide.Types
-                     Language.PureScript.Ide.State
-                     Language.PureScript.Ide.CaseSplit
-                     Language.PureScript.Ide.SourceFile
-                     Language.PureScript.Ide.Watcher
-                     Language.PureScript.Ide.Reexports
                      Language.PureScript.Ide.Imports
-                     Language.PureScript.Ide.Util
+                     Language.PureScript.Ide.Filter
+                     Language.PureScript.Ide.Matcher
+                     Language.PureScript.Ide.Pursuit
                      Language.PureScript.Ide.Rebuild
+                     Language.PureScript.Ide.Reexports
+                     Language.PureScript.Ide.SourceFile
+                     Language.PureScript.Ide.State
+                     Language.PureScript.Ide.Types
+                     Language.PureScript.Ide.Util
+                     Language.PureScript.Ide.Watcher
 
                      Language.PureScript.Interactive
                      Language.PureScript.Interactive.Types
@@ -319,6 +331,7 @@ executable psc
     build-depends: base >=4 && <5,
                    purescript -any,
                    aeson >= 0.8 && < 0.12,
+                   ansi-terminal >= 0.6.2 && < 0.7,
                    base-compat >=0.6.0,
                    bytestring -any,
                    containers -any,
@@ -343,18 +356,27 @@ executable psci
                    purescript -any,
                    base-compat >=0.6.0,
                    boxes >= 0.1.4 && < 0.2.0,
+                   bytestring -any,
                    containers -any,
                    directory -any,
                    filepath -any,
+                   file-embed -any,
                    Glob -any,
                    haskeline >= 0.7.0.0,
+                   http-types == 0.9.*,
                    mtl -any,
                    optparse-applicative >= 0.12.1,
                    parsec -any,
                    process -any,
+                   stm >= 0.2.4.0,
+                   text -any,
                    time -any,
                    transformers -any,
-                   transformers-compat -any
+                   transformers-compat -any,
+                   wai == 3.*,
+                   wai-websockets == 3.*,
+                   warp == 3.*,
+                   websockets >= 0.9 && <0.10
     main-is: Main.hs
     buildable: True
     hs-source-dirs: psci
@@ -433,6 +455,8 @@ executable psc-ide-server
   other-modules:       Paths_purescript
   other-extensions:
   build-depends:       base >=4 && <5,
+                       aeson >= 0.8 && < 0.12,
+                       bytestring -any,
                        purescript -any,
                        base-compat >=0.6.0,
                        directory -any,
@@ -441,6 +465,7 @@ executable psc-ide-server
                        mtl -any,
                        network -any,
                        optparse-applicative >= 0.12.1,
+                       protolude >= 0.1.5,
                        stm -any,
                        text -any,
                        transformers -any,
@@ -454,6 +479,7 @@ executable psc-ide-client
   other-extensions:
   build-depends:       base >=4 && <5,
                        base-compat >=0.6.0,
+                       bytestring -any,
                        mtl -any,
                        network -any,
                        optparse-applicative >= 0.12.1,
@@ -506,6 +532,7 @@ test-suite tests
                    optparse-applicative -any,
                    parsec -any,
                    process -any,
+                   protolude >= 0.1.5,
                    silently -any,
                    stm -any,
                    text -any,
@@ -531,7 +558,8 @@ test-suite tests
                    Language.PureScript.Ide.MatcherSpec
                    Language.PureScript.Ide.RebuildSpec
                    Language.PureScript.Ide.ReexportsSpec
-                   Language.PureScript.IdeSpec
+                   Language.PureScript.Ide.SourceFile.IntegrationSpec
+                   Language.PureScript.Ide.SourceFileSpec
     buildable: True
     hs-source-dirs: tests
 

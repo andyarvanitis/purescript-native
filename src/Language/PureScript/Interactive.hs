@@ -1,8 +1,6 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DataKinds #-}
 
@@ -19,6 +17,7 @@ import           Prelude ()
 import           Prelude.Compat
 
 import           Data.List (intercalate, nub, sort, find, foldl')
+import           Data.Maybe (mapMaybe)
 import qualified Data.Map as M
 
 import           Control.Monad.IO.Class (MonadIO, liftIO)
@@ -39,12 +38,11 @@ import           Language.PureScript.Interactive.Parser       as Interactive
 import           Language.PureScript.Interactive.Printer      as Interactive
 import           Language.PureScript.Interactive.Types        as Interactive
 
-import           System.Exit
-import           System.Process (readProcessWithExitCode)
+import           System.FilePath ((</>))
 
 -- | Pretty-print errors
 printErrors :: MonadIO m => P.MultipleErrors -> m ()
-printErrors = liftIO . putStrLn . P.prettyPrintMultipleErrors False
+printErrors = liftIO . putStrLn . P.prettyPrintMultipleErrors P.defaultPPEOptions
 
 -- | This is different than the runMake in 'Language.PureScript.Make' in that it specifies the
 -- options and ignores the warning messages.
@@ -92,25 +90,28 @@ make ms = do
 -- | Performs a PSCi command
 handleCommand
   :: (MonadReader PSCiConfig m, MonadState PSCiState m, MonadIO m)
-  => Command
+  => (String -> m ())
   -> m ()
-handleCommand ShowHelp                  = liftIO $ putStrLn helpMessage
-handleCommand ResetState                = handleResetState
-handleCommand (Expression val)          = handleExpression val
-handleCommand (Import im)               = handleImport im
-handleCommand (Decls l)                 = handleDecls l
-handleCommand (TypeOf val)              = handleTypeOf val
-handleCommand (KindOf typ)              = handleKindOf typ
-handleCommand (BrowseModule moduleName) = handleBrowse moduleName
-handleCommand (ShowInfo QueryLoaded)    = handleShowLoadedModules
-handleCommand (ShowInfo QueryImport)    = handleShowImportedModules
-handleCommand QuitPSCi                  = P.internalError "`handleCommand QuitPSCi` was called. This is a bug."
+  -> Command
+  -> m ()
+handleCommand _ _ ShowHelp                  = liftIO $ putStrLn helpMessage
+handleCommand _ r ResetState                = handleResetState r
+handleCommand c _ (Expression val)          = handleExpression c val
+handleCommand _ _ (Import im)               = handleImport im
+handleCommand _ _ (Decls l)                 = handleDecls l
+handleCommand _ _ (TypeOf val)              = handleTypeOf val
+handleCommand _ _ (KindOf typ)              = handleKindOf typ
+handleCommand _ _ (BrowseModule moduleName) = handleBrowse moduleName
+handleCommand _ _ (ShowInfo QueryLoaded)    = handleShowLoadedModules
+handleCommand _ _ (ShowInfo QueryImport)    = handleShowImportedModules
+handleCommand _ _ QuitPSCi                  = P.internalError "`handleCommand QuitPSCi` was called. This is a bug."
 
 -- | Reset the application state
 handleResetState
   :: (MonadReader PSCiConfig m, MonadState PSCiState m, MonadIO m)
   => m ()
-handleResetState = do
+  -> m ()
+handleResetState reload = do
   modify $ updateImportedModules (const [])
          . updateLets (const [])
   files <- asks psciLoadedFiles
@@ -120,30 +121,25 @@ handleResetState = do
     return (map snd modules, externs)
   case e of
     Left errs -> printErrors errs
-    Right (modules, externs) -> modify (updateLoadedExterns (const (zip modules externs)))
+    Right (modules, externs) -> do
+      modify (updateLoadedExterns (const (zip modules externs)))
+      reload
 
 -- | Takes a value expression and evaluates it with the current state.
---
--- TODO: factor out the Node process runner, so that we can use PSCi in other settings.
 handleExpression
   :: (MonadReader PSCiConfig m, MonadState PSCiState m, MonadIO m)
-  => P.Expr
+  => (String -> m ())
+  -> P.Expr
   -> m ()
-handleExpression val = do
+handleExpression evaluate val = do
   st <- get
   let m = createTemporaryModule True st val
-  nodeArgs <- asks ((++ [indexFile]) . psciNodeFlags)
   e <- liftIO . runMake $ rebuild (map snd (psciLoadedExterns st)) m
   case e of
     Left errs -> printErrors errs
     Right _ -> do
-      liftIO $ writeFile indexFile "require('$PSCI')['$main']();"
-      process <- liftIO findNodeProcess
-      result  <- liftIO $ traverse (\node -> readProcessWithExitCode node nodeArgs "") process
-      case result of
-        Just (ExitSuccess,   out, _)   -> liftIO $ putStrLn out
-        Just (ExitFailure _, _,   err) -> liftIO $ putStrLn err
-        Nothing                        -> liftIO $ putStrLn "Couldn't find node.js"
+      js <- liftIO $ readFile (modulesDir </> "$PSCI" </> "index.js")
+      evaluate js
 
 -- |
 -- Takes a list of declarations and updates the environment, then run a make. If the declaration fails,
@@ -188,17 +184,27 @@ handleShowImportedModules = do
   showDeclType P.Implicit = ""
   showDeclType (P.Explicit refs) = refsList refs
   showDeclType (P.Hiding refs) = " hiding " ++ refsList refs
-  refsList refs = " (" ++ commaList (map showRef refs) ++ ")"
+  refsList refs = " (" ++ commaList (mapMaybe showRef refs) ++ ")"
 
-  showRef :: P.DeclarationRef -> String
-  showRef (P.TypeRef pn dctors) = N.runProperName pn ++ "(" ++ maybe ".." (commaList . map N.runProperName) dctors ++ ")"
-  showRef (P.TypeOpRef op) = "type " ++ N.showOp op
-  showRef (P.ValueRef ident) = N.runIdent ident
-  showRef (P.ValueOpRef op) = N.showOp op
-  showRef (P.TypeClassRef pn) = "class " ++ N.runProperName pn
-  showRef (P.TypeInstanceRef ident) = N.runIdent ident
-  showRef (P.ModuleRef name) = "module " ++ N.runModuleName name
-  showRef (P.PositionedDeclarationRef _ _ ref) = showRef ref
+  showRef :: P.DeclarationRef -> Maybe String
+  showRef (P.TypeRef pn dctors) =
+    Just $ N.runProperName pn ++ "(" ++ maybe ".." (commaList . map N.runProperName) dctors ++ ")"
+  showRef (P.TypeOpRef op) =
+    Just $ "type " ++ N.showOp op
+  showRef (P.ValueRef ident) =
+    Just $ N.runIdent ident
+  showRef (P.ValueOpRef op) =
+    Just $ N.showOp op
+  showRef (P.TypeClassRef pn) =
+    Just $ "class " ++ N.runProperName pn
+  showRef (P.TypeInstanceRef ident) =
+    Just $ N.runIdent ident
+  showRef (P.ModuleRef name) =
+    Just $ "module " ++ N.runModuleName name
+  showRef (P.ReExportRef _ _) =
+    Nothing
+  showRef (P.PositionedDeclarationRef _ _ ref) =
+    showRef ref
 
   commaList :: [String] -> String
   commaList = intercalate ", "

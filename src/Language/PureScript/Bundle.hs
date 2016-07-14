@@ -6,6 +6,7 @@
 -- and generates the final Javascript bundle.
 module Language.PureScript.Bundle
   ( bundle
+  , guessModuleIdentifier
   , ModuleIdentifier(..)
   , moduleName
   , ModuleType(..)
@@ -19,6 +20,7 @@ import Prelude.Compat
 import Control.Monad
 import Control.Monad.Error.Class
 
+import Data.Char (chr, digitToInt)
 import Data.Generics (everything, everywhere, mkQ, mkT)
 import Data.Graph
 import Data.List (nub, stripPrefix)
@@ -30,6 +32,8 @@ import Language.JavaScript.Parser
 import Language.JavaScript.Parser.AST
 
 import qualified Paths_purescript as Paths
+
+import System.FilePath (takeFileName, takeDirectory)
 
 -- | The type of error messages. We separate generation and rendering of errors using a data
 -- type, in case we need to match on error types later.
@@ -56,6 +60,14 @@ data ModuleIdentifier = ModuleIdentifier String ModuleType deriving (Show, Read,
 
 moduleName :: ModuleIdentifier -> String
 moduleName (ModuleIdentifier name _) = name
+
+-- | Given a filename, assuming it is in the correct place on disk, infer a ModuleIdentifier.
+guessModuleIdentifier :: MonadError ErrorMessage m => FilePath -> m ModuleIdentifier
+guessModuleIdentifier filename = ModuleIdentifier (takeFileName (takeDirectory filename)) <$> guessModuleType (takeFileName filename)
+  where
+    guessModuleType "index.js" = pure Regular
+    guessModuleType "foreign.js" = pure Foreign
+    guessModuleType name = throwError $ UnsupportedModulePath name
 
 -- | A piece of code is identified by its module and its name. These keys are used to label vertices
 -- in the dependency graph.
@@ -186,11 +198,34 @@ withDeps (Module modulePath es) = Module modulePath (map expandDeps es)
 
 -- String literals include the quote chars
 fromStringLiteral :: JSExpression -> Maybe String
-fromStringLiteral (JSStringLiteral _ str) = Just $ trimStringQuotes str
+fromStringLiteral (JSStringLiteral _ str) = Just $ strValue str
 fromStringLiteral _ = Nothing
 
-trimStringQuotes :: String -> String
-trimStringQuotes str = reverse $ drop 1 $ reverse $ drop 1 $ str
+strValue :: String -> String
+strValue str = go $ drop 1 str
+  where
+  go ('\\' : 'b' : xs) = '\b' : go xs
+  go ('\\' : 'f' : xs) = '\f' : go xs
+  go ('\\' : 'n' : xs) = '\n' : go xs
+  go ('\\' : 'r' : xs) = '\r' : go xs
+  go ('\\' : 't' : xs) = '\t' : go xs
+  go ('\\' : 'v' : xs) = '\v' : go xs
+  go ('\\' : '0' : xs) = '\0' : go xs
+  go ('\\' : 'x' : a : b : xs) = chr (a' + b') : go xs
+    where
+    a' = 16 * digitToInt a
+    b' = digitToInt b
+  go ('\\' : 'u' : a : b : c : d : xs) = chr (a' + b' + c' + d') : go xs
+    where
+    a' = 16 * 16 * 16 * digitToInt a
+    b' = 16 * 16 * digitToInt b
+    c' = 16 * digitToInt c
+    d' = digitToInt d
+  go ('\\' : x : xs) = x : go xs
+  go "\"" = ""
+  go "'" = ""
+  go (x : xs) = x : go xs
+  go "" = ""
 
 commaList :: JSCommaList a -> [a]
 commaList JSLNil = []
@@ -332,7 +367,7 @@ matchExportsAssignment stmt
   = Nothing
 
 extractLabel :: JSPropertyName -> Maybe String
-extractLabel (JSPropertyString _ nm) = Just (trimStringQuotes nm)
+extractLabel (JSPropertyString _ nm) = Just $ strValue nm
 extractLabel (JSPropertyIdent _ nm) = Just nm
 extractLabel _ = Nothing
 
