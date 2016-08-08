@@ -28,7 +28,7 @@ import qualified Language.PureScript.Constants as C
 
 magicDo :: Options -> Cpp -> Cpp
 magicDo opts | optionsNoMagicDo opts = id
-             | otherwise = inlineST . magicDo'
+             | otherwise = {- inlineST . -} magicDo' -- TODO: fix and test with Collatz.purs
 
 -- |
 -- Inline type class dictionaries for >>= and return for the Eff monad
