@@ -130,6 +130,7 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
+
   match (CppFunction name args rty qs ret) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
@@ -237,12 +238,11 @@ literals = mkPattern' match
     val' | '(' `elem` vstr || '[' `elem` vstr = parens vstr
          | otherwise = vstr
 
+  match (CppVar ident) | ident == C.__unused = match (CppVar $ '_':ident)
   match (CppVar ident) = return ident
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
-  match (CppVariableIntroduction (ident, _) _ (Just value))
-    | ident == C.__unused = fmap concat $ sequence
-    [ prettyPrintCpp' value
-    ]
+  match (CppVariableIntroduction (ident, typ) qs value)
+    | ident == C.__unused = match (CppVariableIntroduction ('_':ident, typ) qs value)
   match (CppVariableIntroduction (ident, typ) qs value) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
