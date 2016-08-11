@@ -36,7 +36,7 @@ import Data.Version (showVersion)
 import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as B
 
-import System.Directory (doesFileExist, getModificationTime, createDirectoryIfMissing)
+import System.Directory (doesDirectoryExist, doesFileExist, getModificationTime, createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory, addExtension, dropExtension)
 import System.IO.Error (tryIOError)
 import System.IO.UTF8
@@ -116,9 +116,11 @@ buildMakeActions outputDir filePathMap usePrefix =
       writeTextFile externsFile exts
 
       let supportDir = outputDir </> "PureScript"
-      writeTextFile (supportDir </> "PureScript.hh") $ B.unpack $(embedFile "pcc/include/purescript.hh")
-      writeTextFile (supportDir </> "PureScript.cc") $ B.unpack $(embedFile "pcc/include/purescript.cc")
-      writeTextFile (supportDir </> "purescript_memory.hh") $ B.unpack $(embedFile "pcc/include/purescript_memory.hh")
+      supportFilesExist <- dirExists supportDir
+      when (not supportFilesExist) $ do
+        writeTextFile (supportDir </> "PureScript.hh") $ B.unpack $(embedFile "pcc/include/purescript.hh")
+        writeTextFile (supportDir </> "PureScript.cc") $ B.unpack $(embedFile "pcc/include/purescript.cc")
+        writeTextFile (supportDir </> "purescript_memory.hh") $ B.unpack $(embedFile "pcc/include/purescript_memory.hh")
 
       let inputPath = dropExtension $ getInputFile mn
           hfile = addExtension inputPath "hh"
@@ -137,6 +139,10 @@ buildMakeActions outputDir filePathMap usePrefix =
   requiresForeign :: CF.Module a -> Bool
   requiresForeign = not . null . CF.moduleForeign
 
+  dirExists :: FilePath -> Make Bool
+  dirExists path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ do
+    doesDirectoryExist path
+
   textFileExists :: FilePath -> Make Bool
   textFileExists path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ do
     doesFileExist path
@@ -150,12 +156,12 @@ buildMakeActions outputDir filePathMap usePrefix =
   readTextFile path = makeIO (const (ErrorMessage [] $ CannotReadFile path)) $ readUTF8File path
 
   writeTextFile :: FilePath -> String -> Make ()
-  writeTextFile path text =  makeIO (const (ErrorMessage [] $ CannotWriteFile path)) $ do
-    fileExists <- doesFileExist path
-    when (not fileExists) $ do
-      createDirectoryIfMissing True (takeDirectory path)
-      _ <- tryIOError $ writeFile path text
-      return ()
+  writeTextFile path text = makeIO (const (ErrorMessage [] $ CannotWriteFile path)) $ do
+    mkdirp path
+    writeFile path text
+    where
+    mkdirp :: FilePath -> IO ()
+    mkdirp = createDirectoryIfMissing True . takeDirectory
 
   -- | Render a progress message
   renderProgressMessage :: P.ProgressMessage -> String
