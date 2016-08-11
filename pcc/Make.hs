@@ -157,11 +157,9 @@ buildMakeActions outputDir filePathMap usePrefix =
 
   writeTextFile :: FilePath -> String -> Make ()
   writeTextFile path text = makeIO (const (ErrorMessage [] $ CannotWriteFile path)) $ do
-    mkdirp path
-    writeFile path text
-    where
-    mkdirp :: FilePath -> IO ()
-    mkdirp = createDirectoryIfMissing True . takeDirectory
+    createDirectoryIfMissing True (takeDirectory path)
+    _ <- tryIOError $ writeFile path text -- TODO: intended to ignore "file busy", fix properly asap
+    return ()
 
   -- | Render a progress message
   renderProgressMessage :: P.ProgressMessage -> String
