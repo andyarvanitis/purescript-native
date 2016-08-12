@@ -238,11 +238,11 @@ literals = mkPattern' match
     val' | '(' `elem` vstr || '[' `elem` vstr = parens vstr
          | otherwise = vstr
 
-  match (CppVar ident) | ident == C.__unused = match (CppVar $ '_':ident)
+  match (CppVar ident) | ident == C.__unused = match (CppVar $ '$':ident)
   match (CppVar ident) = return ident
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction (ident, typ) qs value)
-    | ident == C.__unused = match (CppVariableIntroduction ('_':ident, typ) qs value)
+    | ident == C.__unused = match (CppVariableIntroduction ('$':ident, typ) qs value)
   match (CppVariableIntroduction (ident, typ) qs value) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
