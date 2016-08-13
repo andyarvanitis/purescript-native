@@ -351,6 +351,7 @@ class any {
     DEFINE_OPERATOR(op, integer, bool) \
     DEFINE_OPERATOR(op, double, bool) \
     DEFINE_OPERATOR(op, char, bool) \
+    DEFINE_OPERATOR(op, bool, bool) \
     DEFINE_INT_OPERATOR(op, bool) \
     friend auto operator op (const any&, const char * const) -> bool; \
     friend auto operator op (const char * const, const any&) -> bool;
