@@ -49,7 +49,7 @@ main = do
 
   -- Auto-generate Makefile
   setCurrentDirectory outputDir
-  callProcess "../.cabal-sandbox/bin/pcc" []
+  callProcess "pcc" []
 
   let tests = filter (`notElem` skipped) passingTestCases
 
@@ -62,6 +62,11 @@ main = do
     putStrLn $ "Compiling test " ++ inputFile ++ " ..."
     setCurrentDirectory outputDir
     copyFile (passingDir </> inputFile) (srcDir </> inputFile)
+
+    let testCaseDir = passingDir </> (takeWhile (/='.') inputFile)
+    testCaseDirExists <- doesDirectoryExist testCaseDir
+    when testCaseDirExists $ callProcess "cp" ["-R", testCaseDir, srcDir]
+
     callProcess "make" ["clean"]
     callProcess "make" ["debug"]
     --
@@ -70,6 +75,7 @@ main = do
     callProcess ("output" </> "bin" </> "main") []
 
     removeFile (srcDir </> inputFile)
+    when testCaseDirExists $ callProcess "rm" ["-rf", srcDir </> (takeWhile (/='.') inputFile)]
 
   -- TODO: support failing test cases
   --
@@ -92,12 +98,13 @@ repo = "git://github.com/pure11/"
 packages :: [(String, String)]
 -------------------------------------------------------------------------------
 packages =
-  [ ("purescript-eff",       "")
-  , ("purescript-prelude",   "")
-  , ("purescript-assert",    "")
-  , ("purescript-st",        "")
-  , ("purescript-console",   "")
-  , ("purescript-functions", "")
+  [ ("purescript-eff",       "pure11-0.9")
+  , ("purescript-prelude",   "pure11-0.9")
+  , ("purescript-assert",    "pure11-0.9")
+  , ("purescript-st",        "pure11-0.9")
+  , ("purescript-console",   "pure11-0.9")
+  , ("purescript-functions", "pure11-0.9")
+  , ("purescript-partial",   "pure11-0.9")
   ]
 
 -------------------------------------------------------------------------------
@@ -116,5 +123,5 @@ fetchPackages = do
 skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
-  [ "ExplicitImportReExport.purs" -- OK, test has no main (would pass otherwise)
+  [ "NumberLiterals.purs" -- unreliable float comparison, test manually
   ]
