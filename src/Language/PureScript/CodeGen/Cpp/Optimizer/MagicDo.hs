@@ -54,17 +54,30 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   -- Desugar monomorphic calls to >>= and return for the Eff monad
   convert :: Cpp -> Cpp
   -- Desugar pure & return
+  convert (CppApp (CppApp pure' [dict, val]) []) | isPure (CppApp pure' [dict]) = val
   convert (CppApp (CppApp pure' [val]) []) | isPure pure' = val
   -- Desugar >>
+  convert (CppApp bind [dict, m, CppLambda _ [] rty (CppBlock cpp)]) | isBind (CppApp bind [dict]) =
+    CppFunction fnName [] rty [] $ CppBlock (CppApp m [] : map applyReturns cpp )
   convert (CppApp (CppApp bind [m]) [CppLambda _ [] rty (CppBlock cpp)]) | isBind bind =
     CppFunction fnName [] rty [] $ CppBlock (CppApp m [] : map applyReturns cpp )
   -- Desugar >>=
+  convert (CppApp bind [dict, m, CppLambda _ [arg] rty (CppBlock cpp)]) | isBind (CppApp bind [dict]) =
+    CppFunction fnName [] rty [] $ CppBlock (app' : map applyReturns cpp)
+    where
+      app' | fst arg == C.__unused = CppApp m []
+           | otherwise = CppVariableIntroduction arg [] (Just (CppApp m []))
   convert (CppApp (CppApp bind [m]) [CppLambda _ [arg] rty (CppBlock cpp)]) | isBind bind =
-    CppFunction fnName [] rty [] $ CppBlock (CppVariableIntroduction arg [] (Just (CppApp m [])) : map applyReturns cpp)
+    CppFunction fnName [] rty [] $ CppBlock (app' : map applyReturns cpp)
+    where
+      app' | fst arg == C.__unused = CppApp m []
+           | otherwise = CppVariableIntroduction arg [] (Just (CppApp m []))
   -- Desugar untilE
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =
     CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppUnary Not (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral []])) []
   -- Desugar whileE
+  convert (CppApp (CppApp f [arg1, arg2]) []) | isEffFunc C.whileE f =
+    CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
   convert (CppApp (CppApp (CppApp f [arg1]) [arg2]) []) | isEffFunc C.whileE f =
     CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral []])) []
   convert other = other
@@ -85,6 +98,7 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   -- Remove __do function applications which remain after desugaring
   undo :: Cpp -> Cpp
   undo (CppReturn (CppApp (CppFunction ident [] _ _ body) [])) | ident == fnName = body
+  undo (CppFunction ident [] rty _ body) | ident == fnName = CppLambda [CppCaptureAll] [] rty body
   undo other = other
 
   applyReturns :: Cpp -> Cpp
