@@ -169,7 +169,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return (CppComment com fn)
     where
     ty' | Just t <- ty = Just t
-        | Just (t, _, _) <- M.lookup (mn, ident) (E.names env) = Just t
+        | Just (t, _, _) <- M.lookup (Qualified (Just mn) ident) (E.names env) = Just t
         | otherwise = Nothing
     argcnt = maybe 0 countArgs ty'
     name = identToCpp ident
@@ -484,7 +484,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             return $ foldl (\fn a -> CppApp fn [a]) fn' curriedArgs
         where
         ty | (_, _, Just t, _) <- ann = Just t
-           | Just (t, _, _) <- M.lookup (mn', ident) (E.names env) = Just t
+           | Just (t, _, _) <- M.lookup (Qualified (Just mn') ident) (E.names env) = Just t
            | otherwise = Nothing
       _ ->
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
@@ -810,8 +810,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     go _ = return []
 
     allForeigns :: [(Ident, T.Type)]
-    allForeigns = map (\((_, ident), (ty, _, _)) -> (ident, ty)) .
-                   filter (\((mn', _), (_, kind, _)) -> mn' == mn && kind == E.External) .
+    allForeigns = map (\((Qualified _ ident), (ty, _, _)) -> (ident, ty)) .
+                   filter (\((Qualified mn' _), (_, kind, _)) -> mn' == Just mn && kind == E.External) .
                    M.toList $ E.names env
 
 ---------------------------------------------------------------------------------------------------

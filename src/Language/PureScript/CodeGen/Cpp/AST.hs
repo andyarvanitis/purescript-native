@@ -53,7 +53,7 @@ data UnaryOperator
   -- Constructor
   --
   | New
-  deriving (Show, Read, Eq)
+  deriving (Show, Eq)
 
 -- |
 -- Built-in binary operators
@@ -136,7 +136,7 @@ data BinaryOperator
   --
   | ShiftRight
   --
-  deriving (Show, Read, Eq)
+  deriving (Show, Eq)
 
 -- |
 -- Data type for simplified C++11 expressions
@@ -282,7 +282,7 @@ data Cpp
   -- Commented C++11
   --
   | CppComment [Comment] Cpp
-  deriving (Show, Read, Eq)
+  deriving (Show, Eq)
 
 --
 -- Traversals
