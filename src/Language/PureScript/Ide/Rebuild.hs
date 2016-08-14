@@ -22,7 +22,6 @@ import           Language.PureScript.Ide.State
 import           Language.PureScript.Ide.Types
 import           Language.PureScript.Ide.Util
 import           System.IO.UTF8                  (readUTF8File)
-import           System.FilePath
 
 -- | Given a filepath performs the following steps:
 --
@@ -145,7 +144,8 @@ sortExterns m ex = do
            . M.elems
            . M.delete (P.getModuleName m) $ ex
   case sorted' of
-    Left _ -> throwError (GeneralError "There was a cycle in the dependencies")
+    Left err ->
+      throwError (RebuildError (toJSONErrors False P.Error err))
     Right (sorted, graph) -> do
       let deps = fromJust (List.lookup (P.getModuleName m) graph)
       pure $ mapMaybe getExtern (deps `inOrderOf` map P.getModuleName sorted)

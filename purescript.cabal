@@ -1,5 +1,5 @@
 name: purescript
-version: 0.9.2
+version: 0.9.3
 cabal-version: >=1.8
 build-type: Simple
 license: MIT
@@ -101,7 +101,7 @@ source-repository head
 
 library
     build-depends: base >=4.8 && <5,
-                   aeson >= 0.8 && < 0.12,
+                   aeson >= 0.8 && < 1.1,
                    aeson-better-errors >= 0.8,
                    ansi-terminal >= 0.6.2 && < 0.7,
                    base-compat >=0.6.0,
@@ -117,6 +117,7 @@ library
                    fsnotify >= 0.2.1,
                    Glob >= 0.7 && < 0.8,
                    haskeline >= 0.7.0.0,
+                   http-client >= 0.4.30 && <0.5,
                    http-types -any,
                    language-javascript == 0.6.*,
                    lifted-base >= 0.2.3 && < 0.2.4,
@@ -129,7 +130,7 @@ library
                    pipes >= 4.0.0 && < 4.3.0,
                    pipes-http -any,
                    process >= 1.2.0 && < 1.5,
-                   protolude >= 0.1.5,
+                   protolude >= 0.1.6,
                    regex-tdfa -any,
                    safe >= 0.3.9 && < 0.4,
                    semigroups >= 0.16.2 && < 0.19,
@@ -330,7 +331,7 @@ library
 executable psc
     build-depends: base >=4 && <5,
                    purescript -any,
-                   aeson >= 0.8 && < 0.12,
+                   aeson >= 0.8 && < 1.1,
                    ansi-terminal >= 0.6.2 && < 0.7,
                    base-compat >=0.6.0,
                    bytestring -any,
@@ -455,7 +456,7 @@ executable psc-ide-server
   other-modules:       Paths_purescript
   other-extensions:
   build-depends:       base >=4 && <5,
-                       aeson >= 0.8 && < 0.12,
+                       aeson >= 0.8 && < 1.1,
                        bytestring -any,
                        purescript -any,
                        base-compat >=0.6.0,
@@ -465,7 +466,7 @@ executable psc-ide-server
                        mtl -any,
                        network -any,
                        optparse-applicative >= 0.12.1,
-                       protolude >= 0.1.5,
+                       protolude >= 0.1.6,
                        stm -any,
                        text -any,
                        transformers -any,
@@ -533,7 +534,7 @@ test-suite tests
                    optparse-applicative -any,
                    parsec -any,
                    process -any,
-                   protolude >= 0.1.5,
+                   protolude >= 0.1.6,
                    silently -any,
                    stm -any,
                    text -any,
