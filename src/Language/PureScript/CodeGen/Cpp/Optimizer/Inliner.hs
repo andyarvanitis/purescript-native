@@ -267,10 +267,13 @@ inlineFnComposition :: (MonadSupply m) => Cpp -> m Cpp
 inlineFnComposition = everywhereOnCppTopDownM convert
   where
   convert :: (MonadSupply m) => Cpp -> m Cpp
+  convert (CppApp fn [dict', x, y, z])
+    | isFnCompose dict' fn = return $ CppApp  x [CppApp  y [z]]
+    | isFnComposeFlipped dict' fn = return $ CppApp  y [CppApp  x [z]]
   convert (CppApp  (CppApp  (CppApp (CppApp fn [dict']) [x]) [y]) [z])
     | isFnCompose dict' fn = return $ CppApp  x [CppApp  y [z]]
     | isFnComposeFlipped dict' fn = return $ CppApp  y [CppApp  x [z]]
-  convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y])
+  convert (CppApp fn [dict', x, y])
     | isFnCompose dict' fn = do
         arg <- freshName
         return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
