@@ -129,7 +129,6 @@ nameIsCppReserved name =
               , "import"
               , "inline"
               , "int"
-              , "integer"
               , "list"
               , "long"
               , "mutable"
