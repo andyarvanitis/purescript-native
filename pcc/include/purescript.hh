@@ -19,6 +19,7 @@
 
 #if defined(DEBUG)
   #include <cassert>
+  #include <climits>
 #else
   #define NDEBUG
   #undef assert
