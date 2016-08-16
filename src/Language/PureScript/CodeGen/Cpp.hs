@@ -419,7 +419,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     CppArrayLiteral <$> mapM valueToCpp xs
 
   valueToCpp (Literal _ (ObjectLiteral ps)) =
-    CppObjectLiteral <$> sortBy (compare `on` fst) <$> mapM (sndM valueToCpp) ps
+    CppObjectLiteral CppRecord <$> sortBy (compare `on` fst) <$> mapM (sndM valueToCpp) ps
 
   valueToCpp (Accessor _ prop val) =
     CppIndexer <$> pure (CppStringLiteral prop) <*> valueToCpp val
@@ -430,7 +430,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
         origFields = (\key -> (key, CppIndexer (CppStringLiteral key) obj')) <$> origKeys
-    return $ CppObjectLiteral . sortBy (compare `on` fst) $ origFields ++ updatedFields
+    return $ CppObjectLiteral CppRecord . sortBy (compare `on` fst) $ origFields ++ updatedFields
     where
     allKeys :: T.Type -> [String]
     allKeys (T.TypeApp (T.TypeConstructor _) r@(T.RCons {})) = fst <$> (fst $ T.rowToList r)
@@ -465,7 +465,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           return $ CppApp (uncurried' $ qualifiedToCpp id ident) args'
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
-        return . CppObjectLiteral $
+        return . CppObjectLiteral CppInstance $
                      zip
                        ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
                        args'

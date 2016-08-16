@@ -70,6 +70,12 @@ data CppValueQual
 data CppCaptureType = CppCaptureAll
   deriving (Show, Read, Eq)
 
+-- |
+-- C++ object/map literal type
+--
+data CppObjectType = CppInstance | CppRecord
+  deriving (Show, Eq)
+
 runType :: CppType -> String
 runType (CppPrimitive t) = t
 runType CppAuto = "auto"
