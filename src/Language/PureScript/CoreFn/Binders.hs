@@ -1,9 +1,9 @@
-{-# LANGUAGE DeriveFunctor #-}
-
 -- |
 -- The core functional representation for binders
 --
 module Language.PureScript.CoreFn.Binders where
+
+import Prelude.Compat
 
 import Language.PureScript.AST.Literals
 import Language.PureScript.Names
@@ -31,7 +31,7 @@ data Binder a
   -- |
   -- A binder which binds its input to an identifier
   --
-  | NamedBinder a Ident (Binder a) deriving (Show, Read, Functor)
+  | NamedBinder a Ident (Binder a) deriving (Show, Functor)
 
 
 extractBinderAnn :: Binder a -> a

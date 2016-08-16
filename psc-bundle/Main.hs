@@ -6,7 +6,6 @@
 -- | Bundles compiled PureScript modules for the browser.
 module Main (main) where
 
-import Data.Maybe
 import Data.Traversable (for)
 import Data.Version (showVersion)
 
@@ -16,7 +15,7 @@ import Control.Monad.Error.Class
 import Control.Monad.Trans.Except
 import Control.Monad.IO.Class
 
-import System.FilePath (takeFileName, takeDirectory)
+import System.FilePath (takeDirectory)
 import System.FilePath.Glob (glob)
 import System.Exit (exitFailure)
 import System.IO (stderr, stdout, hPutStrLn, hSetEncoding, utf8)
@@ -36,16 +35,7 @@ data Options = Options
   , optionsEntryPoints :: [String]
   , optionsMainModule  :: Maybe String
   , optionsNamespace   :: String
-  , optionsRequirePath :: Maybe FilePath
   } deriving Show
-
--- | Given a filename, assuming it is in the correct place on disk, infer a ModuleIdentifier.
-guessModuleIdentifier :: (MonadError ErrorMessage m) => FilePath -> m ModuleIdentifier
-guessModuleIdentifier filename = ModuleIdentifier (takeFileName (takeDirectory filename)) <$> guessModuleType (takeFileName filename)
-  where
-  guessModuleType "index.js" = pure Regular
-  guessModuleType "foreign.js" = pure Foreign
-  guessModuleType name = throwError $ UnsupportedModulePath name
 
 -- | The main application function.
 -- This function parses the input files, performs dead code elimination, filters empty modules
@@ -63,7 +53,7 @@ app Options{..} = do
 
   let entryIds = map (`ModuleIdentifier` Regular) optionsEntryPoints
 
-  bundle input entryIds optionsMainModule optionsNamespace optionsRequirePath
+  bundle input entryIds optionsMainModule optionsNamespace
 
 -- | Command line options parser.
 options :: Parser Options
@@ -72,7 +62,6 @@ options = Options <$> some inputFile
                   <*> many entryPoint
                   <*> optional mainModule
                   <*> namespace
-                  <*> optional requirePath
   where
   inputFile :: Parser FilePath
   inputFile = strArgument $
@@ -104,19 +93,12 @@ options = Options <$> some inputFile
     <> showDefault
     <> help "Specify the namespace that PureScript modules will be exported to when running in the browser."
 
-  requirePath :: Parser FilePath
-  requirePath = strOption $
-       short 'r'
-    <> long "require-path"
-    <> help "The path prefix used in require() calls in the generated JavaScript [deprecated]"
-
 -- | Make it go.
 main :: IO ()
 main = do
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
   opts <- execParser (info (version <*> helper <*> options) infoModList)
-  when (isJust (optionsRequirePath opts)) $ hPutStrLn stderr "The require-path option is deprecated and will be removed in PureScript 0.9."
   output <- runExceptT (app opts)
   case output of
     Left err -> do

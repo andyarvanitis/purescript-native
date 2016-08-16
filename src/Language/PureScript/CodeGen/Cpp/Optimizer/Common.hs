@@ -15,6 +15,8 @@
 
 module Language.PureScript.CodeGen.Cpp.Optimizer.Common where
 
+import Prelude.Compat
+
 import Data.Maybe (fromMaybe)
 
 import Language.PureScript.CodeGen.Cpp.AST
@@ -73,3 +75,17 @@ isUpdated var1 = everythingOnCpp (||) check
 removeFromBlock :: ([Cpp] -> [Cpp]) -> Cpp -> Cpp
 removeFromBlock go (CppBlock sts) = CppBlock (go sts)
 removeFromBlock _  cpp = cpp
+
+isFn :: (String, String) -> Cpp -> Bool
+isFn (moduleName, fnName) (CppAccessor (CppVar x) (CppVar y)) =
+  x == fnName && y == moduleName
+isFn (moduleName, fnName) (CppIndexer (CppStringLiteral x) (CppVar y)) =
+  x == fnName && y == moduleName
+isFn _ _ = False
+
+isDict :: (String, String) -> Cpp -> Bool
+isDict (moduleName, dictName) (CppAccessor (CppVar x) (CppVar y)) = x == dictName && y == moduleName
+isDict _ _ = False
+
+isDict' :: [(String, String)] -> Cpp -> Bool
+isDict' xs cpp = any (`isDict` cpp) xs

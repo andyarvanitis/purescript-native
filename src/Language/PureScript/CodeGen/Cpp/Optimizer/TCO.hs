@@ -15,6 +15,8 @@
 
 module Language.PureScript.CodeGen.Cpp.Optimizer.TCO (tco) where
 
+import Prelude.Compat
+
 import Data.List
 import Data.Monoid
 

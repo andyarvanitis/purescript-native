@@ -9,57 +9,87 @@
 -- Stability   : experimental
 --
 -- |
--- Generally useful functions and conversions
+-- Generally useful functions
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Language.PureScript.Ide.Util where
+module Language.PureScript.Ide.Util
+  ( identifierFromIdeDeclaration
+  , unwrapMatch
+  , unwrapPositioned
+  , unwrapPositionedRef
+  , completionFromMatch
+  , infoFromMatch
+  , encodeT
+  , decodeT
+  , discardAnn
+  , module Language.PureScript.Ide.Conversions
+  ) where
 
+import           Protolude                     hiding (decodeUtf8, encodeUtf8)
 import           Data.Aeson
-import           Data.Text                     (Text)
 import qualified Data.Text                     as T
-import           Data.Text.Lazy                (fromStrict, toStrict)
 import           Data.Text.Lazy.Encoding       (decodeUtf8, encodeUtf8)
 import qualified Language.PureScript           as P
 import           Language.PureScript.Ide.Types
+import           Language.PureScript.Ide.Conversions
 
-runProperNameT :: P.ProperName a -> Text
-runProperNameT = T.pack . P.runProperName
+identifierFromIdeDeclaration :: IdeDeclaration -> Text
+identifierFromIdeDeclaration d = case d of
+  IdeValue name _ -> runIdentT name
+  IdeType name _ -> runProperNameT name
+  IdeTypeSynonym name _ -> runProperNameT name
+  IdeDataConstructor name _ _ -> runProperNameT name
+  IdeTypeClass name -> runProperNameT name
+  IdeValueOperator op _ _ _ -> runOpNameT op
+  IdeTypeOperator op _ _ _ -> runOpNameT op
 
-runIdentT :: P.Ident -> Text
-runIdentT = T.pack . P.runIdent
+discardAnn :: IdeDeclarationAnn -> IdeDeclaration
+discardAnn (IdeDeclarationAnn _ d) = d
 
-prettyTypeT :: P.Type -> Text
-prettyTypeT = T.unwords . fmap T.strip . T.lines . T.pack . P.prettyPrintType
+unwrapMatch :: Match a -> a
+unwrapMatch (Match (_, ed)) = ed
 
-identifierFromExternDecl :: ExternDecl -> Text
-identifierFromExternDecl (ValueDeclaration name _) = name
-identifierFromExternDecl (TypeDeclaration name _) = runProperNameT name
-identifierFromExternDecl (TypeSynonymDeclaration name _) = runProperNameT name
-identifierFromExternDecl (DataConstructor name _ _) = name
-identifierFromExternDecl (TypeClassDeclaration name) = runProperNameT name
-identifierFromExternDecl (ModuleDecl name _) = name
-identifierFromExternDecl Dependency{} = "~Dependency~"
-identifierFromExternDecl Export{} = "~Export~"
+completionFromMatch :: Match IdeDeclaration -> Completion
+completionFromMatch = Completion . completionFromMatch'
 
-identifierFromMatch :: Match -> Text
-identifierFromMatch (Match _ ed) = identifierFromExternDecl ed
+completionFromMatch' :: Match IdeDeclaration -> (Text, Text, Text)
+completionFromMatch' (Match (m', d)) = case d of
+  IdeValue name type' -> (m, runIdentT name, prettyTypeT type')
+  IdeType name kind -> (m, runProperNameT name, toS (P.prettyPrintKind kind))
+  IdeTypeSynonym name kind -> (m, runProperNameT name, prettyTypeT kind)
+  IdeDataConstructor name _ type' -> (m, runProperNameT name, prettyTypeT type')
+  IdeTypeClass name -> (m, runProperNameT name, "class")
+  IdeValueOperator op ref precedence associativity ->
+    (m, runOpNameT op, showFixity precedence associativity ref op)
+  IdeTypeOperator op ref precedence associativity ->
+    (m, runOpNameT op, showFixity precedence associativity ref op)
+  where
+    m = runModuleNameT m'
+    showFixity p a r o =
+      let asso = case a of
+            P.Infix -> "infix"
+            P.Infixl -> "infixl"
+            P.Infixr -> "infixr"
+      in T.unwords [asso, show p, r, "as", runOpNameT o]
 
-completionFromMatch :: Match -> Maybe Completion
-completionFromMatch (Match _ Dependency{}) = Nothing
-completionFromMatch (Match _ Export{}) = Nothing
-completionFromMatch (Match m d) = Just $ case d of
-  ValueDeclaration name type' -> Completion (m, name, prettyTypeT type')
-  TypeDeclaration name kind -> Completion (m, runProperNameT name, T.pack $ P.prettyPrintKind kind)
-  TypeSynonymDeclaration name kind -> Completion (m, runProperNameT name, prettyTypeT kind)
-  DataConstructor name _ type' -> Completion (m, name, prettyTypeT type')
-  TypeClassDeclaration name -> Completion (m, runProperNameT name, "class")
-  ModuleDecl name _ -> Completion ("module", name, "module")
-  _ -> error "the impossible happened in completionFromMatch"
+infoFromMatch :: Match IdeDeclarationAnn -> Info
+infoFromMatch (Match (m, (IdeDeclarationAnn ann d))) =
+  Info (a, b, c, annLocation ann)
+  where
+    (a, b, c) = completionFromMatch' (Match (m, d))
 
 encodeT :: (ToJSON a) => a -> Text
-encodeT = toStrict . decodeUtf8 . encode
+encodeT = toS . decodeUtf8 . encode
 
 decodeT :: (FromJSON a) => Text -> Maybe a
-decodeT = decode . encodeUtf8 . fromStrict
+decodeT = decode . encodeUtf8 . toS
+
+unwrapPositioned :: P.Declaration -> P.Declaration
+unwrapPositioned (P.PositionedDeclaration _ _ x) = x
+unwrapPositioned x = x
+
+unwrapPositionedRef :: P.DeclarationRef -> P.DeclarationRef
+unwrapPositionedRef (P.PositionedDeclarationRef _ _ x) = x
+unwrapPositionedRef x = x

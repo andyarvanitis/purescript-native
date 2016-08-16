@@ -1,8 +1,3 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 -- |
 -- This module generates code in the simplified Javascript intermediate representation from Purescript code
 --
@@ -12,14 +7,7 @@ module Language.PureScript.CodeGen.JS
   , moduleToJs
   ) where
 
-import Prelude ()
 import Prelude.Compat
-
-import Data.List ((\\), delete, intersect)
-import Data.Maybe (isNothing, fromMaybe)
-import qualified Data.Map as M
-import qualified Data.Foldable as F
-import qualified Data.Traversable as T
 
 import Control.Arrow ((&&&))
 import Control.Monad (replicateM, forM, void)
@@ -27,14 +15,22 @@ import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.Reader (MonadReader, asks)
 import Control.Monad.Supply.Class
 
-import Language.PureScript.Crash
+import Data.List ((\\), delete, intersect)
+import Data.Maybe (isNothing, fromMaybe)
+import qualified Data.Foldable as F
+import qualified Data.Map as M
+import qualified Data.Traversable as T
+
 import Language.PureScript.AST.SourcePos
 import Language.PureScript.CodeGen.JS.AST as AST
 import Language.PureScript.CodeGen.JS.Common as Common
-import Language.PureScript.CoreFn
-import Language.PureScript.Names
-import Language.PureScript.Errors
 import Language.PureScript.CodeGen.JS.Optimizer
+import Language.PureScript.CoreFn
+import Language.PureScript.Crash
+import Language.PureScript.Errors (ErrorMessageHint(..), SimpleErrorMessage(..),
+                                   MultipleErrors(..), rethrow,
+                                   errorMessage, rethrowWithPosition, addHint)
+import Language.PureScript.Names
 import Language.PureScript.Options
 import Language.PureScript.Traversals (sndM)
 import qualified Language.PureScript.Constants as C
@@ -109,9 +105,8 @@ moduleToJs (Module coms mn imps exps foreigns decls) foreign_ =
   --
   importToJs :: M.Map ModuleName (Ann, ModuleName) -> ModuleName -> m JS
   importToJs mnLookup mn' = do
-    path <- asks optionsRequirePath
     let ((ss, _, _, _), mnSafe) = fromMaybe (internalError "Missing value in mnLookup") $ M.lookup mn' mnLookup
-    let moduleBody = JSApp Nothing (JSVar Nothing "require") [JSStringLiteral Nothing (fromMaybe ".." path </> runModuleName mn')]
+    let moduleBody = JSApp Nothing (JSVar Nothing "require") [JSStringLiteral Nothing (".." </> runModuleName mn')]
     withPos ss $ JSVariableIntroduction Nothing (moduleNameToJs mnSafe) (Just moduleBody)
 
   -- |
@@ -180,7 +175,6 @@ moduleToJs (Module coms mn imps exps foreigns decls) foreign_ =
   --
   accessor :: Ident -> JS -> JS
   accessor (Ident prop) = accessorString prop
-  accessor (Op op) = JSIndexer Nothing (JSStringLiteral Nothing op)
   accessor (GenIdent _ _) = internalError "GenIdent in accessor"
 
   accessorString :: String -> JS -> JS
@@ -288,15 +282,18 @@ moduleToJs (Module coms mn imps exps foreigns decls) foreign_ =
   extendObj obj sts = do
     newObj <- freshName
     key <- freshName
+    evaluatedObj <- freshName
     let
       jsKey = JSVar Nothing key
       jsNewObj = JSVar Nothing newObj
-      block = JSBlock Nothing (objAssign:copy:extend ++ [JSReturn Nothing jsNewObj])
+      jsEvaluatedObj = JSVar Nothing evaluatedObj
+      block = JSBlock Nothing (evaluate:objAssign:copy:extend ++ [JSReturn Nothing jsNewObj])
+      evaluate = JSVariableIntroduction Nothing evaluatedObj (Just obj)
       objAssign = JSVariableIntroduction Nothing newObj (Just $ JSObjectLiteral Nothing [])
-      copy = JSForIn Nothing key obj $ JSBlock Nothing [JSIfElse Nothing cond assign Nothing]
-      cond = JSApp Nothing (JSAccessor Nothing "hasOwnProperty" obj) [jsKey]
-      assign = JSBlock Nothing [JSAssignment Nothing (JSIndexer Nothing jsKey jsNewObj) (JSIndexer Nothing jsKey obj)]
-      stToAssign (s, js) = JSAssignment Nothing (JSAccessor Nothing s jsNewObj) js
+      copy = JSForIn Nothing key jsEvaluatedObj $ JSBlock Nothing [JSIfElse Nothing cond assign Nothing]
+      cond = JSApp Nothing (JSAccessor Nothing "hasOwnProperty" jsEvaluatedObj) [jsKey]
+      assign = JSBlock Nothing [JSAssignment Nothing (JSIndexer Nothing jsKey jsNewObj) (JSIndexer Nothing jsKey jsEvaluatedObj)]
+      stToAssign (s, js) = JSAssignment Nothing (accessorString s jsNewObj) js
       extend = map stToAssign sts
     return $ JSApp Nothing (JSFunction Nothing Nothing [] block) []
 

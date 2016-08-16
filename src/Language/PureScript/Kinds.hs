@@ -2,36 +2,25 @@
 
 module Language.PureScript.Kinds where
 
-import Prelude ()
 import Prelude.Compat
 
 import qualified Data.Aeson.TH as A
 
--- |
--- The data type of kinds
---
+-- | The data type of kinds
 data Kind
-  -- |
-  -- Unification variable of type Kind
-  --
+  -- | Unification variable of type Kind
   = KUnknown Int
-  -- |
-  -- The kind of types
-  --
+  -- | The kind of types
   | Star
-  -- |
-  -- The kind of effects
-  --
+  -- | The kind of effects
   | Bang
-  -- |
-  -- Kinds for labelled, unordered rows without duplicates
-  --
+  -- | Kinds for labelled, unordered rows without duplicates
   | Row Kind
-  -- |
-  -- Function kinds
-  --
+  -- | Function kinds
   | FunKind Kind Kind
-  deriving (Show, Read, Eq, Ord)
+  -- | Type-level strings
+  | Symbol
+  deriving (Show, Eq, Ord)
 
 $(A.deriveJSON A.defaultOptions ''Kind)
 

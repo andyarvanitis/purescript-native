@@ -17,6 +17,8 @@
 
 module Language.PureScript.CodeGen.Cpp.File where
 
+import Prelude.Compat
+
 import Data.Maybe
 
 import Language.PureScript.CodeGen.Cpp.AST
@@ -50,9 +52,14 @@ toHeader = catMaybes . map go
     Nothing
   go (CppVariableIntroduction (name, _) _ (Just (CppLambda _ [] rty _))) =
     Just $ CppFunction name [] rty [] CppNoOp
+
   -- Generate thunks for top-level values
-  go (CppVariableIntroduction (name, _) _ (Just _)) =
-    Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [CppExtern] Nothing
+  go (CppVariableIntroduction (name, vty) _ (Just cpp)) =
+    case cpp of
+      CppObjectLiteral CppInstance vals ->
+        Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) [] CppNoOp
+      _ ->
+        Just $ CppVariableIntroduction (name, vty) [CppExtern] Nothing
   go cpp@(CppStruct {}) =
     Just cpp
   go (CppComment comms cpp')
@@ -113,15 +120,18 @@ toBody = catMaybes . map go
     Nothing
   go (CppVariableIntroduction (name, _) _ (Just (CppLambda _ [] rty body))) =
     Just $ CppFunction name [] rty [] body
-  -- Generate thunks for top-level values
-  go (CppVariableIntroduction (name, _) _ (Just cpp)) =
-    Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [] (Just lambda)
+  go (CppVariableIntroduction (name, vty) _ (Just cpp)) =
+    case cpp of
+      CppObjectLiteral CppInstance vals ->
+        Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) [] block
+      _ ->
+        Just $ CppVariableIntroduction (name, vty) [] (Just lambda)
     where
     val = CppVariableIntroduction ("$value$", Just $ CppAny [CppConst]) [CppStatic] (Just $ addCaptures cpp)
     block = CppBlock [val, CppReturn (CppVar "$value$")]
     lambda = CppLambda [] [("", Just $ thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) block
     addCaptures :: Cpp -> Cpp
-    addCaptures (CppObjectLiteral objs) = CppObjectLiteral (objlam <$> objs)
+    addCaptures (CppObjectLiteral t objs) = CppObjectLiteral t (objlam <$> objs)
       where
       objlam :: (String, Cpp) -> (String, Cpp)
       objlam (name', (CppLambda _ args rty body)) = (name' , CppLambda [] args rty $ addCaptures body)

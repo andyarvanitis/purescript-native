@@ -1,1 +1,9 @@
-stack-lts-5.yaml
+resolver: lts-6.10
+packages:
+- '.'
+extra-deps:
+- aeson-1.0.0.0
+- semigroups-0.18.2
+flags:
+  semigroups:
+    bytestring-builder: false

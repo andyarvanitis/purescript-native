@@ -26,6 +26,8 @@ module Language.PureScript.CodeGen.Cpp
   , P.prettyPrintCpp
   ) where
 
+import Prelude.Compat
+
 import Data.Char (isLetter)
 import Data.List
 import Data.Function (on)
@@ -124,9 +126,6 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         (supers, members) = span (C.__superclass_ `isPrefixOf`) (identToCpp <$> (fst $ unAbs e []))
     in return $ CppStruct className [CppEnum Nothing Nothing (sort supers ++ members)]
 
-  declToCpp _ (_, Op _) (Var (_, _, Nothing, _) _) =
-    return CppNoOp -- skip operator aliases
-
   declToCpp vqs (_, ident) (Abs (_, com, ty, _) arg body) = do
     fn <- if argcnt > 1 && CppTopLevel `elem` vqs
             then do
@@ -170,7 +169,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return (CppComment com fn)
     where
     ty' | Just t <- ty = Just t
-        | Just (t, _, _) <- M.lookup (mn, ident) (E.names env) = Just t
+        | Just (t, _, _) <- M.lookup (Qualified (Just mn) ident) (E.names env) = Just t
         | otherwise = Nothing
     argcnt = maybe 0 countArgs ty'
     name = identToCpp ident
@@ -185,7 +184,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     isIndexer :: Cpp -> Bool
     isIndexer (CppIndexer (CppStringLiteral _) (CppVar _)) = True
     isIndexer _ = False
-    classes = qualifiedToCpp (Ident . runProperName) . fst <$>
+    classes = qualifiedToCpp (Ident . runProperName) . T.constraintClass <$>
                   maybe [] extractConstraints ty'
     dictClasses = zip (CppVar . fst <$> arg' : args') classes
     convertDictIndexers = everywhereOnCpp (dictIndexerToEnum dictClasses)
@@ -420,7 +419,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     CppArrayLiteral <$> mapM valueToCpp xs
 
   valueToCpp (Literal _ (ObjectLiteral ps)) =
-    CppObjectLiteral <$> sortBy (compare `on` fst) <$> mapM (sndM valueToCpp) ps
+    CppObjectLiteral CppRecord <$> sortBy (compare `on` fst) <$> mapM (sndM valueToCpp) ps
 
   valueToCpp (Accessor _ prop val) =
     CppIndexer <$> pure (CppStringLiteral prop) <*> valueToCpp val
@@ -431,7 +430,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
         origFields = (\key -> (key, CppIndexer (CppStringLiteral key) obj')) <$> origKeys
-    return $ CppObjectLiteral . sortBy (compare `on` fst) $ origFields ++ updatedFields
+    return $ CppObjectLiteral CppRecord . sortBy (compare `on` fst) $ origFields ++ updatedFields
     where
     allKeys :: T.Type -> [String]
     allKeys (T.TypeApp (T.TypeConstructor _) r@(T.RCons {})) = fst <$> (fst $ T.rowToList r)
@@ -452,7 +451,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     where
       arg' = identToCpp arg
       args' = identToCpp <$> (fst $ unAbs body [])
-      classes = qualifiedToCpp (Ident . runProperName) . fst <$>
+      classes = qualifiedToCpp (Ident . runProperName) . T.constraintClass <$>
                     maybe [] extractConstraints ty
       dictClasses = zip (CppVar <$> arg' : args') classes
       convertDictIndexers = everywhereOnCpp (dictIndexerToEnum dictClasses)
@@ -466,7 +465,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           return $ CppApp (uncurried' $ qualifiedToCpp id ident) args'
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
-        return . CppObjectLiteral $
+        return . CppObjectLiteral CppInstance $
                      zip
                        ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
                        args'
@@ -485,7 +484,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             return $ foldl (\fn a -> CppApp fn [a]) fn' curriedArgs
         where
         ty | (_, _, Just t, _) <- ann = Just t
-           | Just (t, _, _) <- M.lookup (mn', ident) (E.names env) = Just t
+           | Just (t, _, _) <- M.lookup (Qualified (Just mn') ident) (E.names env) = Just t
            | otherwise = Nothing
       _ ->
         flip (foldl (\fn a -> CppApp fn [a])) args' <$> valueToCpp f
@@ -618,7 +617,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         SumType ->
             [ CppIfElse
                   (CppBinary
-                       Equal
+                       EqualTo
                        (CppIndexer
                             (CppVar ctorKey)
                             (CppCast dataType $ CppVar varName))
@@ -665,19 +664,19 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   literalToBinderCpp varName done (NumericLiteral num) =
     return [ CppIfElse
-                 (CppBinary Equal (CppVar varName) (CppNumericLiteral num))
+                 (CppBinary EqualTo (CppVar varName) (CppNumericLiteral num))
                  (CppBlock done)
                  Nothing ]
 
   literalToBinderCpp varName done (CharLiteral c) =
     return [ CppIfElse
-                 (CppBinary Equal (CppVar varName) (CppCharLiteral c))
+                 (CppBinary EqualTo (CppVar varName) (CppCharLiteral c))
                  (CppBlock done)
                  Nothing ]
 
   literalToBinderCpp varName done (StringLiteral str) =
     return [ CppIfElse
-                 (CppBinary Equal (CppVar varName) (CppStringLiteral str))
+                 (CppBinary EqualTo (CppVar varName) (CppStringLiteral str))
                  (CppBlock done)
                  Nothing ]
 
@@ -690,7 +689,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   literalToBinderCpp varName done (BooleanLiteral False) =
     return [ CppIfElse
                  (CppUnary
-                      CppNot
+                      Not
                       (CppVar varName))
                  (CppBlock done)
                  Nothing ]
@@ -722,7 +721,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                        (CppApp (CppVar "empty") [])
               n -> let var = CppCast arrayType $ CppVar varName
                    in CppBinary
-                          Equal
+                          EqualTo
                           (CppBinary Dot var (CppApp (CppVar "size") []))
                           (CppNumericLiteral (Left (fromIntegral n)))
     return [ CppIfElse cond (CppBlock cpp) Nothing ]
@@ -811,8 +810,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     go _ = return []
 
     allForeigns :: [(Ident, T.Type)]
-    allForeigns = map (\((_, ident), (ty, _, _)) -> (ident, ty)) .
-                   filter (\((mn', _), (_, kind, _)) -> mn' == mn && kind == E.External) .
+    allForeigns = map (\((Qualified _ ident), (ty, _, _)) -> (ident, ty)) .
+                   filter (\((Qualified mn' _), (_, kind, _)) -> mn' == Just mn && kind == E.External) .
                    M.toList $ E.names env
 
 ---------------------------------------------------------------------------------------------------

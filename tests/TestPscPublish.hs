@@ -24,13 +24,13 @@ import Language.PureScript.Publish.ErrorsWarnings as Publish
 import TestUtils
 
 main :: IO ()
-main = testPackage "tests/support/prelude"
+main = testPackage "tests/support/bower_components/purescript-prelude"
 
 data TestResult
   = ParseFailed String
   | Mismatch ByteString ByteString -- ^ encoding before, encoding after
   | Pass ByteString
-  deriving (Show, Read)
+  deriving (Show)
 
 roundTrip :: UploadedPackage -> TestResult
 roundTrip pkg =

@@ -3,6 +3,8 @@
 --
 module Language.PureScript.CodeGen.JS.Common where
 
+import Prelude.Compat
+
 import Data.Char
 import Data.List (intercalate)
 
@@ -27,14 +29,13 @@ identToJs :: Ident -> String
 identToJs (Ident name)
   | nameIsJsReserved name || nameIsJsBuiltIn name = "$$" ++ name
   | otherwise = concatMap identCharToString name
-identToJs (Op op) = concatMap identCharToString op
 identToJs (GenIdent _ _) = internalError "GenIdent in identToJs"
 
 -- |
 -- Test if a string is a valid JS identifier without escaping.
 --
 identNeedsEscaping :: String -> Bool
-identNeedsEscaping s = s /= identToJs (Ident s)
+identNeedsEscaping s = s /= identToJs (Ident s) || null s
 
 -- |
 -- Attempts to find a human-readable name for a symbol, if none has been specified returns the

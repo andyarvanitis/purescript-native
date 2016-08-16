@@ -3,11 +3,13 @@
 
 module Language.PureScript.Environment where
 
-import Data.Maybe (fromMaybe)
+import Prelude.Compat
+
 import Data.Aeson.TH
+import Data.Maybe (fromMaybe)
+import qualified Data.Aeson as A
 import qualified Data.Map as M
 import qualified Data.Text as T
-import qualified Data.Aeson as A
 
 import Language.PureScript.Crash
 import Language.PureScript.Kinds
@@ -23,7 +25,7 @@ data Environment = Environment {
   -- |
   -- Value names currently in scope
   --
-    names :: M.Map (ModuleName, Ident) (Type, NameKind, NameVisibility)
+    names :: M.Map (Qualified Ident) (Type, NameKind, NameVisibility)
   -- |
   -- Type names currently in scope
   --
@@ -44,7 +46,7 @@ data Environment = Environment {
   -- Type classes
   --
   , typeClasses :: M.Map (Qualified (ProperName 'ClassName)) ([(String, Maybe Kind)], [(Ident, Type)], [Constraint])
-  } deriving (Show, Read)
+  } deriving (Show)
 
 -- |
 -- The initial environment with no values and only the default javascript types defined
@@ -63,7 +65,7 @@ data NameVisibility
   -- |
   -- The name is defined in the another binding group, or has been made visible by a function binder
   --
-  | Defined deriving (Show, Read, Eq)
+  | Defined deriving (Show, Eq)
 
 -- |
 -- A flag for whether a name is for an private or public value - only public values will be
@@ -83,7 +85,7 @@ data NameKind
   -- A name for member introduced by foreign import
   --
   | External
-  deriving (Show, Read, Eq)
+  deriving (Show, Eq)
 
 -- |
 -- The kinds of a type
@@ -109,7 +111,7 @@ data TypeKind
   -- A scoped type variable
   --
   | ScopedTypeVar
-  deriving (Show, Read, Eq)
+  deriving (Show, Eq)
 
 -- |
 -- The type ('data' or 'newtype') of a data type declaration
@@ -123,7 +125,7 @@ data DataDeclType
   -- A newtype constructor
   --
   | Newtype
-  deriving (Show, Read, Eq, Ord)
+  deriving (Show, Eq, Ord)
 
 showDataDeclType :: DataDeclType -> String
 showDataDeclType Data = "data"
@@ -194,16 +196,16 @@ tyArray :: Type
 tyArray = primTy "Array"
 
 -- |
--- Type constructor for objects
+-- Type constructor for records
 --
-tyObject :: Type
-tyObject = primTy "Object"
+tyRecord :: Type
+tyRecord = primTy "Record"
 
 -- |
--- Check whether a type is an object
+-- Check whether a type is a record
 --
 isObject :: Type -> Bool
-isObject = isTypeOrApplied tyObject
+isObject = isTypeOrApplied tyRecord
 
 -- |
 -- Check whether a type is a function
@@ -230,14 +232,15 @@ primTypes :: M.Map (Qualified (ProperName 'TypeName)) (Kind, TypeKind)
 primTypes =
   M.fromList
     [ (primName "Function", (FunKind Star (FunKind Star Star), ExternData))
-    , (primName "Array", (FunKind Star Star, ExternData))
-    , (primName "Object", (FunKind (Row Star) Star, ExternData))
-    , (primName "String", (Star, ExternData))
-    , (primName "Char", (Star, ExternData))
-    , (primName "Number", (Star, ExternData))
-    , (primName "Int", (Star, ExternData))
-    , (primName "Boolean", (Star, ExternData))
-    , (primName "Partial", (Star, ExternData))
+    , (primName "Array",    (FunKind Star Star, ExternData))
+    , (primName "Record",   (FunKind (Row Star) Star, ExternData))
+    , (primName "String",   (Star, ExternData))
+    , (primName "Char",     (Star, ExternData))
+    , (primName "Number",   (Star, ExternData))
+    , (primName "Int",      (Star, ExternData))
+    , (primName "Boolean",  (Star, ExternData))
+    , (primName "Partial",  (Star, ExternData))
+    , (primName "Fail",     (FunKind Symbol Star, ExternData))
     ]
 
 -- |
@@ -247,7 +250,9 @@ primTypes =
 primClasses :: M.Map (Qualified (ProperName 'ClassName)) ([(String, Maybe Kind)], [(Ident, Type)], [Constraint])
 primClasses =
   M.fromList
-    [ (primName "Partial", ([], [], [])) ]
+    [ (primName "Partial", ([], [], []))
+    , (primName "Fail",    ([("message", Just Symbol)], [], []))
+    ]
 
 -- |
 -- Finds information about data constructors from the current environment.
@@ -268,7 +273,6 @@ isNewtypeConstructor e ctor = case lookupConstructor e ctor of
 -- Finds information about values from the current environment.
 --
 lookupValue :: Environment -> Qualified Ident -> Maybe (Type, NameKind, NameVisibility)
-lookupValue env (Qualified (Just mn) ident) = (mn, ident) `M.lookup` names env
-lookupValue _ _ = Nothing
+lookupValue env ident = ident `M.lookup` names env
 
 $(deriveJSON (defaultOptions { sumEncoding = ObjectWithSingleField }) ''TypeKind)

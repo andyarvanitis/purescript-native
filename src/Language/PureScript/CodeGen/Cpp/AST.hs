@@ -18,12 +18,13 @@
 
 module Language.PureScript.CodeGen.Cpp.AST where
 
+import Prelude.Compat
+
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative, (<$>), (<*>))
 import Data.Traversable (traverse)
 #endif
 import Control.Monad.Identity
-import Data.Data
 import Language.PureScript.Comments
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Traversals
@@ -31,33 +32,33 @@ import Language.PureScript.Traversals
 -- |
 -- Built-in unary operators
 --
-data CppUnaryOp
+data UnaryOperator
   -- |
   -- Numeric negation
   --
-  = CppNegate
+  = Negate
   -- |
   -- Boolean negation
   --
-  | CppNot
+  | Not
   -- |
   -- Bitwise negation
   --
-  | CppBitwiseNot
+  | BitwiseNot
   -- |
   -- Numeric unary \'plus\'
   --
-  | CppPositive
+  | Positive
   -- |
   -- Constructor
   --
-  | CppNew
-  deriving (Show, Read, Eq)
+  | New
+  deriving (Show, Eq)
 
 -- |
 -- Built-in binary operators
 --
-data BinaryOp
+data BinaryOperator
   -- |
   -- Numeric addition
   --
@@ -85,11 +86,11 @@ data BinaryOp
   -- |
   -- Generic equality test
   --
-  | Equal
+  | EqualTo
   -- |
   -- Generic inequality test
   --
-  | NotEqual
+  | NotEqualTo
   -- |
   -- Numeric less-than
   --
@@ -97,7 +98,7 @@ data BinaryOp
   -- |
   -- Numeric less-than-or-equal
   --
-  | LessThanOrEqual
+  | LessThanOrEqualTo
   -- |
   -- Numeric greater-than
   --
@@ -105,7 +106,7 @@ data BinaryOp
   -- |
   -- Numeric greater-than-or-equal
   --
-  | GreaterThanOrEqual
+  | GreaterThanOrEqualTo
   -- |
   -- Boolean and
   --
@@ -135,7 +136,7 @@ data BinaryOp
   --
   | ShiftRight
   --
-  deriving (Show, Read, Eq)
+  deriving (Show, Eq)
 
 -- |
 -- Data type for simplified C++11 expressions
@@ -160,11 +161,11 @@ data Cpp
   -- |
   -- A unary operator application
   --
-  | CppUnary CppUnaryOp Cpp
+  | CppUnary UnaryOperator Cpp
   -- |
   -- A binary operator application
   --
-  | CppBinary BinaryOp Cpp Cpp
+  | CppBinary BinaryOperator Cpp Cpp
   -- |
   -- An array literal
   --
@@ -184,7 +185,7 @@ data Cpp
   -- |
   -- An object literal
   --
-  | CppObjectLiteral [(String, Cpp)]
+  | CppObjectLiteral CppObjectType [(String, Cpp)]
   -- |
   -- An general property accessor expression (property, expr)
   --
@@ -281,7 +282,7 @@ data Cpp
   -- Commented C++11
   --
   | CppComment [Comment] Cpp
-  deriving (Show, Read, Eq)
+  deriving (Show, Eq)
 
 --
 -- Traversals
@@ -296,7 +297,7 @@ everywhereOnCpp f = go
   go (CppArrayLiteral cpp) = f (CppArrayLiteral (map go cpp))
   go (CppDataLiteral cpp) = f (CppDataLiteral (map go cpp))
   go (CppIndexer j1 j2) = f (CppIndexer (go j1) (go j2))
-  go (CppObjectLiteral cpp) = f (CppObjectLiteral (map (fmap go) cpp))
+  go (CppObjectLiteral t cpp) = f (CppObjectLiteral t (map (fmap go) cpp))
   go (CppAccessor prop j) = f (CppAccessor (go prop) (go j))
   go (CppFunction name args rty qs j) = f (CppFunction name args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
@@ -327,7 +328,7 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppArrayLiteral cpp) = CppArrayLiteral <$> traverse f' cpp
   go (CppDataLiteral cpp) = CppDataLiteral <$> traverse f' cpp
   go (CppIndexer j1 j2) = CppIndexer <$> f' j1 <*> f' j2
-  go (CppObjectLiteral cpp) = CppObjectLiteral <$> traverse (sndM f') cpp
+  go (CppObjectLiteral t cpp) = CppObjectLiteral t <$> traverse (sndM f') cpp
   go (CppAccessor prop j) = CppAccessor prop <$> f' j
   go (CppFunction name args rty qs j) = CppFunction name args rty qs <$> f' j
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
@@ -354,7 +355,7 @@ everythingOnCpp (<>) f = go
   go j@(CppArrayLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppDataLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppIndexer j1 j2) = f j <> go j1 <> go j2
-  go j@(CppObjectLiteral cpp) = foldl (<>) (f j) (map (go . snd) cpp)
+  go j@(CppObjectLiteral _ cpp) = foldl (<>) (f j) (map (go . snd) cpp)
   go j@(CppAccessor j1 j2) = f j <> go j1 <> go j2
   go j@(CppFunction _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1
