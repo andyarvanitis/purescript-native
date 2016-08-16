@@ -1,22 +1,16 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE LambdaCase #-}
 
 -- |
 -- Data types for modules and declarations
 --
 module Language.PureScript.AST.Declarations where
 
-import Prelude ()
 import Prelude.Compat
 
-import Data.Aeson.TH
-import Data.List (nub, (\\))
-import Data.Maybe (mapMaybe)
-
-import qualified Data.Map as M
-
 import Control.Monad.Identity
+
+import Data.Aeson.TH
+import qualified Data.Map as M
 
 import Language.PureScript.AST.Binders
 import Language.PureScript.AST.Literals
@@ -28,6 +22,148 @@ import Language.PureScript.Kinds
 import Language.PureScript.TypeClassDictionaries
 import Language.PureScript.Comments
 import Language.PureScript.Environment
+import qualified Language.PureScript.Bundle as Bundle
+
+import qualified Text.Parsec as P
+
+-- | A map of locally-bound names in scope.
+type Context = [(Ident, Type)]
+
+-- | A type of error messages
+data SimpleErrorMessage
+  = ErrorParsingFFIModule FilePath (Maybe Bundle.ErrorMessage)
+  | ErrorParsingModule P.ParseError
+  | MissingFFIModule ModuleName
+  | MultipleFFIModules ModuleName [FilePath]
+  | UnnecessaryFFIModule ModuleName FilePath
+  | MissingFFIImplementations ModuleName [Ident]
+  | UnusedFFIImplementations ModuleName [Ident]
+  | InvalidFFIIdentifier ModuleName String
+  | CannotGetFileInfo FilePath
+  | CannotReadFile FilePath
+  | CannotWriteFile FilePath
+  | InfiniteType Type
+  | InfiniteKind Kind
+  | MultipleValueOpFixities (OpName 'ValueOpName)
+  | MultipleTypeOpFixities (OpName 'TypeOpName)
+  | OrphanTypeDeclaration Ident
+  | RedefinedModule ModuleName [SourceSpan]
+  | RedefinedIdent Ident
+  | OverlappingNamesInLet
+  | UnknownName (Qualified Name)
+  | UnknownImport ModuleName Name
+  | UnknownImportDataConstructor ModuleName (ProperName 'TypeName) (ProperName 'ConstructorName)
+  | UnknownExport Name
+  | UnknownExportDataConstructor (ProperName 'TypeName) (ProperName 'ConstructorName)
+  | ScopeConflict Name [ModuleName]
+  | ScopeShadowing Name (Maybe ModuleName) [ModuleName]
+  | DeclConflict Name Name
+  | ExportConflict (Qualified Name) (Qualified Name)
+  | DuplicateModuleName ModuleName
+  | DuplicateTypeArgument String
+  | InvalidDoBind
+  | InvalidDoLet
+  | CycleInDeclaration Ident
+  | CycleInTypeSynonym (Maybe (ProperName 'TypeName))
+  | CycleInModules [ModuleName]
+  | NameIsUndefined Ident
+  | UndefinedTypeVariable (ProperName 'TypeName)
+  | PartiallyAppliedSynonym (Qualified (ProperName 'TypeName))
+  | EscapedSkolem (Maybe Expr)
+  | TypesDoNotUnify Type Type
+  | KindsDoNotUnify Kind Kind
+  | ConstrainedTypeUnified Type Type
+  | OverlappingInstances (Qualified (ProperName 'ClassName)) [Type] [Qualified Ident]
+  | NoInstanceFound Constraint
+  | PossiblyInfiniteInstance (Qualified (ProperName 'ClassName)) [Type]
+  | CannotDerive (Qualified (ProperName 'ClassName)) [Type]
+  | CannotFindDerivingType (ProperName 'TypeName)
+  | DuplicateLabel String (Maybe Expr)
+  | DuplicateValueDeclaration Ident
+  | ArgListLengthsDiffer Ident
+  | OverlappingArgNames (Maybe Ident)
+  | MissingClassMember Ident
+  | ExtraneousClassMember Ident (Qualified (ProperName 'ClassName))
+  | ExpectedType Type Kind
+  | IncorrectConstructorArity (Qualified (ProperName 'ConstructorName))
+  | ExprDoesNotHaveType Expr Type
+  | PropertyIsMissing String
+  | AdditionalProperty String
+  | CannotApplyFunction Type Expr
+  | TypeSynonymInstance
+  | OrphanInstance Ident (Qualified (ProperName 'ClassName)) [Type]
+  | InvalidNewtype (ProperName 'TypeName)
+  | InvalidInstanceHead Type
+  | TransitiveExportError DeclarationRef [DeclarationRef]
+  | TransitiveDctorExportError DeclarationRef (ProperName 'ConstructorName)
+  | ShadowedName Ident
+  | ShadowedTypeVar String
+  | UnusedTypeVar String
+  | WildcardInferredType Type Context
+  | HoleInferredType String Type Context
+  | MissingTypeDeclaration Ident Type
+  | OverlappingPattern [[Binder]] Bool
+  | IncompleteExhaustivityCheck
+  | MisleadingEmptyTypeImport ModuleName (ProperName 'TypeName)
+  | ImportHidingModule ModuleName
+  | UnusedImport ModuleName
+  | UnusedExplicitImport ModuleName [String] (Maybe ModuleName) [DeclarationRef]
+  | UnusedDctorImport (ProperName 'TypeName)
+  | UnusedDctorExplicitImport (ProperName 'TypeName) [ProperName 'ConstructorName]
+  | DuplicateSelectiveImport ModuleName
+  | DuplicateImport ModuleName ImportDeclarationType (Maybe ModuleName)
+  | DuplicateImportRef Name
+  | DuplicateExportRef Name
+  | IntOutOfRange Integer String Integer Integer
+  | ImplicitQualifiedImport ModuleName ModuleName [DeclarationRef]
+  | ImplicitImport ModuleName [DeclarationRef]
+  | HidingImport ModuleName [DeclarationRef]
+  | CaseBinderLengthDiffers Int [Binder]
+  | IncorrectAnonymousArgument
+  | InvalidOperatorInBinder (Qualified (OpName 'ValueOpName)) (Qualified Ident)
+  | DeprecatedRequirePath
+  | CannotGeneralizeRecursiveFunction Ident Type
+  deriving (Show)
+
+-- | Error message hints, providing more detailed information about failure.
+data ErrorMessageHint
+  = ErrorUnifyingTypes Type Type
+  | ErrorInExpression Expr
+  | ErrorInModule ModuleName
+  | ErrorInInstance (Qualified (ProperName 'ClassName)) [Type]
+  | ErrorInSubsumption Type Type
+  | ErrorCheckingAccessor Expr String
+  | ErrorCheckingType Expr Type
+  | ErrorCheckingKind Type
+  | ErrorCheckingGuard
+  | ErrorInferringType Expr
+  | ErrorInApplication Expr Type Expr
+  | ErrorInDataConstructor (ProperName 'ConstructorName)
+  | ErrorInTypeConstructor (ProperName 'TypeName)
+  | ErrorInBindingGroup [Ident]
+  | ErrorInDataBindingGroup
+  | ErrorInTypeSynonym (ProperName 'TypeName)
+  | ErrorInValueDeclaration Ident
+  | ErrorInTypeDeclaration Ident
+  | ErrorInForeignImport Ident
+  | ErrorSolvingConstraint Constraint
+  | PositionedError SourceSpan
+  deriving (Show)
+
+-- | Categories of hints
+data HintCategory
+  = ExprHint
+  | KindHint
+  | CheckHint
+  | PositionHint
+  | SolverHint
+  | OtherHint
+  deriving (Show, Eq)
+
+data ErrorMessage = ErrorMessage
+  [ErrorMessageHint]
+  SimpleErrorMessage
+  deriving (Show)
 
 -- |
 -- A module declaration, consisting of comments about the module, a module name,
@@ -35,7 +171,7 @@ import Language.PureScript.Environment
 -- explicitly exported. If the export list is Nothing, everything is exported.
 --
 data Module = Module SourceSpan [Comment] ModuleName [Declaration] (Maybe [DeclarationRef])
-  deriving (Show, Read)
+  deriving (Show)
 
 -- | Return a module's name.
 getModuleName :: Module -> ModuleName
@@ -47,9 +183,9 @@ getModuleName (Module _ _ name _ _) = name
 addDefaultImport :: ModuleName -> Module -> Module
 addDefaultImport toImport m@(Module ss coms mn decls exps)  =
   if isExistingImport `any` decls || mn == toImport then m
-  else Module ss coms mn (ImportDeclaration toImport Implicit Nothing False : decls) exps
+  else Module ss coms mn (ImportDeclaration toImport Implicit Nothing : decls) exps
   where
-  isExistingImport (ImportDeclaration mn' _ _ _) | mn' == toImport = True
+  isExistingImport (ImportDeclaration mn' _ _) | mn' == toImport = True
   isExistingImport (PositionedDeclaration _ _ d) = isExistingImport d
   isExistingImport _ = False
 
@@ -64,16 +200,20 @@ data DeclarationRef
   -- |
   -- A type operator
   --
-  | TypeOpRef Ident
+  | TypeOpRef (OpName 'TypeOpName)
   -- |
   -- A value
   --
   | ValueRef Ident
   -- |
+  -- A value-level operator
+  --
+  | ValueOpRef (OpName 'ValueOpName)
+  -- |
   -- A type class
   --
   | TypeClassRef (ProperName 'ClassName)
-    -- |
+  -- |
   -- A type class instance, created during typeclass desugaring (name, class name, instance types)
   --
   | TypeInstanceRef Ident
@@ -82,53 +222,58 @@ data DeclarationRef
   --
   | ModuleRef ModuleName
   -- |
-  -- An unspecified ProperName ref. This will be replaced with a TypeClassRef
-  -- or TypeRef during name desugaring.
-  | ProperRef String
+  -- A value re-exported from another module. These will be inserted during
+  -- elaboration in name desugaring.
+  --
+  | ReExportRef ModuleName DeclarationRef
   -- |
   -- A declaration reference with source position information
   --
   | PositionedDeclarationRef SourceSpan [Comment] DeclarationRef
-  deriving (Show, Read)
+  deriving (Show)
 
 instance Eq DeclarationRef where
-  (TypeRef name dctors)  == (TypeRef name' dctors') = name == name' && dctors == dctors'
-  (TypeOpRef name)       == (TypeOpRef name')       = name == name'
-  (ValueRef name)        == (ValueRef name')        = name == name'
-  (TypeClassRef name)    == (TypeClassRef name')    = name == name'
+  (TypeRef name dctors) == (TypeRef name' dctors') = name == name' && dctors == dctors'
+  (TypeOpRef name) == (TypeOpRef name') = name == name'
+  (ValueRef name) == (ValueRef name') = name == name'
+  (ValueOpRef name) == (ValueOpRef name') = name == name'
+  (TypeClassRef name) == (TypeClassRef name') = name == name'
   (TypeInstanceRef name) == (TypeInstanceRef name') = name == name'
-  (ModuleRef name)       == (ModuleRef name')       = name == name'
-  (ProperRef name)       == (ProperRef name')       = name == name'
+  (ModuleRef name) == (ModuleRef name') = name == name'
+  (ReExportRef mn ref) == (ReExportRef mn' ref') = mn == mn' && ref == ref'
   (PositionedDeclarationRef _ _ r) == r' = r == r'
   r == (PositionedDeclarationRef _ _ r') = r == r'
   _ == _ = False
+
+getTypeRef :: DeclarationRef -> Maybe (ProperName 'TypeName, Maybe [ProperName 'ConstructorName])
+getTypeRef (TypeRef name dctors) = Just (name, dctors)
+getTypeRef (PositionedDeclarationRef _ _ r) = getTypeRef r
+getTypeRef _ = Nothing
+
+getTypeOpRef :: DeclarationRef -> Maybe (OpName 'TypeOpName)
+getTypeOpRef (TypeOpRef op) = Just op
+getTypeOpRef (PositionedDeclarationRef _ _ r) = getTypeOpRef r
+getTypeOpRef _ = Nothing
+
+getValueRef :: DeclarationRef -> Maybe Ident
+getValueRef (ValueRef name) = Just name
+getValueRef (PositionedDeclarationRef _ _ r) = getValueRef r
+getValueRef _ = Nothing
+
+getValueOpRef :: DeclarationRef -> Maybe (OpName 'ValueOpName)
+getValueOpRef (ValueOpRef op) = Just op
+getValueOpRef (PositionedDeclarationRef _ _ r) = getValueOpRef r
+getValueOpRef _ = Nothing
+
+getTypeClassRef :: DeclarationRef -> Maybe (ProperName 'ClassName)
+getTypeClassRef (TypeClassRef name) = Just name
+getTypeClassRef (PositionedDeclarationRef _ _ r) = getTypeClassRef r
+getTypeClassRef _ = Nothing
 
 isModuleRef :: DeclarationRef -> Bool
 isModuleRef (PositionedDeclarationRef _ _ r) = isModuleRef r
 isModuleRef (ModuleRef _) = True
 isModuleRef _ = False
-
--- |
--- Finds duplicate values in a list of declaration refs. The returned values
--- are the duplicate refs with data constructors elided, and then a separate
--- list of duplicate data constructors.
---
-findDuplicateRefs :: [DeclarationRef] -> ([DeclarationRef], [ProperName 'ConstructorName])
-findDuplicateRefs refs =
-  let positionless = stripPosInfo `map` refs
-      simplified = simplifyTypeRefs `map` positionless
-      dupeRefs = nub $ simplified \\ nub simplified
-      dupeCtors = concat $ flip mapMaybe positionless $ \case
-        TypeRef _ (Just dctors) ->
-          let dupes = dctors \\ nub dctors
-          in if null dupes then Nothing else Just dupes
-        _ -> Nothing
-  in (dupeRefs, dupeCtors)
-  where
-  stripPosInfo (PositionedDeclarationRef _ _ ref) = stripPosInfo ref
-  stripPosInfo other = other
-  simplifyTypeRefs (TypeRef pn _) = TypeRef pn Nothing
-  simplifyTypeRefs other = other
 
 -- |
 -- The data type which specifies type of import declaration
@@ -146,7 +291,7 @@ data ImportDeclarationType
   -- An import with a list of references to hide: `import M hiding (foo)`
   --
   | Hiding [DeclarationRef]
-  deriving (Eq, Show, Read)
+  deriving (Eq, Show)
 
 isImplicit :: ImportDeclarationType -> Bool
 isImplicit Implicit = True
@@ -193,14 +338,13 @@ data Declaration
   --
   | ExternDataDeclaration (ProperName 'TypeName) Kind
   -- |
-  -- A fixity declaration (fixity data, operator name, value the operator is an alias for)
+  -- A fixity declaration
   --
-  | FixityDeclaration Fixity String (Maybe (Qualified FixityAlias))
+  | FixityDeclaration (Either ValueFixity TypeFixity)
   -- |
   -- A module import (module name, qualified/unqualified/hiding, optional "qualified as" name)
-  -- TODO: also a boolean specifying whether the old `qualified` syntax was used, so a warning can be raised in desugaring (remove for 0.9)
   --
-  | ImportDeclaration ModuleName ImportDeclarationType (Maybe ModuleName) Bool
+  | ImportDeclaration ModuleName ImportDeclarationType (Maybe ModuleName)
   -- |
   -- A type class declaration (name, argument, implies, member declarations)
   --
@@ -214,32 +358,19 @@ data Declaration
   -- A declaration with source position information
   --
   | PositionedDeclaration SourceSpan [Comment] Declaration
-  deriving (Show, Read)
+  deriving (Show)
 
-data FixityAlias
-  = AliasValue Ident
-  | AliasConstructor (ProperName 'ConstructorName)
-  | AliasType (ProperName 'TypeName)
-  deriving (Eq, Ord, Show, Read)
+data ValueFixity = ValueFixity Fixity (Qualified (Either Ident (ProperName 'ConstructorName))) (OpName 'ValueOpName)
+  deriving (Eq, Ord, Show)
 
-foldFixityAlias
-  :: (Ident -> a)
-  -> (ProperName 'ConstructorName -> a)
-  -> (ProperName 'TypeName -> a)
-  -> FixityAlias
-  -> a
-foldFixityAlias f _ _ (AliasValue name) = f name
-foldFixityAlias _ g _ (AliasConstructor name) = g name
-foldFixityAlias _ _ h (AliasType name) = h name
+data TypeFixity = TypeFixity Fixity (Qualified (ProperName 'TypeName)) (OpName 'TypeOpName)
+  deriving (Eq, Ord, Show)
 
-getValueAlias :: FixityAlias -> Maybe (Either Ident (ProperName 'ConstructorName))
-getValueAlias (AliasValue name) = Just $ Left name
-getValueAlias (AliasConstructor name) = Just $ Right name
-getValueAlias _ = Nothing
+pattern ValueFixityDeclaration :: Fixity -> Qualified (Either Ident (ProperName 'ConstructorName)) -> OpName 'ValueOpName -> Declaration
+pattern ValueFixityDeclaration fixity name op = FixityDeclaration (Left (ValueFixity fixity name op))
 
-getTypeAlias :: FixityAlias -> Maybe (ProperName 'TypeName)
-getTypeAlias (AliasType name) = Just name
-getTypeAlias _ = Nothing
+pattern TypeFixityDeclaration :: Fixity -> Qualified (ProperName 'TypeName) -> OpName 'TypeOpName -> Declaration
+pattern TypeFixityDeclaration fixity name op = FixityDeclaration (Right (TypeFixity fixity name op))
 
 -- | The members of a type class instance declaration
 data TypeInstanceBody
@@ -247,7 +378,7 @@ data TypeInstanceBody
   = DerivedInstance
   -- | This is a regular (explicit) instance
   | ExplicitInstance [Declaration]
-  deriving (Show, Read)
+  deriving (Show)
 
 mapTypeInstanceBody :: ([Declaration] -> [Declaration]) -> TypeInstanceBody -> TypeInstanceBody
 mapTypeInstanceBody f = runIdentity . traverseTypeInstanceBody (Identity . f)
@@ -297,6 +428,11 @@ isFixityDecl :: Declaration -> Bool
 isFixityDecl FixityDeclaration{} = True
 isFixityDecl (PositionedDeclaration _ _ d) = isFixityDecl d
 isFixityDecl _ = False
+
+getFixityDecl :: Declaration -> Maybe (Either ValueFixity TypeFixity)
+getFixityDecl (FixityDeclaration fixity) = Just fixity
+getFixityDecl (PositionedDeclaration _ _ d) = getFixityDecl d
+getFixityDecl _ = Nothing
 
 -- |
 -- Test if a declaration is a foreign import
@@ -361,16 +497,9 @@ data Expr
   --
   | Parens Expr
   -- |
-  -- Operator section. This will be removed during desugaring and replaced with lambda.
-  --
-  | OperatorSection Expr (Either Expr Expr)
-  -- |
-  -- An object property getter (e.g. `_.x`). This will be removed during
-  -- desugaring and expanded into a lambda that reads a property from an object.
-  --
-  | ObjectGetter String
-  -- |
-  -- An record property accessor expression
+  -- An record property accessor expression (e.g. `obj.x` or `_.x`).
+  -- Anonymous arguments will be removed during desugaring and expanded
+  -- into a lambda that reads a property from a record.
   --
   | Accessor String Expr
   -- |
@@ -389,6 +518,11 @@ data Expr
   -- Variable
   --
   | Var (Qualified Ident)
+  -- |
+  -- An operator. This will be desugared into a function during the "operators"
+  -- phase of desugaring.
+  --
+  | Op (Qualified (OpName 'ValueOpName))
   -- |
   -- Conditional (if-then-else expression)
   --
@@ -426,7 +560,9 @@ data Expr
   -- at superclass implementations when searching for a dictionary, the type class name and
   -- instance type, and the type class dictionaries in scope.
   --
-  | TypeClassDictionary Constraint (M.Map (Maybe ModuleName) (M.Map (Qualified (ProperName 'ClassName)) (M.Map (Qualified Ident) TypeClassDictionaryInScope)))
+  | TypeClassDictionary Constraint
+                        (M.Map (Maybe ModuleName) (M.Map (Qualified (ProperName 'ClassName)) (M.Map (Qualified Ident) TypeClassDictionaryInScope)))
+                        [ErrorMessageHint]
   -- |
   -- A typeclass dictionary accessor, the implementation is left unspecified until CoreFn desugaring.
   --
@@ -447,7 +583,7 @@ data Expr
   -- A value with source position information
   --
   | PositionedValue SourceSpan [Comment] Expr
-  deriving (Show, Read)
+  deriving (Show)
 
 -- |
 -- An alternative in a case statement
@@ -461,7 +597,7 @@ data CaseAlternative = CaseAlternative
     -- The result expression or a collect of guarded expressions
     --
   , caseAlternativeResult :: Either [(Guard, Expr)] Expr
-  } deriving (Show, Read)
+  } deriving (Show)
 
 -- |
 -- A statement in a do-notation block
@@ -483,8 +619,7 @@ data DoNotationElement
   -- A do notation element with source position information
   --
   | PositionedDoNotationElement SourceSpan [Comment] DoNotationElement
-  deriving (Show, Read)
+  deriving (Show)
 
 $(deriveJSON (defaultOptions { sumEncoding = ObjectWithSingleField }) ''DeclarationRef)
 $(deriveJSON (defaultOptions { sumEncoding = ObjectWithSingleField }) ''ImportDeclarationType)
-$(deriveJSON (defaultOptions { sumEncoding = ObjectWithSingleField }) ''FixityAlias)

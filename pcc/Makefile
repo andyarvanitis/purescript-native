@@ -55,7 +55,7 @@ DEPS = $(SRCS:.cc=.d)
 $(BIN): $(OBJS)
 	@echo "Linking" $(BIN_DIR)/$(BIN)
 	@mkdir -p $(BIN_DIR)
-	@$(CXX) $(LDFLAGS) $^ -o $(BIN_DIR)/$@
+	@$(CXX) $^ -o $(BIN_DIR)/$@ $(LDFLAGS)
 
 -include $(DEPS)
 

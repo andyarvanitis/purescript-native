@@ -12,28 +12,25 @@
 -- This module provides basic inlining capabilities
 --
 -----------------------------------------------------------------------------
+module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
+  ( inlineVariables
+  , inlineCommonValues
+  , inlineOperator
+  , inlineCommonOperators
+  , inlineFnComposition
+  , etaConvert
+  , unThunk
+  , evaluateIifes
+  ) where
 
-{-# LANGUAGE CPP #-}
+import Prelude.Compat
 
-module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner (
-  inlineVariables,
-  inlineValues,
-  inlineOperator,
-  inlineCommonOperators,
-  inlineFnComposition,
-  etaConvert,
-  unThunk,
-  evaluateIifes
-) where
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative (Applicative)
-#endif
 import Control.Monad.Supply.Class (MonadSupply, freshName)
-import Language.PureScript.CodeGen.Cpp.Types
+
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.Optimizer.Common
+import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Names
 import qualified Language.PureScript.Constants as C
 
@@ -99,36 +96,34 @@ inlineVariables = everywhereOnCpp $ removeFromBlock go
       go (map (replaceIdent var cpp) sts)
   go (s:sts) = s : go sts
 
-inlineValues :: Cpp -> Cpp
-inlineValues = everywhereOnCpp convert
+inlineCommonValues :: Cpp -> Cpp
+inlineCommonValues = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
-  convert (CppApp fn [dict]) | isDict semiringNumber dict && isFn fnZero fn = CppNumericLiteral (Left 0)
-                            | isDict semiringNumber dict && isFn fnOne fn = CppNumericLiteral (Left 1)
-                            | isDict semiringInt dict && isFn fnZero fn = CppNumericLiteral (Left 0)
-                            | isDict semiringInt dict && isFn fnOne fn = CppNumericLiteral (Left 1)
-                            | isDict boundedBoolean dict && isFn fnBottom fn = CppBooleanLiteral False
-                            | isDict boundedBoolean dict && isFn fnTop fn = CppBooleanLiteral True
+  convert (CppApp fn [dict])
+    | isDict' [semiringNumber, semiringInt] dict && isFn fnZero fn = CppNumericLiteral (Left 0)
+    | isDict' [semiringNumber, semiringInt] dict && isFn fnOne fn = CppNumericLiteral (Left 1)
+    | isDict boundedBoolean dict && isFn fnBottom fn = CppBooleanLiteral False
+    | isDict boundedBoolean dict && isFn fnTop fn = CppBooleanLiteral True
   convert (CppApp fn [dict, x, y])
     | isDict semiringInt dict && isFn fnAdd fn = CppBinary Add x y
     | isDict semiringInt dict && isFn fnMultiply fn = CppBinary Multiply x y
-    | isDict moduloSemiringInt dict && isFn fnDivide fn = CppBinary Divide x y
+    | isDict euclideanRingInt dict && isFn fnDivide fn = CppBinary Divide x y
     | isDict ringInt dict && isFn fnSubtract fn = CppBinary Subtract x y
   convert (CppApp (CppApp (CppApp fn [dict]) [x]) [y])
     | isDict semiringInt dict && isFn fnAdd fn = CppBinary Add x y
     | isDict semiringInt dict && isFn fnMultiply fn = CppBinary Multiply x y
-    | isDict moduloSemiringInt dict && isFn fnDivide fn = CppBinary Divide x y
+    | isDict euclideanRingInt dict && isFn fnDivide fn = CppBinary Divide x y
     | isDict ringInt dict && isFn fnSubtract fn = CppBinary Subtract x y
-
   convert other = other
-  fnZero = (C.prelude, C.zero)
-  fnOne = (C.prelude, C.one)
-  fnBottom = (C.prelude, C.bottom)
-  fnTop = (C.prelude, C.top)
-  fnAdd = (C.prelude, (C.+))
-  fnDivide = (C.prelude, (C./))
-  fnMultiply = (C.prelude, (C.*))
-  fnSubtract = (C.prelude, (C.-))
+  fnZero = (C.dataSemiring, C.zero)
+  fnOne = (C.dataSemiring, C.one)
+  fnBottom = (C.dataBounded, C.bottom)
+  fnTop = (C.dataBounded, C.top)
+  fnAdd = (C.dataSemiring, C.add)
+  fnDivide = (C.dataEuclideanRing, C.div)
+  fnMultiply = (C.dataSemiring, C.mul)
+  fnSubtract = (C.dataRing, C.sub)
 
 inlineOperator :: (String, String) -> (Cpp -> Cpp -> Cpp) -> Cpp -> Cpp
 inlineOperator (m, op) f = everywhereOnCpp convert
@@ -137,49 +132,60 @@ inlineOperator (m, op) f = everywhereOnCpp convert
   convert (CppApp op' [x, y]) | isOp op' = f x y
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
-  isOp (CppAccessor (CppVar longForm) (CppVar m')) = m == m' && longForm == identToCpp (Op op)
+  isOp (CppAccessor (CppVar longForm) (CppVar m')) = m == m' && longForm == identToCpp (Ident op)
   isOp (CppIndexer (CppStringLiteral op') (CppVar m')) = m == m' && op == op'
   isOp _ = False
 
 inlineCommonOperators :: Cpp -> Cpp
 inlineCommonOperators = applyAll $
-  [ binary semiringNumber (C.+) Add
-  , binary semiringNumber (C.*) Multiply
+  [ binary semiringNumber opAdd Add
+  , binary semiringNumber opMul Multiply
 
-  , binary ringNumber (C.-) Subtract
-  , unary  ringNumber C.negate CppNegate
-  , binary ringInt (C.-) Subtract
-  , unary  ringInt C.negate CppNegate
+  , binary ringNumber opSub Subtract
+  , unary  ringNumber opNegate Negate
+  , binary ringInt opSub Subtract
+  , unary  ringInt opNegate Negate
 
-  , binary moduloSemiringNumber (C./) Divide
-  , binary moduloSemiringInt C.mod Modulus
+  , binary euclideanRingNumber opDiv Divide
+  , binary euclideanRingInt opMod Modulus
 
-  , binary eqNumber (C.==) Equal
-  , binary eqNumber (C./=) NotEqual
-  , binary eqInt (C.==) Equal
-  , binary eqInt (C./=) NotEqual
-  , binary eqString (C.==) Equal
-  , binary eqString (C./=) NotEqual
-  , binary eqBoolean (C.==) Equal
-  , binary eqBoolean (C./=) NotEqual
+  , binary eqNumber opEq EqualTo
+  , binary eqNumber opNotEq NotEqualTo
+  , binary eqInt opEq EqualTo
+  , binary eqInt opNotEq NotEqualTo
+  , binary eqString opEq EqualTo
+  , binary eqString opNotEq NotEqualTo
+  , binary eqChar opEq EqualTo
+  , binary eqChar opNotEq NotEqualTo
+  , binary eqBoolean opEq EqualTo
+  , binary eqBoolean opNotEq NotEqualTo
 
-  , binary ordNumber (C.<) LessThan
-  , binary ordNumber (C.>) GreaterThan
-  , binary ordNumber (C.<=) LessThanOrEqual
-  , binary ordNumber (C.>=) GreaterThanOrEqual
-  , binary ordInt (C.<) LessThan
-  , binary ordInt (C.>) GreaterThan
-  , binary ordInt (C.<=) LessThanOrEqual
-  , binary ordInt (C.>=) GreaterThanOrEqual
+  , binary ordBoolean opLessThan LessThan
+  , binary ordBoolean opLessThanOrEq LessThanOrEqualTo
+  , binary ordBoolean opGreaterThan GreaterThan
+  , binary ordBoolean opGreaterThanOrEq GreaterThanOrEqualTo
+  , binary ordChar opLessThan LessThan
+  , binary ordChar opLessThanOrEq LessThanOrEqualTo
+  , binary ordChar opGreaterThan GreaterThan
+  , binary ordChar opGreaterThanOrEq GreaterThanOrEqualTo
+  , binary ordInt opLessThan LessThan
+  , binary ordInt opLessThanOrEq LessThanOrEqualTo
+  , binary ordInt opGreaterThan GreaterThan
+  , binary ordInt opGreaterThanOrEq GreaterThanOrEqualTo
+  , binary ordNumber opLessThan LessThan
+  , binary ordNumber opLessThanOrEq LessThanOrEqualTo
+  , binary ordNumber opGreaterThan GreaterThan
+  , binary ordNumber opGreaterThanOrEq GreaterThanOrEqualTo
+  , binary ordString opLessThan LessThan
+  , binary ordString opLessThanOrEq LessThanOrEqualTo
+  , binary ordString opGreaterThan GreaterThan
+  , binary ordString opGreaterThanOrEq GreaterThanOrEqualTo
 
-  , binary semigroupString (C.<>) Add
-  , binary semigroupString (C.++) Add
+  , binary semigroupString opAppend Add
 
-  , binary booleanAlgebraBoolean (C.&&) And
-  , binary booleanAlgebraBoolean (C.||) Or
-  , binaryFunction booleanAlgebraBoolean C.conj And
-  , binaryFunction booleanAlgebraBoolean C.disj Or
-  , unary booleanAlgebraBoolean C.not CppNot
+  , binary heytingAlgebraBoolean opConj And
+  , binary heytingAlgebraBoolean opDisj Or
+  , unary  heytingAlgebraBoolean opNot Not
 
   , binary' C.dataIntBits (C..|.) BitwiseOr
   , binary' C.dataIntBits (C..&.) BitwiseAnd
@@ -187,43 +193,33 @@ inlineCommonOperators = applyAll $
   , binary' C.dataIntBits C.shl ShiftLeft
   , binary' C.dataIntBits C.shr ShiftRight
   -- , binary' C.dataIntBits C.zshr ZeroFillShiftRight
-  , unary'  C.dataIntBits C.complement CppBitwiseNot
-  ] -- ++ -- DISABLE mkFn/runFn inlining
+  , unary'  C.dataIntBits C.complement BitwiseNot
+  ] ++
+  []
   -- [ fn | i <- [0..10], fn <- [ mkFn i, runFn i ] ]
   where
-  binary :: (String, String) -> String -> BinaryOp -> Cpp -> Cpp
-  binary dict opString op = everywhereOnCpp convert
+  binary :: (String, String) -> (String, String) -> BinaryOperator -> Cpp -> Cpp
+  binary dict fns op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp fn [dict', CppStringLiteral x, CppStringLiteral y])
-      | isDict dict dict' && isPreludeFn opString fn = CppStringLiteral (x ++ y)
-    convert (CppApp fn [dict', x, y]) | isDict dict dict' && isPreludeFn opString fn = CppBinary op x y
-    convert (CppApp (CppApp (CppApp fn [dict']) [CppStringLiteral x]) [CppStringLiteral y])
-      | isDict dict dict' && isPreludeFn opString fn = CppStringLiteral (x ++ y)
-    convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isDict dict dict' && isPreludeFn opString fn = CppBinary op x y
+    convert (CppApp fn [dict', x, y]) | isDict dict dict' && isFn fns fn = CppBinary op x y
+    convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isDict dict dict' && isFn fns fn = CppBinary op x y
     convert other = other
-  binary' :: String -> String -> BinaryOp -> Cpp -> Cpp
+  binary' :: String -> String -> BinaryOperator -> Cpp -> Cpp
   binary' moduleName opString op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
     convert (CppApp fn [x, y]) | isFn (moduleName, opString) fn = CppBinary op x y
     convert (CppApp (CppApp fn [x]) [y]) | isFn (moduleName, opString) fn = CppBinary op x y
     convert other = other
-  binaryFunction :: (String, String) -> String -> BinaryOp -> Cpp -> Cpp
-  binaryFunction dict fnName op = everywhereOnCpp convert
+  unary :: (String, String) -> (String, String) -> UnaryOperator -> Cpp -> Cpp
+  unary dicts fns op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
-    convert (CppApp fn [dict', x, y]) | isPreludeFn fnName fn && isDict dict dict' = CppBinary op x y
-    convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isPreludeFn fnName fn && isDict dict dict' = CppBinary op x y
+    convert (CppApp fn [dict', x]) | isDict dicts dict' && isFn fns fn = CppUnary op x
+    convert (CppApp (CppApp fn [dict']) [x]) | isDict dicts dict' && isFn fns fn = CppUnary op x
     convert other = other
-  unary :: (String, String) -> String -> CppUnaryOp -> Cpp -> Cpp
-  unary dict fnName op = everywhereOnCpp convert
-    where
-    convert :: Cpp -> Cpp
-    convert (CppApp fn [dict', x]) | isPreludeFn fnName fn && isDict dict dict' = CppUnary op x
-    convert (CppApp (CppApp fn [dict']) [x]) | isPreludeFn fnName fn && isDict dict dict' = CppUnary op x
-    convert other = other
-  unary' :: String -> String -> CppUnaryOp -> Cpp -> Cpp
+  unary' :: String -> String -> UnaryOperator -> Cpp -> Cpp
   unary' moduleName fnName op = everywhereOnCpp convert
     where
     convert :: Cpp -> Cpp
@@ -233,8 +229,8 @@ inlineCommonOperators = applyAll $
   -- mkFn 0 = everywhereOnCpp convert
   --   where
   --   convert :: Cpp -> Cpp
-  --   convert (CppApp mkFnN [CppLambda caps [_] _ (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
-  --     CppLambda caps [] Nothing (CppBlock cpp)
+  --   convert (CppApp mkFnN [CppLambda _ [_] _ (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
+  --     CppLambda [CppCaptureAll] [] Nothing (CppBlock cpp)
   --   convert other = other
   -- mkFn n = everywhereOnCpp convert
   --   where
@@ -244,14 +240,14 @@ inlineCommonOperators = applyAll $
   --       Just (args, cpp) -> CppLambda [CppCaptureAll] args Nothing (CppBlock cpp)
   --       Nothing -> orig
   --   convert other = other
-  --   collectArgs :: Int -> [(String, Maybe CppType)] -> Cpp -> Maybe ([(String, Maybe CppType)], [Cpp])
+  --   collectArgs :: Int -> [String] -> Cpp -> Maybe ([String], [Cpp])
   --   collectArgs 1 acc (CppLambda _ [oneArg] _ (CppBlock cpp)) | length acc == n - 1 = Just (reverse (oneArg : acc), cpp)
   --   collectArgs m acc (CppLambda _ [oneArg] _ (CppBlock [CppReturn ret])) = collectArgs (m - 1) (oneArg : acc) ret
   --   collectArgs _ _   _ = Nothing
   --
   -- isNFn :: String -> Int -> Cpp -> Bool
   -- isNFn prefix n (CppVar name) = name == (prefix ++ show n)
-  -- isNFn prefix n (CppAccessor (CppVar name) (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
+  -- isNFn prefix n (CppAccessor _ name (CppVar dataFunction)) | dataFunction == C.dataFunction = name == (prefix ++ show n)
   -- isNFn _ _ _ = False
   --
   -- runFn :: Int -> Cpp -> Cpp
@@ -267,78 +263,137 @@ inlineCommonOperators = applyAll $
 
 -- (f <<< g $ x) = f (g x)
 -- (f <<< g)     = \x -> f (g x)
-inlineFnComposition :: (Applicative m, MonadSupply m) => Cpp -> m Cpp
+inlineFnComposition :: (MonadSupply m) => Cpp -> m Cpp
 inlineFnComposition = everywhereOnCppTopDownM convert
   where
   convert :: (MonadSupply m) => Cpp -> m Cpp
-  convert (CppApp fn [dict', x, y]) | isFnCompose dict' fn = do
-    arg <- freshName
-    return $ CppLambda [CppCaptureAll] [(arg, Just (CppAny [CppConst, CppRef]))] (Just $ CppAny []) (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
-  convert (CppApp (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) [z]) | isFnCompose dict' fn =
-    return $ CppApp x [CppApp y [z]]
-  convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y]) | isFnCompose dict' fn = do
-    arg <- freshName
-    return $ CppLambda [CppCaptureAll] [(arg, Just (CppAny [CppConst, CppRef]))] (Just $ CppAny []) (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
+  convert (CppApp fn [dict', x, y, z])
+    | isFnCompose dict' fn = return $ CppApp  x [CppApp  y [z]]
+    | isFnComposeFlipped dict' fn = return $ CppApp  y [CppApp  x [z]]
+  convert (CppApp  (CppApp  (CppApp (CppApp fn [dict']) [x]) [y]) [z])
+    | isFnCompose dict' fn = return $ CppApp  x [CppApp  y [z]]
+    | isFnComposeFlipped dict' fn = return $ CppApp  y [CppApp  x [z]]
+  convert (CppApp fn [dict', x, y])
+    | isFnCompose dict' fn = do
+        arg <- freshName
+        return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
+    | isFnComposeFlipped dict' fn = do
+        arg <- freshName
+        return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp y [CppApp x [CppVar arg]]])
   convert other = return other
   isFnCompose :: Cpp -> Cpp -> Bool
-  isFnCompose dict' fn = isDict semigroupoidFn dict' && (isPreludeFn (C.<<<) fn || isPreludeFn (C.compose) fn)
-
-isDict :: (String, String) -> Cpp -> Bool
-isDict (moduleName, dictName) (CppAccessor (CppVar x) (CppVar y)) = x == dictName && y == moduleName
-isDict _ _ = False
-
-isFn :: (String, String) -> Cpp -> Bool
-isFn (moduleName, fnName) (CppAccessor (CppVar x) (CppVar y)) = x == (identToCpp (Ident fnName)) && y == moduleName
-isFn (moduleName, fnName) (CppIndexer (CppStringLiteral x) (CppVar y)) = x == fnName && y == moduleName
-isFn _ _ = False
-
-isPreludeFn :: String -> Cpp -> Bool
-isPreludeFn fnName = isFn (C.prelude, fnName)
+  isFnCompose dict' fn = isDict semigroupoidFn dict' && isFn fnCompose fn
+  isFnComposeFlipped :: Cpp -> Cpp -> Bool
+  isFnComposeFlipped dict' fn = isDict semigroupoidFn dict' && isFn fnComposeFlipped fn
+  fnCompose :: (String, String)
+  fnCompose = (C.controlSemigroupoid, C.compose)
+  fnComposeFlipped :: (String, String)
+  fnComposeFlipped = (C.controlSemigroupoid, C.composeFlipped)
 
 semiringNumber :: (String, String)
-semiringNumber = (C.prelude, C.semiringNumber)
+semiringNumber = (C.dataSemiring, C.semiringNumber)
 
 semiringInt :: (String, String)
-semiringInt = (C.prelude, C.semiringInt)
+semiringInt = (C.dataSemiring, C.semiringInt)
 
 ringNumber :: (String, String)
-ringNumber = (C.prelude, C.ringNumber)
+ringNumber = (C.dataRing, C.ringNumber)
 
 ringInt :: (String, String)
-ringInt = (C.prelude, C.ringInt)
+ringInt = (C.dataRing, C.ringInt)
 
-moduloSemiringNumber :: (String, String)
-moduloSemiringNumber = (C.prelude, C.moduloSemiringNumber)
+euclideanRingNumber :: (String, String)
+euclideanRingNumber = (C.dataEuclideanRing, C.euclideanRingNumber)
 
-moduloSemiringInt :: (String, String)
-moduloSemiringInt = (C.prelude, C.moduloSemiringInt)
+euclideanRingInt :: (String, String)
+euclideanRingInt = (C.dataEuclideanRing, C.euclideanRingInt)
 
 eqNumber :: (String, String)
-eqNumber = (C.prelude, C.eqNumber)
+eqNumber = (C.dataEq, C.eqNumber)
 
 eqInt :: (String, String)
-eqInt = (C.prelude, C.eqInt)
+eqInt = (C.dataEq, C.eqInt)
 
 eqString :: (String, String)
-eqString = (C.prelude, C.eqNumber)
+eqString = (C.dataEq, C.eqString)
+
+eqChar :: (String, String)
+eqChar = (C.dataEq, C.eqChar)
 
 eqBoolean :: (String, String)
-eqBoolean = (C.prelude, C.eqNumber)
+eqBoolean = (C.dataEq, C.eqBoolean)
+
+ordBoolean :: (String, String)
+ordBoolean = (C.dataOrd, C.ordBoolean)
 
 ordNumber :: (String, String)
-ordNumber = (C.prelude, C.ordNumber)
+ordNumber = (C.dataOrd, C.ordNumber)
 
 ordInt :: (String, String)
-ordInt = (C.prelude, C.ordInt)
+ordInt = (C.dataOrd, C.ordInt)
+
+ordString :: (String, String)
+ordString = (C.dataOrd, C.ordString)
+
+ordChar :: (String, String)
+ordChar = (C.dataOrd, C.ordChar)
 
 semigroupString :: (String, String)
-semigroupString = (C.prelude, C.semigroupString)
+semigroupString = (C.dataSemigroup, C.semigroupString)
 
 boundedBoolean :: (String, String)
-boundedBoolean = (C.prelude, C.boundedBoolean)
+boundedBoolean = (C.dataBounded, C.boundedBoolean)
 
-booleanAlgebraBoolean :: (String, String)
-booleanAlgebraBoolean = (C.prelude, C.booleanAlgebraBoolean)
+heytingAlgebraBoolean :: (String, String)
+heytingAlgebraBoolean = (C.dataHeytingAlgebra, C.heytingAlgebraBoolean)
 
 semigroupoidFn :: (String, String)
-semigroupoidFn = (C.prelude, C.semigroupoidFn)
+semigroupoidFn = (C.controlSemigroupoid, C.semigroupoidFn)
+
+opAdd :: (String, String)
+opAdd = (C.dataSemiring, C.add)
+
+opMul :: (String, String)
+opMul = (C.dataSemiring, C.mul)
+
+opEq :: (String, String)
+opEq = (C.dataEq, C.eq)
+
+opNotEq :: (String, String)
+opNotEq = (C.dataEq, C.notEq)
+
+opLessThan :: (String, String)
+opLessThan = (C.dataOrd, C.lessThan)
+
+opLessThanOrEq :: (String, String)
+opLessThanOrEq = (C.dataOrd, C.lessThanOrEq)
+
+opGreaterThan :: (String, String)
+opGreaterThan = (C.dataOrd, C.greaterThan)
+
+opGreaterThanOrEq :: (String, String)
+opGreaterThanOrEq = (C.dataOrd, C.greaterThanOrEq)
+
+opAppend :: (String, String)
+opAppend = (C.dataSemigroup, C.append)
+
+opSub :: (String, String)
+opSub = (C.dataRing, C.sub)
+
+opNegate :: (String, String)
+opNegate = (C.dataRing, C.negate)
+
+opDiv :: (String, String)
+opDiv = (C.dataEuclideanRing, C.div)
+
+opMod :: (String, String)
+opMod = (C.dataEuclideanRing, C.mod)
+
+opConj :: (String, String)
+opConj = (C.dataHeytingAlgebra, C.conj)
+
+opDisj :: (String, String)
+opDisj = (C.dataHeytingAlgebra, C.disj)
+
+opNot :: (String, String)
+opNot = (C.dataHeytingAlgebra, C.not)

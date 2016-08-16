@@ -17,9 +17,12 @@
 
 module Language.PureScript.CodeGen.Cpp.Common where
 
+import Prelude.Compat
+
 import Data.Char
 import Data.List (intercalate)
 
+import Language.PureScript.Crash
 import Language.PureScript.Names
 
 -- |
@@ -35,7 +38,7 @@ identToCpp :: Ident -> String
 identToCpp (Ident name) | nameIsCppReserved name = '_' : name ++ "_"
 identToCpp (Ident name@('$' : s)) | all isDigit s = name
 identToCpp (Ident name) = concatMap identCharToString name
-identToCpp (Op op) = concatMap identCharToString op
+identToCpp (GenIdent _ _) = internalError "GenIdent in identToJs"
 
 -- |
 -- Test if a string is a valid Cpp identifier without escaping.
@@ -126,7 +129,6 @@ nameIsCppReserved name =
               , "import"
               , "inline"
               , "int"
-              , "integer"
               , "list"
               , "long"
               , "mutable"

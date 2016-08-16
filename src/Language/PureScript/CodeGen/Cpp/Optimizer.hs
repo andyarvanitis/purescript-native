@@ -38,6 +38,8 @@ module Language.PureScript.CodeGen.Cpp.Optimizer (
     optimize
 ) where
 
+import Prelude.Compat
+
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative)
 #endif
@@ -79,7 +81,7 @@ optimize' cpp = do
     , etaConvert
     , evaluateIifes
     , inlineVariables
-    , inlineValues
+    , inlineCommonValues
     , inlineOperator (C.prelude, (C.$)) $ \f x -> CppApp f [x]
     , inlineOperator (C.prelude, (C.#)) $ \x f -> CppApp f [x]
     , inlineOperator (C.dataArrayUnsafe, C.unsafeIndex) $ flip CppIndexer

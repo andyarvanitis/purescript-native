@@ -22,6 +22,8 @@ module Language.PureScript.Pretty.Cpp (
     prettyPrintCpp,
 ) where
 
+import Prelude.Compat
+
 import Data.Bits
 import Data.Char
 import Data.List
@@ -115,7 +117,7 @@ literals = mkPattern' match
     , return $ intercalate ", " es
     , return " }"
     ]
-  match (CppObjectLiteral ps) = fmap concat $ sequence
+  match (CppObjectLiteral _ ps) = fmap concat $ sequence
     [ return $ runType mapType ++ "{\n"
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
@@ -128,6 +130,7 @@ literals = mkPattern' match
     , currentIndent
     , return "}"
     ]
+
   match (CppFunction name args rty qs ret) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
@@ -235,12 +238,11 @@ literals = mkPattern' match
     val' | '(' `elem` vstr || '[' `elem` vstr = parens vstr
          | otherwise = vstr
 
+  match (CppVar ident) | ident == C.__unused = match (CppVar $ '$':ident)
   match (CppVar ident) = return ident
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
-  match (CppVariableIntroduction (ident, _) _ (Just value))
-    | ident == C.__unused = fmap concat $ sequence
-    [ prettyPrintCpp' value
-    ]
+  match (CppVariableIntroduction (ident, typ) qs value)
+    | ident == C.__unused = match (CppVariableIntroduction ('$':ident, typ) qs value)
   match (CppVariableIntroduction (ident, typ) qs value) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
@@ -409,7 +411,7 @@ app = mkPattern' match
     return (intercalate ", " cpps, val)
   match _ = mzero
 
-unary' :: CppUnaryOp -> (Cpp -> String) -> Operator PrinterState Cpp String
+unary' :: UnaryOperator -> (Cpp -> String) -> Operator PrinterState Cpp String
 unary' op mkStr = Wrap match (++)
   where
   match :: Pattern PrinterState Cpp (String, Cpp)
@@ -418,21 +420,23 @@ unary' op mkStr = Wrap match (++)
     match' (CppUnary op' val) | op' == op = Just (mkStr val, val)
     match' _ = Nothing
 
-unary :: CppUnaryOp -> String -> Operator PrinterState Cpp String
+unary :: UnaryOperator -> String -> Operator PrinterState Cpp String
 unary op str = unary' op (const str)
 
 negateOperator :: Operator PrinterState Cpp String
-negateOperator = unary' CppNegate (\v -> if isNegate v then "- " else "-")
+negateOperator = unary' Negate (\v -> if isNegate v then "- " else "-")
   where
-  isNegate (CppUnary CppNegate _) = True
+  isNegate (CppUnary Negate _) = True
   isNegate _ = False
 
-binary :: BinaryOp -> String -> Operator PrinterState Cpp String
+binary :: BinaryOperator -> String -> Operator PrinterState Cpp String
 binary op str = AssocL match (\v1 v2 -> v1 ++ str ++ v2)
   where
   match :: Pattern PrinterState Cpp (Cpp, Cpp)
   match = mkPattern match'
     where
+    match' (CppBinary op' v1@(CppStringLiteral _) v2@(CppStringLiteral _))
+      | op' == op = Just (CppApp (CppVar "std::string") [v1], v2)
     match' (CppBinary op' v1 v2) | op' == op = Just (v1, v2)
     match' _ = Nothing
 
@@ -474,16 +478,16 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
     OperatorTable [ [ Wrap accessor $ \prop val -> val ++ "::" ++ prop ]
                   , [ Wrap indexer $ \index val -> val ++ "[" ++ index ++ "]" ]
                   , [ Wrap app $ \args val -> val ++ parens args ]
-                  , [ unary CppNew "new " ]
+                  , [ unary New "new " ]
                   , [ Wrap lam $ \(caps, args, rty) ret -> '[' : caps ++ "]"
                         ++ let args' = argstr <$> args in
                            parens (intercalate ", " args')
                         ++ maybe "" ((" -> " ++) . runType) rty
                         ++ " "
                         ++ ret ]
-                  , [ unary     CppNot                "!"
-                    , unary     CppBitwiseNot         "~"
-                    , unary     CppPositive           "+"
+                  , [ unary     Not                  "!"
+                    , unary     BitwiseNot           "~"
+                    , unary     Positive             "+"
                     , negateOperator ]
                   , [ binary    Multiply             " * "
                     , binary    Divide               " / "
@@ -494,11 +498,11 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ binary    ShiftLeft            " << "
                     , binary    ShiftRight           " >> " ]
                   , [ binary    LessThan             " < "
-                    , binary    LessThanOrEqual      " <= "
+                    , binary    LessThanOrEqualTo    " <= "
                     , binary    GreaterThan          " > "
-                    , binary    GreaterThanOrEqual   " >= "
-                    , binary    Equal                " == "
-                    , binary    NotEqual             " != " ]
+                    , binary    GreaterThanOrEqualTo " >= "
+                    , binary    EqualTo                " == "
+                    , binary    NotEqualTo             " != " ]
                   , [ binary    BitwiseAnd           " & " ]
                   , [ binary    BitwiseXor           " ^ " ]
                   , [ binary    BitwiseOr            " | " ]

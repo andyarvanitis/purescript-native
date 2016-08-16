@@ -1,6 +1,4 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
 
 -- | Functions for converting PureScript ASTs into values of the data types
 -- from Language.PureScript.Docs.
@@ -11,24 +9,23 @@ module Language.PureScript.Docs.Convert
   , collectBookmarks
   ) where
 
-import Prelude ()
 import Prelude.Compat
 
 import Control.Arrow ((&&&), second)
 import Control.Category ((>>>))
 import Control.Monad
+import Control.Monad.Error.Class (MonadError)
 import Control.Monad.State (runStateT)
 import Control.Monad.Writer.Strict (runWriterT)
-import Control.Monad.Error.Class (MonadError)
 import qualified Data.Map as Map
-
-import Text.Parsec (eof)
-import qualified Language.PureScript as P
-import qualified Language.PureScript.Constants as C
 
 import Language.PureScript.Docs.Convert.ReExports (updateReExports)
 import Language.PureScript.Docs.Convert.Single (convertSingleModule, collectBookmarks)
 import Language.PureScript.Docs.Types
+import qualified Language.PureScript as P
+import qualified Language.PureScript.Constants as C
+
+import Text.Parsec (eof)
 
 -- |
 -- Like convertModules, except that it takes a list of modules, together with
@@ -107,8 +104,9 @@ typeCheckIfNecessary modules convertedModules =
     else pure convertedModules
 
   where
-  hasWildcards =
-     any ((==) (ValueDeclaration P.TypeWildcard) . declInfo) . modDeclarations
+  hasWildcards = any (isWild . declInfo) . modDeclarations
+  isWild (ValueDeclaration P.TypeWildcard{}) = True
+  isWild _ = False
 
   go = do
     checkEnv <- snd <$> typeCheck modules
@@ -147,7 +145,7 @@ insertValueTypes ::
 insertValueTypes env m =
   m { modDeclarations = map go (modDeclarations m) }
   where
-  go (d@Declaration { declInfo = ValueDeclaration P.TypeWildcard }) =
+  go (d@Declaration { declInfo = ValueDeclaration P.TypeWildcard{} }) =
     let
       ident = parseIdent (declTitle d)
       ty = lookupName ident
@@ -160,7 +158,7 @@ insertValueTypes env m =
     either (err . ("failed to parse Ident: " ++)) id . runParser P.parseIdent
 
   lookupName name =
-    let key = (modName m, name)
+    let key = P.Qualified (Just (modName m)) name
     in case Map.lookup key (P.names env) of
       Just (ty, _, _) ->
         ty
@@ -187,8 +185,8 @@ partiallyDesugar = P.evalSupplyT 0 . desugar'
   where
   desugar' =
     traverse P.desugarDoModule
-      >=> P.desugarCasesModule
-      >=> P.desugarTypeDeclarationsModule
+      >=> traverse P.desugarCasesModule
+      >=> traverse P.desugarTypeDeclarationsModule
       >=> ignoreWarnings . P.desugarImportsWithEnv []
 
   ignoreWarnings = fmap fst . runWriterT

@@ -18,6 +18,8 @@
 
 module Language.PureScript.CodeGen.Cpp.Types where
 
+import Prelude.Compat
+
 import Data.List
 
 import Language.PureScript.CodeGen.Cpp.Common
@@ -68,6 +70,12 @@ data CppValueQual
 data CppCaptureType = CppCaptureAll
   deriving (Show, Read, Eq)
 
+-- |
+-- C++ object/map literal type
+--
+data CppObjectType = CppInstance | CppRecord
+  deriving (Show, Eq)
+
 runType :: CppType -> String
 runType (CppPrimitive t) = t
 runType CppAuto = "auto"
@@ -98,7 +106,7 @@ boolType :: CppType
 boolType = CppPrimitive "bool"
 
 intType :: CppType
-intType = CppPrimitive "integer"
+intType = CppPrimitive "int"
 
 doubleType :: CppType
 doubleType = CppPrimitive "double"
@@ -123,3 +131,6 @@ thunkMarkerType = CppPrimitive "any::as_thunk"
 
 ctorKey :: String
 ctorKey = "constructor"
+
+constAnyRef :: Maybe CppType
+constAnyRef = Just $ CppAny [CppConst, CppRef]

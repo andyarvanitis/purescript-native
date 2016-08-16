@@ -1,37 +1,35 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 -- |
--- This module generates code for \"externs\" files, i.e. files containing only foreign import declarations.
+-- This module generates code for \"externs\" files, i.e. files containing only
+-- foreign import declarations.
 --
 module Language.PureScript.Externs
   ( ExternsFile(..)
   , ExternsImport(..)
   , ExternsFixity(..)
+  , ExternsTypeFixity(..)
   , ExternsDeclaration(..)
   , moduleToExternsFile
   , applyExternsFileToEnvironment
   ) where
 
-import Prelude ()
 import Prelude.Compat
 
+import Data.Aeson.TH
+import Data.Foldable (fold)
 import Data.List (find, foldl')
 import Data.Maybe (mapMaybe, maybeToList, fromMaybe)
-import Data.Foldable (fold)
 import Data.Version (showVersion)
-import Data.Aeson.TH
-
 import qualified Data.Map as M
 
-import Language.PureScript.Crash
 import Language.PureScript.AST
+import Language.PureScript.Crash
 import Language.PureScript.Environment
-import Language.PureScript.Names
-import Language.PureScript.Types
 import Language.PureScript.Kinds
+import Language.PureScript.Names
 import Language.PureScript.TypeClassDictionaries
+import Language.PureScript.Types
 
 import Paths_purescript as Paths
 
@@ -48,9 +46,11 @@ data ExternsFile = ExternsFile
   , efImports :: [ExternsImport]
   -- | List of operators and their fixities
   , efFixities :: [ExternsFixity]
+  -- | List of type operators and their fixities
+  , efTypeFixities :: [ExternsTypeFixity]
   -- | List of type and value declaration
   , efDeclarations :: [ExternsDeclaration]
-  } deriving (Show, Read)
+  } deriving (Show)
 
 -- | A module import in an externs file
 data ExternsImport = ExternsImport
@@ -61,7 +61,7 @@ data ExternsImport = ExternsImport
   , eiImportType :: ImportDeclarationType
   -- | The imported-as name, for qualified imports
   , eiImportedAs :: Maybe ModuleName
-  } deriving (Show, Read)
+  } deriving (Show)
 
 -- | A fixity declaration in an externs file
 data ExternsFixity = ExternsFixity
@@ -71,10 +71,23 @@ data ExternsFixity = ExternsFixity
   -- | The precedence level of the operator
   , efPrecedence :: Precedence
   -- | The operator symbol
-  , efOperator :: String
+  , efOperator :: OpName 'ValueOpName
   -- | The value the operator is an alias for
-  , efAlias :: Maybe (Qualified FixityAlias)
-  } deriving (Show, Read)
+  , efAlias :: Qualified (Either Ident (ProperName 'ConstructorName))
+  } deriving (Show)
+
+-- | A type fixity declaration in an externs file
+data ExternsTypeFixity = ExternsTypeFixity
+  {
+  -- | The associativity of the operator
+    efTypeAssociativity :: Associativity
+  -- | The precedence level of the operator
+  , efTypePrecedence :: Precedence
+  -- | The operator symbol
+  , efTypeOperator :: OpName 'TypeOpName
+  -- | The value the operator is an alias for
+  , efTypeAlias :: Qualified (ProperName 'TypeName)
+  } deriving (Show)
 
 -- | A type or value declaration appearing in an externs file
 data ExternsDeclaration =
@@ -117,7 +130,7 @@ data ExternsDeclaration =
       , edInstanceTypes :: [Type]
       , edInstanceConstraints :: Maybe [Constraint]
       }
-  deriving (Show, Read)
+  deriving (Show)
 
 -- | Convert an externs file back into a module
 applyExternsFileToEnvironment :: ExternsFile -> Environment -> Environment
@@ -127,7 +140,7 @@ applyExternsFileToEnvironment ExternsFile{..} = flip (foldl' applyDecl) efDeclar
   applyDecl env (EDType pn kind tyKind) = env { types = M.insert (qual pn) (kind, tyKind) (types env) }
   applyDecl env (EDTypeSynonym pn args ty) = env { typeSynonyms = M.insert (qual pn) (args, ty) (typeSynonyms env) }
   applyDecl env (EDDataConstructor pn dTy tNm ty nms) = env { dataConstructors = M.insert (qual pn) (dTy, tNm, ty, nms) (dataConstructors env) }
-  applyDecl env (EDValue ident ty) = env { names = M.insert (efModuleName, ident) (ty, External, Defined) (names env) }
+  applyDecl env (EDValue ident ty) = env { names = M.insert (Qualified (Just efModuleName) ident) (ty, External, Defined) (names env) }
   applyDecl env (EDClass pn args members cs) = env { typeClasses = M.insert (qual pn) (args, members, cs) (typeClasses env) }
   applyDecl env (EDInstance className ident tys cs) = env { typeClassDictionaries = updateMap (updateMap (M.insert (qual ident) dict) className) (Just efModuleName) (typeClassDictionaries env) }
     where
@@ -150,22 +163,26 @@ moduleToExternsFile (Module _ _ mn ds (Just exps)) env = ExternsFile{..}
   efExports       = exps
   efImports       = mapMaybe importDecl ds
   efFixities      = mapMaybe fixityDecl ds
+  efTypeFixities  = mapMaybe typeFixityDecl ds
   efDeclarations  = concatMap toExternsDeclaration efExports
 
   fixityDecl :: Declaration -> Maybe ExternsFixity
-  fixityDecl (FixityDeclaration (Fixity assoc prec) op alias) =
-      fmap (const (ExternsFixity assoc prec op alias)) (find exportsOp exps)
-    where
-    exportsOp :: DeclarationRef -> Bool
-    exportsOp (PositionedDeclarationRef _ _ r) = exportsOp r
-    exportsOp (ValueRef ident') = ident' == Op op
-    exportsOp (TypeOpRef ident') = ident' == Op op
-    exportsOp _ = False
+  fixityDecl (ValueFixityDeclaration (Fixity assoc prec) name op) =
+      fmap (const (ExternsFixity assoc prec op name)) (find (findOp getValueOpRef op) exps)
   fixityDecl (PositionedDeclaration _ _ d) = fixityDecl d
   fixityDecl _ = Nothing
 
+  typeFixityDecl :: Declaration -> Maybe ExternsTypeFixity
+  typeFixityDecl (TypeFixityDeclaration (Fixity assoc prec) name op) =
+      fmap (const (ExternsTypeFixity assoc prec op name)) (find (findOp getTypeOpRef op) exps)
+  typeFixityDecl (PositionedDeclaration _ _ d) = typeFixityDecl d
+  typeFixityDecl _ = Nothing
+
+  findOp :: (DeclarationRef -> Maybe (OpName a)) -> OpName a -> DeclarationRef -> Bool
+  findOp get op = maybe False (== op) . get
+
   importDecl :: Declaration -> Maybe ExternsImport
-  importDecl (ImportDeclaration m mt qmn _) = Just (ExternsImport m mt qmn)
+  importDecl (ImportDeclaration m mt qmn) = Just (ExternsImport m mt qmn)
   importDecl (PositionedDeclaration _ _ d) = importDecl d
   importDecl _ = Nothing
 
@@ -184,7 +201,7 @@ moduleToExternsFile (Module _ _ mn ds (Just exps)) env = ExternsFile{..}
                             ]
       _ -> internalError "toExternsDeclaration: Invalid input"
   toExternsDeclaration (ValueRef ident)
-    | Just (ty, _, _) <- (mn, ident) `M.lookup` names env
+    | Just (ty, _, _) <- Qualified (Just mn) ident `M.lookup` names env
     = [ EDValue ident ty ]
   toExternsDeclaration (TypeClassRef className)
     | Just (args, members, implies) <- Qualified (Just mn) className `M.lookup` typeClasses env
@@ -204,5 +221,6 @@ moduleToExternsFile (Module _ _ mn ds (Just exps)) env = ExternsFile{..}
 
 $(deriveJSON (defaultOptions { sumEncoding = ObjectWithSingleField }) ''ExternsImport)
 $(deriveJSON (defaultOptions { sumEncoding = ObjectWithSingleField }) ''ExternsFixity)
+$(deriveJSON (defaultOptions { sumEncoding = ObjectWithSingleField }) ''ExternsTypeFixity)
 $(deriveJSON (defaultOptions { sumEncoding = ObjectWithSingleField }) ''ExternsDeclaration)
 $(deriveJSON (defaultOptions { sumEncoding = ObjectWithSingleField }) ''ExternsFile)

@@ -1,47 +1,30 @@
------------------------------------------------------------------------------
---
--- Module      :  Language.PureScript.TypeChecker.Unify
--- Copyright   :  (c) Phil Freeman 2013
--- License     :  MIT
---
--- Maintainer  :  Phil Freeman <paf31@cantab.net>
--- Stability   :  experimental
--- Portability :
---
+{-# LANGUAGE FlexibleInstances #-}
+
 -- |
 -- Functions and instances relating to unification
 --
------------------------------------------------------------------------------
+module Language.PureScript.TypeChecker.Unify
+  ( freshType
+  , solveType
+  , substituteType
+  , unknownsInType
+  , unifyTypes
+  , unifyRows
+  , unifiesWith
+  , replaceVarWithUnknown
+  , replaceTypeWildcards
+  , varIfUnknown
+  ) where
 
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
+import Prelude.Compat
 
-module Language.PureScript.TypeChecker.Unify (
-    freshType,
-    solveType,
-    substituteType,
-    unknownsInType,
-    unifyTypes,
-    unifyRows,
-    unifiesWith,
-    replaceVarWithUnknown,
-    replaceTypeWildcards,
-    varIfUnknown
-) where
+import Control.Monad
+import Control.Monad.Error.Class (MonadError(..))
+import Control.Monad.State.Class (MonadState(..), gets, modify)
+import Control.Monad.Writer.Class (MonadWriter(..))
 
 import Data.List (nub, sort)
 import qualified Data.Map as M
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative
-#endif
-import Control.Monad
-import Control.Monad.Error.Class (MonadError(..))
-import Control.Monad.Writer.Class (MonadWriter(..))
-import Control.Monad.State.Class (MonadState(..), gets, modify)
 
 import Language.PureScript.Crash
 import Language.PureScript.Errors
@@ -97,7 +80,7 @@ unknownsInType t = everythingOnTypes (.) go t []
 unifyTypes :: (MonadError MultipleErrors m, MonadState CheckState m) => Type -> Type -> m ()
 unifyTypes t1 t2 = do
   sub <- gets checkSubstitution
-  rethrow (addHint (ErrorUnifyingTypes t1 t2)) $ unifyTypes' (substituteType sub t1) (substituteType sub t2)
+  withErrorMessageHint (ErrorUnifyingTypes t1 t2) $ unifyTypes' (substituteType sub t1) (substituteType sub t2)
   where
   unifyTypes' (TUnknown u1) (TUnknown u2) | u1 == u2 = return ()
   unifyTypes' (TUnknown u) t = solveType u t
@@ -129,9 +112,11 @@ unifyTypes t1 t2 = do
   unifyTypes' r1 r2@RCons{} = unifyRows r1 r2
   unifyTypes' r1@REmpty r2 = unifyRows r1 r2
   unifyTypes' r1 r2@REmpty = unifyRows r1 r2
-  unifyTypes' ty1@(ConstrainedType _ _) ty2 = throwError . errorMessage $ ConstrainedTypeUnified ty1 ty2
+  unifyTypes' ty1@(ConstrainedType _ _) ty2 =
+    throwError . errorMessage $ ConstrainedTypeUnified ty1 ty2
   unifyTypes' t3 t4@(ConstrainedType _ _) = unifyTypes' t4 t3
-  unifyTypes' t3 t4 = throwError . errorMessage $ TypesDoNotUnify t3 t4
+  unifyTypes' t3 t4 =
+    throwError . errorMessage $ TypesDoNotUnify t3 t4
 
 -- |
 -- Unify two rows, updating the current substitution
@@ -164,19 +149,21 @@ unifyRows r1 r2 =
   unifyRows' [] REmpty [] REmpty = return ()
   unifyRows' [] (TypeVar v1) [] (TypeVar v2) | v1 == v2 = return ()
   unifyRows' [] (Skolem _ s1 _ _) [] (Skolem _ s2 _ _) | s1 == s2 = return ()
-  unifyRows' _ _ _ _ = throwError . errorMessage $ TypesDoNotUnify r1 r2
+  unifyRows' _ _ _ _ =
+    throwError . errorMessage $ TypesDoNotUnify r1 r2
 
 -- |
 -- Check that two types unify
 --
 unifiesWith :: Type -> Type -> Bool
-unifiesWith (TUnknown u1) (TUnknown u2) | u1 == u2 = True
-unifiesWith (Skolem _ s1 _ _) (Skolem _ s2 _ _) | s1 == s2 = True
-unifiesWith (TypeVar v1) (TypeVar v2) | v1 == v2 = True
-unifiesWith (TypeConstructor c1) (TypeConstructor c2) | c1 == c2 = True
-unifiesWith (TypeApp h1 t1) (TypeApp h2 t2) = h1 `unifiesWith` h2 && t1 `unifiesWith` t2
-unifiesWith REmpty REmpty = True
-unifiesWith r1@RCons{} r2@RCons{} =
+unifiesWith (TUnknown u1)        (TUnknown u2)        = u1 == u2
+unifiesWith (Skolem _ s1 _ _)    (Skolem _ s2 _ _)    = s1 == s2
+unifiesWith (TypeVar v1)         (TypeVar v2)         = v1 == v2
+unifiesWith (TypeLevelString s1) (TypeLevelString s2) = s1 == s2
+unifiesWith (TypeConstructor c1) (TypeConstructor c2) = c1 == c2
+unifiesWith (TypeApp h1 t1)      (TypeApp h2 t2)      = h1 `unifiesWith` h2 && t1 `unifiesWith` t2
+unifiesWith REmpty               REmpty               = True
+unifiesWith r1@RCons{}           r2@RCons{} =
   let (s1, r1') = rowToList r1
       (s2, r2') = rowToList r2
 
@@ -209,9 +196,10 @@ replaceVarWithUnknown ident ty = do
 replaceTypeWildcards :: (MonadWriter MultipleErrors m, MonadState CheckState m) => Type -> m Type
 replaceTypeWildcards = everywhereOnTypesM replace
   where
-  replace TypeWildcard = do
+  replace (TypeWildcard ss) = do
     t <- freshType
-    tell . errorMessage $ WildcardInferredType t
+    ctx <- getLocalContext
+    warnWithPosition ss $ tell . errorMessage $ WildcardInferredType t ctx
     return t
   replace other = return other
 
