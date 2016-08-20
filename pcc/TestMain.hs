@@ -98,13 +98,13 @@ repo = "git://github.com/pure11/"
 packages :: [(String, String)]
 -------------------------------------------------------------------------------
 packages =
-  [ ("purescript-eff",       "pure11-0.9")
-  , ("purescript-prelude",   "pure11-0.9")
-  , ("purescript-assert",    "pure11-0.9")
-  , ("purescript-st",        "pure11-0.9")
-  , ("purescript-console",   "pure11-0.9")
-  , ("purescript-functions", "pure11-0.9")
-  , ("purescript-partial",   "pure11-0.9")
+  [ ("purescript-eff",       "")
+  , ("purescript-prelude",   "")
+  , ("purescript-assert",    "")
+  , ("purescript-st",        "")
+  , ("purescript-console",   "")
+  , ("purescript-functions", "")
+  , ("purescript-partial",   "")
   ]
 
 -------------------------------------------------------------------------------
