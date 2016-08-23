@@ -21,6 +21,7 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
   , etaConvert
   , unThunk
   , evaluateIifes
+  , toAutoVars
   ) where
 
 import Prelude.Compat
@@ -289,6 +290,25 @@ inlineFnComposition = everywhereOnCppTopDownM convert
   fnCompose = (C.controlSemigroupoid, C.compose)
   fnComposeFlipped :: (String, String)
   fnComposeFlipped = (C.controlSemigroupoid, C.composeFlipped)
+
+toAutoVars :: Cpp -> Cpp
+toAutoVars = everywhereOnCpp convert
+  where
+  convert :: Cpp -> Cpp
+  convert cpp@(CppVariableIntroduction (ident, (Just (CppAny tqs))) qs (Just value))
+    | CppStatic `notElem` qs,
+      CppRef `notElem` tqs =
+      case value of
+        CppNumericLiteral {} -> autovar
+        CppBooleanLiteral {} -> autovar
+        CppBinary {} -> autovar
+        CppUnary {} -> autovar
+        _ -> cpp
+      where
+      typ | CppConst `elem` tqs = CppConstAuto
+          | otherwise = CppAuto
+      autovar = CppVariableIntroduction (ident, (Just typ)) qs (Just value)
+  convert cpp = cpp
 
 semiringNumber :: (String, String)
 semiringNumber = (C.dataSemiring, C.semiringNumber)

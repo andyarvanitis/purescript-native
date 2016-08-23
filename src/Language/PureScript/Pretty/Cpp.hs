@@ -246,7 +246,7 @@ literals = mkPattern' match
   match (CppVariableIntroduction (ident, typ) qs value) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
-    , return (maybe "any" runType typ ++ " ")
+    , return $ runType (fromMaybe (CppAny [CppConst]) typ) ++ " "
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
     ]

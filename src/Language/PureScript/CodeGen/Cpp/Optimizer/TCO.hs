@@ -111,7 +111,7 @@ tco' = everywhereOnCpp convert
 
   toLoop :: String -> [String] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
-        map (\arg -> CppVariableIntroduction (arg, Just $ CppAny []) [] (Just (CppVar (copyVar arg)))) allArgs ++
+        map (\arg -> CppVariableIntroduction (arg, Just CppAuto) [] (Just (CppVar (copyVar arg)))) allArgs ++
         [ CppWhile (CppBooleanLiteral True) (CppBlock loop) ]
     where
     loop :: [Cpp]
@@ -125,7 +125,7 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppBlock $ zipWith (\val arg ->
-                    CppVariableIntroduction (tcoVar arg, Just $ CppAny []) [] (Just val)) allArgumentValues allArgs
+                    CppVariableIntroduction (tcoVar arg, Just CppAuto) [] (Just val)) allArgumentValues allArgs
                   ++ map (\arg ->
                     CppAssignment (CppVar arg) (CppVar (tcoVar arg))) allArgs
                   ++ [ CppContinue ]
