@@ -50,16 +50,18 @@ toHeader = catMaybes . map go
     Nothing
   go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
     Nothing
+  go (CppVariableIntroduction _ _ (Just (CppUnary _ (CppNumericLiteral {})))) =
+    Nothing
   go (CppVariableIntroduction (name, _) _ (Just (CppLambda _ [] rty _))) =
     Just $ CppFunction name [] rty [] CppNoOp
 
   -- Generate thunks for top-level values
-  go (CppVariableIntroduction (name, vty) _ (Just cpp)) =
+  go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
       CppObjectLiteral CppInstance vals ->
         Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) [] CppNoOp
       _ ->
-        Just $ CppVariableIntroduction (name, vty) [CppExtern] Nothing
+        Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [CppExtern] Nothing
   go cpp@(CppStruct {}) =
     Just cpp
   go (CppComment comms cpp')
@@ -86,6 +88,8 @@ toHeaderFns = catMaybes . map go
   go cpp@(CppVariableIntroduction _ _ (Just CppStringLiteral {})) =
     Just cpp
   go cpp@(CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
+    Just cpp
+  go cpp@(CppVariableIntroduction _ _ (Just (CppUnary _ (CppNumericLiteral {})))) =
     Just cpp
   go (CppComment comms cpp') | Just cpp <- go cpp' = Just (CppComment comms cpp)
   go _ = Nothing
@@ -118,14 +122,18 @@ toBody = catMaybes . map go
     Nothing
   go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
     Nothing
+  go (CppVariableIntroduction _ _ (Just (CppUnary _ (CppNumericLiteral {})))) =
+    Nothing
   go (CppVariableIntroduction (name, _) _ (Just (CppLambda _ [] rty body))) =
     Just $ CppFunction name [] rty [] body
-  go (CppVariableIntroduction (name, vty) _ (Just cpp)) =
+
+  -- Generate thunks for top-level values
+  go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
       CppObjectLiteral CppInstance vals ->
         Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) [] block
       _ ->
-        Just $ CppVariableIntroduction (name, vty) [] (Just lambda)
+        Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [] (Just lambda)
     where
     val = CppVariableIntroduction ("$value$", Just $ CppAny [CppConst]) [CppStatic] (Just $ addCaptures cpp)
     block = CppBlock [val, CppReturn (CppVar "$value$")]

@@ -28,7 +28,7 @@ import qualified Language.PureScript.Constants as C
 
 -- import Debug.Trace
 
-data CppType = CppPrimitive String | CppAuto | CppAny [CppTypeQual]
+data CppType = CppPrimitive String | CppAuto | CppConstAuto | CppAny [CppTypeQual]
   deriving (Show, Read, Eq)
 
 data CppTypeQual = CppConst | CppRef
@@ -79,6 +79,7 @@ data CppObjectType = CppInstance | CppRecord
 runType :: CppType -> String
 runType (CppPrimitive t) = t
 runType CppAuto = "auto"
+runType CppConstAuto = "const auto"
 runType (CppAny qs)
   | CppConst `elem` qs = "const " ++ (runType . CppAny $ delete CppConst qs)
   | CppRef   `elem` qs = runType (CppAny $ delete CppRef qs) ++ "&"

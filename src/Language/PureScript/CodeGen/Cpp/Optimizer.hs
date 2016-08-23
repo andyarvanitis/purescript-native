@@ -72,6 +72,7 @@ optimize' cpp = do
     [ collapseNestedBlocks
     , collapseNestedIfs
     , collapseIfElses
+    , toAutoVars
     , tco opts
     , magicDo opts
     , removeCodeAfterReturnStatements
