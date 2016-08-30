@@ -127,9 +127,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     in return $ CppStruct className [CppEnum Nothing Nothing (sort supers ++ members)]
 
   declToCpp vqs (_, ident) (Abs (_, com, ty, _) arg body) = do
-    fn <- if argcnt > 1 && CppTopLevel `elem` vqs
+    fn <- if arity' > 1 && CppTopLevel `elem` vqs
             then do
-              argNames <- replicateM (argcnt - length args' - 1) freshName
+              argNames <- replicateM (arity' - length args' - 1) freshName
               let args'' = zip argNames (repeat aty)
               block <- asReturnBlock <$> valueToCpp
                          (if null argNames
@@ -171,7 +171,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     ty' | Just t <- ty = Just t
         | Just (t, _, _) <- M.lookup (Qualified (Just mn) ident) (E.names env) = Just t
         | otherwise = Nothing
-    argcnt = maybe 0 countArgs ty'
+    arity' = maybe 0 arity ty'
     name = identToCpp ident
     aty = Just $ CppAny [CppConst, CppRef]
     rty = Just $ CppAny []
@@ -239,9 +239,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   declToCpp qs (_, ident) e
     | Just ty <- exprType e,
       CppTopLevel `elem` qs,
-      argcnt <- countArgs ty,
-      argcnt > 0 = do
-        argNames <- replicateM argcnt freshName
+      arity' <- arity ty,
+      arity' > 0 = do
+        argNames <- replicateM arity' freshName
         block <- valueToCpp $
                    curriedApp
                        (tail argNames)
@@ -263,7 +263,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                            rty
                            []
                            (asReturnBlock block)
-                     ] ++ if argcnt > 1
+                     ] ++ if arity' > 1
                             then [fn']
                             else []
     where
@@ -397,7 +397,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return . curriedName' $ varToCpp ident
 
   valueToCpp (Var (_, _, Just ty, _) ident@(Qualified (Just _) _))
-    | countArgs ty > 1 =
+    | arity ty > 1 =
       return . curriedName' $ varToCpp ident
 
   valueToCpp (Var _ ident) =
@@ -470,12 +470,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                        ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
                        args'
       Var ann (Qualified (Just mn') ident)
-        | argcnt <- maybe 0 countArgs ty,
-          argcnt > 1 -> do
+        | arity' <- maybe 0 arity ty,
+          arity' > 1 -> do
             f' <- valueToCpp f
             let (uncurriedArgs, curriedArgs) =
-                  if length args' >= argcnt
-                    then splitAt argcnt args'
+                  if length args' >= arity'
+                    then splitAt arity' args'
                     else ([], args')
                 fn' =
                   if null uncurriedArgs
@@ -791,10 +791,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   curriedForeigns = concat <$> mapM go allForeigns
     where
     go (ident, ty)
-      | argcnt <- countArgs ty,
-        argcnt > 1 = do
+      | arity' <- arity ty,
+        arity' > 1 = do
           let name = identToCpp ident
-          argNames <- replicateM argcnt freshName
+          argNames <- replicateM arity' freshName
           return $
             [ CppFunction
                   (curriedName name)
@@ -839,14 +839,14 @@ curriedApp args vals = foldl (\val arg -> App
                              vals args
 
 ---------------------------------------------------------------------------------------------------
-countArgs :: T.Type -> Int
+arity :: T.Type -> Int
 ---------------------------------------------------------------------------------------------------
-countArgs = go 0
+arity = go 0
   where
-  go argcnt (T.ForAll _ t _) = go argcnt t
-  go argcnt (T.TypeApp (T.TypeApp fn _) t) | fn == E.tyFunction = go (argcnt + 1) t
-  go argcnt (T.ConstrainedType ts t) = go (argcnt + length ts) t
-  go argcnt _ = argcnt
+  go arity' (T.ForAll _ t _) = go arity' t
+  go arity' (T.TypeApp (T.TypeApp fn _) t) | fn == E.tyFunction = go (arity' + 1) t
+  go arity' (T.ConstrainedType ts t) = go (arity' + length ts) t
+  go arity' _ = arity'
 
 ---------------------------------------------------------------------------------------------------
 extractConstraints :: T.Type -> [T.Constraint]
