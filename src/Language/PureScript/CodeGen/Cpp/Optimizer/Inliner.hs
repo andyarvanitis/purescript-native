@@ -281,6 +281,13 @@ inlineFnComposition = everywhereOnCppTopDownM convert
     | isFnComposeFlipped dict' fn = do
         arg <- freshName
         return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp y [CppApp x [CppVar arg]]])
+  convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y])
+    | isFnCompose dict' fn = do
+        arg <- freshName
+        return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
+    | isFnComposeFlipped dict' fn = do
+        arg <- freshName
+        return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp y [CppApp x [CppVar arg]]])
   convert other = return other
   isFnCompose :: Cpp -> Cpp -> Bool
   isFnCompose dict' fn = isDict semigroupoidFn dict' && isFn fnCompose fn

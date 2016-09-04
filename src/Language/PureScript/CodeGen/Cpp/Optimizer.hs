@@ -55,23 +55,25 @@ import Language.PureScript.CodeGen.Cpp.Optimizer.Common
 import Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
 import Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo
 import Language.PureScript.CodeGen.Cpp.Optimizer.TCO
+import Language.PureScript.CodeGen.Cpp.Optimizer.Uncurry
 import Language.PureScript.CodeGen.Cpp.Optimizer.Unused
 
 -- |
 -- Apply a series of optimizer passes to simplified C++11 code
 --
-optimize :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => Cpp -> m Cpp
-optimize cpp = do
+optimize :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
+optimize nm cpp = do
   noOpt <- asks optionsNoOptimizations
-  if noOpt then return cpp else optimize' cpp
+  if noOpt then return cpp else optimize' nm cpp
 
-optimize' :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => Cpp -> m Cpp
-optimize' cpp = do
+optimize' :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
+optimize' nm cpp = do
   opts <- ask
   untilFixedPoint (inlineFnComposition . applyAll
     [ collapseNestedBlocks
     , collapseNestedIfs
     , collapseIfElses
+    , removeCurrying nm
     , toAutoVars
     , tco opts
     , magicDo opts
