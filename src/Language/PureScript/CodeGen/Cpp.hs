@@ -173,7 +173,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                            rty
                            (vqs ++ if isIndexer block then [CppInline] else [])
                            (convertNestedLambdas . asReturnBlock $ convertDictIndexers block)
-    return (CppComment com fn)
+    return (CppComment com $ convertIfPrimFn ty' fn)
     where
     ty' | Just t <- ty = Just t
         | Just (t, _, _) <- M.lookup (Qualified (Just mn) ident) (E.names env) = Just t
@@ -223,7 +223,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
               (curriedName name)
               (farg <$> f)
               (Just $ CppAny [])
-              []
+              (if length fields == 1 then [CppInline] else [])
               (CppBlock (fieldLambdas fs))
         ]
       else
@@ -868,3 +868,28 @@ curriedName' :: Cpp -> Cpp
 curriedName' (CppVar name) = CppVar (curriedName name)
 curriedName' (CppAccessor a b) = CppAccessor (curriedName' a) b
 curriedName' cpp = cpp
+
+---------------------------------------------------------------------------------------------------
+primFn :: T.Type -> ([CppType], Maybe CppType)
+---------------------------------------------------------------------------------------------------
+primFn = go []
+  where
+  go ps (T.TypeApp (T.TypeApp fn a) b) | fn == E.tyFunction,
+                                         Just a' <- numType a = go (a' : ps) b
+  go ps t | Just t' <- numType t = (ps , Just t')
+  go _ _ = ([], Nothing)
+  numType t@(T.TypeConstructor {}) | t == E.tyInt = Just intType
+  numType t@(T.TypeConstructor {}) | t == E.tyNumber = Just doubleType
+  numType t@(T.TypeConstructor {}) | t == E.tyBoolean = Just boolType
+  numType t@(T.TypeConstructor {}) | t == E.tyChar = Just charType
+  numType _ = Nothing
+
+---------------------------------------------------------------------------------------------------
+convertIfPrimFn :: Maybe T.Type -> Cpp -> Cpp
+---------------------------------------------------------------------------------------------------
+convertIfPrimFn ty@(Just _) (CppNamespace ns fs) = CppNamespace ns (convertIfPrimFn ty <$> fs)
+convertIfPrimFn (Just _) cpp@(CppFunction ('$':_) _ _ _ _) = cpp
+convertIfPrimFn (Just ty) (CppFunction name params _ qs body)
+  | (tys', Just rty') <- primFn ty =
+    CppFunction name (zipWith (\(p, _) t -> (p, Just t)) params tys') (Just rty') qs body
+convertIfPrimFn _ cpp = cpp

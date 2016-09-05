@@ -18,7 +18,6 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Uncurry where
 import Prelude.Compat
 
 import Language.PureScript.CodeGen.Cpp.AST
-import qualified Language.PureScript.Types as T
 
 type NamesMap = [(Cpp, Int)]
 
