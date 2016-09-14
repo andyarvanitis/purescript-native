@@ -875,7 +875,7 @@ primFn :: T.Type -> ([CppType], Maybe CppType)
 primFn = go []
   where
   go ps (T.TypeApp (T.TypeApp fn a) b) | fn == E.tyFunction,
-                                         Just a' <- numType a = go (a' : ps) b
+                                         Just a' <- numType a = go (ps ++ [a']) b
   go ps t | Just t' <- numType t = (ps , Just t')
   go _ _ = ([], Nothing)
   numType t@(T.TypeConstructor {}) | t == E.tyInt = Just intType
