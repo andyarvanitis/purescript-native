@@ -39,7 +39,7 @@ toHeader = catMaybes . map go
   go cpp@(CppUseNamespace{}) = Just cpp
   go (CppFunction _ _ _ qs _)
     | CppInline `elem` qs = Nothing
-  go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just CppAuto
+  go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just (CppAuto [])
     = Nothing
   go (CppFunction name args rtyp qs _) =
     let args' = (\(_,t) -> ("", t)) <$> args in
@@ -58,7 +58,7 @@ toHeader = catMaybes . map go
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
-      CppObjectLiteral CppInstance vals ->
+      CppObjectLiteral CppInstance _ ->
         Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) [] CppNoOp
       _ ->
         Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [CppExtern] Nothing
@@ -81,7 +81,7 @@ toHeaderFns = catMaybes . map go
   go cpp@(CppFunction _ _ _ qs _)
     | CppInline `elem` qs = Just cpp
   go (CppFunction name [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp cpp [_])]))
-    | atyp == Just CppAuto
+    | Just CppAuto {} <- atyp
     = Just (CppVariableIntroduction (name, Nothing) [] (Just cpp))
   go cpp@(CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
     Just cpp
@@ -130,7 +130,7 @@ toBody = catMaybes . map go
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
-      CppObjectLiteral CppInstance vals ->
+      CppObjectLiteral CppInstance _ ->
         Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) [] block
       _ ->
         Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [] (Just lambda)

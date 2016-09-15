@@ -514,7 +514,7 @@ dotsTo :: Char -> String -> String
 dotsTo chr' = map (\c -> if c == '.' then chr' else c)
 
 argstr :: (String, Maybe CppType) -> String
-argstr (name, Nothing) = argStr name CppAuto
+argstr (name, Nothing) = argStr name (CppAuto [])
 argstr (name, Just typ) | name == C.__unused = argStr [] typ
 argstr (name, Just typ) = argStr name typ
 
