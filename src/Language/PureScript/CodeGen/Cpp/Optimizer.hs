@@ -43,6 +43,7 @@ import Prelude.Compat
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative)
 #endif
+import Control.Monad (liftM)
 import Control.Monad.Reader (MonadReader, ask, asks)
 import Control.Monad.Supply.Class (MonadSupply)
 
@@ -69,12 +70,11 @@ optimize nm cpp = do
 optimize' :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
 optimize' nm cpp = do
   opts <- ask
-  untilFixedPoint (inlineFnComposition . applyAll
+  untilFixedPoint (liftM toAutoVars . inlineFnComposition . applyAll
     [ collapseNestedBlocks
     , collapseNestedIfs
     , collapseIfElses
     , removeCurrying nm
-    , toAutoVars
     , tco opts
     , magicDo opts
     , removeCodeAfterReturnStatements
@@ -90,7 +90,8 @@ optimize' nm cpp = do
     , inlineOperator (C.prelude, (C.#)) $ \x f -> CppApp f [x]
     , inlineOperator (C.dataFunction, C.applyFlipped) $ \x f -> CppApp f [x]
     , inlineOperator (C.dataArrayUnsafe, C.unsafeIndex) $ flip CppIndexer
-    , inlineCommonOperators ]) cpp
+    , inlineCommonOperators
+    ]) cpp
 
 untilFixedPoint :: (Monad m, Eq a) => (a -> m a) -> a -> m a
 untilFixedPoint f = go

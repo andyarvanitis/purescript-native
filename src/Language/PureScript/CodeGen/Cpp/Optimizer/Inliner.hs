@@ -306,15 +306,19 @@ toAutoVars = everywhereOnCpp convert
     | CppStatic `notElem` qs,
       CppRef `notElem` tqs =
       case value of
-        CppNumericLiteral {} -> autovar
-        CppBooleanLiteral {} -> autovar
-        CppBinary {} -> autovar
-        CppUnary {} -> autovar
+        CppNumericLiteral {} -> var auto'
+        CppBooleanLiteral {} -> var auto'
+        CppBinary {} -> var auto'
+        CppUnary {} -> var auto'
+        CppApp {} -> var auto'
+        CppVar {} -> var autoref'
+        CppAccessor (CppVar {}) _ -> var autoref'
         _ -> cpp
       where
-      typ | CppConst `elem` tqs = CppConstAuto
-          | otherwise = CppAuto
-      autovar = CppVariableIntroduction (ident, (Just typ)) qs (Just value)
+      auto' = CppAuto tqs
+      autoref' | CppConst `elem` tqs = CppAuto (CppRef : tqs)
+               | otherwise = auto'
+      var t = CppVariableIntroduction (ident, (Just t)) qs (Just value)
   convert cpp = cpp
 
 semiringNumber :: (String, String)

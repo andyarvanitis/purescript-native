@@ -28,7 +28,7 @@ import qualified Language.PureScript.Constants as C
 
 -- import Debug.Trace
 
-data CppType = CppPrimitive String | CppAuto | CppConstAuto | CppAny [CppTypeQual]
+data CppType = CppPrimitive String | CppAuto [CppTypeQual] | CppAny [CppTypeQual]
   deriving (Show, Read, Eq)
 
 data CppTypeQual = CppConst | CppRef
@@ -78,12 +78,18 @@ data CppObjectType = CppInstance | CppRecord
 
 runType :: CppType -> String
 runType (CppPrimitive t) = t
-runType CppAuto = "auto"
-runType CppConstAuto = "const auto"
-runType (CppAny qs)
-  | CppConst `elem` qs = "const " ++ (runType . CppAny $ delete CppConst qs)
-  | CppRef   `elem` qs = runType (CppAny $ delete CppRef qs) ++ "&"
-  | otherwise = "any"
+runType (CppAuto []) = "auto"
+runType (CppAny []) = "any"
+runType typ =
+  case typ of
+    CppAuto qs -> rendered CppAuto qs
+    CppAny qs -> rendered CppAny qs
+    _ -> rendered CppAny []
+  where
+  rendered t qs
+    | CppConst `elem` qs = "const " ++ (runType . t $ delete CppConst qs)
+    | CppRef   `elem` qs = runType (t $ delete CppRef qs) ++ "&"
+    | otherwise = runType (t qs)
 
 runValueQual :: CppValueQual -> String
 runValueQual CppStatic    = "static"
