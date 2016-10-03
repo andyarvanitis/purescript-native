@@ -278,12 +278,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     aty = Just $ CppAny [CppConst, CppRef]
     rty = Just $ CppAny []
 
-  declToCpp _ (_, ident) val = do
+  declToCpp qs (_, ident) val = do
     val' <- valueToCpp val
     return $
       CppVariableIntroduction
           (identToCpp ident, Just $ CppAny [CppConst])
-          []
+          qs
           (Just val')
 
   -------------------------------------------------------------------------------------------------
@@ -336,11 +336,19 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
     recursive :: Cpp -> [Cpp]
     recursive cpp'@(CppFunction _ _ _ qs _) | CppRecursive `elem` qs = [cpp']
+    recursive cpp'@(CppVariableIntroduction _ qs _) | CppRecursive `elem` qs = [cpp']
     recursive _ = []
 
     removeRec :: Cpp -> Cpp
-    removeRec(CppFunction _ _ _ qs _) | CppRecursive `elem` qs = CppNoOp
+    removeRec (CppFunction _ _ _ qs _) | CppRecursive `elem` qs = CppNoOp
+    removeRec (CppVariableIntroduction _ qs _) | CppRecursive `elem` qs = CppNoOp
     removeRec cpp' = cpp'
+
+    replaceVar :: [(String, Cpp)] -> Cpp -> Cpp
+    replaceVar rs = go
+      where
+      go (CppVar var) | Just var' <- lookup var rs = var'
+      go cpp' = cpp'
 
     dict :: Cpp
     dict = CppVariableIntroduction
@@ -348,23 +356,26 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                []
                (Just $ CppDataLiteral ((\(f,cpp) -> CppComment [LineComment f] cpp) <$> fns))
 
+    accessed :: String -> String -> (String, Cpp)
+    accessed dictname name =
+      (name, CppApp
+               (CppIndexer
+                  (CppNumericLiteral .
+                   Left .
+                   fromIntegral .
+                   fromJust $ findIndex ((== name) . fst) fns)
+                  dict'')
+               [dict'])
+      where
+      dict' = CppVar dictname
+      dict'' = CppCast dataType dict'
+
     accessor :: String -> (String, Cpp) -> Cpp
     accessor dictname (name, _) =
       CppVariableIntroduction
           (name, Just $ CppAny [CppConst])
           []
-          (Just accessed)
-      where
-      dict' = CppVar dictname
-      dict'' = CppCast dataType dict'
-      accessed = CppApp
-                   (CppIndexer
-                      (CppNumericLiteral .
-                       Left .
-                       fromIntegral .
-                       fromJust $ findIndex ((== name) . fst) fns)
-                      dict'')
-                   [dict']
+          (Just . snd $ accessed dictname name)
 
     toelem :: Cpp -> (String, Cpp)
     toelem (CppFunction name args rtyp _ body'@(CppBlock body)) =
@@ -373,6 +384,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                            args
                                            rtyp
                                            (CppBlock $ (accessor localdict <$> filteredFns body') ++ body))
+
+    toelem (CppVariableIntroduction (name, _) _ (Just body')) =
+      let replacements = accessed localdict . fst <$> filteredFns body'
+          replaced = everywhereOnCpp (replaceVar replacements) body'
+      in (name, withdict . maybeRemCaps $ CppBlock [CppReturn replaced])
+
     toelem _ = error "not a function"
 
     withdict :: Cpp -> Cpp
@@ -495,19 +512,21 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     hasRecursion :: [Cpp] -> Bool
     hasRecursion cpps' = any (everythingOnCpp (||) hasRecursiveRef) cpps'
       where
-      fnames :: [String]
-      fnames  = concatMap (everythingOnCpp (++) fname) cpps'
+      valnames :: [String]
+      valnames  = concatMap (everythingOnCpp (++) valname) cpps'
 
-      fname :: Cpp -> [String]
-      fname (CppFunction name _ _ _ _) = [name]
-      fname _ = []
+      valname :: Cpp -> [String]
+      valname (CppFunction name _ _ _ _) = [name]
+      valname (CppVariableIntroduction (name, _) _ _) = [name]
+      valname _ = []
 
       hasRecursiveRef :: Cpp -> Bool
       hasRecursiveRef (CppFunction _ _ _ _ body) = everythingOnCpp (||) ref body
+      hasRecursiveRef (CppVariableIntroduction _ _ (Just value)) = everythingOnCpp (||) ref value
       hasRecursiveRef _ = False
 
       ref :: Cpp -> Bool
-      ref (CppVar name) | name `elem` fnames = True
+      ref (CppVar name) | name `elem` valnames = True
       ref _ = False
 
   valueToCpp Constructor{} = return CppNoOp
