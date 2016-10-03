@@ -755,9 +755,11 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   findClass :: Qualified (ProperName 'ClassName) -> Maybe ([String], [T.Constraint], [(String, T.Type)])
   -------------------------------------------------------------------------------------------------
   findClass name
-    | Just (params, fns, constraints) <- M.lookup name (E.typeClasses env),
-      fns' <- (\(i,t) -> (runIdent i, t)) <$> fns
-      = Just (fst <$> params, constraints, (sortBy (compare `on` normalizedName . fst) fns'))
+    | Just tcd <- M.lookup name (E.typeClasses env),
+      fns' <- (\(i,t) -> (runIdent i, t)) <$> E.typeClassMembers tcd
+      = Just (fst <$> E.typeClassArguments tcd,
+              E.typeClassSuperclasses tcd,
+              (sortBy (compare `on` normalizedName . fst) fns'))
   findClass _ = Nothing
 
   -------------------------------------------------------------------------------------------------
