@@ -158,6 +158,10 @@ sourceMaps = switch $
      long "source-maps"
   <> help "Generate source maps"
 
+dumpCoreFn :: Parser Bool
+dumpCoreFn = switch $
+     long "dump-corefn"
+  <> help "Dump the (functional) core representation of the compiled code at output/*/corefn.json"
 
 options :: Parser P.Options
 options = P.Options <$> noTco
@@ -167,6 +171,7 @@ options = P.Options <$> noTco
                     <*> verboseErrors
                     <*> (not <$> comments)
                     <*> sourceMaps
+                    <*> dumpCoreFn
 
 pccMakeOptions :: Parser PCCMakeOptions
 pccMakeOptions = PCCMakeOptions <$> many inputFile

@@ -105,6 +105,7 @@ packages =
   , ("purescript-console",   "")
   , ("purescript-functions", "")
   , ("purescript-partial",   "")
+  , ("purescript-newtype",   "")
   ]
 
 -------------------------------------------------------------------------------
@@ -124,4 +125,5 @@ skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
   [ "NumberLiterals.purs" -- unreliable float comparison, test manually
+  , "FunWithFunDeps.purs" -- requires FFI
   ]
