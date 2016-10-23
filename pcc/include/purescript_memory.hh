@@ -25,7 +25,7 @@
   #define MAKE_MANAGED_FINALIZED(T) new (GC, [](void* p, void*){ static_cast<T*>(p)->~T(); }) T
   #define IS_POINTER_TYPE(T) std::is_pointer<T>
   #define POINTER_FROM_MEMBER(P) P
-  #define INITIALIZE_GC(_) GC_INIT()
+  #define INITIALIZE_GC() GC_INIT()
 #else
   #include <memory>
   #define WITH_ALLOCATOR(_)
@@ -34,7 +34,7 @@
   #define MAKE_MANAGED_FINALIZED(T) MAKE_MANAGED(T)
   #define IS_POINTER_TYPE(T) std::is_assignable<managed<void>,T>
   #define POINTER_FROM_MEMBER(P) P.get()
-  #define INITIALIZE_GC(_)
+  #define INITIALIZE_GC()
 #endif
 
 namespace PureScript {

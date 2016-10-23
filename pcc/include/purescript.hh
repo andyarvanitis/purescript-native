@@ -38,7 +38,7 @@
 namespace PureScript {
 
 using cstring = const char *;
-using nullptr_t = std::nullptr_t;
+using std::nullptr_t;
 
 // Workaround for missing C++11 version in gcc
 class runtime_error : public std::runtime_error {
