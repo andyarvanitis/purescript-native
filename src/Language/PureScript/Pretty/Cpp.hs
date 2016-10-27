@@ -104,7 +104,7 @@ literals = mkPattern' match
     , return " }"
     ]
   match (CppDataLiteral xs) = fmap concat $ sequence
-    [ return $ runType dataType
+    [ return $ runType (dataType $ length xs)
     , return "{ "
     , fmap (intercalate ", ") $ forM xs prettyPrintCpp'
     , return " }"

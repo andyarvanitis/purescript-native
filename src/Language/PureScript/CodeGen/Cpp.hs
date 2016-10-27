@@ -368,7 +368,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                [dict'])
       where
       dict' = CppVar dictname
-      dict'' = CppCast dataType dict'
+      dict'' = CppCast (dataType 1) dict'
 
     accessor :: String -> (String, Cpp) -> Cpp
     accessor dictname (name, _) =
@@ -625,7 +625,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                        EqualTo
                        (CppIndexer
                             (CppVar ctorKey)
-                            (CppCast dataType $ CppVar varName))
+                            (CppCast (dataType 1) $ CppVar varName))
                        ctorCpp)
                   (CppBlock cpps)
                   Nothing]
@@ -642,10 +642,14 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             []
             (Just $ CppIndexer
                         (fieldToIndex field)
-                        (CppCast dataType $ CppVar varName))
+                        (CppCast (dataType $ fieldToIndex' field + 1) $ CppVar varName))
         : cpps
     fieldToIndex :: Ident -> Cpp
     fieldToIndex = CppNumericLiteral . Left . (+1) . read . dropWhile isLetter . runIdent
+
+    fieldToIndex' :: Ident -> Int
+    fieldToIndex' = (+1) . read . dropWhile isLetter . runIdent
+
     ctor' :: Cpp
     ctor' = CppAccessor (CppVar . identToCpp $ Ident ctor) (CppVar "data")
     ctorCpp :: Cpp

@@ -127,8 +127,8 @@ charType = CppPrimitive "char"
 mapType :: CppType
 mapType = CppPrimitive "any::map"
 
-dataType :: CppType
-dataType = CppPrimitive "any::data"
+dataType :: Int -> CppType
+dataType n = CppPrimitive $ "any::data<" ++ show n ++ ">"
 
 arrayType :: CppType
 arrayType = CppPrimitive "any::array"

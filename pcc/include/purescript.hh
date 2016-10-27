@@ -20,15 +20,18 @@
 #if defined(DEBUG)
   #include <cassert>
   #include <climits>
+  #define IF_DEBUG(x) x
 #else
   #define NDEBUG
   #undef assert
   #define assert(x)
+  #define IF_DEBUG(_)
 #endif
 
 #include <functional>
 #include <string>
 #include <vector>
+#include <array>
 #include <deque>
 #include <utility>
 #include <stdexcept>
@@ -83,7 +86,10 @@ class any {
 
   using map_pair = std::pair<const char * const, const any>;
   using map      = std::vector<map_pair WITH_ALLOCATOR(map_pair)>;
-  using data     = std::vector<any WITH_ALLOCATOR(any)>;
+
+  template <size_t N>
+  using data = std::array<any, N>;
+
   using array    = std::deque<any WITH_ALLOCATOR(any)>;
   using fn       = auto (*)(const any&) -> any;
   using eff_fn   = auto (*)() -> any;
@@ -135,7 +141,6 @@ class any {
     mutable void *                u;
     mutable managed<std::string>  s;
     mutable managed<map>          m;
-    mutable managed<data>         v;
     mutable managed<array>        a;
     mutable managed<closure>      l;
     mutable managed<eff_closure>  k;
@@ -168,8 +173,8 @@ class any {
   any(const map& val) : type(Type::Map), m(make_managed<map>(val)) {}
   any(map&& val) noexcept : type(Type::Map), m(make_managed<map>(std::move(val))) {}
 
-  any(const data& val) : type(Type::Data), v(make_managed<data>(val)) {}
-  any(data&& val) noexcept : type(Type::Data), v(make_managed<data>(std::move(val))) {}
+  template <size_t N>
+  any(data<N>&& val) noexcept : type(Type::Data), p(make_managed<data<N>>(std::move(val))) {}
 
   any(const array& val) : type(Type::Array), a(make_managed<array>(val)) {}
   any(array&& val) noexcept : type(Type::Array), a(make_managed<array>(std::move(val))) {}
@@ -245,10 +250,10 @@ class any {
 
       case Type::String:      new (&s) managed<std::string>(move_if_rvalue<T>(other.s));  break;
       case Type::Map:         new (&m) managed<map>(move_if_rvalue<T>(other.m));          break;
-      case Type::Data:        new (&v) managed<data>(move_if_rvalue<T>(other.v));         break;
       case Type::Array:       new (&a) managed<array>(move_if_rvalue<T>(other.a));        break;
       case Type::Closure:     new (&l) managed<closure>(move_if_rvalue<T>(other.l));      break;
       case Type::EffClosure:  new (&k) managed<eff_closure>(move_if_rvalue<T>(other.k));  break;
+      case Type::Data:
       case Type::Pointer:     new (&p) managed<void>(move_if_rvalue<T>(other.p));         break;
 
       default: assert(false && "Bad 'any' type"); break;
@@ -259,10 +264,10 @@ class any {
     switch (type) {
       case Type::String:      s.~managed<std::string>();   break;
       case Type::Map:         m.~managed<map>();           break;
-      case Type::Data:        v.~managed<data>();          break;
       case Type::Array:       a.~managed<array>();         break;
       case Type::Closure:     l.~managed<closure>();       break;
       case Type::EffClosure:  k.~managed<eff_closure>();   break;
+      case Type::Data:
       case Type::Pointer:     p.~managed<void>();          break;
 
       default: break;
@@ -310,7 +315,6 @@ class any {
   operator char() const;
   operator cstring() const;
   operator const map&() const;
-  operator const data&() const;
   operator const array&() const;
 
   auto operator[](const char[]) const -> const any&;
@@ -319,7 +323,7 @@ class any {
 
   auto contains(const char[]) const -> bool;
 
-  auto extractPointer() const -> void*;
+  auto extractPointer(IF_DEBUG(const Type)) const -> void*;
 
   auto rawPointer() const -> void* {
     const any& variant = unthunkVariant(*this);
@@ -387,6 +391,19 @@ class any {
   friend auto operator-(const any&) -> any; // unary negate
 };
 
+template <typename T, typename U=void>
+struct TypeTag {};
+
+template <size_t N>
+struct TypeTag<any::data<N>> {
+  static constexpr any::Type TypeId = any::Type::Data;
+};
+
+template <typename T>
+struct TypeTag<T> {
+  static constexpr any::Type TypeId = any::Type::Pointer;
+};
+
 template <typename T>
 inline auto cast(const any& a) ->
     typename std::enable_if<std::is_arithmetic<T>::value ||
@@ -397,17 +414,15 @@ inline auto cast(const any& a) ->
 template <typename T>
 inline auto cast(const any& a) ->
     typename std::enable_if<std::is_same<T, any::map>::value  ||
-                            std::is_same<T, any::data>::value ||
                             std::is_same<T, any::array>::value, const T&>::type {
   return a;
 }
 
 template <typename T, typename = typename std::enable_if<std::is_class<T>::value>::type>
 inline auto cast(const any& a) ->
-    typename std::enable_if<!std::is_same<T, any::map>::value  &&
-                            !std::is_same<T, any::data>::value &&
+    typename std::enable_if<!std::is_same<T, any::map>::value &&
                             !std::is_same<T, any::array>::value, T&>::type {
-  return *static_cast<T*>(a.extractPointer());
+  return *static_cast<T*>(a.extractPointer(IF_DEBUG(TypeTag<T>::TypeId)));
 }
 
 template <typename T>

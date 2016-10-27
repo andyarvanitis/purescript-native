@@ -74,16 +74,12 @@ any::operator const map&() const {
   RETURN_VALUE(Type::Map, m, *)
 }
 
-any::operator const data&() const {
-  RETURN_VALUE(Type::Data, v, *)
-}
-
 any::operator const array&() const {
   RETURN_VALUE(Type::Array, a, *)
 }
 
-auto any::extractPointer() const -> void* {
-  RETURN_VALUE(Type::Pointer, POINTER_FROM_MEMBER(p),)
+auto any::extractPointer(IF_DEBUG(const any::Type t)) const -> void* {
+  RETURN_VALUE(t, POINTER_FROM_MEMBER(p),)
 }
 
 auto any::unthunkVariant(const any& a) -> const any& {
