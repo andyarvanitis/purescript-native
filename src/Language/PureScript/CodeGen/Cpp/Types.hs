@@ -124,8 +124,11 @@ stringType = CppPrimitive "string"
 charType :: CppType
 charType = CppPrimitive "char"
 
-mapType :: CppType
-mapType = CppPrimitive "any::map"
+voidType :: CppType
+voidType = CppPrimitive "void"
+
+mapType :: Int -> CppType
+mapType n = CppPrimitive $ "any::map<" ++ show n ++ ">"
 
 dataType :: Int -> CppType
 dataType n = CppPrimitive $ "any::data<" ++ show n ++ ">"
@@ -141,3 +144,6 @@ ctorKey = "constructor"
 
 constAnyRef :: Maybe CppType
 constAnyRef = Just $ CppAny [CppConst, CppRef]
+
+symbolname :: String -> String
+symbolname = identToCpp . Ident

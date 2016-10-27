@@ -70,10 +70,6 @@ any::operator cstring() const {
   return variant.s->c_str();
 }
 
-any::operator const map&() const {
-  RETURN_VALUE(Type::Map, m, *)
-}
-
 any::operator const array&() const {
   RETURN_VALUE(Type::Array, a, *)
 }
@@ -90,21 +86,17 @@ auto any::unthunkVariant(const any& a) -> const any& {
   return *variant;
 }
 
-auto any::operator[](const char rhs[]) const -> const any& {
+auto any::operator[](const symbol_t key) const -> const any& {
   const any& variant = unthunkVariant(*this);
   assert(variant.type == Type::Map);
-  const auto begin = variant.m->cbegin();
-  const auto end = variant.m->cend();
-  for (auto it = begin; it != end; ++it) {
-    if (it->first == rhs) {
-      return it->second;
+  // TODO: assumes at least one element -- safe assumption?
+  const auto m = cast<map<1>>(variant);
+  decltype(m)::size_type i = 0;
+  do {
+    if (m[i].first == key) {
+      return m[i].second;
     }
-  }
-  for (auto it = begin; it != end; ++it) {
-    if (strcmp(it->first, rhs) == 0) {
-      return it->second;
-    }
-  }
+  } while (m[++i].first != nullptr);
   throw runtime_error("map key not found");
 }
 
@@ -120,21 +112,17 @@ auto any::operator[](const any& rhs) const -> const any& {
   return (*variant.a)[cast<int>(rhs)];
 }
 
-auto any::contains(const char key[]) const -> bool {
+auto any::contains(const symbol_t key) const -> bool {
   const any& variant = unthunkVariant(*this);
   assert(variant.type == Type::Map);
-  const auto begin = variant.m->cbegin();
-  const auto end = variant.m->cend();
-  for (auto it = begin; it != end; ++it) {
-    if (it->first == key) {
+  // TODO: assumes at least one element -- safe assumption?
+  const auto m = cast<map<1>>(variant);
+  decltype(m)::size_type i = 0;
+  do {
+    if (m[i].first == key) {
       return true;
     }
-  }
-  for (auto it = begin; it != end; ++it) {
-    if (strcmp(it->first, key) == 0) {
-      return true;
-    }
-  }
+  } while (m[++i].first != nullptr);
   return false;
 }
 

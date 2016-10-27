@@ -99,9 +99,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             P.linebreak ++
             fileEnd mn "HH"
     let bodyCpps = toBodyDecl optimized ++ toBody optimized
+        symbols = allSymbols bodyCpps
         moduleBody =
             CppInclude (runModuleName mn) (runModuleName mn) :
-            P.linebreak ++
+            symbolDefs symbols :
             (if null bodyCpps
                  then []
                  else [ CppNamespace (runModuleName mn) $
@@ -186,10 +187,15 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     args' = (\i -> (identToCpp i, aty)) <$> fst abs'
     abs' = unAbs body []
     isAccessor :: Expr Ann -> Bool
-    isAccessor Accessor{} = True
+    isAccessor (Accessor _ _ e)
+      | (_, f, _, _) <- everythingOnValues (&&) (const False) notAbs (const False) (const False) = f e
+      where
+      notAbs :: Expr Ann -> Bool
+      notAbs Abs{} = False
+      notAbs _ = True
     isAccessor _ = False
     isIndexer :: Cpp -> Bool
-    isIndexer (CppIndexer (CppStringLiteral _) (CppVar _)) = True
+    isIndexer (CppIndexer (CppSymbol _) (CppVar _)) = True
     isIndexer _ = False
     classes = qualifiedToCpp (Ident . runProperName) . T.constraintClass <$>
                   maybe [] extractConstraints ty'
@@ -440,18 +446,20 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     CppArrayLiteral <$> mapM valueToCpp xs
 
   valueToCpp (Literal _ (ObjectLiteral ps)) =
-    CppObjectLiteral CppRecord <$> sortBy (compare `on` fst) <$> mapM (sndM valueToCpp) ps
+    CppObjectLiteral CppRecord <$>
+        mapM (sndM valueToCpp) ((\(k,v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) ps)
 
   valueToCpp (Accessor _ prop val) =
-    CppIndexer <$> pure (CppStringLiteral prop) <*> valueToCpp val
+    CppIndexer <$> pure (CppSymbol prop) <*> valueToCpp val
 
   -- TODO: use a more efficient way of copying/updating the map?
   valueToCpp (ObjectUpdate (_, _, Just ty, _) obj ps) = do
     obj' <- valueToCpp obj
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
-        origFields = (\key -> (key, CppIndexer (CppStringLiteral key) obj')) <$> origKeys
-    return $ CppObjectLiteral CppRecord . sortBy (compare `on` fst) $ origFields ++ updatedFields
+        origFields = (\key -> (key, CppIndexer (CppSymbol key) obj')) <$> origKeys
+    return $ CppObjectLiteral CppRecord $
+                 (\(k,v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) (origFields ++ updatedFields)
     where
     allKeys :: T.Type -> [String]
     allKeys (T.TypeApp (T.TypeConstructor _) r@(T.RCons {})) = fst <$> (fst $ T.rowToList r)
@@ -485,7 +493,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return . CppObjectLiteral CppInstance $
                      zip
-                       ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
+                       (CppSymbol <$> (sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
                        args'
       Var _ (Qualified (Just _) _) -> applied f args' curriedName'
       _ -> applied f args' id
@@ -716,7 +724,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             (propVar, Nothing)
             []
             (Just $ CppIndexer
-                        (CppStringLiteral prop)
+                        (CppSymbol prop)
                         (CppVar varName))
         : cpp
 
@@ -872,12 +880,12 @@ extractConstraints = go []
 ---------------------------------------------------------------------------------------------------
 dictIndexerToEnum :: [(Cpp,Cpp)] -> Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
-dictIndexerToEnum repls (CppIndexer (CppStringLiteral prop) dict)
+dictIndexerToEnum repls (CppIndexer (CppSymbol prop) dict)
   | Just cls <- lookup dict repls =
     CppBinary Dot
       (CppIndexer
           (CppAccessor (CppVar . identToCpp $ Ident prop) cls)
-          (CppCast mapType dict))
+          (CppCast (mapType 1) dict))
       (CppVar "second")
 dictIndexerToEnum _ cpp = cpp
 
@@ -918,3 +926,21 @@ convertIfPrimFn (Just ty) (CppFunction name params _ qs body)
   | (tys', Just rty') <- primFn ty =
     CppFunction name (zipWith (\(p, _) t -> (p, Just t)) params tys') (Just rty') qs body
 convertIfPrimFn _ cpp = cpp
+
+---------------------------------------------------------------------------------------------------
+allSymbols :: [Cpp] -> [String]
+---------------------------------------------------------------------------------------------------
+allSymbols cpps = nub $ concatMap (everythingOnCpp (++) symbols) cpps
+  where
+  symbols :: Cpp -> [String]
+  symbols (CppSymbol s) = [symbolname s]
+  symbols _ = []
+
+---------------------------------------------------------------------------------------------------
+symbolDefs :: [String] -> Cpp
+---------------------------------------------------------------------------------------------------
+symbolDefs [] = CppNoOp
+symbolDefs syms = CppNamespace "PureScript" [CppNamespace "symbol" (asFunc <$> syms)]
+  where
+  asFunc :: String -> Cpp
+  asFunc s = CppStruct s []

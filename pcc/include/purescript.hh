@@ -30,7 +30,6 @@
 
 #include <functional>
 #include <string>
-#include <vector>
 #include <array>
 #include <deque>
 #include <utility>
@@ -42,6 +41,18 @@ namespace PureScript {
 
 using cstring = const char *;
 using std::nullptr_t;
+
+struct symbol_generator_anchor {};
+using symbol_t = const symbol_generator_anchor *;
+
+template <typename T>
+struct symbol_generator {
+  constexpr static symbol_generator_anchor anchor = symbol_generator_anchor{};
+};
+template <typename T>
+constexpr symbol_generator_anchor symbol_generator<T>::anchor;
+
+#define SYMBOL(S) &symbol_generator<symbol::S>::anchor
 
 // Workaround for missing C++11 version in gcc
 class runtime_error : public std::runtime_error {
@@ -84,11 +95,13 @@ class any {
   };
   static constexpr as_thunk unthunk = as_thunk{};
 
-  using map_pair = std::pair<const char * const, const any>;
-  using map      = std::vector<map_pair WITH_ALLOCATOR(map_pair)>;
+  using map_pair = std::pair<const symbol_t, const any>;
 
   template <size_t N>
-  using data = std::array<any, N>;
+  using map = std::array<const map_pair, N>;
+
+  template <size_t N>
+  using data = std::array<const any, N>;
 
   using array    = std::deque<any WITH_ALLOCATOR(any)>;
   using fn       = auto (*)(const any&) -> any;
@@ -140,7 +153,6 @@ class any {
     mutable eff_fn                e;
     mutable void *                u;
     mutable managed<std::string>  s;
-    mutable managed<map>          m;
     mutable managed<array>        a;
     mutable managed<closure>      l;
     mutable managed<eff_closure>  k;
@@ -170,8 +182,8 @@ class any {
   any(const managed<std::string>& val) noexcept : type(Type::String), s(val) {}
   any(managed<std::string>&& val) noexcept : type(Type::String), s(std::move(val)) {}
 
-  any(const map& val) : type(Type::Map), m(make_managed<map>(val)) {}
-  any(map&& val) noexcept : type(Type::Map), m(make_managed<map>(std::move(val))) {}
+  template <size_t N>
+  any(map<N>&& val) noexcept : type(Type::Map), p(make_managed<map<N>>(std::move(val))) {}
 
   template <size_t N>
   any(data<N>&& val) noexcept : type(Type::Data), p(make_managed<data<N>>(std::move(val))) {}
@@ -216,7 +228,7 @@ class any {
   any(const T& val, typename std::enable_if<std::is_same<T,void*>::value>::type* = 0) noexcept
     : type(Type::RawPointer), u(val) {}
 
-  any(std::nullptr_t) noexcept : type(Type::Pointer), p(nullptr) {}
+  any(std::nullptr_t) noexcept : type(Type::RawPointer), u(nullptr) {}
 
 
 #if !defined(USE_GC)
@@ -249,10 +261,10 @@ class any {
       case Type::RawPointer:     u = other.u;  break;
 
       case Type::String:      new (&s) managed<std::string>(move_if_rvalue<T>(other.s));  break;
-      case Type::Map:         new (&m) managed<map>(move_if_rvalue<T>(other.m));          break;
       case Type::Array:       new (&a) managed<array>(move_if_rvalue<T>(other.a));        break;
       case Type::Closure:     new (&l) managed<closure>(move_if_rvalue<T>(other.l));      break;
       case Type::EffClosure:  new (&k) managed<eff_closure>(move_if_rvalue<T>(other.k));  break;
+      case Type::Map:
       case Type::Data:
       case Type::Pointer:     new (&p) managed<void>(move_if_rvalue<T>(other.p));         break;
 
@@ -263,10 +275,10 @@ class any {
   auto destruct() -> void {
     switch (type) {
       case Type::String:      s.~managed<std::string>();   break;
-      case Type::Map:         m.~managed<map>();           break;
       case Type::Array:       a.~managed<array>();         break;
       case Type::Closure:     l.~managed<closure>();       break;
       case Type::EffClosure:  k.~managed<eff_closure>();   break;
+      case Type::Map:
       case Type::Data:
       case Type::Pointer:     p.~managed<void>();          break;
 
@@ -314,14 +326,13 @@ class any {
   operator bool() const;
   operator char() const;
   operator cstring() const;
-  operator const map&() const;
   operator const array&() const;
 
-  auto operator[](const char[]) const -> const any&;
+  auto operator[](const symbol_t) const -> const any&;
   auto operator[](const size_t) const -> const any&;
   auto operator[](const any&) const -> const any&;
 
-  auto contains(const char[]) const -> bool;
+  auto contains(const symbol_t) const -> bool;
 
   auto extractPointer(IF_DEBUG(const Type)) const -> void*;
 
@@ -389,19 +400,25 @@ class any {
   DEFINE_OPERATOR(%, char, char)
 
   friend auto operator-(const any&) -> any; // unary negate
-};
+
+}; // class any
 
 template <typename T, typename U=void>
-struct TypeTag {};
+struct tag_helper {};
 
 template <size_t N>
-struct TypeTag<any::data<N>> {
-  static constexpr any::Type TypeId = any::Type::Data;
+struct tag_helper<any::map<N>> {
+  static constexpr any::Type tag = any::Type::Map;
+};
+
+template <size_t N>
+struct tag_helper<any::data<N>> {
+  static constexpr any::Type tag = any::Type::Data;
 };
 
 template <typename T>
-struct TypeTag<T> {
-  static constexpr any::Type TypeId = any::Type::Pointer;
+struct tag_helper<T> {
+  static constexpr any::Type tag = any::Type::Pointer;
 };
 
 template <typename T>
@@ -413,16 +430,14 @@ inline auto cast(const any& a) ->
 
 template <typename T>
 inline auto cast(const any& a) ->
-    typename std::enable_if<std::is_same<T, any::map>::value  ||
-                            std::is_same<T, any::array>::value, const T&>::type {
+    typename std::enable_if<std::is_same<T, any::array>::value, const T&>::type {
   return a;
 }
 
 template <typename T, typename = typename std::enable_if<std::is_class<T>::value>::type>
 inline auto cast(const any& a) ->
-    typename std::enable_if<!std::is_same<T, any::map>::value &&
-                            !std::is_same<T, any::array>::value, T&>::type {
-  return *static_cast<T*>(a.extractPointer(IF_DEBUG(TypeTag<T>::TypeId)));
+    typename std::enable_if<!std::is_same<T, any::array>::value, T&>::type {
+  return *static_cast<T*>(a.extractPointer(IF_DEBUG(tag_helper<T>::tag)));
 }
 
 template <typename T>

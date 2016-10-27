@@ -167,6 +167,7 @@ nameIsCppReserved name =
               , "string"
               , "struct"
               , "switch"
+              , "symbol"
               , "template"
               , "this"
               , "thread_local"

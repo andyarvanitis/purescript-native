@@ -128,7 +128,7 @@ inlineST = everywhereOnCpp convertBlock
   -- or in a more aggressive way, turning wrappers into local variables depending on the
   -- agg(ressive) parameter.
   convert agg (CppApp f [arg]) | isSTFunc C.newSTRef f =
-   CppLambda [CppCaptureAll] [] Nothing (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral CppRecord [(C.stRefValue, arg)]])
+   CppLambda [CppCaptureAll] [] Nothing (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral CppRecord [(CppSymbol C.stRefValue, arg)]])
   convert agg (CppApp (CppApp f [ref]) []) | isSTFunc C.readSTRef f =
     if agg then ref else CppAccessor (CppVar C.stRefValue) ref
   convert agg (CppApp (CppApp (CppApp f [ref]) [arg]) []) | isSTFunc C.writeSTRef f =
