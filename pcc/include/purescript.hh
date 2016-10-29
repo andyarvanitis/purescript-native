@@ -228,7 +228,7 @@ class any {
   any(const T& val, typename std::enable_if<std::is_same<T,void*>::value>::type* = 0) noexcept
     : type(Type::RawPointer), u(val) {}
 
-  any(std::nullptr_t) noexcept : type(Type::RawPointer), u(nullptr) {}
+  any(nullptr_t) noexcept : type(Type::RawPointer), u(nullptr) {}
 
 
 #if !defined(USE_GC)

@@ -86,38 +86,35 @@ auto any::unthunkVariant(const any& a) -> const any& {
   return *variant;
 }
 
+static const any invalid_key(nullptr);
+
 auto any::operator[](const symbol_t key) const -> const any& {
-  const any& variant = unthunkVariant(*this);
-  assert(variant.type == Type::Map);
   // TODO: assumes at least one element -- safe assumption?
-  const auto m = cast<map<1>>(variant);
-  decltype(m)::size_type i = 0;
+  const auto& m = cast<map<1>>(*this);
+  any::map<1>::size_type i = 0;
   do {
     if (m[i].first == key) {
       return m[i].second;
     }
   } while (m[++i].first != nullptr);
-  throw runtime_error("map key not found");
+  assert(false && "map key not found");
+  return invalid_key;
 }
 
 auto any::operator[](const size_t rhs) const -> const any& {
-  const any& variant = unthunkVariant(*this);
-  assert(variant.type == Type::Array);
-  return (*variant.a)[rhs];
+  const auto& xs = cast<array>(*this);
+  return xs[rhs];
 }
 
 auto any::operator[](const any& rhs) const -> const any& {
-  const any& variant = unthunkVariant(*this);
-  assert(variant.type == Type::Array);
-  return (*variant.a)[cast<int>(rhs)];
+  const auto& xs = cast<array>(*this);
+  return xs[cast<int>(rhs)];
 }
 
 auto any::contains(const symbol_t key) const -> bool {
-  const any& variant = unthunkVariant(*this);
-  assert(variant.type == Type::Map);
   // TODO: assumes at least one element -- safe assumption?
-  const auto m = cast<map<1>>(variant);
-  decltype(m)::size_type i = 0;
+  const auto& m = cast<map<1>>(*this);
+  any::map<1>::size_type i = 0;
   do {
     if (m[i].first == key) {
       return true;

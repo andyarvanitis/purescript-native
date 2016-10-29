@@ -71,16 +71,17 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         (snd <$> imps)
     let cppImports' = "PureScript" : cppImports
     cppDecls <- concat <$> mapM (bindToCpp [CppTopLevel]) decls
-    let namesmap = M.toList .
+    let cpps = filterInlineFuncs <$> cppDecls
+        namesmap = M.toList .
                    M.mapKeysMonotonic (qualifiedToCpp id) . M.map (\(t, _, _) -> arity t) $
                    E.names env
         datamap =  M.toList .
                    M.mapKeysMonotonic (qualifiedToCpp (Ident . runProperName)) .
                    M.map (\(_, _, _, fields) -> length fields) $
                    E.dataConstructors env
-    cppDecls' <- traverse (optimize $ namesmap ++ datamap) cppDecls
+    cpps' <- traverse (optimize $ namesmap ++ datamap) cpps
     foreignWrappers <- curriedForeigns
-    let optimized = cppDecls' ++ foreignWrappers
+    let optimized = cpps' ++ foreignWrappers
     let moduleHeader =
             fileBegin mn "HH" ++
             P.linebreak ++
@@ -187,12 +188,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     args' = (\i -> (identToCpp i, aty)) <$> fst abs'
     abs' = unAbs body []
     isAccessor :: Expr Ann -> Bool
-    isAccessor (Accessor _ _ e)
-      | (_, f, _, _) <- everythingOnValues (&&) (const False) notAbs (const False) (const False) = f e
-      where
-      notAbs :: Expr Ann -> Bool
-      notAbs Abs{} = False
-      notAbs _ = True
+    isAccessor Accessor{} = True
     isAccessor _ = False
     isIndexer :: Cpp -> Bool
     isIndexer (CppIndexer (CppSymbol _) (CppVar _)) = True
@@ -944,3 +940,20 @@ symbolDefs syms = CppNamespace "PureScript" [CppNamespace "symbol" (asFunc <$> s
   where
   asFunc :: String -> Cpp
   asFunc s = CppStruct s []
+
+---------------------------------------------------------------------------------------------------
+filterInlineFuncs :: Cpp -> Cpp
+---------------------------------------------------------------------------------------------------
+filterInlineFuncs = everywhereOnCpp convert
+  where
+  convert :: Cpp -> Cpp
+  convert (CppBlock []) = CppBlock []
+  convert (CppFunction n ps r qs cpp)
+    | CppInline `elem` qs,
+      everythingOnCpp (||) shouldRemove cpp = CppFunction n ps r (delete CppInline qs) cpp
+    where
+    shouldRemove :: Cpp -> Bool
+    shouldRemove CppSymbol{} = True
+    shouldRemove CppLambda{} = True
+    shouldRemove _ = False
+  convert cpp = cpp
