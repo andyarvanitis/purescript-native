@@ -645,15 +645,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             (argVar, Nothing)
             []
             (Just $ CppIndexer
-                        (fieldToIndex field)
-                        (CppCast (dataType $ fieldToIndex' field + 1) $ CppVar varName))
+                        (fieldToIndex' field)
+                        (CppCast (dataType $ fieldToIndex field + 1) $ CppVar varName))
         : cpps
-    fieldToIndex :: Ident -> Cpp
-    fieldToIndex = CppNumericLiteral . Left . (+1) . read . dropWhile isLetter . runIdent
-
-    fieldToIndex' :: Ident -> Int
-    fieldToIndex' = (+1) . read . dropWhile isLetter . runIdent
-
+    fieldToIndex :: Ident -> Int
+    fieldToIndex = (+1) . read . dropWhile isLetter . runIdent
+    fieldToIndex' :: Ident -> Cpp
+    fieldToIndex' = CppNumericLiteral . Left . toInteger . fieldToIndex
     ctor' :: Cpp
     ctor' = CppAccessor (CppVar . identToCpp $ Ident ctor) (CppVar "data")
     ctorCpp :: Cpp
