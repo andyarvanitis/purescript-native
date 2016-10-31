@@ -60,8 +60,11 @@ public:
   runtime_error(const char message[]) : std::runtime_error(std::string(message)) {}
 };
 
-const bool undefined = false;
-const size_t constructor = 0;
+constexpr bool undefined = false;
+constexpr size_t constructor = 0;
+
+// Not a real limit, just used for simpler accessors
+static constexpr size_t unknown_size = 64;
 
 // A variant data class designed to provide some features of dynamic typing.
 //

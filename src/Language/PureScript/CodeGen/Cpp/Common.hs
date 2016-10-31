@@ -179,6 +179,7 @@ nameIsCppReserved name =
               , "typename"
               , "typeof"
               , "union"
+              , "unknown_size"
               , "unsigned"
               , "using"
               , "virtual"

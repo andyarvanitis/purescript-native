@@ -879,7 +879,7 @@ dictIndexerToEnum repls (CppIndexer (CppSymbol prop) dict)
     CppBinary Dot
       (CppIndexer
           (CppAccessor (CppVar . identToCpp $ Ident prop) cls)
-          (CppCast (mapType 1) dict))
+          (CppCast (mapType 0) dict))
       (CppVar "second")
 dictIndexerToEnum _ cpp = cpp
 

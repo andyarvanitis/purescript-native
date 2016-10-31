@@ -128,7 +128,11 @@ voidType :: CppType
 voidType = CppPrimitive "void"
 
 mapType :: Int -> CppType
-mapType n = CppPrimitive $ "any::map<" ++ show n ++ ">"
+mapType = maptype
+  where
+  maptype 0 = mapprim "unknown_size"
+  maptype n = mapprim $ show n
+  mapprim s = CppPrimitive $ "any::map<" ++ s ++ ">"
 
 dataType :: Int -> CppType
 dataType n = CppPrimitive $ "any::data<" ++ show n ++ ">"

@@ -90,8 +90,8 @@ static const any invalid_key(nullptr);
 
 auto any::operator[](const symbol_t key) const -> const any& {
   // TODO: assumes at least one element -- safe assumption?
-  const auto& m = cast<map<1>>(*this);
-  any::map<1>::size_type i = 0;
+  const auto& m = cast<map<unknown_size>>(*this);
+  std::remove_reference<decltype(m)>::type::size_type i = 0;
   do {
     if (m[i].first == key) {
       return m[i].second;
@@ -113,8 +113,8 @@ auto any::operator[](const any& rhs) const -> const any& {
 
 auto any::contains(const symbol_t key) const -> bool {
   // TODO: assumes at least one element -- safe assumption?
-  const auto& m = cast<map<1>>(*this);
-  any::map<1>::size_type i = 0;
+  const auto& m = cast<map<unknown_size>>(*this);
+  std::remove_reference<decltype(m)>::type::size_type i = 0;
   do {
     if (m[i].first == key) {
       return true;
