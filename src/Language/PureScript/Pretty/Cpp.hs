@@ -247,7 +247,7 @@ literals = mkPattern' match
   match (CppVariableIntroduction (ident, typ) qs value) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
-    , return $ runType (fromMaybe (CppAny [CppConst]) typ) ++ " "
+    , return $ runType (fromMaybe (Any [Const]) typ) ++ " "
     , return ident
     , maybe (return "") (fmap (" = " ++) . prettyPrintCpp') value
     ]
@@ -302,7 +302,7 @@ literals = mkPattern' match
     ]
   match (CppReturn value@(CppStringLiteral _)) = fmap concat $ sequence
     [ return "return "
-    , return . runType $ CppAny []
+    , return . runType $ Any []
     , return "("
     , prettyPrintCpp' value
     , return ")"
@@ -515,7 +515,7 @@ dotsTo :: Char -> String -> String
 dotsTo chr' = map (\c -> if c == '.' then chr' else c)
 
 argstr :: (String, Maybe CppType) -> String
-argstr (name, Nothing) = argStr name (CppAuto [])
+argstr (name, Nothing) = argStr name (Auto [])
 argstr (name, Just typ) | name == C.__unused = argStr [] typ
 argstr (name, Just typ) = argStr name typ
 

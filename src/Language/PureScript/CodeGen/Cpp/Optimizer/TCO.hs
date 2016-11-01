@@ -18,7 +18,7 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.TCO (tco) where
 import Prelude.Compat
 
 import Data.List
-import Data.Monoid
+import qualified Data.Monoid as Monoid
 
 import Language.PureScript.Options
 import Language.PureScript.CodeGen.Cpp.Types
@@ -111,7 +111,7 @@ tco' = everywhereOnCpp convert
 
   toLoop :: String -> [String] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
-        map (\arg -> CppVariableIntroduction (arg, Just $ CppAny []) [] (Just (CppVar (copyVar arg)))) allArgs ++
+        map (\arg -> CppVariableIntroduction (arg, Just $ Any []) [] (Just (CppVar (copyVar arg)))) allArgs ++
         [ CppWhile (CppBooleanLiteral True) (CppBlock loop) ]
     where
     loop :: [Cpp]
@@ -125,7 +125,7 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppBlock $ zipWith (\val arg ->
-                    CppVariableIntroduction (tcoVar arg, Just $ CppAny [CppConst]) [] (Just val)) allArgumentValues allArgs
+                    CppVariableIntroduction (tcoVar arg, Just $ Any [Const]) [] (Just val)) allArgumentValues allArgs
                   ++ map (\arg ->
                     CppAssignment (CppVar arg) (CppVar (tcoVar arg))) allArgs
                   ++ [ CppContinue ]
@@ -145,7 +145,7 @@ tco' = everywhereOnCpp convert
   isSelfCallWithFnArgs _ _ _ = False
 
   hasFunction :: Cpp -> Bool
-  hasFunction = getAny . everythingOnCpp mappend (Any . isFunction)
+  hasFunction = Monoid.getAny . everythingOnCpp mappend (Monoid.Any . isFunction)
     where
     isFunction (CppFunction {}) = True
     isFunction _ = False

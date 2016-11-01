@@ -231,14 +231,14 @@ inlineCommonOperators = applyAll $
   --   where
   --   convert :: Cpp -> Cpp
   --   convert (CppApp mkFnN [CppLambda _ [_] _ (CppBlock cpp)]) | isNFn C.mkFn 0 mkFnN =
-  --     CppLambda [CppCaptureAll] [] Nothing (CppBlock cpp)
+  --     CppLambda [CaptureAll] [] Nothing (CppBlock cpp)
   --   convert other = other
   -- mkFn n = everywhereOnCpp convert
   --   where
   --   convert :: Cpp -> Cpp
   --   convert orig@(CppApp mkFnN [fn]) | isNFn C.mkFn n mkFnN =
   --     case collectArgs n [] fn of
-  --       Just (args, cpp) -> CppLambda [CppCaptureAll] args Nothing (CppBlock cpp)
+  --       Just (args, cpp) -> CppLambda [CaptureAll] args Nothing (CppBlock cpp)
   --       Nothing -> orig
   --   convert other = other
   --   collectArgs :: Int -> [String] -> Cpp -> Maybe ([String], [Cpp])
@@ -277,17 +277,17 @@ inlineFnComposition = everywhereOnCppTopDownM convert
   convert (CppApp fn [dict', x, y])
     | isFnCompose dict' fn = do
         arg <- freshName
-        return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
+        return $ CppLambda [CaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
     | isFnComposeFlipped dict' fn = do
         arg <- freshName
-        return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp y [CppApp x [CppVar arg]]])
+        return $ CppLambda [CaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp y [CppApp x [CppVar arg]]])
   convert (CppApp (CppApp (CppApp fn [dict']) [x]) [y])
     | isFnCompose dict' fn = do
         arg <- freshName
-        return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
+        return $ CppLambda [CaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp x [CppApp y [CppVar arg]]])
     | isFnComposeFlipped dict' fn = do
         arg <- freshName
-        return $ CppLambda [CppCaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp y [CppApp x [CppVar arg]]])
+        return $ CppLambda [CaptureAll] [(arg, constAnyRef)] Nothing (CppBlock [CppReturn $ CppApp y [CppApp x [CppVar arg]]])
   convert other = return other
   isFnCompose :: Cpp -> Cpp -> Bool
   isFnCompose dict' fn = isDict semigroupoidFn dict' && isFn fnCompose fn
@@ -302,9 +302,9 @@ toAutoVars :: Cpp -> Cpp
 toAutoVars = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
-  convert cpp@(CppVariableIntroduction (ident, (Just (CppAny tqs))) qs (Just value))
-    | CppStatic `notElem` qs,
-      CppRef `notElem` tqs =
+  convert cpp@(CppVariableIntroduction (ident, (Just (Any tqs))) qs (Just value))
+    | Static `notElem` qs,
+      Ref `notElem` tqs =
       case value of
         CppNumericLiteral {} -> var auto'
         CppBooleanLiteral {} -> var auto'
@@ -315,8 +315,8 @@ toAutoVars = everywhereOnCpp convert
         CppAccessor (CppVar {}) _ -> var autoref'
         _ -> cpp
       where
-      auto' = CppAuto tqs
-      autoref' | CppConst `elem` tqs = CppAuto (CppRef : tqs)
+      auto' = Auto tqs
+      autoref' | Const `elem` tqs = Auto (Ref : tqs)
                | otherwise = auto'
       var t = CppVariableIntroduction (ident, (Just t)) qs (Just value)
   convert cpp = cpp

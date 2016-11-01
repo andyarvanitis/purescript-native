@@ -185,7 +185,7 @@ data Cpp
   -- |
   -- An object literal
   --
-  | CppMapLiteral CppMapType [(Cpp, Cpp)]
+  | CppMapLiteral MapType [(Cpp, Cpp)]
   -- |
   -- An general property accessor expression (property, expr)
   --
@@ -193,11 +193,11 @@ data Cpp
   -- |
   -- A function introduction (name, arguments, return type, qualifiers, body)
   --
-  | CppFunction String [(String, Maybe CppType)] (Maybe CppType) [CppValueQual] Cpp
+  | CppFunction String [(String, Maybe CppType)] (Maybe CppType) [ValueQual] Cpp
   -- |
   -- A lambda introduction (arguments, return type, body)
   --
-  | CppLambda [CppCaptureType] [(String, Maybe CppType)] (Maybe CppType) Cpp
+  | CppLambda [CaptureType] [(String, Maybe CppType)] (Maybe CppType) Cpp
   -- |
   -- Value type cast
   --
@@ -242,7 +242,7 @@ data Cpp
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction (String, Maybe CppType) [CppValueQual] (Maybe Cpp)
+  | CppVariableIntroduction (String, Maybe CppType) [ValueQual] (Maybe Cpp)
   -- |
   -- A variable assignment
   --

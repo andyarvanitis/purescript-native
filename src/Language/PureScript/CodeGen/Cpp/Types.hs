@@ -28,79 +28,79 @@ import qualified Language.PureScript.Constants as C
 
 -- import Debug.Trace
 
-data CppType = CppPrimitive String | CppAuto [CppTypeQual] | CppAny [CppTypeQual]
+data CppType = Primitive String | Auto [TypeQual] | Any [TypeQual]
   deriving (Show, Read, Eq)
 
-data CppTypeQual = CppConst | CppRef
+data TypeQual = Const | Ref
   deriving (Show, Read, Eq)
 
 -- |
 -- Value C++11 qualifiers
 --
-data CppValueQual
+data ValueQual
   -- |
   -- C++ static qualifier
   --
-  = CppStatic
+  = Static
   -- |
   -- Inline function
   --
-  | CppInline
+  | Inline
   -- |
   -- C++11+ constant expression "constexpr"
   --
-  | CppConstExpr
+  | ConstExpr
   -- |
   -- Extern value
   --
-  | CppExtern
+  | Extern
   -- |
   -- Function or lambda is involved in recursion
   --
-  | CppRecursive
+  | Recursive
   -- |
   -- Function or lambda is involved in recursion
   --
-  | CppTopLevel
+  | TopLevel
   deriving (Show, Read, Eq)
 
 -- |
 -- C++ lambda capture list
 --
-data CppCaptureType = CppCaptureAll
+data CaptureType = CaptureAll
   deriving (Show, Read, Eq)
 
 -- |
 -- C++ object/map literal type
 --
-data CppMapType = CppInstance | CppRecord
+data MapType = Instance | Record
   deriving (Show, Eq)
 
 runType :: CppType -> String
-runType (CppPrimitive t) = t
-runType (CppAuto []) = "auto"
-runType (CppAny []) = "any"
+runType (Primitive t) = t
+runType (Auto []) = "auto"
+runType (Any []) = "any"
 runType typ =
   case typ of
-    CppAuto qs -> rendered CppAuto qs
-    CppAny qs -> rendered CppAny qs
-    _ -> rendered CppAny []
+    Auto qs -> rendered Auto qs
+    Any qs -> rendered Any qs
+    _ -> rendered Any []
   where
   rendered t qs
-    | CppConst `elem` qs = "const " ++ (runType . t $ delete CppConst qs)
-    | CppRef   `elem` qs = runType (t $ delete CppRef qs) ++ "&"
+    | Const `elem` qs = "const " ++ (runType . t $ delete Const qs)
+    | Ref   `elem` qs = runType (t $ delete Ref qs) ++ "&"
     | otherwise = runType (t qs)
 
-runValueQual :: CppValueQual -> String
-runValueQual CppStatic    = "static"
-runValueQual CppInline    = "inline"
-runValueQual CppConstExpr = "constexpr"
-runValueQual CppExtern    = "extern"
-runValueQual CppRecursive = ""
-runValueQual CppTopLevel  = ""
+runValueQual :: ValueQual -> String
+runValueQual Static    = "static"
+runValueQual Inline    = "inline"
+runValueQual ConstExpr = "constexpr"
+runValueQual Extern    = "extern"
+runValueQual Recursive = ""
+runValueQual TopLevel  = ""
 
-runCaptureType :: CppCaptureType -> String
-runCaptureType CppCaptureAll = "="
+runCaptureType :: CaptureType -> String
+runCaptureType CaptureAll = "="
 
 -- TODO: move or remove this
 --
@@ -110,44 +110,44 @@ qualifiedToStr m f (Qualified (Just m') a) | m /= m' = moduleNameToCpp m' ++ "::
 qualifiedToStr _ f (Qualified _ a) = identToCpp (f a)
 
 boolType :: CppType
-boolType = CppPrimitive "bool"
+boolType = Primitive "bool"
 
 intType :: CppType
-intType = CppPrimitive "int"
+intType = Primitive "int"
 
 doubleType :: CppType
-doubleType = CppPrimitive "double"
+doubleType = Primitive "double"
 
 stringType :: CppType
-stringType = CppPrimitive "string"
+stringType = Primitive "string"
 
 charType :: CppType
-charType = CppPrimitive "char"
+charType = Primitive "char"
 
 voidType :: CppType
-voidType = CppPrimitive "void"
+voidType = Primitive "void"
 
 mapType :: Int -> CppType
 mapType = maptype
   where
   maptype 0 = mapprim "unknown_size"
   maptype n = mapprim $ show n
-  mapprim s = CppPrimitive $ "any::map<" ++ s ++ ">"
+  mapprim s = Primitive $ "any::map<" ++ s ++ ">"
 
 dataType :: Int -> CppType
-dataType n = CppPrimitive $ "any::data<" ++ show n ++ ">"
+dataType n = Primitive $ "any::data<" ++ show n ++ ">"
 
 arrayType :: CppType
-arrayType = CppPrimitive "any::array"
+arrayType = Primitive "any::array"
 
 thunkMarkerType :: CppType
-thunkMarkerType = CppPrimitive "any::as_thunk"
+thunkMarkerType = Primitive "any::as_thunk"
 
 ctorKey :: String
 ctorKey = "constructor"
 
 constAnyRef :: Maybe CppType
-constAnyRef = Just $ CppAny [CppConst, CppRef]
+constAnyRef = Just $ Any [Const, Ref]
 
 symbolname :: String -> String
 symbolname = identToCpp . Ident
