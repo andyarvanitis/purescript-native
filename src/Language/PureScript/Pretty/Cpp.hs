@@ -40,7 +40,6 @@ import qualified Control.Arrow as A
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Comments
--- import Language.PureScript.Pretty.Common
 import qualified Language.PureScript.Constants as C
 import Numeric
 -- import Debug.Trace
@@ -104,7 +103,7 @@ literals = mkPattern' match
     , return " }"
     ]
   match (CppDataLiteral xs) = fmap concat $ sequence
-    [ return $ runType dataType
+    [ return $ runType (dataType $ length xs)
     , return "{ "
     , fmap (intercalate ", ") $ forM xs prettyPrintCpp'
     , return " }"
@@ -118,17 +117,17 @@ literals = mkPattern' match
     , return " }"
     ]
   match (CppObjectLiteral _ ps) = fmap concat $ sequence
-    [ return $ runType mapType ++ "{\n"
+    [ return $ runType (mapType $ length ps + 1) ++ "{{\n"
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
                             value' <- prettyPrintCpp' value
-                            key' <- prettyPrintCpp' (CppStringLiteral key)
+                            key' <- prettyPrintCpp' key
                             return $ "{ " ++ key' ++ ", " ++ value' ++ " }"
         indentString <- currentIndent
-        return $ intercalate ", \n" $ map (indentString ++) cpps
+        return $ intercalate ", \n" $ map (indentString ++) (cpps ++ ["{ nullptr, nullptr }"])
     , return "\n"
     , currentIndent
-    , return "}"
+    , return "}}"
     ]
 
   match (CppFunction name args rty qs ret) =
@@ -196,6 +195,7 @@ literals = mkPattern' match
     isUseNamespace :: Cpp -> Bool
     isUseNamespace (CppUseNamespace{}) = True
     isUseNamespace _ = False
+  match (CppStruct (name) []) = return $ "struct " ++ name ++ " {}"
   match (CppStruct (name) mems) = fmap concat $ sequence $
     [ return "\n"
     , currentIndent
@@ -240,6 +240,7 @@ literals = mkPattern' match
 
   match (CppVar ident) | ident == C.__unused = match (CppVar $ '$':ident)
   match (CppVar ident) = return ident
+  match (CppSymbol ident) = return $ "SYMBOL" ++ parens (symbolname ident)
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction (ident, typ) qs value)
     | ident == C.__unused = match (CppVariableIntroduction ('$':ident, typ) qs value)

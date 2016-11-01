@@ -185,7 +185,7 @@ data Cpp
   -- |
   -- An object literal
   --
-  | CppObjectLiteral CppObjectType [(String, Cpp)]
+  | CppObjectLiteral CppObjectType [(Cpp, Cpp)]
   -- |
   -- An general property accessor expression (property, expr)
   --
@@ -210,6 +210,11 @@ data Cpp
   -- Variable
   --
   | CppVar String
+  -- |
+  -- Unique system-wide name/constant
+  --
+  | CppSymbol String
+  -- |
   -- |
   -- A block of expressions in braces
   --
@@ -297,7 +302,7 @@ everywhereOnCpp f = go
   go (CppArrayLiteral cpp) = f (CppArrayLiteral (map go cpp))
   go (CppDataLiteral cpp) = f (CppDataLiteral (map go cpp))
   go (CppIndexer j1 j2) = f (CppIndexer (go j1) (go j2))
-  go (CppObjectLiteral t cpp) = f (CppObjectLiteral t (map (fmap go) cpp))
+  go (CppObjectLiteral t cpps) = f (CppObjectLiteral t (map (fmap go) cpps))
   go (CppAccessor prop j) = f (CppAccessor (go prop) (go j))
   go (CppFunction name args rty qs j) = f (CppFunction name args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
@@ -328,7 +333,7 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppArrayLiteral cpp) = CppArrayLiteral <$> traverse f' cpp
   go (CppDataLiteral cpp) = CppDataLiteral <$> traverse f' cpp
   go (CppIndexer j1 j2) = CppIndexer <$> f' j1 <*> f' j2
-  go (CppObjectLiteral t cpp) = CppObjectLiteral t <$> traverse (sndM f') cpp
+  go (CppObjectLiteral t cpps) = CppObjectLiteral t <$> traverse (pairM f' f') cpps
   go (CppAccessor prop j) = CppAccessor prop <$> f' j
   go (CppFunction name args rty qs j) = CppFunction name args rty qs <$> f' j
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
@@ -341,7 +346,7 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppAssignment j1 j2) = CppAssignment <$> f' j1 <*> f' j2
   go (CppWhile j1 j2) = CppWhile <$> f' j1 <*> f' j2
   go (CppIfElse j1 j2 j3) = CppIfElse <$> f' j1 <*> f' j2 <*> traverse f' j3
-  go (CppSwitch cpp cpps) = CppSwitch <$> f' cpp <*> traverse (sndM f') cpps
+  go (CppSwitch cpp cpps) = CppSwitch <$> f' cpp <*> traverse (pairM f' f') cpps
   go (CppReturn j) = CppReturn <$> f' j
   go (CppThrow j) = CppThrow <$> f' j
   go (CppComment com j) = CppComment com <$> f' j
@@ -355,7 +360,7 @@ everythingOnCpp (<>) f = go
   go j@(CppArrayLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppDataLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppIndexer j1 j2) = f j <> go j1 <> go j2
-  go j@(CppObjectLiteral _ cpp) = foldl (<>) (f j) (map (go . snd) cpp)
+  go j@(CppObjectLiteral _ cpps) = foldl (<>) (f j) ((map (go . fst) cpps) ++ (map (go . snd) cpps))
   go j@(CppAccessor j1 j2) = f j <> go j1 <> go j2
   go j@(CppFunction _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1
@@ -369,7 +374,7 @@ everythingOnCpp (<>) f = go
   go j@(CppWhile j1 j2) = f j <> go j1 <> go j2
   go j@(CppIfElse j1 j2 Nothing) = f j <> go j1 <> go j2
   go j@(CppIfElse j1 j2 (Just j3)) = f j <> go j1 <> go j2 <> go j3
-  go j@(CppSwitch cpp cpps) = foldl (<>) (f j <> go cpp) (map (go . snd) cpps)
+  go j@(CppSwitch cpp cpps) = foldl (<>) (f j <> go cpp) ((map (go . fst) cpps) ++ (map (go . snd) cpps))
   go j@(CppReturn j1) = f j <> go j1
   go j@(CppThrow j1) = f j <> go j1
   go j@(CppComment _ j1) = f j <> go j1

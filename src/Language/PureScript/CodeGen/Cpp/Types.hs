@@ -124,11 +124,18 @@ stringType = CppPrimitive "string"
 charType :: CppType
 charType = CppPrimitive "char"
 
-mapType :: CppType
-mapType = CppPrimitive "any::map"
+voidType :: CppType
+voidType = CppPrimitive "void"
 
-dataType :: CppType
-dataType = CppPrimitive "any::data"
+mapType :: Int -> CppType
+mapType = maptype
+  where
+  maptype 0 = mapprim "unknown_size"
+  maptype n = mapprim $ show n
+  mapprim s = CppPrimitive $ "any::map<" ++ s ++ ">"
+
+dataType :: Int -> CppType
+dataType n = CppPrimitive $ "any::data<" ++ show n ++ ">"
 
 arrayType :: CppType
 arrayType = CppPrimitive "any::array"
@@ -141,3 +148,6 @@ ctorKey = "constructor"
 
 constAnyRef :: Maybe CppType
 constAnyRef = Just $ CppAny [CppConst, CppRef]
+
+symbolname :: String -> String
+symbolname = identToCpp . Ident

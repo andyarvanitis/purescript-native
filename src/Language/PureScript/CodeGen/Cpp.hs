@@ -71,16 +71,17 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         (snd <$> imps)
     let cppImports' = "PureScript" : cppImports
     cppDecls <- concat <$> mapM (bindToCpp [CppTopLevel]) decls
-    let namesmap = M.toList .
+    let cpps = filterInlineFuncs <$> cppDecls
+        namesmap = M.toList .
                    M.mapKeysMonotonic (qualifiedToCpp id) . M.map (\(t, _, _) -> arity t) $
                    E.names env
         datamap =  M.toList .
                    M.mapKeysMonotonic (qualifiedToCpp (Ident . runProperName)) .
                    M.map (\(_, _, _, fields) -> length fields) $
                    E.dataConstructors env
-    cppDecls' <- traverse (optimize $ namesmap ++ datamap) cppDecls
+    cpps' <- traverse (optimize $ namesmap ++ datamap) cpps
     foreignWrappers <- curriedForeigns
-    let optimized = cppDecls' ++ foreignWrappers
+    let optimized = cpps' ++ foreignWrappers
     let moduleHeader =
             fileBegin mn "HH" ++
             P.linebreak ++
@@ -99,9 +100,10 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             P.linebreak ++
             fileEnd mn "HH"
     let bodyCpps = toBodyDecl optimized ++ toBody optimized
+        symbols = allSymbols bodyCpps
         moduleBody =
             CppInclude (runModuleName mn) (runModuleName mn) :
-            P.linebreak ++
+            symbolDefs symbols :
             (if null bodyCpps
                  then []
                  else [ CppNamespace (runModuleName mn) $
@@ -189,7 +191,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     isAccessor Accessor{} = True
     isAccessor _ = False
     isIndexer :: Cpp -> Bool
-    isIndexer (CppIndexer (CppStringLiteral _) (CppVar _)) = True
+    isIndexer (CppIndexer (CppSymbol _) (CppVar _)) = True
     isIndexer _ = False
     classes = qualifiedToCpp (Ident . runProperName) . T.constraintClass <$>
                   maybe [] extractConstraints ty'
@@ -368,7 +370,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                [dict'])
       where
       dict' = CppVar dictname
-      dict'' = CppCast dataType dict'
+      dict'' = CppCast (dataType 1) dict'
 
     accessor :: String -> (String, Cpp) -> Cpp
     accessor dictname (name, _) =
@@ -440,18 +442,20 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     CppArrayLiteral <$> mapM valueToCpp xs
 
   valueToCpp (Literal _ (ObjectLiteral ps)) =
-    CppObjectLiteral CppRecord <$> sortBy (compare `on` fst) <$> mapM (sndM valueToCpp) ps
+    CppObjectLiteral CppRecord <$>
+        mapM (sndM valueToCpp) ((\(k,v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) ps)
 
   valueToCpp (Accessor _ prop val) =
-    CppIndexer <$> pure (CppStringLiteral prop) <*> valueToCpp val
+    CppIndexer <$> pure (CppSymbol prop) <*> valueToCpp val
 
   -- TODO: use a more efficient way of copying/updating the map?
   valueToCpp (ObjectUpdate (_, _, Just ty, _) obj ps) = do
     obj' <- valueToCpp obj
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
-        origFields = (\key -> (key, CppIndexer (CppStringLiteral key) obj')) <$> origKeys
-    return $ CppObjectLiteral CppRecord . sortBy (compare `on` fst) $ origFields ++ updatedFields
+        origFields = (\key -> (key, CppIndexer (CppSymbol key) obj')) <$> origKeys
+    return $ CppObjectLiteral CppRecord $
+                 (\(k,v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) (origFields ++ updatedFields)
     where
     allKeys :: T.Type -> [String]
     allKeys (T.TypeApp (T.TypeConstructor _) r@(T.RCons {})) = fst <$> (fst $ T.rowToList r)
@@ -485,7 +489,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
         return . CppObjectLiteral CppInstance $
                      zip
-                       ((sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
+                       (CppSymbol <$> (sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
                        args'
       Var _ (Qualified (Just _) _) -> applied f args' curriedName'
       _ -> applied f args' id
@@ -625,7 +629,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                        EqualTo
                        (CppIndexer
                             (CppVar ctorKey)
-                            (CppCast dataType $ CppVar varName))
+                            (CppCast (dataType 1) $ CppVar varName))
                        ctorCpp)
                   (CppBlock cpps)
                   Nothing]
@@ -641,11 +645,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             (argVar, Nothing)
             []
             (Just $ CppIndexer
-                        (fieldToIndex field)
-                        (CppCast dataType $ CppVar varName))
+                        (fieldToIndex' field)
+                        (CppCast (dataType $ fieldToIndex field + 1) $ CppVar varName))
         : cpps
-    fieldToIndex :: Ident -> Cpp
-    fieldToIndex = CppNumericLiteral . Left . (+1) . read . dropWhile isLetter . runIdent
+    fieldToIndex :: Ident -> Int
+    fieldToIndex = (+1) . read . dropWhile isLetter . runIdent
+    fieldToIndex' :: Ident -> Cpp
+    fieldToIndex' = CppNumericLiteral . Left . toInteger . fieldToIndex
     ctor' :: Cpp
     ctor' = CppAccessor (CppVar . identToCpp $ Ident ctor) (CppVar "data")
     ctorCpp :: Cpp
@@ -712,7 +718,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             (propVar, Nothing)
             []
             (Just $ CppIndexer
-                        (CppStringLiteral prop)
+                        (CppSymbol prop)
                         (CppVar varName))
         : cpp
 
@@ -868,12 +874,12 @@ extractConstraints = go []
 ---------------------------------------------------------------------------------------------------
 dictIndexerToEnum :: [(Cpp,Cpp)] -> Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
-dictIndexerToEnum repls (CppIndexer (CppStringLiteral prop) dict)
+dictIndexerToEnum repls (CppIndexer (CppSymbol prop) dict)
   | Just cls <- lookup dict repls =
     CppBinary Dot
       (CppIndexer
           (CppAccessor (CppVar . identToCpp $ Ident prop) cls)
-          (CppCast mapType dict))
+          (CppCast (mapType 0) dict))
       (CppVar "second")
 dictIndexerToEnum _ cpp = cpp
 
@@ -914,3 +920,38 @@ convertIfPrimFn (Just ty) (CppFunction name params _ qs body)
   | (tys', Just rty') <- primFn ty =
     CppFunction name (zipWith (\(p, _) t -> (p, Just t)) params tys') (Just rty') qs body
 convertIfPrimFn _ cpp = cpp
+
+---------------------------------------------------------------------------------------------------
+allSymbols :: [Cpp] -> [String]
+---------------------------------------------------------------------------------------------------
+allSymbols cpps = nub $ concatMap (everythingOnCpp (++) symbols) cpps
+  where
+  symbols :: Cpp -> [String]
+  symbols (CppSymbol s) = [symbolname s]
+  symbols _ = []
+
+---------------------------------------------------------------------------------------------------
+symbolDefs :: [String] -> Cpp
+---------------------------------------------------------------------------------------------------
+symbolDefs [] = CppNoOp
+symbolDefs syms = CppNamespace "PureScript" [CppNamespace "symbol" (asFunc <$> syms)]
+  where
+  asFunc :: String -> Cpp
+  asFunc s = CppStruct s []
+
+---------------------------------------------------------------------------------------------------
+filterInlineFuncs :: Cpp -> Cpp
+---------------------------------------------------------------------------------------------------
+filterInlineFuncs = everywhereOnCpp convert
+  where
+  convert :: Cpp -> Cpp
+  convert (CppBlock []) = CppBlock []
+  convert (CppFunction n ps r qs cpp)
+    | CppInline `elem` qs,
+      everythingOnCpp (||) shouldRemove cpp = CppFunction n ps r (delete CppInline qs) cpp
+    where
+    shouldRemove :: Cpp -> Bool
+    shouldRemove CppSymbol{} = True
+    shouldRemove CppLambda{} = True
+    shouldRemove _ = False
+  convert cpp = cpp
