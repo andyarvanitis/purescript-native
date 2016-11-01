@@ -116,7 +116,7 @@ literals = mkPattern' match
     , return $ intercalate ", " es
     , return " }"
     ]
-  match (CppObjectLiteral _ ps) = fmap concat $ sequence
+  match (CppMapLiteral _ ps) = fmap concat $ sequence
     [ return $ runType (mapType $ length ps + 1) ++ "{{\n"
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do

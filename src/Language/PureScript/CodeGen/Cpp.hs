@@ -442,7 +442,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     CppArrayLiteral <$> mapM valueToCpp xs
 
   valueToCpp (Literal _ (ObjectLiteral ps)) =
-    CppObjectLiteral CppRecord <$>
+    CppMapLiteral CppRecord <$>
         mapM (sndM valueToCpp) ((\(k,v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) ps)
 
   valueToCpp (Accessor _ prop val) =
@@ -454,7 +454,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
         origFields = (\key -> (key, CppIndexer (CppSymbol key) obj')) <$> origKeys
-    return $ CppObjectLiteral CppRecord $
+    return $ CppMapLiteral CppRecord $
                  (\(k,v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) (origFields ++ updatedFields)
     where
     allKeys :: T.Type -> [String]
@@ -487,7 +487,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
-        return . CppObjectLiteral CppInstance $
+        return . CppMapLiteral CppInstance $
                      zip
                        (CppSymbol <$> (sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
                        args'

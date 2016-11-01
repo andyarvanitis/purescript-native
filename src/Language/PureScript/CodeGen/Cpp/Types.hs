@@ -73,7 +73,7 @@ data CppCaptureType = CppCaptureAll
 -- |
 -- C++ object/map literal type
 --
-data CppObjectType = CppInstance | CppRecord
+data CppMapType = CppInstance | CppRecord
   deriving (Show, Eq)
 
 runType :: CppType -> String

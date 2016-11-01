@@ -74,12 +74,12 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
            | otherwise = CppVariableIntroduction arg [] (Just (CppApp m []))
   -- Desugar untilE
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =
-    CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppUnary Not (CppApp arg [])) (CppBlock []), CppReturn $ CppObjectLiteral CppRecord []])) []
+    CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppUnary Not (CppApp arg [])) (CppBlock []), CppReturn $ CppMapLiteral CppRecord []])) []
   -- Desugar whileE
   convert (CppApp (CppApp f [arg1, arg2]) []) | isEffFunc C.whileE f =
-    CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral CppRecord []])) []
+    CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppMapLiteral CppRecord []])) []
   convert (CppApp (CppApp (CppApp f [arg1]) [arg2]) []) | isEffFunc C.whileE f =
-    CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppObjectLiteral CppRecord []])) []
+    CppApp (CppLambda [CppCaptureAll] [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppMapLiteral CppRecord []])) []
   convert other = other
   -- Check if an expression represents a monomorphic call to >>= for the Eff monad
   isBind (CppApp fn [dict]) | isDict (C.eff, C.bindEffDictionary) dict && isBindPoly fn = True
@@ -128,7 +128,7 @@ inlineST = everywhereOnCpp convertBlock
   -- or in a more aggressive way, turning wrappers into local variables depending on the
   -- agg(ressive) parameter.
   convert agg (CppApp f [arg]) | isSTFunc C.newSTRef f =
-   CppLambda [CppCaptureAll] [] Nothing (CppBlock [CppReturn $ if agg then arg else CppObjectLiteral CppRecord [(CppSymbol C.stRefValue, arg)]])
+   CppLambda [CppCaptureAll] [] Nothing (CppBlock [CppReturn $ if agg then arg else CppMapLiteral CppRecord [(CppSymbol C.stRefValue, arg)]])
   convert agg (CppApp (CppApp f [ref]) []) | isSTFunc C.readSTRef f =
     if agg then ref else CppAccessor (CppVar C.stRefValue) ref
   convert agg (CppApp (CppApp (CppApp f [ref]) [arg]) []) | isSTFunc C.writeSTRef f =
