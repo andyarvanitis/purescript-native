@@ -71,7 +71,7 @@ static constexpr size_t unknown_size = 64;
 class any {
 
   public:
-  enum class Type {
+  enum class tag_t {
     Thunk = 0x10,
     Integer,
     Double,
@@ -91,7 +91,7 @@ class any {
   };
 
   private:
-  mutable Type type;
+  mutable tag_t tag;
 
   public:
   struct as_thunk {
@@ -164,74 +164,74 @@ class any {
 
   public:
 
-  any(const int val) noexcept : type(Type::Integer), i(val) {}
-  any(const long int_value) noexcept : type(Type::Integer), i(int_value) {
+  any(const int val) noexcept : tag(tag_t::Integer), i(val) {}
+  any(const long int_value) noexcept : tag(tag_t::Integer), i(int_value) {
     assert(int_value >= INT_MIN && int_value <= INT_MAX);
   }
 
-  any(const double val) noexcept : type(Type::Double), d(val) {}
-  any(const char val) noexcept : type(Type::Character), c(val) {}
+  any(const double val) noexcept : tag(tag_t::Double), d(val) {}
+  any(const char val) noexcept : tag(tag_t::Character), c(val) {}
 
   template <typename T, typename = typename std::enable_if<std::is_same<bool,T>::value>::type>
-  any(const T val) noexcept : type(Type::Boolean), b(val) {}
+  any(const T val) noexcept : tag(tag_t::Boolean), b(val) {}
 
   template <size_t N>
-  any(const char (&val)[N]) noexcept : type(Type::StringLiteral), r(val) {}
-  any(char * val) : type(Type::String), s(make_managed<std::string>(val)) {}
+  any(const char (&val)[N]) noexcept : tag(tag_t::StringLiteral), r(val) {}
+  any(char * val) : tag(tag_t::String), s(make_managed<std::string>(val)) {}
 
-  any(const std::string& val) : type(Type::String), s(make_managed<std::string>(val)) {}
-  any(std::string&& val) noexcept : type(Type::String), s(make_managed<std::string>(std::move(val))) {}
+  any(const std::string& val) : tag(tag_t::String), s(make_managed<std::string>(val)) {}
+  any(std::string&& val) noexcept : tag(tag_t::String), s(make_managed<std::string>(std::move(val))) {}
 
-  any(const managed<std::string>& val) noexcept : type(Type::String), s(val) {}
-  any(managed<std::string>&& val) noexcept : type(Type::String), s(std::move(val)) {}
-
-  template <size_t N>
-  any(map<N>&& val) noexcept : type(Type::Map), p(make_managed<map<N>>(std::move(val))) {}
+  any(const managed<std::string>& val) noexcept : tag(tag_t::String), s(val) {}
+  any(managed<std::string>&& val) noexcept : tag(tag_t::String), s(std::move(val)) {}
 
   template <size_t N>
-  any(data<N>&& val) noexcept : type(Type::Data), p(make_managed<data<N>>(std::move(val))) {}
+  any(map<N>&& val) noexcept : tag(tag_t::Map), p(make_managed<map<N>>(std::move(val))) {}
 
-  any(const array& val) : type(Type::Array), a(make_managed<array>(val)) {}
-  any(array&& val) noexcept : type(Type::Array), a(make_managed<array>(std::move(val))) {}
+  template <size_t N>
+  any(data<N>&& val) noexcept : tag(tag_t::Data), p(make_managed<data<N>>(std::move(val))) {}
+
+  any(const array& val) : tag(tag_t::Array), a(make_managed<array>(val)) {}
+  any(array&& val) noexcept : tag(tag_t::Array), a(make_managed<array>(std::move(val))) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0) noexcept
-    : type(Type::Function), f(val) {}
+    : tag(tag_t::Function), f(val) {}
 
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                            !std::is_convertible<T,fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&)>,T>::value>::type* = 0)
-    : type(Type::Closure), l(make_managed<_closure<T>>(val)) {}
+    : tag(tag_t::Closure), l(make_managed<_closure<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,eff_fn>::value>::type* = 0) noexcept
-    : type(Type::EffFunction), e(val) {}
+    : tag(tag_t::EffFunction), e(val) {}
 
   template <typename T,
             typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                !std::is_convertible<T,eff_fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
-    : type(Type::EffClosure), k(make_managed<_eff_closure<T>>(val)) {}
+    : tag(tag_t::EffClosure), k(make_managed<_eff_closure<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0) noexcept
-    : type(Type::Thunk), t(val) {}
+    : tag(tag_t::Thunk), t(val) {}
 
   template <typename T,
             typename = typename std::enable_if<std::is_class<typename std::remove_pointer<T>::type>::value>::type>
   any(const T& val, typename std::enable_if<IS_POINTER_TYPE(T)::value>::type* = 0) noexcept
-    : type(Type::Pointer), p(val) {}
+    : tag(tag_t::Pointer), p(val) {}
 
   template <typename T>
   any(T&& val, typename std::enable_if<std::is_assignable<managed<void>,T>::value>::type* = 0) noexcept
-    : type(Type::Pointer), p(std::move(val)) {}
+    : tag(tag_t::Pointer), p(std::move(val)) {}
 
   // Explicit void* to raw pointer value
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_same<T,void*>::value>::type* = 0) noexcept
-    : type(Type::RawPointer), u(val) {}
+    : tag(tag_t::RawPointer), u(val) {}
 
-  any(nullptr_t) noexcept : type(Type::RawPointer), u(nullptr) {}
+  any(nullptr_t) noexcept : tag(tag_t::RawPointer), u(nullptr) {}
 
 
 #if !defined(USE_GC)
@@ -252,62 +252,62 @@ class any {
 
   template <typename T>
   auto assign(T&& other) const noexcept -> void {
-    switch (other.type) {
-      case Type::Thunk:          t = other.t;  break;
-      case Type::Integer:        i = other.i;  break;
-      case Type::Double:         d = other.d;  break;
-      case Type::Character:      c = other.c;  break;
-      case Type::Boolean:        b = other.b;  break;
-      case Type::StringLiteral:  r = other.r;  break;
-      case Type::Function:       f = other.f;  break;
-      case Type::EffFunction:    e = other.e;  break;
-      case Type::RawPointer:     u = other.u;  break;
+    switch (other.tag) {
+      case tag_t::Thunk:          t = other.t;  break;
+      case tag_t::Integer:        i = other.i;  break;
+      case tag_t::Double:         d = other.d;  break;
+      case tag_t::Character:      c = other.c;  break;
+      case tag_t::Boolean:        b = other.b;  break;
+      case tag_t::StringLiteral:  r = other.r;  break;
+      case tag_t::Function:       f = other.f;  break;
+      case tag_t::EffFunction:    e = other.e;  break;
+      case tag_t::RawPointer:     u = other.u;  break;
 
-      case Type::String:      new (&s) managed<std::string>(move_if_rvalue<T>(other.s));  break;
-      case Type::Array:       new (&a) managed<array>(move_if_rvalue<T>(other.a));        break;
-      case Type::Closure:     new (&l) managed<closure>(move_if_rvalue<T>(other.l));      break;
-      case Type::EffClosure:  new (&k) managed<eff_closure>(move_if_rvalue<T>(other.k));  break;
-      case Type::Map:
-      case Type::Data:
-      case Type::Pointer:     new (&p) managed<void>(move_if_rvalue<T>(other.p));         break;
+      case tag_t::String:      new (&s) managed<std::string>(move_if_rvalue<T>(other.s));  break;
+      case tag_t::Array:       new (&a) managed<array>(move_if_rvalue<T>(other.a));        break;
+      case tag_t::Closure:     new (&l) managed<closure>(move_if_rvalue<T>(other.l));      break;
+      case tag_t::EffClosure:  new (&k) managed<eff_closure>(move_if_rvalue<T>(other.k));  break;
+      case tag_t::Map:
+      case tag_t::Data:
+      case tag_t::Pointer:     new (&p) managed<void>(move_if_rvalue<T>(other.p));         break;
 
-      default: assert(false && "Bad 'any' type"); break;
+      default: assert(false && "Bad 'any' tag"); break;
     }
   }
 
   auto destruct() -> void {
-    switch (type) {
-      case Type::String:      s.~managed<std::string>();   break;
-      case Type::Array:       a.~managed<array>();         break;
-      case Type::Closure:     l.~managed<closure>();       break;
-      case Type::EffClosure:  k.~managed<eff_closure>();   break;
-      case Type::Map:
-      case Type::Data:
-      case Type::Pointer:     p.~managed<void>();          break;
+    switch (tag) {
+      case tag_t::String:      s.~managed<std::string>();   break;
+      case tag_t::Array:       a.~managed<array>();         break;
+      case tag_t::Closure:     l.~managed<closure>();       break;
+      case tag_t::EffClosure:  k.~managed<eff_closure>();   break;
+      case tag_t::Map:
+      case tag_t::Data:
+      case tag_t::Pointer:     p.~managed<void>();          break;
 
       default: break;
     }
   }
 
   public:
-  any(const any& other) noexcept : type(other.type) {
+  any(const any& other) noexcept : tag(other.tag) {
     assign(other);
   }
 
-  any(any&& other) noexcept : type(other.type) {
+  any(any&& other) noexcept : tag(other.tag) {
     assign(std::move(other));
   }
 
   auto operator=(const any& rhs) noexcept -> any& {
     destruct();
-    type = rhs.type;
+    tag = rhs.tag;
     assign(rhs);
     return *this;
   }
 
   auto operator=(any&& rhs) noexcept -> any& {
     destruct();
-    type = rhs.type;
+    tag = rhs.tag;
     assign(std::move(rhs));
     return *this;
   }
@@ -337,11 +337,11 @@ class any {
 
   auto contains(const symbol_t) const -> bool;
 
-  auto extractPointer(IF_DEBUG(const Type)) const -> void*;
+  auto extractPointer(IF_DEBUG(const tag_t)) const -> void*;
 
   auto rawPointer() const -> void* {
     const any& variant = unthunkVariant(*this);
-    assert(type == Type::RawPointer);
+    assert(tag == tag_t::RawPointer);
     return variant.u;
   }
 
@@ -411,17 +411,17 @@ struct tag_helper {};
 
 template <size_t N>
 struct tag_helper<any::map<N>> {
-  static constexpr any::Type tag = any::Type::Map;
+  static constexpr any::tag_t tag = any::tag_t::Map;
 };
 
 template <size_t N>
 struct tag_helper<any::data<N>> {
-  static constexpr any::Type tag = any::Type::Data;
+  static constexpr any::tag_t tag = any::tag_t::Data;
 };
 
 template <typename T>
 struct tag_helper<T> {
-  static constexpr any::Type tag = any::Type::Pointer;
+  static constexpr any::tag_t tag = any::tag_t::Pointer;
 };
 
 template <typename T>
