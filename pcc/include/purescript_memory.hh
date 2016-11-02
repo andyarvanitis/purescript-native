@@ -19,7 +19,7 @@
   #define GC_THREADS
   #include <gc/gc_cpp.h>
   #include <gc/gc_allocator.h>
-  #define WITH_ALLOCATOR(T) , traceable_allocator<T>
+  #define WITH_ALLOCATOR(T) , gc_allocator<T>
   #define MANAGED_TYPE(T) T*
   #define MAKE_MANAGED(T) new (GC) T
   #define MAKE_MANAGED_FINALIZED(T) new (GC, [](void* p, void*){ static_cast<T*>(p)->~T(); }) T
