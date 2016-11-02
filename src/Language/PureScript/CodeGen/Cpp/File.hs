@@ -38,8 +38,8 @@ toHeader = catMaybes . map go
     | otherwise = Nothing
   go cpp@(CppUseNamespace{}) = Just cpp
   go (CppFunction _ _ _ qs _)
-    | CppInline `elem` qs = Nothing
-  go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just (CppAuto [])
+    | Inline `elem` qs = Nothing
+  go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just (Auto [])
     = Nothing
   go (CppFunction name args rtyp qs _) =
     let args' = (\(_,t) -> ("", t)) <$> args in
@@ -58,10 +58,10 @@ toHeader = catMaybes . map go
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
-      CppObjectLiteral CppInstance _ ->
-        Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) [] CppNoOp
+      CppMapLiteral Instance _ ->
+        Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ Any [Const, Ref]) [] CppNoOp
       _ ->
-        Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [CppExtern] Nothing
+        Just $ CppVariableIntroduction (name, Just $ Any [Const]) [Extern] Nothing
   go cpp@(CppStruct {}) =
     Just cpp
   go (CppComment comms cpp')
@@ -79,9 +79,9 @@ toHeaderFns = catMaybes . map go
     | cpps'@(_:_) <- toHeaderFns cpps = Just (CppNamespace name cpps')
     | otherwise = Nothing
   go cpp@(CppFunction _ _ _ qs _)
-    | CppInline `elem` qs = Just cpp
+    | Inline `elem` qs = Just cpp
   go (CppFunction name [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp cpp [_])]))
-    | Just CppAuto {} <- atyp
+    | Just Auto {} <- atyp
     = Just (CppVariableIntroduction (name, Nothing) [] (Just cpp))
   go cpp@(CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
     Just cpp
@@ -114,7 +114,7 @@ toBody = catMaybes . map go
     | otherwise = Nothing
   go cpp@(CppUseNamespace{}) = Just cpp
   go (CppFunction _ _ _ qs _)
-    | CppInline `elem` qs = Nothing
+    | Inline `elem` qs = Nothing
   go cpp@(CppFunction {}) = Just cpp
   go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
     Nothing
@@ -130,16 +130,16 @@ toBody = catMaybes . map go
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
-      CppObjectLiteral CppInstance _ ->
-        Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) [] block
+      CppMapLiteral Instance _ ->
+        Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ Any [Const, Ref]) [] block
       _ ->
-        Just $ CppVariableIntroduction (name, Just $ CppAny [CppConst]) [] (Just lambda)
+        Just $ CppVariableIntroduction (name, Just $ Any [Const]) [] (Just lambda)
     where
-    val = CppVariableIntroduction ("$value$", Just $ CppAny [CppConst]) [CppStatic] (Just $ addCaptures cpp)
+    val = CppVariableIntroduction ("$value$", Just $ Any [Const]) [Static] (Just $ addCaptures cpp)
     block = CppBlock [val, CppReturn (CppVar "$value$")]
-    lambda = CppLambda [] [("", Just $ thunkMarkerType)] (Just $ CppAny [CppConst, CppRef]) block
+    lambda = CppLambda [] [("", Just $ thunkMarkerType)] (Just $ Any [Const, Ref]) block
     addCaptures :: Cpp -> Cpp
-    addCaptures (CppObjectLiteral t objs) = CppObjectLiteral t (objlam <$> objs)
+    addCaptures (CppMapLiteral t objs) = CppMapLiteral t (objlam <$> objs)
       where
       objlam :: (Cpp, Cpp) -> (Cpp, Cpp)
       objlam (name', (CppLambda _ args rty body)) = (name' , CppLambda [] args rty $ addCaptures body)
@@ -148,7 +148,7 @@ toBody = catMaybes . map go
     addCaptures cpps' = everywhereOnCpp addCapture cpps'
       where
       addCapture :: Cpp -> Cpp
-      addCapture (CppLambda _ args rty body) = maybeRemCaps $ CppLambda [CppCaptureAll] args rty body
+      addCapture (CppLambda _ args rty body) = maybeRemCaps $ CppLambda [CaptureAll] args rty body
       addCapture cpp' = cpp'
   go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
   go _ = Nothing
@@ -156,17 +156,17 @@ toBody = catMaybes . map go
 -------------------------------------------------------------------------------------------------
 maybeRemCaps :: Cpp -> Cpp
 -------------------------------------------------------------------------------------------------
-maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppNumericLiteral{}]))
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppNumericLiteral{}]))
   = CppLambda [] args rtyp body
-maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppStringLiteral{}]))
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppStringLiteral{}]))
   = CppLambda [] args rtyp body
-maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppCharLiteral{}]))
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppCharLiteral{}]))
   = CppLambda [] args rtyp body
-maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppBooleanLiteral{}]))
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppBooleanLiteral{}]))
   = CppLambda [] args rtyp body
-maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn CppAccessor{}]))
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppAccessor{}]))
   = CppLambda [] args rtyp body
-maybeRemCaps (CppLambda [CppCaptureAll] args rtyp body@(CppBlock [CppReturn (CppVar "unit")])) -- TODO: not really safe
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn (CppVar "unit")])) -- TODO: not really safe
   = CppLambda [] args rtyp body
 maybeRemCaps cpp = cpp
 
@@ -188,10 +188,10 @@ isMain _ = False
 
 nativeMain :: Cpp
 nativeMain = CppFunction "main"
-               [ ([], Just $ CppPrimitive "int")
-               , ([], Just $ CppPrimitive "char *[]")
+               [ ([], Just $ Primitive "int")
+               , ([], Just $ Primitive "char *[]")
                ]
-               (Just $ CppPrimitive "int")
+               (Just $ Primitive "int")
                []
                (CppBlock [ CppUseNamespace "Main"
                          , CppApp (CppVar "INITIALIZE_GC") []

@@ -185,7 +185,7 @@ data Cpp
   -- |
   -- An object literal
   --
-  | CppObjectLiteral CppObjectType [(Cpp, Cpp)]
+  | CppMapLiteral MapType [(Cpp, Cpp)]
   -- |
   -- An general property accessor expression (property, expr)
   --
@@ -193,11 +193,11 @@ data Cpp
   -- |
   -- A function introduction (name, arguments, return type, qualifiers, body)
   --
-  | CppFunction String [(String, Maybe CppType)] (Maybe CppType) [CppValueQual] Cpp
+  | CppFunction String [(String, Maybe CppType)] (Maybe CppType) [ValueQual] Cpp
   -- |
   -- A lambda introduction (arguments, return type, body)
   --
-  | CppLambda [CppCaptureType] [(String, Maybe CppType)] (Maybe CppType) Cpp
+  | CppLambda [CaptureType] [(String, Maybe CppType)] (Maybe CppType) Cpp
   -- |
   -- Value type cast
   --
@@ -242,7 +242,7 @@ data Cpp
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction (String, Maybe CppType) [CppValueQual] (Maybe Cpp)
+  | CppVariableIntroduction (String, Maybe CppType) [ValueQual] (Maybe Cpp)
   -- |
   -- A variable assignment
   --
@@ -302,7 +302,7 @@ everywhereOnCpp f = go
   go (CppArrayLiteral cpp) = f (CppArrayLiteral (map go cpp))
   go (CppDataLiteral cpp) = f (CppDataLiteral (map go cpp))
   go (CppIndexer j1 j2) = f (CppIndexer (go j1) (go j2))
-  go (CppObjectLiteral t cpps) = f (CppObjectLiteral t (map (fmap go) cpps))
+  go (CppMapLiteral t cpps) = f (CppMapLiteral t (map (fmap go) cpps))
   go (CppAccessor prop j) = f (CppAccessor (go prop) (go j))
   go (CppFunction name args rty qs j) = f (CppFunction name args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
@@ -333,7 +333,7 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppArrayLiteral cpp) = CppArrayLiteral <$> traverse f' cpp
   go (CppDataLiteral cpp) = CppDataLiteral <$> traverse f' cpp
   go (CppIndexer j1 j2) = CppIndexer <$> f' j1 <*> f' j2
-  go (CppObjectLiteral t cpps) = CppObjectLiteral t <$> traverse (pairM f' f') cpps
+  go (CppMapLiteral t cpps) = CppMapLiteral t <$> traverse (pairM f' f') cpps
   go (CppAccessor prop j) = CppAccessor prop <$> f' j
   go (CppFunction name args rty qs j) = CppFunction name args rty qs <$> f' j
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
@@ -360,7 +360,7 @@ everythingOnCpp (<>) f = go
   go j@(CppArrayLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppDataLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppIndexer j1 j2) = f j <> go j1 <> go j2
-  go j@(CppObjectLiteral _ cpps) = foldl (<>) (f j) ((map (go . fst) cpps) ++ (map (go . snd) cpps))
+  go j@(CppMapLiteral _ cpps) = foldl (<>) (f j) ((map (go . fst) cpps) ++ (map (go . snd) cpps))
   go j@(CppAccessor j1 j2) = f j <> go j1 <> go j2
   go j@(CppFunction _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1

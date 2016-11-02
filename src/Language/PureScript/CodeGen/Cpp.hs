@@ -70,7 +70,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $
         (snd <$> imps)
     let cppImports' = "PureScript" : cppImports
-    cppDecls <- concat <$> mapM (bindToCpp [CppTopLevel]) decls
+    cppDecls <- concat <$> mapM (bindToCpp [TopLevel]) decls
     let cpps = filterInlineFuncs <$> cppDecls
         namesmap = M.toList .
                    M.mapKeysMonotonic (qualifiedToCpp id) . M.map (\(t, _, _) -> arity t) $
@@ -119,16 +119,16 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -- Generate code in the simplified C++1x intermediate representation for a declaration
   --
   -------------------------------------------------------------------------------------------------
-  bindToCpp :: [CppValueQual] -> Bind Ann -> m [Cpp]
+  bindToCpp :: [ValueQual] -> Bind Ann -> m [Cpp]
   -------------------------------------------------------------------------------------------------
   bindToCpp qs (NonRec ann ident val) = return <$> declToCpp qs (ann, ident) val
-  bindToCpp qs (Rec vals) = forM vals (uncurry $ declToCpp (CppRecursive:qs))
+  bindToCpp qs (Rec vals) = forM vals (uncurry $ declToCpp (Recursive:qs))
 
   -- |
   -- Desugar a declaration into a variable introduction or named function
   -- declaration.
   -------------------------------------------------------------------------------------------------
-  declToCpp :: [CppValueQual] -> (Ann, Ident) -> Expr Ann -> m Cpp
+  declToCpp :: [ValueQual] -> (Ann, Ident) -> Expr Ann -> m Cpp
   -------------------------------------------------------------------------------------------------
   declToCpp _ (_, ident) e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
     let className = identToCpp ident
@@ -136,7 +136,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     in return $ CppStruct className [CppEnum Nothing Nothing (sort supers ++ members)]
 
   declToCpp vqs (_, ident) (Abs (_, com, ty, _) arg body) = do
-    fn <- if CppTopLevel `elem` vqs
+    fn <- if TopLevel `elem` vqs
             then do
               argNames <- replicateM (arity' - length args' - 1) freshName
               let args'' = zip argNames (repeat aty)
@@ -154,13 +154,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                  name
                                  (arg' : args' ++ args'')
                                  rty
-                                 (vqs ++ if isAccessor (snd abs') then [CppInline] else [])
+                                 (vqs ++ if isAccessor (snd abs') then [Inline] else [])
                                  (convertNestedLambdas $ convertDictIndexers block)
                            , CppFunction
                                  (curriedName name)
                                  [arg']
                                  rty
-                                 (if arity' == 1 then [CppInline] else [])
+                                 (if arity' == 1 then [Inline] else [])
                                  (asReturnBlock $
                                       curriedLambda
                                           (fst <$> args' ++ args'')
@@ -173,7 +173,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                            name
                            [arg']
                            rty
-                           (vqs ++ if isIndexer block then [CppInline] else [])
+                           (vqs ++ if isIndexer block then [Inline] else [])
                            (convertNestedLambdas . asReturnBlock $ convertDictIndexers block)
     return (CppComment com $ convertIfPrimFn ty' fn)
     where
@@ -182,8 +182,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         | otherwise = Nothing
     arity' = maybe 0 arity ty'
     name = identToCpp ident
-    aty = Just $ CppAny [CppConst, CppRef]
-    rty = Just $ CppAny []
+    aty = Just $ Any [Const, Ref]
+    rty = Just $ Any []
     arg' = (identToCpp arg, aty)
     args' = (\i -> (identToCpp i, aty)) <$> fst abs'
     abs' = unAbs body []
@@ -203,8 +203,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       CppFunction
           (identToCpp ident)
           []
-          (Just $ CppAny [])
-          [CppInline]
+          (Just $ Any [])
+          [Inline]
           (asReturnBlock $
                CppDataLiteral [CppAccessor (CppVar $ identToCpp ident) (CppVar "data")])
 
@@ -213,8 +213,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     [ CppFunction
           name
           (farg <$> fields')
-          (Just $ CppAny [])
-          [CppInline]
+          (Just $ Any [])
+          [Inline]
           (asReturnBlock $
                CppDataLiteral $
                    CppAccessor (CppVar name) (CppVar "data") : (CppVar <$> fields'))
@@ -224,8 +224,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         [ CppFunction
               (curriedName name)
               (farg <$> f)
-              (Just $ CppAny [])
-              (if length fields == 1 then [CppInline] else [])
+              (Just $ Any [])
+              (if length fields == 1 then [Inline] else [])
               (CppBlock (fieldLambdas fs))
         ]
       else
@@ -235,19 +235,19 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     fields' = identToCpp <$> fields
     (f, fs) | (f' : fs') <- fields' = ([f'], fs')
             | otherwise = ([], [])
-    farg = \x -> (x, Just $ CppAny [CppConst, CppRef])
+    farg = \x -> (x, Just $ Any [Const, Ref])
     fieldLambdas flds
       | (f' : fs') <- flds = [ CppReturn . maybeRemCaps $
                                CppLambda
-                                   [CppCaptureAll]
+                                   [CaptureAll]
                                    (farg <$> [f'])
-                                   (Just $ CppAny [])
+                                   (Just $ Any [])
                                    (CppBlock $ fieldLambdas fs') ]
       | otherwise = [CppReturn $ CppApp (CppVar name) (CppVar <$> fields')]
 
   declToCpp qs (_, ident) e
     | Just ty <- exprType e,
-      CppTopLevel `elem` qs,
+      TopLevel `elem` qs,
       arity' <- arity ty,
       arity' > 0 = do
         argNames <- replicateM arity' freshName
@@ -257,7 +257,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                        (App nullAnn e (Var nullAnn . Qualified Nothing . Ident $ head argNames))
         let fn' = CppFunction
                      (curriedName name)
-                     [(head argNames, Just $ CppAny [CppConst, CppRef])]
+                     [(head argNames, Just $ Any [Const, Ref])]
                      rty
                      []
                      (asReturnBlock $
@@ -277,14 +277,14 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                             else []
     where
     name = identToCpp ident
-    aty = Just $ CppAny [CppConst, CppRef]
-    rty = Just $ CppAny []
+    aty = Just $ Any [Const, Ref]
+    rty = Just $ Any []
 
   declToCpp qs (_, ident) val = do
     val' <- valueToCpp val
     return $
       CppVariableIntroduction
-          (identToCpp ident, Just $ CppAny [CppConst])
+          (identToCpp ident, Just $ Any [Const])
           qs
           (Just val')
 
@@ -302,12 +302,12 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   fnToLambda (CppFunction name args _ qs body) =
     CppVariableIntroduction
-        (name, Just $ CppAny [CppConst])
-        (filter (==CppStatic) qs)
-        (Just $ CppLambda cs args (Just $ CppAny []) body)
+        (name, Just $ Any [Const])
+        (filter (==Static) qs)
+        (Just $ CppLambda cs args (Just $ Any []) body)
     where
-    cs | (not . null) (qs `intersect` [CppInline, CppStatic]) = []
-       | otherwise = [CppCaptureAll]
+    cs | (not . null) (qs `intersect` [Inline, Static]) = []
+       | otherwise = [CaptureAll]
   fnToLambda (CppComment com cpp) = CppComment com (fnToLambda cpp)
   fnToLambda _ = error "Not a function!"
 
@@ -318,7 +318,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     where
     go :: Cpp -> Cpp
     go f@(CppFunction {}) = maybeRemCaps $ fnToLambda f
-    go (CppLambda _ args rtyp body) = maybeRemCaps $ CppLambda [CppCaptureAll] args rtyp body
+    go (CppLambda _ args rtyp body) = maybeRemCaps $ CppLambda [CaptureAll] args rtyp body
     go cpp = cpp
 
   -------------------------------------------------------------------------------------------------
@@ -337,13 +337,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     filteredFns cpp = filter (\(f,_) -> everythingOnCpp (||) (== CppVar f) cpp) fns
 
     recursive :: Cpp -> [Cpp]
-    recursive cpp'@(CppFunction _ _ _ qs _) | CppRecursive `elem` qs = [cpp']
-    recursive cpp'@(CppVariableIntroduction _ qs _) | CppRecursive `elem` qs = [cpp']
+    recursive cpp'@(CppFunction _ _ _ qs _) | Recursive `elem` qs = [cpp']
+    recursive cpp'@(CppVariableIntroduction _ qs _) | Recursive `elem` qs = [cpp']
     recursive _ = []
 
     removeRec :: Cpp -> Cpp
-    removeRec (CppFunction _ _ _ qs _) | CppRecursive `elem` qs = CppNoOp
-    removeRec (CppVariableIntroduction _ qs _) | CppRecursive `elem` qs = CppNoOp
+    removeRec (CppFunction _ _ _ qs _) | Recursive `elem` qs = CppNoOp
+    removeRec (CppVariableIntroduction _ qs _) | Recursive `elem` qs = CppNoOp
     removeRec cpp' = cpp'
 
     replaceVar :: [(String, Cpp)] -> Cpp -> Cpp
@@ -354,7 +354,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
     dict :: Cpp
     dict = CppVariableIntroduction
-               (topdict, Just $ CppAny [CppConst])
+               (topdict, Just $ Any [Const])
                []
                (Just $ CppDataLiteral ((\(f,cpp) -> CppComment [LineComment f] cpp) <$> fns))
 
@@ -375,14 +375,14 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     accessor :: String -> (String, Cpp) -> Cpp
     accessor dictname (name, _) =
       CppVariableIntroduction
-          (name, Just $ CppAny [CppConst])
+          (name, Just $ Any [Const])
           []
           (Just . snd $ accessed dictname name)
 
     toelem :: Cpp -> (String, Cpp)
     toelem (CppFunction name args rtyp _ body'@(CppBlock body)) =
       (name, withdict . maybeRemCaps $ CppLambda
-                                           [CppCaptureAll]
+                                           [CaptureAll]
                                            args
                                            rtyp
                                            (CppBlock $ (accessor localdict <$> filteredFns body') ++ body))
@@ -396,9 +396,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
     withdict :: Cpp -> Cpp
     withdict cpp' = maybeRemCaps $ CppLambda
-                                       [CppCaptureAll]
-                                       [(localdict, Just $ CppAny [CppConst, CppRef])]
-                                       (Just $ CppAny [])
+                                       [CaptureAll]
+                                       [(localdict, Just $ Any [Const, Ref])]
+                                       (Just $ Any [])
                                        (asReturnBlock cpp')
     topdict :: String
     topdict = "_$dict$_"
@@ -442,7 +442,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     CppArrayLiteral <$> mapM valueToCpp xs
 
   valueToCpp (Literal _ (ObjectLiteral ps)) =
-    CppObjectLiteral CppRecord <$>
+    CppMapLiteral Record <$>
         mapM (sndM valueToCpp) ((\(k,v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) ps)
 
   valueToCpp (Accessor _ prop val) =
@@ -454,7 +454,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
         origFields = (\key -> (key, CppIndexer (CppSymbol key) obj')) <$> origKeys
-    return $ CppObjectLiteral CppRecord $
+    return $ CppMapLiteral Record $
                  (\(k,v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) (origFields ++ updatedFields)
     where
     allKeys :: T.Type -> [String]
@@ -470,8 +470,8 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     return $
       CppLambda
           []
-          [(identToCpp arg, Just $ CppAny [CppConst, CppRef])]
-          (Just $ CppAny [])
+          [(identToCpp arg, Just $ Any [Const, Ref])]
+          (Just $ Any [])
           (asReturnBlock $ convertDictIndexers cpp')
     where
       arg' = identToCpp arg
@@ -487,7 +487,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname)) in
-        return . CppObjectLiteral CppInstance $
+        return . CppMapLiteral Instance $
                      zip
                        (CppSymbol <$> (sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
                        args'
@@ -563,7 +563,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         (CppLambda
              []
              []
-             (Just $ CppAny [])
+             (Just $ Any [])
              (CppBlock (assignments ++ concat cpps ++ [failedPatternError valNames])))
         []
     where
@@ -607,7 +607,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   binderToCpp varName done (VarBinder _ ident) =
     return $
       CppVariableIntroduction
-          (identToCpp ident, Just $ CppAny [CppConst])
+          (identToCpp ident, Just $ Any [Const])
           []
           (Just $ CppVar varName)
       : done
@@ -665,7 +665,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     cpp <- binderToCpp varName done binder
     return $
       CppVariableIntroduction
-          (identToCpp ident, Just $ CppAny [CppConst])
+          (identToCpp ident, Just $ Any [Const])
           []
           (Just $ CppVar varName)
       : cpp
@@ -811,9 +811,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           return $
             [ CppFunction
                   (curriedName name)
-                  [(head argNames, Just $ CppAny [CppConst, CppRef])]
-                  (Just $ CppAny [])
-                  (if arity' == 1 then [CppInline] else [])
+                  [(head argNames, Just $ Any [Const, Ref])]
+                  (Just $ Any [])
+                  (if arity' == 1 then [Inline] else [])
                   (asReturnBlock $
                       curriedLambda
                           (tail argNames)
@@ -836,9 +836,9 @@ asReturnBlock cpp = CppBlock [CppReturn cpp]
 curriedLambda :: [String] -> Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
 curriedLambda args ret = foldr (\arg ret' -> CppLambda
-                                                 [CppCaptureAll]
-                                                 [(arg, Just $ CppAny [CppConst, CppRef])]
-                                                 (Just $ CppAny [])
+                                                 [CaptureAll]
+                                                 [(arg, Just $ Any [Const, Ref])]
+                                                 (Just $ Any [])
                                                  (asReturnBlock ret')
                                 ) ret args
 
@@ -947,8 +947,8 @@ filterInlineFuncs = everywhereOnCpp convert
   convert :: Cpp -> Cpp
   convert (CppBlock []) = CppBlock []
   convert (CppFunction n ps r qs cpp)
-    | CppInline `elem` qs,
-      everythingOnCpp (||) shouldRemove cpp = CppFunction n ps r (delete CppInline qs) cpp
+    | Inline `elem` qs,
+      everythingOnCpp (||) shouldRemove cpp = CppFunction n ps r (delete Inline qs) cpp
     where
     shouldRemove :: Cpp -> Bool
     shouldRemove CppSymbol{} = True
