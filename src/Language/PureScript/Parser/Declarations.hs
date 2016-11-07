@@ -19,6 +19,7 @@ import Prelude hiding (lex)
 
 import Data.Functor (($>))
 import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 
 import Control.Applicative
 import Control.Arrow ((+++))
@@ -71,7 +72,7 @@ parseDataDeclaration = do
   tyArgs <- many (indented *> kindedIdent)
   ctors <- P.option [] $ do
     indented *> equals
-    P.sepBy1 ((,) <$> properName <*> P.many (indented *> noWildcards parseTypeAtom)) pipe
+    P.sepBy1 ((,) <$> dataConstructorName <*> P.many (indented *> noWildcards parseTypeAtom)) pipe
   return $ DataDeclaration dtype name tyArgs ctors
 
 parseTypeDeclaration :: TokenParser Declaration
@@ -281,7 +282,7 @@ parseModulesFromFiles
   :: forall m k
    . MonadError MultipleErrors m
   => (k -> FilePath)
-  -> [(k, String)]
+  -> [(k, Text)]
   -> m [(k, Module)]
 parseModulesFromFiles toFilePath input =
   flip parU wrapError . inParallel . flip map input $ parseModuleFromFile toFilePath
@@ -298,11 +299,11 @@ parseModulesFromFiles toFilePath input =
 -- | Parses a single module with FilePath for eventual parsing errors
 parseModuleFromFile
   :: (k -> FilePath)
-  -> (k, String)
+  -> (k, Text)
   -> Either P.ParseError (k, Module)
 parseModuleFromFile toFilePath (k, content) = do
     let filename = toFilePath k
-    ts <- lex filename content
+    ts <- lex' filename content
     m <- runTokenParser filename parseModule ts
     pure (k, m)
 
@@ -360,7 +361,7 @@ parseVar :: TokenParser Expr
 parseVar = Var <$> C.parseQualified C.parseIdent
 
 parseConstructor :: TokenParser Expr
-parseConstructor = Constructor <$> C.parseQualified C.properName
+parseConstructor = Constructor <$> C.parseQualified C.dataConstructorName
 
 parseCase :: TokenParser Expr
 parseCase = Case <$> P.between (reserved "case") (C.indented *> reserved "of") (commaSep1 parseValue)
@@ -494,10 +495,10 @@ parseNumberLiteral = LiteralBinder . NumericLiteral <$> (sign <*> number)
          <|> return id
 
 parseNullaryConstructorBinder :: TokenParser Binder
-parseNullaryConstructorBinder = ConstructorBinder <$> C.parseQualified C.properName <*> pure []
+parseNullaryConstructorBinder = ConstructorBinder <$> C.parseQualified C.dataConstructorName <*> pure []
 
 parseConstructorBinder :: TokenParser Binder
-parseConstructorBinder = ConstructorBinder <$> C.parseQualified C.properName <*> many (C.indented *> parseBinderNoParens)
+parseConstructorBinder = ConstructorBinder <$> C.parseQualified C.dataConstructorName <*> many (C.indented *> parseBinderNoParens)
 
 parseObjectBinder:: TokenParser Binder
 parseObjectBinder = LiteralBinder <$> parseObjectLiteral (C.indented *> parseIdentifierAndBinder)

@@ -29,6 +29,15 @@ import qualified Text.Parsec as P
 -- | A map of locally-bound names in scope.
 type Context = [(Ident, Type)]
 
+-- | Holds the data necessary to do type directed search for typed holes
+data TypeSearch
+  = TSBefore Environment
+  -- ^ An Environment captured for later consumption by type directed search
+  | TSAfter [(Qualified Ident, Type)]
+  -- ^ Results of applying type directed search to the previously captured
+  -- Environment
+  deriving Show
+
 -- | A type of error messages
 data SimpleErrorMessage
   = ErrorParsingFFIModule FilePath (Maybe Bundle.ErrorMessage)
@@ -74,6 +83,8 @@ data SimpleErrorMessage
   | ConstrainedTypeUnified Type Type
   | OverlappingInstances (Qualified (ProperName 'ClassName)) [Type] [Qualified Ident]
   | NoInstanceFound Constraint
+  | AmbiguousTypeVariables Type Constraint
+  | UnknownClass (Qualified (ProperName 'ClassName))
   | PossiblyInfiniteInstance (Qualified (ProperName 'ClassName)) [Type]
   | CannotDerive (Qualified (ProperName 'ClassName)) [Type]
   | InvalidNewtypeInstance (Qualified (ProperName 'ClassName)) [Type]
@@ -99,7 +110,7 @@ data SimpleErrorMessage
   | ShadowedTypeVar String
   | UnusedTypeVar String
   | WildcardInferredType Type Context
-  | HoleInferredType String Type Context
+  | HoleInferredType String Type Context TypeSearch
   | MissingTypeDeclaration Ident Type
   | OverlappingPattern [[Binder]] Bool
   | IncompleteExhaustivityCheck
@@ -123,7 +134,7 @@ data SimpleErrorMessage
   | DeprecatedRequirePath
   | CannotGeneralizeRecursiveFunction Ident Type
   | CannotDeriveNewtypeForData (ProperName 'TypeName)
-  | NonWildcardNewtypeInstance (ProperName 'TypeName)
+  | ExpectedWildcard (ProperName 'TypeName)
   deriving (Show)
 
 -- | Error message hints, providing more detailed information about failure.
@@ -249,6 +260,31 @@ instance Eq DeclarationRef where
   (PositionedDeclarationRef _ _ r) == r' = r == r'
   r == (PositionedDeclarationRef _ _ r') = r == r'
   _ == _ = False
+
+-- enable sorting lists of explicitly imported refs when suggesting imports in linting, IDE, etc.
+-- not an Ord because this implementation is not consistent with its Eq instance.
+-- think of it as a notion of contextual, not inherent, ordering.
+compDecRef :: DeclarationRef -> DeclarationRef -> Ordering
+compDecRef (TypeRef name _) (TypeRef name' _) = compare name name'
+compDecRef (TypeOpRef name) (TypeOpRef name') = compare name name'
+compDecRef (ValueRef ident) (ValueRef ident') = compare ident ident'
+compDecRef (ValueOpRef name) (ValueOpRef name') = compare name name'
+compDecRef (TypeClassRef name) (TypeClassRef name') = compare name name'
+compDecRef (TypeInstanceRef ident) (TypeInstanceRef ident') = compare ident ident'
+compDecRef (ModuleRef name) (ModuleRef name') = compare name name'
+compDecRef (ReExportRef name _) (ReExportRef name' _) = compare name name'
+compDecRef (PositionedDeclarationRef _ _ ref) ref' = compDecRef ref ref'
+compDecRef ref (PositionedDeclarationRef _ _ ref') = compDecRef ref ref'
+compDecRef ref ref' = compare
+  (orderOf ref) (orderOf ref')
+    where
+      orderOf :: DeclarationRef -> Int
+      orderOf (TypeClassRef _) = 0
+      orderOf (TypeOpRef _) = 1
+      orderOf (TypeRef _ _) = 2
+      orderOf (ValueRef _) = 3
+      orderOf (ValueOpRef _) = 4
+      orderOf _ = 5
 
 getTypeRef :: DeclarationRef -> Maybe (ProperName 'TypeName, Maybe [ProperName 'ConstructorName])
 getTypeRef (TypeRef name dctors) = Just (name, dctors)
