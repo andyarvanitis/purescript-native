@@ -533,6 +533,7 @@ executable pcc
                    mtl -any,
                    optparse-applicative >= 0.12.1,
                    parsec -any,
+                   text -any,
                    time -any,
                    transformers -any,
                    transformers-compat -any,
@@ -540,7 +541,7 @@ executable pcc
     main-is: Main.hs
     buildable: True
     hs-source-dirs: pcc
-    other-modules: Paths_purescript
+    other-modules: Paths_purescript Make Makefile
     ghc-options: -Wall -O2 -fno-warn-unused-do-bind -threaded -rtsopts "-with-rtsopts=-N"
 
 
