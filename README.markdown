@@ -48,7 +48,7 @@ This is an experimental native compiler/backend for [PureScript](https://github.
 ```PureScript
 module Main where
   import Prelude
-  import Control.Monad.Eff.Console
+  import Control.Monad.Eff.Console (log, logShow)
 
   fib :: Int -> Int
   fib 0 = 0
@@ -57,7 +57,7 @@ module Main where
 
   main = do
     log "Here's the result of fib 10:"
-    print (fib 10)
+    logShow (fib 10)
 ```
 **`fib.cc`**
 ```c++
@@ -66,9 +66,14 @@ namespace Main {
   using namespace PureScript;
   using namespace Prelude;
   using namespace Control_Monad_Eff_Console;
+  using namespace Data_Semiring;
+  using namespace Data_Ring;
+  using namespace Control_Bind;
   using namespace Control_Monad_Eff;
+  using namespace Data_Show;
 
-  auto fib(const any& v) -> any {
+  
+  auto fib(int v) -> int {
     switch (cast<int>(v)) {
       case 0: return 0;
       case 1: return 1;
@@ -77,12 +82,13 @@ namespace Main {
   };
   auto main() -> any {
     Control_Monad_Eff_Console::log("Here's the result of fib 10:")();
-    return Control_Monad_Eff_Console::print(Prelude::showInt, fib(10))();
+    return Control_Monad_Eff_Console::logShow(Data_Show::showInt, fib(10))();
   };
 }
 
 auto main(int, char *[]) -> int {
   using namespace Main;
+  INITIALIZE_GC();
   Main::main();
   return 0;
 };
