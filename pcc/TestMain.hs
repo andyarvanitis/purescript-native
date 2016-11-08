@@ -98,14 +98,18 @@ repo = "git://github.com/pure11/"
 packages :: [(String, String)]
 -------------------------------------------------------------------------------
 packages =
-  [ ("purescript-eff",       "")
-  , ("purescript-prelude",   "")
-  , ("purescript-assert",    "")
-  , ("purescript-st",        "")
-  , ("purescript-console",   "")
-  , ("purescript-functions", "")
-  , ("purescript-partial",   "")
-  , ("purescript-newtype",   "")
+  [ ("purescript-eff",          "")
+  , ("purescript-prelude",      "")
+  , ("purescript-assert",       "")
+  , ("purescript-st",           "")
+  , ("purescript-console",      "")
+  , ("purescript-functions",    "")
+  , ("purescript-partial",      "")
+  , ("purescript-newtype",      "")
+  , ("purescript-control",      "")
+  , ("purescript-invariant",    "")
+  , ("purescript-monoid",       "")
+  , ("purescript-generics-rep", "")
   ]
 
 -------------------------------------------------------------------------------

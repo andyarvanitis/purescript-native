@@ -795,7 +795,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                         catMaybes . map modCtor . M.keys $ E.dataConstructors env]]
     where
     modCtor :: Qualified (ProperName a) -> Maybe String
-    modCtor (Qualified (Just mn') (ProperName name)) | mn' == mn = Just name
+    modCtor (Qualified (Just mn') (ProperName name)) | mn' == mn = Just $ identToCpp (Ident name)
     modCtor _ = Nothing
 
   -------------------------------------------------------------------------------------------------

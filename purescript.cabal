@@ -1,5 +1,5 @@
 name: purescript
-version: 0.10.1
+version: 0.10.2
 cabal-version: >=1.8
 build-type: Simple
 license: BSD3
@@ -55,6 +55,8 @@ extra-source-files: examples/passing/*.purs
                   , examples/passing/TypeWithoutParens/*.purs
                   , examples/failing/*.purs
                   , examples/failing/1733/*.purs
+                  , examples/failing/2378/*.purs
+                  , examples/failing/2379/*.purs
                   , examples/failing/ConflictingExports/*.purs
                   , examples/failing/ConflictingImports/*.purs
                   , examples/failing/ConflictingImports2/*.purs
@@ -120,9 +122,10 @@ library
                    fsnotify >= 0.2.1,
                    Glob >= 0.7 && < 0.8,
                    haskeline >= 0.7.0.0,
-                   http-client >= 0.4.30 && <0.6,
+                   http-client >= 0.4.30 && <0.5,
                    http-types -any,
                    language-javascript == 0.6.*,
+                   lens == 4.*,
                    lifted-base >= 0.2.3 && < 0.2.4,
                    monad-control >= 1.0.0.0 && < 1.1,
                    monad-logger >= 0.3 && < 0.4,
@@ -254,6 +257,7 @@ library
                      Language.PureScript.TypeChecker.Subsumption
                      Language.PureScript.TypeChecker.Synonyms
                      Language.PureScript.TypeChecker.Types
+                     Language.PureScript.TypeChecker.TypeSearch
                      Language.PureScript.TypeChecker.Unify
                      Language.PureScript.TypeClassDictionaries
                      Language.PureScript.Types
@@ -347,6 +351,7 @@ executable psc
                    mtl -any,
                    optparse-applicative >= 0.12.1,
                    parsec -any,
+                   text -any,
                    time -any,
                    transformers -any,
                    transformers-compat -any,
@@ -400,6 +405,7 @@ executable psc-docs
                    optparse-applicative >= 0.12.1,
                    process -any,
                    split -any,
+                   text -any,
                    transformers -any,
                    transformers-compat -any
     main-is: Main.hs
@@ -423,6 +429,24 @@ executable psc-publish
     hs-source-dirs: psc-publish
     ghc-options: -Wall -O2
 
+executable psc-package
+    build-depends: base >=4 && <5,
+                   purescript -any,
+                   aeson -any,
+                   aeson-pretty -any,
+                   bytestring -any,
+                   containers -any,
+                   foldl -any,
+                   optparse-applicative -any,
+                   system-filepath -any,
+                   text -any,
+                   turtle -any
+    main-is: Main.hs
+    other-modules: Paths_purescript
+    buildable: True
+    hs-source-dirs: psc-package
+    ghc-options: -Wall -O2
+
 executable psc-hierarchy
     build-depends: base >=4 && <5,
                    purescript -any,
@@ -432,7 +456,8 @@ executable psc-hierarchy
                    mtl -any,
                    optparse-applicative >= 0.12.1,
                    parsec -any,
-                   process -any
+                   process -any,
+                   text -any
     main-is: Main.hs
     other-modules: Paths_purescript
     buildable: True
@@ -508,6 +533,7 @@ executable pcc
                    mtl -any,
                    optparse-applicative >= 0.12.1,
                    parsec -any,
+                   text -any,
                    time -any,
                    transformers -any,
                    transformers-compat -any,
@@ -515,7 +541,7 @@ executable pcc
     main-is: Main.hs
     buildable: True
     hs-source-dirs: pcc
-    other-modules: Paths_purescript
+    other-modules: Paths_purescript Make Makefile
     ghc-options: -Wall -O2 -fno-warn-unused-do-bind -threaded -rtsopts "-with-rtsopts=-N"
 
 

@@ -11,7 +11,7 @@ module Language.PureScript.Ide.Rebuild
 import           Protolude
 
 import           "monad-logger" Control.Monad.Logger
-import qualified Data.List as List
+import qualified Data.List                       as List
 import qualified Data.Map.Lazy                   as M
 import           Data.Maybe                      (fromJust)
 import qualified Data.Set                        as S
@@ -21,7 +21,7 @@ import           Language.PureScript.Ide.Error
 import           Language.PureScript.Ide.State
 import           Language.PureScript.Ide.Types
 import           Language.PureScript.Ide.Util
-import           System.IO.UTF8                  (readUTF8File)
+import           System.IO.UTF8                  (readUTF8FileT)
 
 -- | Given a filepath performs the following steps:
 --
@@ -44,7 +44,7 @@ rebuildFile
   -> m Success
 rebuildFile path = do
 
-  input <- liftIO (readUTF8File path)
+  input <- liftIO (readUTF8FileT path)
 
   m <- case snd <$> P.parseModuleFromFile identity (path, input) of
     Left parseError -> throwError

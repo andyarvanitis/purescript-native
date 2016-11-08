@@ -474,7 +474,8 @@ everythingWithScope f g h i j = (f'', g'', h'', i'', \s -> snd . j'' s)
     in foldMap (f'' s') ds
   f' s (ValueDeclaration name _ bs (Right val)) =
     let s' = S.insert name s
-    in foldMap (h'' s') bs <> g'' s' val
+        s'' = S.union s' (S.fromList (concatMap binderNames bs))
+    in foldMap (h'' s') bs <> g'' s'' val
   f' s (ValueDeclaration name _ bs (Left gs)) =
     let s' = S.insert name s
         s'' = S.union s' (S.fromList (concatMap binderNames bs))
@@ -551,7 +552,7 @@ everythingWithScope f g h i j = (f'', g'', h'', i'', \s -> snd . j'' s)
   j' s (DoNotationValue v) = (s, g'' s v)
   j' s (DoNotationBind b v) =
     let s' = S.union (S.fromList (binderNames b)) s
-    in (s', h'' s b <> g'' s' v)
+    in (s', h'' s b <> g'' s v)
   j' s (DoNotationLet ds) =
     let s' = S.union s (S.fromList (mapMaybe getDeclIdent ds))
     in (s', foldMap (f'' s') ds)
@@ -586,3 +587,15 @@ accumTypes f = everythingOnValues mappend forDecls forValues (const mempty) (con
   forValues (DeferredDictionary _ tys) = mconcat (map f tys)
   forValues (TypedValue _ _ ty) = f ty
   forValues _ = mempty
+
+-- |
+-- Map a function over type annotations appearing inside a value
+--
+overTypes :: (Type -> Type) -> Expr -> Expr
+overTypes f = let (_, f', _) = everywhereOnValues id g id in f'
+  where
+  g :: Expr -> Expr
+  g (TypedValue checkTy val t) = TypedValue checkTy val (f t)
+  g (TypeClassDictionary c sco hints) = TypeClassDictionary (mapConstraintArgs (map f) c) sco hints
+  g other = other
+

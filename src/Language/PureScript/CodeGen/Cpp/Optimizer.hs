@@ -89,7 +89,7 @@ optimize' nm cpp = do
     , inlineOperator (C.dataFunction, C.apply) $ \f x -> CppApp f [x]
     , inlineOperator (C.prelude, (C.#)) $ \x f -> CppApp f [x]
     , inlineOperator (C.dataFunction, C.applyFlipped) $ \x f -> CppApp f [x]
-    , inlineOperator (C.dataArrayUnsafe, C.unsafeIndex) $ flip CppIndexer
+    , inlineOperator (C.dataArray, C.unsafeIndex) $ flip CppIndexer
     , inlineCommonOperators
     ]) cpp
 
