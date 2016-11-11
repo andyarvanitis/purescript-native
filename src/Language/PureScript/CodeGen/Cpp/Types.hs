@@ -12,7 +12,6 @@
 -- Types for native C++11 translation
 --
 -----------------------------------------------------------------------------
-
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
@@ -105,8 +104,10 @@ runCaptureType CaptureAll = "="
 -- TODO: move or remove this
 --
 qualifiedToStr :: ModuleName -> (a -> Ident) -> Qualified a -> String
-qualifiedToStr _ f (Qualified (Just (ModuleName [ProperName mn])) a) | mn == C.prim = runIdent $ f a
-qualifiedToStr m f (Qualified (Just m') a) | m /= m' = moduleNameToCpp m' ++ "::" ++ identToCpp (f a)
+qualifiedToStr _ f (Qualified (Just (ModuleName [ProperName mn])) a)
+  | mn == C.prim = runIdent $ f a
+qualifiedToStr m f (Qualified (Just m') a)
+  | m /= m' = moduleNameToCpp m' ++ "::" ++ identToCpp (f a)
 qualifiedToStr _ f (Qualified _ a) = identToCpp (f a)
 
 boolType :: CppType

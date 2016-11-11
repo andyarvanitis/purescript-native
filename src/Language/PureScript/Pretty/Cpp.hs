@@ -12,15 +12,14 @@
 -- Pretty printer for the C++11 AST
 --
 -----------------------------------------------------------------------------
-
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE CPP #-}
 
-module Language.PureScript.Pretty.Cpp (
-    dotsTo,
-    linebreak,
-    prettyPrintCpp,
-) where
+module Language.PureScript.Pretty.Cpp
+  ( dotsTo
+  , linebreak
+  , prettyPrintCpp
+  ) where
 
 import Prelude.Compat
 
@@ -28,26 +27,28 @@ import Data.Bits
 import Data.Char
 import Data.List
 import Data.Maybe (catMaybes, fromMaybe)
-
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
 #endif
 import Control.Arrow ((<+>))
+import qualified Control.Arrow as A
 import Control.Monad.State
 import Control.PatternArrows
-import qualified Control.Arrow as A
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Comments
 import qualified Language.PureScript.Constants as C
 import Numeric
--- import Debug.Trace
 
+-- import Debug.Trace
 ---------------------------------------------------------------------------------------------------
 -- TODO: Go back to using Pretty.Common? (will require some work)
 --
-newtype PrinterState = PrinterState { indent :: Int } deriving (Show, Read, Eq, Ord)
+newtype PrinterState = PrinterState
+  { indent :: Int
+  } deriving (Show, Read, Eq, Ord)
+
 -- |
 -- Pretty print with a new indentation level
 --
@@ -73,9 +74,9 @@ blockIndent = 2
 -- Wrap a string in parentheses
 --
 parens :: String -> String
-parens s = '(':s ++ ")"
----------------------------------------------------------------------------------------------------
+parens s = '(' : s ++ ")"
 
+---------------------------------------------------------------------------------------------------
 literals :: Pattern PrinterState Cpp String
 literals = mkPattern' match
   where
@@ -84,7 +85,8 @@ literals = mkPattern' match
   match CppEndOfHeader = return []
   match (CppNumericLiteral (Left n)) = return $ show n
   match (CppNumericLiteral n) = return $ either show show n
-  match (CppStringLiteral s) | all isAscii s = return $ string s
+  match (CppStringLiteral s)
+    | all isAscii s = return $ string s
   match (CppStringLiteral s) = return $ "u8" ++ string s
   match (CppCharLiteral c) = return $ show c
   match (CppBooleanLiteral True) = return "true"
@@ -119,17 +121,17 @@ literals = mkPattern' match
   match (CppMapLiteral _ ps) = fmap concat $ sequence
     [ return $ runType (mapType $ length ps + 1) ++ "{{\n"
     , withIndent $ do
-        cpps <- forM ps $ \(key, value) -> do
-                            value' <- prettyPrintCpp' value
-                            key' <- prettyPrintCpp' key
-                            return $ "{ " ++ key' ++ ", " ++ value' ++ " }"
+        cpps <-
+          forM ps $ \(key, value) -> do
+            value' <- prettyPrintCpp' value
+            key' <- prettyPrintCpp' key
+            return $ "{ " ++ key' ++ ", " ++ value' ++ " }"
         indentString <- currentIndent
         return $ intercalate ", \n" $ map (indentString ++) (cpps ++ ["{ nullptr, nullptr }"])
     , return "\n"
     , currentIndent
     , return "}}"
     ]
-
   match (CppFunction name args rty qs ret) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
@@ -173,19 +175,22 @@ literals = mkPattern' match
     , return "\n"
     , currentIndent
     , return "}#"
-    ]
-    ++ let (cpp', cpps') = fromNested nested' in
-       map match cpp'
-    ++ if null cpps' then [] else [match (CppNamespace name (filter isUseNamespace sts ++ cpps'))]
+    ] ++
+    let (cpp', cpps') = fromNested nested'
+    in map match cpp' ++
+       if null cpps'
+         then []
+         else [match (CppNamespace name (filter isUseNamespace sts ++ cpps'))]
     where
     (sts', nested') = break isNestedNamespace sts
     fromNested :: [Cpp] -> ([Cpp], [Cpp])
-    fromNested [] = ([],[])
+    fromNested [] = ([], [])
     fromNested cpps@((CppNamespace nm _):_) = ([foldl1 combineNamespaces namespaces], others)
       where
       (namespaces, others) = span inSameNamespace cpps
       inSameNamespace :: Cpp -> Bool
-      inSameNamespace (CppNamespace nm' _) | nm' == nm = True
+      inSameNamespace (CppNamespace nm' _)
+        | nm' == nm = True
       inSameNamespace _ = False
     fromNested _ = error "Not a nested namespace"
     combineNamespaces :: Cpp -> Cpp -> Cpp
@@ -193,7 +198,7 @@ literals = mkPattern' match
       | nm == nm' = CppNamespace nm (ss ++ filter (not . isUseNamespace) ss')
     combineNamespaces _ _ = error "Cannot fold cpps"
     isUseNamespace :: Cpp -> Bool
-    isUseNamespace (CppUseNamespace{}) = True
+    isUseNamespace (CppUseNamespace {}) = True
     isUseNamespace _ = False
   match (CppStruct (name) []) = return $ "struct " ++ name ++ " {}"
   match (CppStruct (name) mems) = fmap concat $ sequence $
@@ -230,20 +235,20 @@ literals = mkPattern' match
   match (CppCast typ val) = return $
     case val of
       CppNumericLiteral {} -> vstr
-      CppStringLiteral {}  -> vstr
+      CppStringLiteral {} -> vstr
       CppBooleanLiteral {} -> vstr
       _ -> "cast" ++ angles (runType typ) ++ parens val'
     where
     vstr = prettyPrintCpp1 val
     val' | '(' `elem` vstr || '[' `elem` vstr = parens vstr
          | otherwise = vstr
-
-  match (CppVar ident) | ident == C.__unused = match (CppVar $ '$':ident)
+  match (CppVar ident)
+    | ident == C.__unused = match (CppVar $ '$' : ident)
   match (CppVar ident) = return ident
   match (CppSymbol ident) = return $ "SYMBOL" ++ parens (symbolname ident)
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction (ident, typ) qs value)
-    | ident == C.__unused = match (CppVariableIntroduction ('$':ident, typ) qs value)
+    | ident == C.__unused = match (CppVariableIntroduction ('$' : ident, typ) qs value)
   match (CppVariableIntroduction (ident, typ) qs value) =
     fmap concat $ sequence
     [ return . concatMap (++ " ") . filter (not . null) $ runValueQual <$> qs
@@ -290,9 +295,9 @@ literals = mkPattern' match
     ]
     where
     cast :: Cpp -> Cpp -> Cpp
-    cast CppNumericLiteral{} cpp' = CppCast intType cpp'
-    cast CppBooleanLiteral{} cpp' = CppCast boolType cpp'
-    cast CppCharLiteral{} cpp' = CppCast charType cpp'
+    cast CppNumericLiteral {} cpp' = CppCast intType cpp'
+    cast CppBooleanLiteral {} cpp' = CppCast boolType cpp'
+    cast CppCharLiteral {} cpp' = CppCast charType cpp'
     cast _ cpp' = cpp'
   match (CppReturn (CppBlock (cpp:cpps))) = fmap concat $ sequence
     [   do s <- prettyPrintCpp' cpp
@@ -332,16 +337,13 @@ literals = mkPattern' match
     commentLines :: Comment -> [String]
     commentLines (LineComment s) = [s]
     commentLines (BlockComment s) = lines s
-
     asLine :: String -> StateT PrinterState Maybe String
     asLine s = do
       i <- currentIndent
       return $ i ++ " * " ++ removeComments s ++ "\n"
-
     removeComments :: String -> String
-    removeComments ('*' : '/' : s) = removeComments s
-    removeComments (c : s) = c : removeComments s
-
+    removeComments ('*':'/':s) = removeComments s
+    removeComments (c:s) = c : removeComments s
     removeComments [] = []
   match (CppRaw cpp) = return cpp
   match _ = mzero
@@ -359,8 +361,8 @@ string s = '"' : concatMap encodeChar (decodeSurrogates s) ++ "\""
         fromEnum b >= 0xD800 && fromEnum b <= 0xDFFF
       = Just . chr $ 0x10000 + shiftL (fromEnum a .&. 0x03FF) 10 + (fromEnum b .&. 0x03FF)
     decodePair a _
-      | fromEnum a >= 0xD800 && fromEnum a <= 0xDFFF  = Nothing
-    decodePair a _  = Just a
+      | fromEnum a >= 0xD800 && fromEnum a <= 0xDFFF = Nothing
+    decodePair a _ = Just a
   encodeChar :: Char -> String
   encodeChar '\b' = "\\b"
   encodeChar '\t' = "\\t"
@@ -370,14 +372,19 @@ string s = '"' : concatMap encodeChar (decodeSurrogates s) ++ "\""
   encodeChar '\r' = "\\r"
   encodeChar '"'  = "\\\""
   encodeChar '\\' = "\\\\"
-  encodeChar c | fromEnum c > 0xFFFF = "\\U" ++ leading ++ hex
+  encodeChar c
+    | fromEnum c > 0xFFFF = "\\U" ++ leading ++ hex
     where
     hex = showHex (fromEnum c) ""
     leading = replicate (8 - length hex) '0'
-  encodeChar c | fromEnum c > 0xFFF = "\\u" ++ showHex (fromEnum c) ""
-  encodeChar c | fromEnum c > 0xFF = "\\u0" ++ showHex (fromEnum c) ""
-  encodeChar c | fromEnum c < 0x10 = "\\x0" ++ showHex (fromEnum c) ""
-  encodeChar c | fromEnum c > 0x7E || fromEnum c < 0x20 = "\\x" ++ showHex (fromEnum c) ""
+  encodeChar c
+    | fromEnum c > 0xFFF = "\\u" ++ showHex (fromEnum c) ""
+  encodeChar c
+    | fromEnum c > 0xFF = "\\u0" ++ showHex (fromEnum c) ""
+  encodeChar c
+    | fromEnum c < 0x10 = "\\x0" ++ showHex (fromEnum c) ""
+  encodeChar c
+    | fromEnum c > 0x7E || fromEnum c < 0x20 = "\\x" ++ showHex (fromEnum c) ""
   encodeChar c = [c]
 
 accessor :: Pattern PrinterState Cpp (String, Cpp)
@@ -399,8 +406,7 @@ indexer = mkPattern' match
 lam :: Pattern PrinterState Cpp ((String, [(String, Maybe CppType)], Maybe CppType), Cpp)
 lam = mkPattern match
   where
-  match (CppLambda caps args rty ret) =
-    Just ((concatMap runCaptureType caps, args, rty), ret)
+  match (CppLambda caps args rty ret) = Just ((concatMap runCaptureType caps, args, rty), ret)
   match _ = Nothing
 
 app :: Pattern PrinterState Cpp (String, Cpp)
@@ -418,7 +424,8 @@ unary' op mkStr = Wrap match (++)
   match :: Pattern PrinterState Cpp (String, Cpp)
   match = mkPattern match'
     where
-    match' (CppUnary op' val) | op' == op = Just (mkStr val, val)
+    match' (CppUnary op' val)
+      | op' == op = Just (mkStr val, val)
     match' _ = Nothing
 
 unary :: UnaryOperator -> String -> Operator PrinterState Cpp String
@@ -438,7 +445,8 @@ binary op str = AssocL match (\v1 v2 -> v1 ++ str ++ v2)
     where
     match' (CppBinary op' v1@(CppStringLiteral _) v2@(CppStringLiteral _))
       | op' == op = Just (CppApp (CppVar "std::string") [v1], v2)
-    match' (CppBinary op' v1 v2) | op' == op = Just (v1, v2)
+    match' (CppBinary op' v1 v2)
+      | op' == op = Just (v1, v2)
     match' _ = Nothing
 
 prettyStatements :: [Cpp] -> StateT PrinterState Maybe String
@@ -449,9 +457,11 @@ prettyStatements sts = do
   where
   addsemi :: String -> String
   addsemi [] = []
-  addsemi s | all isSpace s = []
+  addsemi s
+    | all isSpace s = []
   addsemi s@('#':_) = s
-  addsemi s | last s == '#' = init s
+  addsemi s
+    | last s == '#' = init s
   addsemi s = s ++ ";"
 
 -- |
@@ -516,11 +526,16 @@ dotsTo chr' = map (\c -> if c == '.' then chr' else c)
 
 argstr :: (String, Maybe CppType) -> String
 argstr (name, Nothing) = argStr name (Auto [])
-argstr (name, Just typ) | name == C.__unused = argStr [] typ
+argstr (name, Just typ)
+  | name == C.__unused = argStr [] typ
 argstr (name, Just typ) = argStr name typ
 
 argStr :: String -> CppType -> String
-argStr name typ = runType typ ++ if null name then [] else " " ++ name
+argStr name typ =
+  runType typ ++
+  if null name
+    then []
+    else " " ++ name
 
 templDecl :: [(String, Int)] -> String
 templDecl ps = "template " ++ angles (intercalate ", " (go <$> ps))

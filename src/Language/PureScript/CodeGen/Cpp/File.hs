@@ -12,7 +12,6 @@
 -- File generation utility functions
 --
 -----------------------------------------------------------------------------
-
 {-# LANGUAGE PatternGuards #-}
 
 module Language.PureScript.CodeGen.Cpp.File where
@@ -36,37 +35,33 @@ toHeader = catMaybes . map go
   go (CppNamespace name cpps)
     | cpps'@(_:_) <- toHeader cpps = Just (CppNamespace name cpps')
     | otherwise = Nothing
-  go cpp@(CppUseNamespace{}) = Just cpp
+  go cpp@(CppUseNamespace {}) = Just cpp
   go (CppFunction _ _ _ qs _)
     | Inline `elem` qs = Nothing
-  go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])])) | atyp == Just (Auto [])
-    = Nothing
+  go (CppFunction _ [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp _ [_])]))
+    | atyp == Just (Auto []) = Nothing
   go (CppFunction name args rtyp qs _) =
-    let args' = (\(_,t) -> ("", t)) <$> args in
-    Just (CppFunction name args' rtyp qs CppNoOp)
-  go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
-    Nothing
-  go (CppVariableIntroduction _ _ (Just CppStringLiteral {})) =
-    Nothing
-  go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
-    Nothing
-  go (CppVariableIntroduction _ _ (Just (CppUnary _ (CppNumericLiteral {})))) =
-    Nothing
+    let args' = (\(_, t) -> ("", t)) <$> args
+    in Just (CppFunction name args' rtyp qs CppNoOp)
+  go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) = Nothing
+  go (CppVariableIntroduction _ _ (Just CppStringLiteral {})) = Nothing
+  go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) = Nothing
+  go (CppVariableIntroduction _ _ (Just (CppUnary _ (CppNumericLiteral {})))) = Nothing
   go (CppVariableIntroduction (name, _) _ (Just (CppLambda _ [] rty _))) =
     Just $ CppFunction name [] rty [] CppNoOp
-
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
       CppMapLiteral Instance _ ->
         Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ Any [Const, Ref]) [] CppNoOp
-      _ ->
-        Just $ CppVariableIntroduction (name, Just $ Any [Const]) [Extern] Nothing
-  go cpp@(CppStruct {}) =
-    Just cpp
+      _ -> Just $ CppVariableIntroduction (name, Just $ Any [Const]) [Extern] Nothing
+  go cpp@(CppStruct {}) = Just cpp
   go (CppComment comms cpp')
-    | Just cpp <- go cpp' = Just $ case cpp of CppFunction {} -> cpp
-                                               _ -> CppComment comms cpp
+    | Just cpp <- go cpp' =
+      Just $
+      case cpp of
+        CppFunction {} -> cpp
+        _ -> CppComment comms cpp
   go _ = Nothing
 
 ---------------------------------------------------------------------------------------------------
@@ -81,17 +76,13 @@ toHeaderFns = catMaybes . map go
   go cpp@(CppFunction _ _ _ qs _)
     | Inline `elem` qs = Just cpp
   go (CppFunction name [(_, atyp)] _ _ (CppBlock [CppReturn (CppApp cpp [_])]))
-    | Just Auto {} <- atyp
-    = Just (CppVariableIntroduction (name, Nothing) [] (Just cpp))
-  go cpp@(CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
-    Just cpp
-  go cpp@(CppVariableIntroduction _ _ (Just CppStringLiteral {})) =
-    Just cpp
-  go cpp@(CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
-    Just cpp
-  go cpp@(CppVariableIntroduction _ _ (Just (CppUnary _ (CppNumericLiteral {})))) =
-    Just cpp
-  go (CppComment comms cpp') | Just cpp <- go cpp' = Just (CppComment comms cpp)
+    | Just Auto {} <- atyp = Just (CppVariableIntroduction (name, Nothing) [] (Just cpp))
+  go cpp@(CppVariableIntroduction _ _ (Just CppNumericLiteral {})) = Just cpp
+  go cpp@(CppVariableIntroduction _ _ (Just CppStringLiteral {})) = Just cpp
+  go cpp@(CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) = Just cpp
+  go cpp@(CppVariableIntroduction _ _ (Just (CppUnary _ (CppNumericLiteral {})))) = Just cpp
+  go (CppComment comms cpp')
+    | Just cpp <- go cpp' = Just (CppComment comms cpp)
   go _ = Nothing
 
 ---------------------------------------------------------------------------------------------------
@@ -100,7 +91,8 @@ toBodyDecl :: [Cpp] -> [Cpp]
 toBodyDecl = catMaybes . map go
   where
   go :: Cpp -> Maybe Cpp
-  go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
+  go (CppComment comms cpp')
+    | Just commented <- go cpp' = Just (CppComment comms commented)
   go _ = Nothing
 
 ---------------------------------------------------------------------------------------------------
@@ -112,28 +104,22 @@ toBody = catMaybes . map go
   go (CppNamespace name cpps)
     | cpps'@(_:_) <- toBody cpps = Just (CppNamespace name cpps')
     | otherwise = Nothing
-  go cpp@(CppUseNamespace{}) = Just cpp
+  go cpp@(CppUseNamespace {}) = Just cpp
   go (CppFunction _ _ _ qs _)
     | Inline `elem` qs = Nothing
   go cpp@(CppFunction {}) = Just cpp
-  go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) =
-    Nothing
-  go (CppVariableIntroduction _ _ (Just CppStringLiteral {})) =
-    Nothing
-  go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) =
-    Nothing
-  go (CppVariableIntroduction _ _ (Just (CppUnary _ (CppNumericLiteral {})))) =
-    Nothing
+  go (CppVariableIntroduction _ _ (Just CppNumericLiteral {})) = Nothing
+  go (CppVariableIntroduction _ _ (Just CppStringLiteral {})) = Nothing
+  go (CppVariableIntroduction _ _ (Just CppBooleanLiteral {})) = Nothing
+  go (CppVariableIntroduction _ _ (Just (CppUnary _ (CppNumericLiteral {})))) = Nothing
   go (CppVariableIntroduction (name, _) _ (Just (CppLambda _ [] rty body))) =
     Just $ CppFunction name [] rty [] body
-
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
       CppMapLiteral Instance _ ->
         Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ Any [Const, Ref]) [] block
-      _ ->
-        Just $ CppVariableIntroduction (name, Just $ Any [Const]) [] (Just lambda)
+      _ -> Just $ CppVariableIntroduction (name, Just $ Any [Const]) [] (Just lambda)
     where
     val = CppVariableIntroduction ("$value$", Just $ Any [Const]) [Static] (Just $ addCaptures cpp)
     block = CppBlock [val, CppReturn (CppVar "$value$")]
@@ -142,39 +128,41 @@ toBody = catMaybes . map go
     addCaptures (CppMapLiteral t objs) = CppMapLiteral t (objlam <$> objs)
       where
       objlam :: (Cpp, Cpp) -> (Cpp, Cpp)
-      objlam (name', (CppLambda _ args rty body)) = (name' , CppLambda [] args rty $ addCaptures body)
+      objlam (name', (CppLambda _ args rty body)) =
+        (name', CppLambda [] args rty $ addCaptures body)
       objlam obj = obj
-    addCaptures (CppApp (CppLambda _ [] rty body) []) = CppApp (CppLambda [] [] rty (addCaptures body)) []
+    addCaptures (CppApp (CppLambda _ [] rty body) []) =
+      CppApp (CppLambda [] [] rty (addCaptures body)) []
     addCaptures cpps' = everywhereOnCpp addCapture cpps'
       where
       addCapture :: Cpp -> Cpp
       addCapture (CppLambda _ args rty body) = maybeRemCaps $ CppLambda [CaptureAll] args rty body
       addCapture cpp' = cpp'
-  go (CppComment comms cpp') | Just commented <- go cpp' = Just (CppComment comms commented)
+  go (CppComment comms cpp')
+    | Just commented <- go cpp' = Just (CppComment comms commented)
   go _ = Nothing
 
 -------------------------------------------------------------------------------------------------
 maybeRemCaps :: Cpp -> Cpp
 -------------------------------------------------------------------------------------------------
-maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppNumericLiteral{}]))
-  = CppLambda [] args rtyp body
-maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppStringLiteral{}]))
-  = CppLambda [] args rtyp body
-maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppCharLiteral{}]))
-  = CppLambda [] args rtyp body
-maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppBooleanLiteral{}]))
-  = CppLambda [] args rtyp body
-maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppAccessor{}]))
-  = CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppNumericLiteral {}])) =
+  CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppStringLiteral {}])) =
+  CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppCharLiteral {}])) =
+  CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppBooleanLiteral {}])) =
+  CppLambda [] args rtyp body
+maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn CppAccessor {}])) =
+  CppLambda [] args rtyp body
 maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn (CppVar "unit")])) -- TODO: not really safe
-  = CppLambda [] args rtyp body
+ = CppLambda [] args rtyp body
 maybeRemCaps cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
-
 fileBegin :: ModuleName -> String -> [Cpp]
-fileBegin mn suffix = [CppRaw ("#ifndef " ++ fileModName mn suffix),
-                       CppRaw ("#define " ++ fileModName mn suffix)]
+fileBegin mn suffix =
+  [CppRaw ("#ifndef " ++ fileModName mn suffix), CppRaw ("#define " ++ fileModName mn suffix)]
 
 fileEnd :: ModuleName -> String -> [Cpp]
 fileEnd mn suffix = [CppRaw ("#endif // " ++ fileModName mn suffix)]
@@ -187,14 +175,15 @@ isMain (ModuleName [ProperName "Main"]) = True
 isMain _ = False
 
 nativeMain :: Cpp
-nativeMain = CppFunction "main"
-               [ ([], Just $ Primitive "int")
-               , ([], Just $ Primitive "char *[]")
-               ]
-               (Just $ Primitive "int")
-               []
-               (CppBlock [ CppUseNamespace "Main"
-                         , CppApp (CppVar "INITIALIZE_GC") []
-                         , CppApp (CppAccessor (CppVar "main") (CppVar "Main")) []
-                         , CppReturn (CppNumericLiteral (Left 0))
-                         ])
+nativeMain =
+  CppFunction
+    "main"
+    [([], Just $ Primitive "int"), ([], Just $ Primitive "char *[]")]
+    (Just $ Primitive "int")
+    []
+    (CppBlock
+       [ CppUseNamespace "Main"
+       , CppApp (CppVar "INITIALIZE_GC") []
+       , CppApp (CppAccessor (CppVar "main") (CppVar "Main")) []
+       , CppReturn (CppNumericLiteral (Left 0))
+       ])
