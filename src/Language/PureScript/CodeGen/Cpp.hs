@@ -140,46 +140,68 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
             then do
               argNames <- replicateM (arity' - length args' - 1) freshName
               let args'' = zip argNames (repeat aty)
-              block <- asReturnBlock <$> valueToCpp
-                         (if null argNames
-                            then snd abs'
-                            else curriedApp
-                                     (tail argNames)
-                                     (App
-                                        nullAnn
-                                        (snd abs')
-                                        (Var nullAnn . Qualified Nothing . Ident $ head argNames)))
-              return $ CppNamespace ""
-                           [ CppFunction
-                                 name
-                                 (arg' : args' ++ args'')
-                                 rty
-                                 (vqs ++ if isAccessor (snd abs') then [Inline] else [])
-                                 (convertNestedLambdas $ convertDictIndexers block)
-                           , CppFunction
-                                 (curriedName name)
-                                 [arg']
-                                 rty
-                                 (if arity' == 1 then [Inline] else [])
-                                 (asReturnBlock $
-                                      curriedLambda
-                                          (fst <$> args' ++ args'')
-                                          (CppApp (CppVar name)
-                                                  (CppVar . fst <$> (arg' : args' ++ args''))))
-                           ]
+              if isTypeClassMember
+                then do -- typeclass member functions are stored curried
+                  body' <- nestedLambdas . optimizeIndexers classes <$> valueToCpp (snd abs')
+                  return $ CppNamespace ""
+                               [ CppFunction
+                                     (curriedName name)
+                                     [arg']
+                                     rty
+                                     [Inline]
+                                     (asReturnBlock body')
+                               , CppFunction
+                                     name
+                                     (arg' : args' ++ args'')
+                                     rty
+                                     (vqs ++ if isAccessor (snd abs') then [Inline] else [])
+                                     (asReturnBlock $
+                                          foldl (\fn a -> CppApp fn [a])
+                                                body'
+                                                (CppVar . fst <$> (args' ++ args'')))
+                               ]
+                else do
+                  body' <- nestedLambdas . optimizeIndexers classes <$> valueToCpp
+                             (if null argNames
+                                then snd abs'
+                                else curriedApp
+                                         (tail argNames)
+                                         (App
+                                            nullAnn
+                                            (snd abs')
+                                            (Var nullAnn . Qualified Nothing . Ident $ head argNames)))
+                  return $ CppNamespace ""
+                               [ CppFunction
+                                     name
+                                     (arg' : args' ++ args'')
+                                     rty
+                                     (vqs ++ if isAccessor (snd abs') then [Inline] else [])
+                                     (asReturnBlock body')
+                               , CppFunction
+                                     (curriedName name)
+                                     [arg']
+                                     rty
+                                     (if arity' == 1 then [Inline] else [])
+                                     (asReturnBlock $
+                                          curriedLambda
+                                              (fst <$> args' ++ args'')
+                                              (CppApp (CppVar name)
+                                                      (CppVar . fst <$> (arg' : args' ++ args''))))
+                               ]
             else do
-              block <- valueToCpp body
+              body' <- nestedLambdas . optimizeIndexers classes <$> valueToCpp body
               return $ CppFunction
                            name
                            [arg']
                            rty
-                           (vqs ++ if isIndexer block then [Inline] else [])
-                           (convertNestedLambdas . asReturnBlock $ convertDictIndexers block)
+                           (vqs ++ if isIndexer body' then [Inline] else [])
+                           (asReturnBlock body')
     return (CppComment com $ convertIfPrimFn ty' fn)
     where
     ty' | Just t <- ty = Just t
         | Just (t, _, _) <- M.lookup (Qualified (Just mn) ident) (E.names env) = Just t
         | otherwise = Nothing
+    isTypeClassMember = ident `elem` typeClassMembers
     arity' = maybe 0 arity ty'
     name = identToCpp ident
     aty = Just $ Any [Const, Ref]
@@ -193,10 +215,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     isIndexer :: Cpp -> Bool
     isIndexer (CppIndexer (CppSymbol _) (CppVar _)) = True
     isIndexer _ = False
-    classes = qualifiedToCpp (Ident . runProperName) . T.constraintClass <$>
-                  maybe [] extractConstraints ty'
-    dictClasses = zip (CppVar . fst <$> arg' : args') classes
-    convertDictIndexers = everywhereOnCpp (dictIndexerToEnum dictClasses)
+    classes = zip (CppVar . fst <$> arg' : args')
+                  (qualifiedToCpp (Ident . runProperName) . T.constraintClass <$> maybe [] extractConstraints ty')
+
 
   declToCpp _ (_, ident) (Constructor _ _ (ProperName _) []) =
     return $
@@ -251,7 +272,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       arity' <- arity ty,
       arity' > 0 = do
         argNames <- replicateM arity' freshName
-        block <- valueToCpp $
+        body' <- valueToCpp $
                    curriedApp
                        (tail argNames)
                        (App nullAnn e (Var nullAnn . Qualified Nothing . Ident $ head argNames))
@@ -271,7 +292,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                            (zip argNames $ repeat aty)
                            rty
                            []
-                           (asReturnBlock block)
+                           (asReturnBlock body')
                      ] ++ if arity' > 0
                             then [fn']
                             else []
@@ -312,9 +333,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   fnToLambda _ = error "Not a function!"
 
   -------------------------------------------------------------------------------------------------
-  convertNestedLambdas :: Cpp -> Cpp
+  nestedLambdas :: Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  convertNestedLambdas = everywhereOnCpp go
+  nestedLambdas = everywhereOnCpp go
     where
     go :: Cpp -> Cpp
     go f@(CppFunction {}) = maybeRemCaps $ fnToLambda f
@@ -466,20 +487,19 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp (Abs (_, _, ty, _) arg body) = do
     cpp <- valueToCpp body
-    let cpp' = convertNestedLambdas cpp
+    let cpp' = nestedLambdas cpp
     return $
       CppLambda
           []
           [(identToCpp arg, Just $ Any [Const, Ref])]
           (Just $ Any [])
-          (asReturnBlock $ convertDictIndexers cpp')
+          (asReturnBlock $ optimizeIndexers classes cpp')
     where
       arg' = identToCpp arg
       args' = identToCpp <$> (fst $ unAbs body [])
-      classes = qualifiedToCpp (Ident . runProperName) . T.constraintClass <$>
-                    maybe [] extractConstraints ty
-      dictClasses = zip (CppVar <$> arg' : args') classes
-      convertDictIndexers = everywhereOnCpp (dictIndexerToEnum dictClasses)
+      classes = zip (CppVar <$> arg' : args')
+                    (qualifiedToCpp (Ident . runProperName) . T.constraintClass <$> maybe [] extractConstraints ty)
+
   valueToCpp e@App{} = do
     let (f, args) = unApp e []
     args' <- mapM valueToCpp args
@@ -508,7 +528,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let rs = if hasRecursion ds''
                then convertRecursiveFns ds'' ret
                else ds''
-    let cpps = convertNestedLambdas <$> rs
+    let cpps = nestedLambdas <$> rs
     return $ CppApp
                  (CppLambda [] [] Nothing (CppBlock (cpps ++ [CppReturn ret])))
                  []
@@ -788,6 +808,14 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   findClass _ = Nothing
 
   -------------------------------------------------------------------------------------------------
+  typeClassMembers :: [Ident]
+  -------------------------------------------------------------------------------------------------
+  typeClassMembers = fst <$> (concat . M.elems $ M.map E.typeClassMembers (M.filterWithKey thisModule (E.typeClasses env)))
+    where
+    thisModule (Qualified (Just mn') _) _ = mn' == mn
+    thisModule _ _ = False
+
+  -------------------------------------------------------------------------------------------------
   dataCtors :: [Cpp]
   -------------------------------------------------------------------------------------------------
   dataCtors = [CppNamespace "data"
@@ -872,16 +900,19 @@ extractConstraints = go []
   go cs _ = cs
 
 ---------------------------------------------------------------------------------------------------
-dictIndexerToEnum :: [(Cpp,Cpp)] -> Cpp -> Cpp
+optimizeIndexers :: [(Cpp,Cpp)] -> Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
-dictIndexerToEnum repls (CppIndexer (CppSymbol prop) dict)
-  | Just cls <- lookup dict repls =
-    CppBinary Dot
-      (CppIndexer
-          (CppAccessor (CppVar . identToCpp $ Ident prop) cls)
-          (CppCast (mapType 0) dict))
-      (CppVar "second")
-dictIndexerToEnum _ cpp = cpp
+optimizeIndexers classes = everywhereOnCpp dictIndexerToEnum
+  where
+  dictIndexerToEnum :: Cpp -> Cpp
+  dictIndexerToEnum (CppIndexer (CppSymbol prop) dict)
+    | Just cls <- lookup dict classes =
+      CppBinary Dot
+        (CppIndexer
+            (CppAccessor (CppVar . identToCpp $ Ident prop) cls)
+            (CppCast (mapType 0) dict))
+        (CppVar "second")
+  dictIndexerToEnum cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
 curriedName :: String -> String
