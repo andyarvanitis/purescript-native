@@ -142,26 +142,26 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
               let args'' = zip argNames (repeat aty)
               if isTypeClassMember
                 then do -- typeclass member functions are stored curried
-                  body' <- nestedLambdas . optimizeIndexers classes <$> valueToCpp (snd abs')
+                  body' <- innerLambdas . optIndexers classes <$> valueToCpp (snd abs')
                   return $ CppNamespace ""
                                [ CppFunction
                                      (curriedName name)
                                      [arg']
                                      rty
                                      [Inline]
-                                     (asReturnBlock body')
+                                     (returnBlock body')
                                , CppFunction
                                      name
                                      (arg' : args' ++ args'')
                                      rty
                                      (vqs ++ if isAccessor (snd abs') then [Inline] else [])
-                                     (asReturnBlock $
+                                     (returnBlock $
                                           foldl (\fn a -> CppApp fn [a])
                                                 body'
                                                 (CppVar . fst <$> (args' ++ args'')))
                                ]
                 else do
-                  body' <- nestedLambdas . optimizeIndexers classes <$> valueToCpp
+                  body' <- innerLambdas . optIndexers classes <$> valueToCpp
                              (if null argNames
                                 then snd abs'
                                 else curriedApp
@@ -176,26 +176,26 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                      (arg' : args' ++ args'')
                                      rty
                                      (vqs ++ if isAccessor (snd abs') then [Inline] else [])
-                                     (asReturnBlock body')
+                                     (returnBlock body')
                                , CppFunction
                                      (curriedName name)
                                      [arg']
                                      rty
                                      (if arity' == 1 then [Inline] else [])
-                                     (asReturnBlock $
+                                     (returnBlock $
                                           curriedLambda
                                               (fst <$> args' ++ args'')
                                               (CppApp (CppVar name)
                                                       (CppVar . fst <$> (arg' : args' ++ args''))))
                                ]
             else do
-              body' <- nestedLambdas . optimizeIndexers classes <$> valueToCpp body
+              body' <- innerLambdas . optIndexers classes <$> valueToCpp body
               return $ CppFunction
                            name
                            [arg']
                            rty
                            (vqs ++ if isIndexer body' then [Inline] else [])
-                           (asReturnBlock body')
+                           (returnBlock body')
     return (CppComment com $ convertIfPrimFn ty' fn)
     where
     ty' | Just t <- ty = Just t
@@ -226,7 +226,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           []
           (Just $ Any [])
           [Inline]
-          (asReturnBlock $
+          (returnBlock $
                CppDataLiteral [CppAccessor (CppVar $ identToCpp ident) (CppVar "data")])
 
   declToCpp _ (_, ident) (Constructor _ _ (ProperName _) fields) =
@@ -236,7 +236,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
           (farg <$> fields')
           (Just $ Any [])
           [Inline]
-          (asReturnBlock $
+          (returnBlock $
                CppDataLiteral $
                    CppAccessor (CppVar name) (CppVar "data") : (CppVar <$> fields'))
     ] ++
@@ -281,7 +281,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                      [(head argNames, Just $ Any [Const, Ref])]
                      rty
                      []
-                     (asReturnBlock $
+                     (returnBlock $
                           curriedLambda
                               (tail argNames)
                               (CppApp (CppVar name)
@@ -292,7 +292,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                            (zip argNames $ repeat aty)
                            rty
                            []
-                           (asReturnBlock body')
+                           (returnBlock body')
                      ] ++ if arity' > 0
                             then [fn']
                             else []
@@ -333,9 +333,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
   fnToLambda _ = error "Not a function!"
 
   -------------------------------------------------------------------------------------------------
-  nestedLambdas :: Cpp -> Cpp
+  innerLambdas :: Cpp -> Cpp
   -------------------------------------------------------------------------------------------------
-  nestedLambdas = everywhereOnCpp go
+  innerLambdas = everywhereOnCpp go
     where
     go :: Cpp -> Cpp
     go f@(CppFunction {}) = maybeRemCaps $ fnToLambda f
@@ -420,7 +420,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                                        [CaptureAll]
                                        [(localdict, Just $ Any [Const, Ref])]
                                        (Just $ Any [])
-                                       (asReturnBlock cpp')
+                                       (returnBlock cpp')
     topdict :: String
     topdict = "_$dict$_"
     localdict :: String
@@ -487,13 +487,13 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
 
   valueToCpp (Abs (_, _, ty, _) arg body) = do
     cpp <- valueToCpp body
-    let cpp' = nestedLambdas cpp
+    let cpp' = innerLambdas cpp
     return $
       CppLambda
           []
           [(identToCpp arg, Just $ Any [Const, Ref])]
           (Just $ Any [])
-          (asReturnBlock $ optimizeIndexers classes cpp')
+          (returnBlock $ optIndexers classes cpp')
     where
       arg' = identToCpp arg
       args' = identToCpp <$> (fst $ unAbs body [])
@@ -528,7 +528,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
     let rs = if hasRecursion ds''
                then convertRecursiveFns ds'' ret
                else ds''
-    let cpps = nestedLambdas <$> rs
+    let cpps = innerLambdas <$> rs
     return $ CppApp
                  (CppLambda [] [] Nothing (CppBlock (cpps ++ [CppReturn ret])))
                  []
@@ -609,7 +609,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
       guardsToCpp (Left gs) = forM gs $ \(cond, val) -> do
         cond' <- valueToCpp cond
         done  <- valueToCpp val
-        return $ CppIfElse cond' (asReturnBlock done) Nothing
+        return $ CppIfElse cond' (returnBlock done) Nothing
       guardsToCpp (Right v) = return . CppReturn <$> valueToCpp v
 
   -- |
@@ -842,7 +842,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                   [(head argNames, Just $ Any [Const, Ref])]
                   (Just $ Any [])
                   (if arity' == 1 then [Inline] else [])
-                  (asReturnBlock $
+                  (returnBlock $
                       curriedLambda
                           (tail argNames)
                           (CppApp (CppVar name)
@@ -856,9 +856,9 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
                    M.toList $ E.names env
 
 ---------------------------------------------------------------------------------------------------
-asReturnBlock :: Cpp -> Cpp
+returnBlock :: Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
-asReturnBlock cpp = CppBlock [CppReturn cpp]
+returnBlock cpp = CppBlock [CppReturn cpp]
 
 ---------------------------------------------------------------------------------------------------
 curriedLambda :: [String] -> Cpp -> Cpp
@@ -867,7 +867,7 @@ curriedLambda args ret = foldr (\arg ret' -> CppLambda
                                                  [CaptureAll]
                                                  [(arg, Just $ Any [Const, Ref])]
                                                  (Just $ Any [])
-                                                 (asReturnBlock ret')
+                                                 (returnBlock ret')
                                 ) ret args
 
 ---------------------------------------------------------------------------------------------------
@@ -900,9 +900,9 @@ extractConstraints = go []
   go cs _ = cs
 
 ---------------------------------------------------------------------------------------------------
-optimizeIndexers :: [(Cpp,Cpp)] -> Cpp -> Cpp
+optIndexers :: [(Cpp,Cpp)] -> Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
-optimizeIndexers classes = everywhereOnCpp dictIndexerToEnum
+optIndexers classes = everywhereOnCpp dictIndexerToEnum
   where
   dictIndexerToEnum :: Cpp -> Cpp
   dictIndexerToEnum (CppIndexer (CppSymbol prop) dict)
@@ -965,10 +965,10 @@ allSymbols cpps = nub $ concatMap (everythingOnCpp (++) symbols) cpps
 symbolDefs :: [String] -> Cpp
 ---------------------------------------------------------------------------------------------------
 symbolDefs [] = CppNoOp
-symbolDefs syms = CppNamespace "PureScript" [CppNamespace "symbol" (asFunc <$> syms)]
+symbolDefs syms = CppNamespace "PureScript" [CppNamespace "symbol" (asStruct <$> syms)]
   where
-  asFunc :: String -> Cpp
-  asFunc s = CppStruct s []
+  asStruct :: String -> Cpp
+  asStruct s = CppStruct s []
 
 ---------------------------------------------------------------------------------------------------
 filterInlineFuncs :: Cpp -> Cpp
