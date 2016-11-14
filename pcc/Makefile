@@ -19,6 +19,7 @@ PURESCRIPT_PKGS := packages  # example: bower_components
 PURESCRIPT_SRC  := src
 OUTPUT          := output
 BIN             := main
+OBJ             := purescript.o
 
 override PCCFLAGS += --comments
 override CXXFLAGS += -std=c++11
@@ -44,6 +45,12 @@ release: codegen
 debug: codegen
 	@$(MAKE) $(BIN) CXXFLAGS+=$(DEBUG)
 
+release-object: codegen
+	@$(MAKE) $(OBJ) CXXFLAGS+=$(RELEASE)
+
+debug-object: codegen
+	@$(MAKE) $(OBJ) CXXFLAGS+=$(DEBUG)
+
 codegen:
 	@$(PCC) $(PCCFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
 
@@ -56,6 +63,11 @@ $(BIN): $(OBJS)
 	@echo "Linking" $(BIN_DIR)/$(BIN)
 	@mkdir -p $(BIN_DIR)
 	@$(CXX) $^ -o $(BIN_DIR)/$@ $(LDFLAGS)
+
+$(OBJ): $(OBJS)
+	@echo "Creating combined object file" $(BIN_DIR)/$(OBJ)
+	@mkdir -p $(BIN_DIR)
+	@$(LD) -r $^ -o $(BIN_DIR)/$@ $(LDFLAGS)
 
 -include $(DEPS)
 
