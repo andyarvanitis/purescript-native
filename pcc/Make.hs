@@ -119,9 +119,9 @@ buildMakeActions outputDir filePathMap usePrefix =
       let supportDir = outputDir </> "PureScript"
       supportFilesExist <- dirExists supportDir
       when (not supportFilesExist) $ do
-        writeTextFile (supportDir </> "PureScript.hh") $ B.unpack $(embedFile "pcc/include/purescript.hh")
-        writeTextFile (supportDir </> "PureScript.cc") $ B.unpack $(embedFile "pcc/include/purescript.cc")
-        writeTextFile (supportDir </> "purescript_memory.hh") $ B.unpack $(embedFile "pcc/include/purescript_memory.hh")
+        writeTextFile (supportDir </> "PureScript.hh") $ B.unpack $(embedFile "pcc/runtime/purescript.hh")
+        writeTextFile (supportDir </> "PureScript.cc") $ B.unpack $(embedFile "pcc/runtime/purescript.cc")
+        writeTextFile (supportDir </> "purescript_memory.hh") $ B.unpack $(embedFile "pcc/runtime/purescript_memory.hh")
 
       let inputPath = dropExtension $ getInputFile mn
           hfile = addExtension inputPath headerExt
