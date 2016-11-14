@@ -40,9 +40,6 @@ module Language.PureScript.CodeGen.Cpp.Optimizer (
 
 import Prelude.Compat
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative (Applicative)
-#endif
 import Control.Monad (liftM)
 import Control.Monad.Reader (MonadReader, ask, asks)
 import Control.Monad.Supply.Class (MonadSupply)
@@ -62,12 +59,12 @@ import Language.PureScript.CodeGen.Cpp.Optimizer.Unused
 -- |
 -- Apply a series of optimizer passes to simplified C++11 code
 --
-optimize :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
+optimize :: (MonadReader Options m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
 optimize nm cpp = do
   noOpt <- asks optionsNoOptimizations
   if noOpt then return cpp else optimize' nm cpp
 
-optimize' :: (Monad m, MonadReader Options m, Applicative m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
+optimize' :: (MonadReader Options m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
 optimize' nm cpp = do
   opts <- ask
   untilFixedPoint (liftM toAutoVars . inlineFnComposition . applyAll
