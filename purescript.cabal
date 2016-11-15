@@ -97,7 +97,8 @@ extra-source-files: examples/passing/*.purs
                   , INSTALL.md
                   , CONTRIBUTORS.md
                   , CONTRIBUTING.md
-                  , pcc/include/*.hh
+                  , pcc/runtime/*.hh
+                  , pcc/runtime/*.cc
 
 source-repository head
     type: git

@@ -74,12 +74,10 @@ buildMakeActions outputDir filePathMap usePrefix =
     let path = fromMaybe (error "Module has no filename in 'make'") $ M.lookup mn filePathMap
     let filePath = either (const []) takeDirectory path
         fileBase = filePath </> (last . words . dotsTo ' ' $ P.runModuleName mn)
-        sourceFFI = addExtension fileBase sourceExt
-        headerFFI = addExtension fileBase headerExt
+        ffis = addExtension fileBase <$> [sourceExt, headerExt] ++ otherExts
     e1 <- traverse getTimestamp path
-    sffi <- getTimestamp sourceFFI
-    hffi <- getTimestamp headerFFI
-    return $ fmap (max (max sffi hffi)) e1
+    ffimax <- foldl1 max <$> mapM getTimestamp ffis
+    return $ max ffimax <$> e1
 
   getOutputTimestamp :: P.ModuleName -> Make (Maybe UTCTime)
   getOutputTimestamp mn = do
@@ -135,6 +133,8 @@ buildMakeActions outputDir filePathMap usePrefix =
       sfileExists <- textFileExists sfile
       when (sfileExists) $ do
         copyTextFile (addExtension (fileBase ++ ffiMangle) sourceExt) sfile
+      mapM (copyTextFileWithExt fileBase inputPath) otherExts
+      return ()
 
   requiresForeign :: CF.Module a -> Bool
   requiresForeign = not . null . CF.moduleForeign
@@ -160,6 +160,12 @@ buildMakeActions outputDir filePathMap usePrefix =
     createDirectoryIfMissing True (takeDirectory to)
     copyFile from to
 
+  copyTextFileWithExt :: FilePath -> FilePath -> String -> Make ()
+  copyTextFileWithExt to from ext = makeIO (const (ErrorMessage [] $ CannotWriteFile to)) $ do
+    createDirectoryIfMissing True (takeDirectory to)
+    _ <- tryIOError $ copyFile (addExtension from ext) (addExtension to ext)
+    return ()
+
   writeTextFile :: FilePath -> String -> Make ()
   writeTextFile path text = makeIO (const (ErrorMessage [] $ CannotWriteFile path)) $ do
     createDirectoryIfMissing True (takeDirectory path)
@@ -181,6 +187,9 @@ headerExt = "hh"
 
 sourceExt :: String
 sourceExt = "cc"
+
+otherExts :: [String]
+otherExts = ["h", "inl"]
 
 ffiMangle :: String
 ffiMangle = "_ffi"

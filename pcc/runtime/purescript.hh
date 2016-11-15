@@ -19,7 +19,7 @@
 
 #if defined(DEBUG)
   #include <cassert>
-  #include <climits>
+  #include <limits>
   #define IF_DEBUG(x) x
 #else
   #define NDEBUG
@@ -165,8 +165,9 @@ class any {
   public:
 
   any(const int val) noexcept : tag(tag_t::Integer), i(val) {}
-  any(const long int_value) noexcept : tag(tag_t::Integer), i(int_value) {
-    assert(int_value >= INT_MIN && int_value <= INT_MAX);
+  any(const long val) noexcept : tag(tag_t::Integer), i(static_cast<decltype(i)>(val)) {
+    assert(val >= std::numeric_limits<decltype(i)>::min() &&
+           val <= std::numeric_limits<decltype(i)>::max());
   }
 
   any(const double val) noexcept : tag(tag_t::Double), d(val) {}
