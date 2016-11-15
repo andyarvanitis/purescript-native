@@ -15,7 +15,7 @@
 # You can also edit the generated version of this file directly.
 #
 PCC             := {bin/pcc} # example: /usr/local/bin/pcc
-PURESCRIPT_PKGS := packages  # example: bower_components
+PURESCRIPT_PKGS := .psc-package
 PURESCRIPT_SRC  := src
 OUTPUT          := output
 BIN             := main
@@ -33,9 +33,6 @@ endif
 DEBUG := "-DDEBUG -g"
 RELEASE := "-O3 -flto"
 
-PURESCRIPT_PKG_SRCS := $(shell find $(PURESCRIPT_PKGS) -name '*.purs' | grep -v \/test\/ | grep -v \/example\/ | grep -v \/examples\/)
-PURESCRIPT_SRCS := $(shell find $(PURESCRIPT_SRC) -name '*.purs')
-
 INCLUDES := -I $(OUTPUT)
 BIN_DIR := $(OUTPUT)/bin
 
@@ -45,14 +42,15 @@ release: codegen
 debug: codegen
 	@$(MAKE) $(BIN) CXXFLAGS+=$(DEBUG)
 
-release-object: codegen
-	@$(MAKE) $(OBJ) CXXFLAGS+=$(RELEASE)
-
-debug-object: codegen
-	@$(MAKE) $(OBJ) CXXFLAGS+=$(DEBUG)
-
-codegen:
+codegen: PURESCRIPT_PKG_SRCS=$(shell find $(PURESCRIPT_PKGS) -name '*.purs' | grep -v \/test\/ | grep -v \/example\/ | grep -v \/examples\/)
+codegen: PURESCRIPT_SRCS=$(shell find $(PURESCRIPT_SRC) -name '*.purs')
+#
+codegen: .psc-package
 	@$(PCC) $(PCCFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
+
+.psc-package:
+	@echo "Getting packages using 'psc-package'..."
+	@-psc-package update
 
 SRCS := $(shell find $(OUTPUT) 2>/dev/null -name '*.cc')
 

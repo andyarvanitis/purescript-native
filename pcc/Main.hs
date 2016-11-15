@@ -78,6 +78,7 @@ compile :: PCCMakeOptions -> IO ()
 compile PCCMakeOptions{..} = do
   input <- globWarningOnMisses (unless pccmJSONErrors . warnFileTypeNotFound) pccmInput
   when (null input && not pccmJSONErrors) $ do
+    generatePackagefile
     generateMakefile
     exitSuccess
   moduleFiles <- readInput input

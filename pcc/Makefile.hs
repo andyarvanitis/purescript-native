@@ -29,13 +29,27 @@ generateMakefile = do
     let makefile = $(embedFile "pcc/Makefile")
     exePath <- getExecutablePath
     putStrLn ""
-    putStrLn "Generating Makefile..."
-    putStrLn $ "pcc executable location: " ++ exePath
+    putStrLn $ "Generating Makefile... " ++ "pcc executable location " ++ exePath
     writeFile "Makefile" $ replace makefile pccPath exePath
     putStrLn "Done"
+    putStrLn ""
     putStrLn "Run 'make' or 'make release' to build an optimized release build."
+    putStrLn "Run 'make debug' to build an executable with assertions enabled and"
+    putStrLn "suitable for source-level debugging."
+    putStrLn ""
     putStrLn "The resulting binary executable will be located in output/bin (by default)."
     putStrLn ""
+
+generatePackagefile :: IO ()
+generatePackagefile = do
+  pkgfileExists <- doesFileExist "psc-package.json"
+  when (not pkgfileExists) $ do
+    let pkgfile = $(embedFile "pcc/psc-package.json")
+    putStrLn ""
+    putStrLn "Generating psc-package.json..."
+    writeFile "psc-package.json" $ B.unpack pkgfile
+    putStrLn "Done"
+    putStrLn "Use the 'psc-package' utility to install or update packages."
 
 replace :: B.ByteString -> B.ByteString -> String -> String
 replace s orig repl = replace'
