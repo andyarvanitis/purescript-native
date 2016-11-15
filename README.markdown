@@ -4,6 +4,10 @@ This is an experimental native compiler/backend for [PureScript](https://github.
 
 ---
 
+### **Please note that this project and [pure11](https://github.com/andyarvanitis/pure11) are now the same**
+
+---
+
 #### Performance
 
 * No runtime system (beyond some support classes and the standard C++11 runtime library)
