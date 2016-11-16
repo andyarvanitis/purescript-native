@@ -4,7 +4,7 @@ This is an experimental native compiler/backend for [PureScript](https://github.
 
 ---
 
-### **Please note that this project and [pure11](https://github.com/andyarvanitis/pure11) are now the same**
+### **Please note that this project and [pure11](https://github.com/pure11/pure11) are now the same**
 
 ---
 
@@ -16,7 +16,7 @@ This is an experimental native compiler/backend for [PureScript](https://github.
 
 #### Differences from PureScript:
 
-* Foreign imports are C++11 (or C) instead of JavaScript ([FFI examples](https://github.com/andyarvanitis/pure11/wiki/FFI_Examples))
+* Foreign imports are C++11 (or C) instead of JavaScript ([FFI examples](https://github.com/pure11/pure11/wiki/FFI_Examples))
 * Foreign functions are not written as curried functions (any necessary currying is done implicitly by the compiler)
 * Compiler is `pcc` instead of `psc`, `make` is recommended for building
 * No purescript-native-specific REPL
@@ -30,7 +30,7 @@ This is an experimental native compiler/backend for [PureScript](https://github.
 
 #### TO-DO:
 
-* Get all automated builds/tests fully up and running [(some work already done)](https://github.com/andyarvanitis/purescript-native/blob/native/pcc/TestMain.hs)
+* Get all automated builds/tests fully up and running [(some work already done)](https://github.com/pure11/purescript-native/blob/native/pcc/TestMain.hs)
 * Unicode (UTF-8) support for `String` (possibly use code from my Idris backend)
 * Lots of testing!
 
@@ -98,10 +98,10 @@ auto main(int, char *[]) -> int {
 };
 ```
 ---
-#### [FFI examples](https://github.com/andyarvanitis/pure11/wiki/FFI_Examples)
+#### [FFI examples](https://github.com/pure11/pure11/wiki/FFI_Examples)
 ---
 #### Getting Started
-This assumes you are running OS X or a Unix-like system (Linux, *BSD, etc.), and already have the ability to [build PureScript from source] (http://www.purescript.org/download/) (bottom of the page) -- but instead of cloning and building the repository in the instructions, make sure to use [this project's repo](https://github.com/andyarvanitis/purescript-native).
+This assumes you are running OS X or a Unix-like system (Linux, *BSD, etc.), and already have the ability to [build PureScript from source] (http://www.purescript.org/download/) (bottom of the page) -- but instead of cloning and building the repository in the instructions, make sure to use [this project's repo](https://github.com/pure11/purescript-native).
 
 1. Make sure you have developer tools for your system installed. For OS X, you'll need a recent version of Xcode. For Linux, etc., you need gcc 4.9.2 or later, including g++ support. You can also use clang 3.5 or later, but it still requires gcc for its C++ standard libraries.
 
