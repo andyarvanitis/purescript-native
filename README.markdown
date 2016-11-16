@@ -4,7 +4,7 @@
 
 ---
 
-### **Please note that this project and [purescript-native](https://github.com/pure11/purescript-native) are now the same**
+### **Please note that this project and [purescript-native](https://github.com/andyarvanitis/purescript-native) are now the same**
 
 ---
 
