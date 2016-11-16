@@ -41,7 +41,7 @@ This is an experimental C++11/native compiler backend for [PureScript](https://g
 
 #### Requirements
 
-* Everything you need to build [PureScript](https://github.com/purescript/purescript)
+* Everything you need to build [PureScript](https://github.com/purescript/purescript) (if you're running macOS 10.11+, you can use pre-built binaries from [here](https://github.com/pure11/pure11/releases/))
 * A C++11-capable toolchain, e.g. recent versions of clang, gcc, Microsoft Visual Studio 2015
 * GNU Make is the default supported build tool, but you should be able to use your favorite C++ build system, tools, debuggers, etc.
 
@@ -100,6 +100,8 @@ auto main(int, char *[]) -> int {
 ---
 #### Getting Started
 This assumes you are running OS X or a Unix-like system (Linux, *BSD, etc.), and already have the ability to [build PureScript from source] (http://www.purescript.org/download/) (bottom of the page) -- but instead of cloning and building the repository in the instructions, make sure to use this project's repo.
+
+If you're running macOS 10.11+ (El Capitan or later), you can avoid building it yourself by using these [pre-built snapshot binaries](https://github.com/pure11/pure11/releases/), but make sure you've installed a recent version of [purescript](https://github.com/purescript/purescript/releases) first.
 
 1. Make sure you have developer tools for your system installed. For OS X, you'll need a recent version of Xcode. For Linux, etc., you need gcc 4.9.2 or later, including g++ support. You can also use clang 3.5 or later, but it still requires gcc for its C++ standard libraries.
 
