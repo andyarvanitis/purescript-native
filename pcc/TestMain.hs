@@ -39,8 +39,6 @@ main = do
   when outputDirExists $ removeDirectoryRecursive outputDir
   createDirectory outputDir
 
-  fetchPackages
-
   let srcDir = outputDir </> "src"
   createDirectory srcDir
 
@@ -50,6 +48,8 @@ main = do
   -- Auto-generate Makefile
   setCurrentDirectory outputDir
   callProcess "pcc" []
+
+  fetchPackages
 
   let tests = filter (`notElem` skipped) passingTestCases
 
@@ -95,34 +95,29 @@ repo :: String
 repo = "git://github.com/pure11/"
 
 -------------------------------------------------------------------------------
-packages :: [(String, String)]
+packages :: [String]
 -------------------------------------------------------------------------------
 packages =
-  [ ("purescript-eff",          "")
-  , ("purescript-prelude",      "")
-  , ("purescript-assert",       "")
-  , ("purescript-st",           "")
-  , ("purescript-console",      "")
-  , ("purescript-functions",    "")
-  , ("purescript-partial",      "")
-  , ("purescript-newtype",      "")
-  , ("purescript-control",      "")
-  , ("purescript-invariant",    "")
-  , ("purescript-monoid",       "")
-  , ("purescript-generics-rep", "")
+  [ "eff"
+  , "prelude"
+  , "assert"
+  , "st"
+  , "console"
+  , "functions"
+  , "partial"
+  , "newtype"
+  , "control"
+  , "invariant"
+  , "monoid"
+  , "generics-rep"
   ]
 
 -------------------------------------------------------------------------------
 fetchPackages :: IO ()
 -------------------------------------------------------------------------------
 fetchPackages = do
-  (outputDir, baseDir) <- testsDir
-  let packageDir = outputDir </> "packages"
-  createDirectory packageDir
-  setCurrentDirectory packageDir
-  forM_ packages $ \package -> let branch = snd package in
-    callProcess "git" $ ["clone"] ++ (if null branch then [] else ["--branch", branch]) ++ [repo ++ (fst package) ++ ".git"]
-  setCurrentDirectory baseDir
+  mapM (callProcess "psc-package" . (\p -> ["install", p])) packages
+  return ()
 
 -------------------------------------------------------------------------------
 skipped :: [String]
