@@ -42,6 +42,12 @@ release: codegen
 debug: codegen
 	@$(MAKE) $(BIN) CXXFLAGS+=$(DEBUG)
 
+release-object: codegen
+	@$(MAKE) $(OBJ) CXXFLAGS+=$(RELEASE)
+
+debug-object: codegen
+	@$(MAKE) $(OBJ) CXXFLAGS+=$(DEBUG)
+
 codegen: PURESCRIPT_PKG_SRCS=$(shell find $(PURESCRIPT_PKGS) -name '*.purs' | grep -v \/test\/ | grep -v \/example\/ | grep -v \/examples\/)
 codegen: PURESCRIPT_SRCS=$(shell find $(PURESCRIPT_SRC) -name '*.purs')
 #
