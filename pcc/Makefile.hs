@@ -19,7 +19,9 @@ import Control.Monad (when)
 import Data.FileEmbed (embedFile)
 import System.Environment (getExecutablePath)
 import System.Directory (doesFileExist)
+import System.FilePath (takeDirectory)
 
+import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as B
 
 generateMakefile :: IO ()
@@ -30,7 +32,11 @@ generateMakefile = do
     exePath <- getExecutablePath
     putStrLn ""
     putStrLn $ "Generating Makefile... " ++ "pcc executable location " ++ exePath
-    writeFile "Makefile" $ replace makefile pccPath exePath
+    writeFile "Makefile" . T.unpack $
+        T.replace
+          pathPlaceholder
+          (T.pack $ takeDirectory exePath)
+          (T.pack $ B.unpack makefile)
     putStrLn "Done"
     putStrLn ""
     putStrLn "Run 'make' or 'make release' to build an optimized release build."
@@ -51,14 +57,5 @@ generatePackagefile = do
     putStrLn "Done"
     putStrLn "Use the 'psc-package' utility to install or update packages."
 
-replace :: B.ByteString -> B.ByteString -> String -> String
-replace s orig repl = replace'
-  where
-  replace'
-    | (p1, p2) <- B.breakSubstring orig s,
-                  not (B.null p2) = B.unpack p1 ++ repl ++ trim (B.unpack p2)
-    | otherwise = B.unpack s
-  trim = drop (B.length orig)
-
-pccPath :: B.ByteString
-pccPath = "{bin/pcc}"
+pathPlaceholder :: T.Text
+pathPlaceholder = "{{path}}"

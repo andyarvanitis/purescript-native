@@ -14,7 +14,8 @@
 #
 # You can also edit the generated version of this file directly.
 #
-PCC             := {bin/pcc} # example: /usr/local/bin/pcc
+PCC             := {{path}}/pcc
+PSC_PACKAGE     := psc-package
 PURESCRIPT_PKGS := .psc-package
 PURESCRIPT_SRC  := src
 OUTPUT          := output
@@ -51,12 +52,12 @@ debug-object: codegen
 codegen: PURESCRIPT_PKG_SRCS=$(shell find $(PURESCRIPT_PKGS) -name '*.purs' | grep -v \/test\/ | grep -v \/example\/ | grep -v \/examples\/)
 codegen: PURESCRIPT_SRCS=$(shell find $(PURESCRIPT_SRC) -name '*.purs')
 #
-codegen: .psc-package
+codegen: $(PURESCRIPT_PKGS)
 	@$(PCC) $(PCCFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
 
-.psc-package:
-	@echo "Getting packages using 'psc-package'..."
-	@-psc-package update
+$(PURESCRIPT_PKGS):
+	@echo "Getting packages using" $(PSC_PACKAGE) "..."
+	@$(PSC_PACKAGE) update
 
 SRCS := $(shell find $(OUTPUT) 2>/dev/null -name '*.cc')
 
