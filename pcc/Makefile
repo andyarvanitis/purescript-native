@@ -15,7 +15,7 @@
 # You can also edit the generated version of this file directly.
 #
 PCC             := {{path}}/pcc
-PSC_PACKAGE     := psc-package
+PSC_PACKAGE     := {{path}}/psc-package
 PURESCRIPT_PKGS := .psc-package
 PURESCRIPT_SRC  := src
 OUTPUT          := output
