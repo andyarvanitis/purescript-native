@@ -39,10 +39,4 @@ for arch_ in $ARCHS ; do
   fi
 done
 
-## Look for psc-package, in case it's already in the PATH
-#
-if [ -x "$(command -v psc-package)" ] ; then
-  PSC_PKG="PSC_PACKAGE=$(command -v psc-package)"
-fi
-
 make $OBJECT_TYPE ${PSC_PKG} CXXFLAGS="$ARCH_OPTS $FLTO -isysroot $SDKROOT" LD="clang -Wl,-r -nostdlib $ARCH_OPTS" -j`sysctl -n hw.ncpu`

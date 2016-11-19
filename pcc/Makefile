@@ -15,7 +15,8 @@
 # You can also edit the generated version of this file directly.
 #
 PCC             := {{path}}/pcc
-PSC_PACKAGE     := {{path}}/psc-package
+PSC_PKG_BIN     := psc-package
+PSC_PACKAGE     := {{path}}/$(PSC_PKG_BIN)
 PURESCRIPT_PKGS := .psc-package
 PURESCRIPT_SRC  := src
 OUTPUT          := output
@@ -25,6 +26,10 @@ OBJ             := purescript.o
 override PCCFLAGS += --comments
 override CXXFLAGS += -std=c++11
 override LDFLAGS  +=
+
+ifeq ("$(wildcard $(PSC_PACKAGE))","")
+	PSC_PACKAGE := $(PSC_PKG_BIN)
+endif
 
 ifeq ($(GC),yes)
   override CXXFLAGS += -DUSE_GC
