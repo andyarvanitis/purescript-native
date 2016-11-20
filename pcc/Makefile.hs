@@ -26,13 +26,13 @@ import qualified Data.ByteString.Char8 as B
 
 generateMakefile :: IO ()
 generateMakefile = do
-  makefileExists <- doesFileExist "Makefile"
+  makefileExists <- doesFileExist makefilename
   when (not makefileExists) $ do
     let makefile = $(embedFile "pcc/Makefile")
     exePath <- getExecutablePath
     putStrLn ""
-    putStrLn $ "Generating Makefile... " ++ "pcc executable location " ++ exePath
-    writeFile "Makefile" . T.unpack $
+    putStrLn $ "Generating " ++ makefilename ++ "... " ++ "pcc executable location " ++ exePath
+    writeFile makefilename . T.unpack $
         T.replace
           pathPlaceholder
           (T.pack $ takeDirectory exePath)
@@ -48,14 +48,34 @@ generateMakefile = do
 
 generatePackagefile :: IO ()
 generatePackagefile = do
-  pkgfileExists <- doesFileExist "psc-package.json"
+  pkgfileExists <- doesFileExist packagefilename
   when (not pkgfileExists) $ do
     let pkgfile = $(embedFile "pcc/psc-package.json")
     putStrLn ""
-    putStrLn "Generating psc-package.json..."
-    writeFile "psc-package.json" $ B.unpack pkgfile
+    putStrLn $ "Generating " ++ packagefilename ++ "..."
+    writeFile packagefilename $ B.unpack pkgfile
     putStrLn "Done"
     putStrLn "Use the 'psc-package' utility to install or update packages."
+
+generateXcodefile :: IO ()
+generateXcodefile = do
+  xcodefileExists <- doesFileExist xcodefilename
+  when (not xcodefileExists) $ do
+    let xcodefile = $(embedFile "pcc/psc-xcode.sh")
+    putStrLn ""
+    putStrLn $ "Generating " ++ xcodefilename ++ "..."
+    writeFile xcodefilename $ B.unpack xcodefile
+    putStrLn "Done"
+    putStrLn "Add this file to an Xcode 'Run Script' build phase."
+
+makefilename :: String
+makefilename = "Makefile"
+
+packagefilename :: String
+packagefilename = "psc-package.json"
+
+xcodefilename :: String
+xcodefilename = "psc-xcode.sh"
 
 pathPlaceholder :: T.Text
 pathPlaceholder = "{{path}}"

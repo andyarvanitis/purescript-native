@@ -54,6 +54,7 @@ data PCCMakeOptions = PCCMakeOptions
   , pccmOpts         :: P.Options
   , pccmUsePrefix    :: Bool
   , pccmJSONErrors   :: Bool
+  , pccmXcode        :: Bool
   }
 
 -- | Argumnets: verbose, use JSON, warnings, errors
@@ -77,6 +78,8 @@ printWarningsAndErrors verbose True warnings errors = do
 compile :: PCCMakeOptions -> IO ()
 compile PCCMakeOptions{..} = do
   input <- globWarningOnMisses (unless pccmJSONErrors . warnFileTypeNotFound) pccmInput
+  when pccmXcode $ do
+    generateXcodefile
   when (null input && not pccmJSONErrors) $ do
     generatePackagefile
     generateMakefile
@@ -165,6 +168,11 @@ dumpCoreFn = switch $
      long "dump-corefn"
   <> help "Dump the (functional) core representation of the compiled code at output/*/corefn.json"
 
+xcode :: Parser Bool
+xcode = switch $
+     long "xcode"
+  <> help "Generate support files for Xcode"
+
 options :: Parser P.Options
 options = P.Options <$> noTco
                     <*> noMagicDo
@@ -181,6 +189,7 @@ pccMakeOptions = PCCMakeOptions <$> many inputFile
                                 <*> options
                                 <*> (not <$> noPrefix)
                                 <*> jsonErrors
+                                <*> xcode
 
 main :: IO ()
 main = do
