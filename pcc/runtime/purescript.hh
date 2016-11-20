@@ -15,6 +15,10 @@
 #ifndef PureScript_HH
 #define PureScript_HH
 
+#if !defined(__cplusplus)
+#error This is a C++ file!
+#endif
+
 // Standard includes
 
 #if defined(DEBUG)
