@@ -181,12 +181,29 @@ install pkgName = do
   writePackageFile pkg'
   echo "psc-package.json file was updated"
 
+uninstall :: String -> IO ()
+uninstall pkgName = do
+  pkg <- readPackageFile
+  let pkg' = pkg { depends = filter (/= pack pkgName) $ depends pkg }
+  updateImpl pkg'
+  writePackageFile pkg'
+  echo "psc-package.json file was updated"
+
 listDependencies :: IO ()
 listDependencies = do
   pkg@PackageConfig{ depends } <- readPackageFile
   db <- readPackageSet pkg
   trans <- getTransitiveDeps db depends
   traverse_ (echo . fst) trans
+
+listPackages :: IO ()
+listPackages = do
+  pkg <- readPackageFile
+  db <- readPackageSet pkg
+  traverse_ echo (fmt <$> Map.assocs db)
+  where
+  fmt :: (Text, PackageInfo) -> Text
+  fmt (name, PackageInfo{ version }) = name <> " (" <> version <> ")"
 
 getSourcePaths :: PackageConfig -> PackageSet -> [Text] -> IO [Turtle.FilePath]
 getSourcePaths PackageConfig{..} db pkgNames = do
@@ -240,6 +257,9 @@ main = do
         , Opts.command "update"
             (Opts.info (pure update)
             (Opts.progDesc "Update dependencies"))
+        , Opts.command "uninstall"
+            (Opts.info (uninstall <$> pkg)
+            (Opts.progDesc "Uninstall the named package"))
         , Opts.command "install"
             (Opts.info (install <$> pkg)
             (Opts.progDesc "Install the named package"))
@@ -252,6 +272,9 @@ main = do
         , Opts.command "sources"
             (Opts.info (pure listSourcePaths)
             (Opts.progDesc "List all (active) source paths for dependencies"))
+        , Opts.command "available"
+            (Opts.info (pure listPackages)
+            (Opts.progDesc "List all packages available in the package set"))
         ]
       where
         pkg = Opts.strArgument $

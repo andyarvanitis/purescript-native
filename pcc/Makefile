@@ -14,7 +14,9 @@
 #
 # You can also edit the generated version of this file directly.
 #
-PCC             := {bin/pcc} # example: /usr/local/bin/pcc
+PCC             := {{path}}/pcc
+PSC_PKG_BIN     := psc-package
+PSC_PACKAGE     := {{path}}/$(PSC_PKG_BIN)
 PURESCRIPT_PKGS := .psc-package
 PURESCRIPT_SRC  := src
 OUTPUT          := output
@@ -24,6 +26,10 @@ OBJ             := purescript.o
 override PCCFLAGS += --comments
 override CXXFLAGS += -std=c++11
 override LDFLAGS  +=
+
+ifeq ("$(wildcard $(PSC_PACKAGE))","")
+	PSC_PACKAGE := $(PSC_PKG_BIN)
+endif
 
 ifeq ($(GC),yes)
   override CXXFLAGS += -DUSE_GC
@@ -42,15 +48,21 @@ release: codegen
 debug: codegen
 	@$(MAKE) $(BIN) CXXFLAGS+=$(DEBUG)
 
+release-object: codegen
+	@$(MAKE) $(OBJ) CXXFLAGS+=$(RELEASE)
+
+debug-object: codegen
+	@$(MAKE) $(OBJ) CXXFLAGS+=$(DEBUG)
+
 codegen: PURESCRIPT_PKG_SRCS=$(shell find $(PURESCRIPT_PKGS) -name '*.purs' | grep -v \/test\/ | grep -v \/example\/ | grep -v \/examples\/)
 codegen: PURESCRIPT_SRCS=$(shell find $(PURESCRIPT_SRC) -name '*.purs')
 #
-codegen: .psc-package
+codegen: $(PURESCRIPT_PKGS)
 	@$(PCC) $(PCCFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
 
-.psc-package:
-	@echo "Getting packages using 'psc-package'..."
-	@-psc-package update
+$(PURESCRIPT_PKGS):
+	@echo "Getting packages using" $(PSC_PACKAGE) "..."
+	@$(PSC_PACKAGE) update
 
 SRCS := $(shell find $(OUTPUT) 2>/dev/null -name '*.cc')
 
