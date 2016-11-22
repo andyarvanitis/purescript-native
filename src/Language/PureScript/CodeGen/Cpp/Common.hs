@@ -53,28 +53,9 @@ identNeedsEscaping s = s /= identToCpp (Ident s)
 identCharToString :: Char -> String
 identCharToString c | isAlphaNum c = [c]
 identCharToString '_' = "_"
-identCharToString '.' = "_dot_"
-identCharToString '$' = "_dollar_"
-identCharToString '~' = "_tilde_"
-identCharToString '=' = "_eq_"
-identCharToString '<' = "_less_"
-identCharToString '>' = "_greater_"
-identCharToString '!' = "_bang_"
-identCharToString '#' = "_hash_"
-identCharToString '%' = "_percent_"
-identCharToString '^' = "_up_"
-identCharToString '&' = "_amp_"
-identCharToString '|' = "_bar_"
-identCharToString '*' = "_times_"
-identCharToString '/' = "_div_"
-identCharToString '+' = "_plus_"
-identCharToString '-' = "_minus_"
-identCharToString ':' = "_colon_"
-identCharToString '\\' = "_bslash_"
-identCharToString '?' = "_qmark_"
-identCharToString '@' = "_at_"
-identCharToString '\'' = "_prime_"
-identCharToString c = '_' : show (ord c) ++ "_"
+identCharToString '.' = "_"
+identCharToString '\'' = "_prime"
+identCharToString c = "$0" ++ show (ord c)
 
 -- |
 -- Checks whether an identifier name is reserved in C++11.
