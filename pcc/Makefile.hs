@@ -28,7 +28,7 @@ generateMakefile :: IO ()
 generateMakefile = do
   makefileExists <- doesFileExist makefilename
   when (not makefileExists) $ do
-    let makefile = $(embedFile "pcc/Makefile")
+    let makefile = $(embedFile "pcc/support/Makefile")
     exePath <- getExecutablePath
     putStrLn ""
     putStrLn $ "Generating " ++ makefilename ++ "... " ++ "pcc executable location " ++ exePath
@@ -50,7 +50,7 @@ generatePackagefile :: IO ()
 generatePackagefile = do
   pkgfileExists <- doesFileExist packagefilename
   when (not pkgfileExists) $ do
-    let pkgfile = $(embedFile "pcc/psc-package.json")
+    let pkgfile = $(embedFile "pcc/support/psc-package.json")
     putStrLn ""
     putStrLn $ "Generating " ++ packagefilename ++ "..."
     writeFile packagefilename $ B.unpack pkgfile
@@ -61,7 +61,7 @@ generateXcodefile :: IO ()
 generateXcodefile = do
   xcodefileExists <- doesFileExist xcodefilename
   when (not xcodefileExists) $ do
-    let xcodefile = $(embedFile "pcc/psc-xcode.sh")
+    let xcodefile = $(embedFile "pcc/support/psc-xcode.sh")
     putStrLn ""
     putStrLn $ "Generating " ++ xcodefilename ++ "..."
     writeFile xcodefilename $ B.unpack xcodefile
