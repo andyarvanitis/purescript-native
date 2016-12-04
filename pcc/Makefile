@@ -21,7 +21,6 @@ PURESCRIPT_PKGS := .psc-package
 PURESCRIPT_SRC  := src
 OUTPUT          := output
 BIN             := main
-OBJ             := purescript.o
 
 override PCCFLAGS += --comments
 override CXXFLAGS += -std=c++11
@@ -48,12 +47,6 @@ release: codegen
 debug: codegen
 	@$(MAKE) $(BIN) CXXFLAGS+=$(DEBUG)
 
-release-object: codegen
-	@$(MAKE) $(OBJ) CXXFLAGS+=$(RELEASE)
-
-debug-object: codegen
-	@$(MAKE) $(OBJ) CXXFLAGS+=$(DEBUG)
-
 codegen: PURESCRIPT_PKG_SRCS=$(shell find $(PURESCRIPT_PKGS) -name '*.purs' | grep -v \/test\/ | grep -v \/example\/ | grep -v \/examples\/)
 codegen: PURESCRIPT_SRCS=$(shell find $(PURESCRIPT_SRC) -name '*.purs')
 #
@@ -73,11 +66,6 @@ $(BIN): $(OBJS)
 	@echo "Linking" $(BIN_DIR)/$(BIN)
 	@mkdir -p $(BIN_DIR)
 	@$(CXX) $^ -o $(BIN_DIR)/$@ $(LDFLAGS)
-
-$(OBJ): $(OBJS)
-	@echo "Creating combined object file" $(BIN_DIR)/$(OBJ)
-	@mkdir -p $(BIN_DIR)
-	@$(LD) -r $^ -o $(BIN_DIR)/$@ $(LDFLAGS)
 
 -include $(DEPS)
 

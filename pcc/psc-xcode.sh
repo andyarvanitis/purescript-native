@@ -14,14 +14,14 @@ if [[ "$CONFIGURATION" == "Debug" ]] ; then
     touch "$IS_DEBUG"
   fi
   rm "$IS_RELEASE" > /dev/null 2>&1 || true
-  OBJECT_TYPE=debug-object
+  OBJECT_TYPE=debug
 else
   if [ ! -f "$IS_RELEASE" ] ; then
     make clean
     touch "$IS_RELEASE"
   fi
   rm "$IS_DEBUG" > /dev/null 2>&1 || true
-  OBJECT_TYPE=release-object
+  OBJECT_TYPE=release
 fi
 
 ## Create compiler switches for architectures
@@ -39,4 +39,4 @@ for arch_ in $ARCHS ; do
   fi
 done
 
-make $OBJECT_TYPE ${PSC_PKG} CXXFLAGS="$ARCH_OPTS $FLTO -isysroot $SDKROOT" LD="clang -Wl,-r -nostdlib $ARCH_OPTS" -j`sysctl -n hw.ncpu`
+make $OBJECT_TYPE CXXFLAGS="$ARCH_OPTS $FLTO -isysroot $SDKROOT" LDFLAGS="-r -nostdlib $ARCH_OPTS" BIN=purescript.o -j`sysctl -n hw.ncpu`
