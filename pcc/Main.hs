@@ -52,6 +52,7 @@ data PCCMakeOptions = PCCMakeOptions
   { pccmInput        :: [FilePath]
   , pccmOutputDir    :: FilePath
   , pccmOpts         :: P.Options
+  , pccmOtherOpts    :: OtherOptions
   , pccmUsePrefix    :: Bool
   , pccmJSONErrors   :: Bool
   , pccmXcode        :: Bool
@@ -88,7 +89,7 @@ compile PCCMakeOptions{..} = do
   (makeErrors, makeWarnings) <- runMake pccmOpts $ do
     ms <- P.parseModulesFromFiles id moduleFiles
     let filePathMap = M.fromList $ map (\(fp, P.Module _ _ mn _ _) -> (mn, Right fp)) ms
-    let makeActions = buildMakeActions pccmOutputDir filePathMap pccmUsePrefix
+    let makeActions = buildMakeActions pccmOutputDir filePathMap pccmUsePrefix pccmOtherOpts
     P.make makeActions (map snd ms)
   printWarningsAndErrors (P.optionsVerboseErrors pccmOpts) pccmJSONErrors makeWarnings makeErrors
   exitSuccess
@@ -173,6 +174,11 @@ xcode = switch $
      long "xcode"
   <> help "Generate support files for Xcode"
 
+ucns :: Parser Bool
+ucns = switch $
+     long "use-ucns"
+  <> help "Use UCNs for unicode identifiers (for compilers that do not fully support them, such as gcc)"
+
 options :: Parser P.Options
 options = P.Options <$> noTco
                     <*> noMagicDo
@@ -183,10 +189,14 @@ options = P.Options <$> noTco
                     <*> sourceMaps
                     <*> dumpCoreFn
 
+otherOptions :: Parser OtherOptions
+otherOptions = OtherOptions <$> ucns
+
 pccMakeOptions :: Parser PCCMakeOptions
 pccMakeOptions = PCCMakeOptions <$> many inputFile
                                 <*> outputDirectory
                                 <*> options
+                                <*> otherOptions
                                 <*> (not <$> noPrefix)
                                 <*> jsonErrors
                                 <*> xcode

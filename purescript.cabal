@@ -97,8 +97,11 @@ extra-source-files: examples/passing/*.purs
                   , INSTALL.md
                   , CONTRIBUTORS.md
                   , CONTRIBUTING.md
-                  , pcc/runtime/*
-                  , pcc/support/*
+                  , pcc/runtime/*.hh
+                  , pcc/runtime/*.cc
+                  , pcc/support/Makefile
+                  , pcc/support/*.json
+                  , pcc/support/*.sh
 
 source-repository head
     type: git
@@ -192,6 +195,7 @@ library
                      Language.PureScript.CodeGen.Cpp.Optimizer.Uncurry
                      Language.PureScript.CodeGen.Cpp.Optimizer.Unused
                      Language.PureScript.CodeGen.Cpp.Types
+                     Language.PureScript.CodeGen.Cpp.Unicode
                      Language.PureScript.Pretty.Cpp
 
                      Language.PureScript.Constants
