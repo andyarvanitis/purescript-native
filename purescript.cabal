@@ -195,6 +195,7 @@ library
                      Language.PureScript.CodeGen.Cpp.Optimizer.Uncurry
                      Language.PureScript.CodeGen.Cpp.Optimizer.Unused
                      Language.PureScript.CodeGen.Cpp.Types
+                     Language.PureScript.CodeGen.Cpp.Unicode
                      Language.PureScript.Pretty.Cpp
 
                      Language.PureScript.Constants

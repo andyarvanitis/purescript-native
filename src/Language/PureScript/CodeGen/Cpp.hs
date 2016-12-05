@@ -23,6 +23,7 @@ module Language.PureScript.CodeGen.Cpp
   ( module AST
   , module Common
   , moduleToCpp
+  , OtherOptions(..)
   , P.prettyPrintCpp
   ) where
 
@@ -44,6 +45,7 @@ import Language.PureScript.CodeGen.Cpp.File
 import Language.PureScript.CodeGen.Cpp.Optimizer
 import Language.PureScript.CodeGen.Cpp.Optimizer.TCO
 import Language.PureScript.CodeGen.Cpp.Types
+import Language.PureScript.CodeGen.Cpp.Unicode
 import Language.PureScript.Comments
 import Language.PureScript.CoreFn
 import Language.PureScript.Names
@@ -56,6 +58,10 @@ import qualified Language.PureScript.Environment as E
 import qualified Language.PureScript.Pretty.Cpp as P
 import qualified Language.PureScript.Types as T
 
+data OtherOptions = OtherOptions
+  { optionsUseUCNs :: Bool
+  } deriving Show
+
 -- |
 -- Generate code in the simplified C++1x intermediate representation for all declarations in a
 -- module.
@@ -64,9 +70,9 @@ import qualified Language.PureScript.Types as T
 moduleToCpp
   :: forall m.
      (Applicative m, Monad m, MonadReader Options m, MonadSupply m)
-  => E.Environment -> Module Ann -> m [Cpp]
+  => OtherOptions -> E.Environment -> Module Ann -> m [Cpp]
 ---------------------------------------------------------------------------------------------------
-moduleToCpp env (Module _ mn imps _ foreigns decls) = do
+moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   cppImports <-
     traverse (pure . runModuleName) . delete (ModuleName [ProperName C.prim]) . (\\ [mn]) $
     (snd <$> imps)
@@ -83,7 +89,7 @@ moduleToCpp env (Module _ mn imps _ foreigns decls) = do
         E.dataConstructors env
   cpps' <- traverse (optimize $ namesmap ++ datamap) cpps
   foreignWrappers <- curriedForeigns
-  let optimized = cpps' ++ foreignWrappers
+  let optimized = (otherTransforms otherOpts <$> cpps') ++ foreignWrappers
   let moduleHeader =
         fileBegin mn "HH" ++
         P.linebreak ++
@@ -917,3 +923,9 @@ filterInlineFuncs = everywhereOnCpp convert
     shouldRemove CppLambda {} = True
     shouldRemove _ = False
   convert cpp = cpp
+
+---------------------------------------------------------------------------------------------------
+otherTransforms :: OtherOptions -> Cpp -> Cpp
+---------------------------------------------------------------------------------------------------
+otherTransforms OtherOptions {optionsUseUCNs = True} = everywhereOnCpp unicodeToUCNs
+otherTransforms _ = id
