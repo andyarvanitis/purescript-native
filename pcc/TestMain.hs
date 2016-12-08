@@ -19,6 +19,7 @@ import Control.Monad
 
 import System.Process
 import System.FilePath
+import System.IO
 import System.Directory
 
 -------------------------------------------------------------------------------
@@ -53,6 +54,11 @@ main = do
 
   let tests = filter (`notElem` skipped) passingTestCases
 
+  tmp <- getTemporaryDirectory
+  createDirectoryIfMissing False (tmp </> logpath)
+  outputFile <- openFile (tmp </> logpath </> logfile) WriteMode
+  hClose outputFile
+
   -- Run the tests
   --
   forM_ tests $ \inputFile -> do
@@ -72,7 +78,9 @@ main = do
     --
     -- Run C++ files
     --
-    callProcess ("output" </> "bin" </> "main") []
+    outputFile <- openFile (tmp </> logpath </> logfile) AppendMode
+    hPutStrLn outputFile ("\n" ++ inputFile ++ ":")
+    proc <- runProcess ("output" </> "bin" </> "main") [] Nothing Nothing Nothing (Just outputFile) Nothing
 
     removeFile (srcDir </> inputFile)
     when testCaseDirExists $ callProcess "rm" ["-rf", srcDir </> (takeWhile (/='.') inputFile)]
@@ -126,3 +134,9 @@ skipped =
   [ "NumberLiterals.purs" -- unreliable float comparison, test manually
   , "FunWithFunDeps.purs" -- requires FFI
   ]
+
+logpath :: FilePath
+logpath = "purescript-output"
+
+logfile :: FilePath
+logfile = "pcc-tests.out"
