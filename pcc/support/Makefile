@@ -6,8 +6,8 @@
 # You can also perform a parallel build with 'make -jN', where N is the
 # number of cores to use.
 #
-# PCC, PURESCRIPT_PKGS, OUTPUT, and BIN can all be overridden with the
-# command itself. For example: 'make PURESCRIPT_PKGS=../gitpackages BIN=myexe'
+# PCC, PURESCRIPT_SRC, OUTPUT, and BIN can all be overridden with the
+# command itself. For example: 'make BIN=myutil'
 #
 # Flags can be added to either the codegen or native build phases.
 # For example: 'make PCCFLAGS=--no-tco CXXFLAGS=-DDEBUG LDFLAGS=lobjc'
@@ -15,9 +15,6 @@
 # You can also edit the generated version of this file directly.
 #
 PCC             := {{path}}/pcc
-PSC_PKG_BIN     := psc-package
-PSC_PACKAGE     := {{path}}/$(PSC_PKG_BIN)
-PURESCRIPT_PKGS := .psc-package
 PURESCRIPT_SRC  := src
 OUTPUT          := output
 BIN             := main
@@ -25,10 +22,6 @@ BIN             := main
 override PCCFLAGS += --comments
 override CXXFLAGS += -std=c++11
 override LDFLAGS  +=
-
-ifeq ("$(wildcard $(PSC_PACKAGE))","")
-	PSC_PACKAGE := $(PSC_PKG_BIN)
-endif
 
 ifeq ($(GC),yes)
   override CXXFLAGS += -DUSE_GC
@@ -41,14 +34,27 @@ RELEASE := "-O3 -flto"
 INCLUDES := -I $(OUTPUT)
 BIN_DIR := $(OUTPUT)/bin
 
+PSC_PKG_BIN := psc-package
+PSC_PACKAGE := {{path}}/$(PSC_PKG_BIN)
+
+ifeq ("$(wildcard $(PSC_PACKAGE))","")
+	PSC_PACKAGE := $(PSC_PKG_BIN)
+endif
+
+PACKAGE_SOURCES = $(shell $(PSC_PACKAGE) sources)
+PURESCRIPT_PKGS := $(firstword $(subst /, ,$(PACKAGE_SOURCES)))
+
+## Not all environments support globstar (** dir pattern)
+rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
+
 release: codegen
 	@$(MAKE) $(BIN) CXXFLAGS+=$(RELEASE)
 
 debug: codegen
 	@$(MAKE) $(BIN) CXXFLAGS+=$(DEBUG)
 
-codegen: PURESCRIPT_PKG_SRCS=$(shell find $(PURESCRIPT_PKGS) -name '*.purs' | grep -v \/test\/ | grep -v \/example\/ | grep -v \/examples\/)
-codegen: PURESCRIPT_SRCS=$(shell find $(PURESCRIPT_SRC) -name '*.purs')
+codegen: PURESCRIPT_PKG_SRCS=$(foreach d,$(PACKAGE_SOURCES),$(call rwildcard,$(firstword $(subst *, ,$(d))),*.purs))
+codegen: PURESCRIPT_SRCS=$(call rwildcard,$(PURESCRIPT_SRC)/,*.purs)
 #
 codegen: $(PURESCRIPT_PKGS)
 	@$(PCC) $(PCCFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
@@ -57,7 +63,7 @@ $(PURESCRIPT_PKGS):
 	@echo "Getting packages using" $(PSC_PACKAGE) "..."
 	@$(PSC_PACKAGE) update
 
-SRCS := $(shell find $(OUTPUT) 2>/dev/null -name '*.cc')
+SRCS := $(call rwildcard,$(OUTPUT)/,*.cc)
 
 OBJS = $(SRCS:.cc=.o)
 DEPS = $(SRCS:.cc=.d)
