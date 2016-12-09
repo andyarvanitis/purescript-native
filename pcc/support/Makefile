@@ -76,3 +76,7 @@ $(BIN): $(OBJS)
 .PHONY: clean
 clean:
 	@-rm -rf $(OUTPUT)
+
+.PHONY: run
+run:
+	@$(BIN_DIR)/$(BIN)
