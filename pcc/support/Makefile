@@ -6,7 +6,7 @@
 # You can also perform a parallel build with 'make -jN', where N is the
 # number of cores to use.
 #
-# PCC, PURESCRIPT_SRC, OUTPUT, and BIN can all be overridden with the
+# PCC, SRC, OUTPUT, and BIN can all be overridden with the
 # command itself. For example: 'make BIN=myutil'
 #
 # Flags can be added to either the codegen or native build phases.
@@ -14,10 +14,10 @@
 #
 # You can also edit the generated version of this file directly.
 #
-PCC             := {{path}}/pcc
-PURESCRIPT_SRC  := src
-OUTPUT          := output
-BIN             := main
+PCC    := {{path}}/pcc
+SRC    := src
+OUTPUT := output
+BIN    := main
 
 override PCCFLAGS += --comments
 override CXXFLAGS += -std=c++11
@@ -54,7 +54,7 @@ debug: codegen
 	@$(MAKE) $(BIN) CXXFLAGS+=$(DEBUG)
 
 codegen: PURESCRIPT_PKG_SRCS=$(foreach d,$(PACKAGE_SOURCES),$(call rwildcard,$(firstword $(subst *, ,$(d))),*.purs))
-codegen: PURESCRIPT_SRCS=$(call rwildcard,$(PURESCRIPT_SRC)/,*.purs)
+codegen: PURESCRIPT_SRCS=$(call rwildcard,$(SRC)/,*.purs)
 #
 codegen: $(PURESCRIPT_PKGS)
 	@$(PCC) $(PCCFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
