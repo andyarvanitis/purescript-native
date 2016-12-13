@@ -113,7 +113,7 @@ briefFormat (JSONResult warnings errors) = concat $
     where
     message
       | null lnk = msg
-      | otherwise = printf "%sSee %s for more information\n" msg lnk
+      | otherwise = printf "%s\nSee %s for more information\n" msg lnk
     notes
       | Error <- t,
         Just (ErrorSuggestion s@(_:_) r) <- suggest =
