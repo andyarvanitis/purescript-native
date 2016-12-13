@@ -14,6 +14,7 @@
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -28,6 +29,7 @@ import qualified Data.Aeson as A
 import           Data.Bool (bool)
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.UTF8 as BU8
+import           Data.Char (isSpace)
 import qualified Data.Map as M
 import           Data.Text (Text)
 import           Data.Version (showVersion)
@@ -45,6 +47,8 @@ import           System.FilePath.Glob (glob)
 import           System.IO (hSetEncoding, hPutStrLn, stdout, stderr, utf8)
 import           System.IO.UTF8 (readUTF8FileT)
 
+import Text.Printf (printf)
+
 import           Make
 import           Makefile
 
@@ -55,12 +59,22 @@ data PCCMakeOptions = PCCMakeOptions
   , pccmOtherOpts    :: OtherOptions
   , pccmUsePrefix    :: Bool
   , pccmJSONErrors   :: Bool
+  , pccmBriefErrors  :: Bool
   , pccmXcode        :: Bool
   }
 
--- | Argumnets: verbose, use JSON, warnings, errors
-printWarningsAndErrors :: Bool -> Bool -> P.MultipleErrors -> Either P.MultipleErrors a -> IO ()
-printWarningsAndErrors verbose False warnings errors = do
+data ErrorTypes = StandardErrors | JSONErrors | BriefErrors
+
+data BriefType = Warning | Error | Note
+
+instance Show BriefType where
+  show Warning = "warning"
+  show Error   = "error"
+  show Note    = "note"
+
+-- | Argumnets: verbose, ErrorTypes (e.g. JSON or Brief), warnings, errors
+printWarningsAndErrors :: Bool -> ErrorTypes -> P.MultipleErrors -> Either P.MultipleErrors a -> IO ()
+printWarningsAndErrors verbose StandardErrors warnings errors = do
   cc <- bool Nothing (Just P.defaultCodeColor) <$> ANSI.hSupportsANSI stderr
   let ppeOpts = P.defaultPPEOptions { P.ppeCodeColor = cc, P.ppeFull = verbose }
   when (P.nonEmpty warnings) $
@@ -70,11 +84,41 @@ printWarningsAndErrors verbose False warnings errors = do
       hPutStrLn stderr (P.prettyPrintMultipleErrors ppeOpts errs)
       exitFailure
     Right _ -> return ()
-printWarningsAndErrors verbose True warnings errors = do
+printWarningsAndErrors verbose JSONErrors warnings errors = do
   hPutStrLn stderr . BU8.toString . B.toStrict . A.encode $
     JSONResult (toJSONErrors verbose P.Warning warnings)
                (either (toJSONErrors verbose P.Error) (const []) errors)
   either (const exitFailure) (const (return ())) errors
+printWarningsAndErrors verbose BriefErrors warnings errors = do
+  mapM
+    (hPutStrLn stderr)
+    (briefFormat $ JSONResult (toJSONErrors verbose P.Warning warnings)
+                              (either (toJSONErrors verbose P.Error) (const []) errors))
+  either (const exitFailure) (const (return ())) errors
+
+briefFormat :: JSONResult -> [String]
+briefFormat (JSONResult warnings errors) = concat $
+  (renderError Error <$> errors) <> (renderError Warning <$> warnings)
+  where
+  renderError :: BriefType -> JSONError -> [String]
+  renderError t (JSONError pos msg _ lnk file _ suggest) =
+    printf
+      "%s:%d:%d: %s: %s"
+      (concat file)
+      (maybe 0 startLine pos)
+      (maybe 0 startColumn pos)
+      (show t)
+      (dropWhile isSpace message) :
+    notes
+    where
+    message
+      | null lnk = msg
+      | otherwise = printf "%sSee %s for more information\n" msg lnk
+    notes
+      | Error <- t,
+        Just (ErrorSuggestion s@(_:_) r) <- suggest =
+        renderError Note (JSONError (r <|> pos) s [] [] file Nothing Nothing)
+      | otherwise = []
 
 compile :: PCCMakeOptions -> IO ()
 compile PCCMakeOptions{..} = do
@@ -91,8 +135,13 @@ compile PCCMakeOptions{..} = do
     let filePathMap = M.fromList $ map (\(fp, P.Module _ _ mn _ _) -> (mn, Right fp)) ms
     let makeActions = buildMakeActions pccmOutputDir filePathMap pccmUsePrefix pccmOtherOpts
     P.make makeActions (map snd ms)
-  printWarningsAndErrors (P.optionsVerboseErrors pccmOpts) pccmJSONErrors makeWarnings makeErrors
+  printWarningsAndErrors (P.optionsVerboseErrors pccmOpts) errorType makeWarnings makeErrors
   exitSuccess
+  where
+  errorType
+    | pccmJSONErrors = JSONErrors
+    | pccmBriefErrors = BriefErrors
+    | otherwise = StandardErrors
 
 warnFileTypeNotFound :: String -> IO ()
 warnFileTypeNotFound = hPutStrLn stderr . ("pcc: No files found using pattern: " ++)
@@ -159,6 +208,12 @@ jsonErrors :: Parser Bool
 jsonErrors = switch $
      long "json-errors"
   <> help "Print errors to stderr as JSON"
+
+briefErrors :: Parser Bool
+briefErrors = switch $
+     long "brief-errors"
+  <> help "Print errors to stderr in \"brief format\" (a de facto standard made popular by gcc)"
+
 sourceMaps :: Parser Bool
 sourceMaps = switch $
      long "source-maps"
@@ -199,6 +254,7 @@ pccMakeOptions = PCCMakeOptions <$> many inputFile
                                 <*> otherOptions
                                 <*> (not <$> noPrefix)
                                 <*> jsonErrors
+                                <*> briefErrors
                                 <*> xcode
 
 main :: IO ()
