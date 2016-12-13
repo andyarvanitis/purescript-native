@@ -79,10 +79,13 @@ $(BIN): $(OBJS)
 	@echo "Creating" $@
 	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
+.PHONY: all
+all: release
+
 .PHONY: clean
 clean:
 	@-rm -rf $(OUTPUT)
 
 .PHONY: run
 run:
-	@$(BIN_DIR)/$(BIN)
+	@$(BIN_DIR)/$(BIN) $(ARGS)
