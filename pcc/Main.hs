@@ -31,6 +31,7 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.UTF8 as BU8
 import           Data.Char (isSpace)
 import qualified Data.Map as M
+import           Data.Maybe (maybe)
 import           Data.Text (Text)
 import           Data.Version (showVersion)
 
@@ -97,28 +98,30 @@ printWarningsAndErrors verbose BriefErrors warnings errors = do
   either (const exitFailure) (const (return ())) errors
 
 briefFormat :: JSONResult -> [String]
-briefFormat (JSONResult warnings errors) = concat $
+briefFormat (JSONResult warnings errors) =
   (renderError Error <$> errors) <> (renderError Warning <$> warnings)
   where
-  renderError :: BriefType -> JSONError -> [String]
-  renderError t (JSONError pos msg _ lnk file _ suggest) =
+  renderError :: BriefType -> JSONError -> String
+  renderError t (JSONError (Just pos) msg _ lnk (Just file) _ _) =
     printf
       "%s:%d:%d: %s: %s"
-      (concat file)
-      (maybe 0 startLine pos)
-      (maybe 0 startColumn pos)
+      file
+      (startLine pos)
+      (startColumn pos)
       (show t)
-      (dropWhile isSpace message) :
-    notes
+      (combine msg lnk)
+  renderError t (JSONError _ msg _ lnk _ module' _) =
+    printf
+      "%s: in module %s - %s"
+      (show t)
+      (maybe "?" (printf "\"%s\"") module')
+      (combine msg lnk)
+  combine :: String -> String -> String
+  combine msg lnk
+    | null lnk = msg'
+    | otherwise = printf "%s\nSee %s for more information\n" msg' lnk
     where
-    message
-      | null lnk = msg
-      | otherwise = printf "%s\nSee %s for more information\n" msg lnk
-    notes
-      | Error <- t,
-        Just (ErrorSuggestion s@(_:_) r) <- suggest =
-        renderError Note (JSONError (r <|> pos) s [] [] file Nothing Nothing)
-      | otherwise = []
+    msg' = dropWhile isSpace msg
 
 compile :: PCCMakeOptions -> IO ()
 compile PCCMakeOptions{..} = do
