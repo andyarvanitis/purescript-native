@@ -40,6 +40,7 @@ import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Comments
 import qualified Language.PureScript.Constants as C
 import Numeric
+import Text.Printf (printf)
 
 -- import Debug.Trace
 ---------------------------------------------------------------------------------------------------
@@ -242,6 +243,10 @@ literals = mkPattern' match
     vstr = prettyPrintCpp1 val
     val' | '(' `elem` vstr || '[' `elem` vstr = parens vstr
          | otherwise = vstr
+  match (CppGet i@(CppSymbol _) val) =
+    return $ printf "get(%s, %s)" (prettyPrintCpp1 i) (prettyPrintCpp1 val)
+  match (CppGet i val) =
+    return $ printf "get<%s>(%s)" (prettyPrintCpp1 i) (prettyPrintCpp1 val)
   match (CppVar ident)
     | ident == C.__unused = match (CppVar $ '$' : ident)
   match (CppVar ident) = return ident

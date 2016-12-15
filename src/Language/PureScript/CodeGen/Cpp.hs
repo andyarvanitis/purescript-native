@@ -210,7 +210,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
               [arg']
               rty
               (vqs ++
-               if isIndexer body'
+               if isGet body'
                  then [Inline]
                  else [])
               (returnBlock body')
@@ -231,9 +231,9 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     isAccessor :: Expr Ann -> Bool
     isAccessor Accessor {} = True
     isAccessor _ = False
-    isIndexer :: Cpp -> Bool
-    isIndexer (CppIndexer (CppSymbol _) (CppVar _)) = True
-    isIndexer _ = False
+    isGet :: Cpp -> Bool
+    isGet (CppGet (CppSymbol _) (CppVar _)) = True
+    isGet _ = False
     classes =
       zip
         (CppVar . fst <$> arg' : args')
@@ -441,13 +441,13 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Literal _ (ObjectLiteral ps)) =
     CppMapLiteral Record <$>
     mapM (sndM valueToCpp) ((\(k, v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) ps)
-  valueToCpp (Accessor _ prop val) = CppIndexer <$> pure (CppSymbol prop) <*> valueToCpp val
+  valueToCpp (Accessor _ prop val) = CppGet <$> pure (CppSymbol prop) <*> valueToCpp val
   -- TODO: use a more efficient way of copying/updating the map?
   valueToCpp (ObjectUpdate (_, _, Just ty, _) obj ps) = do
     obj' <- valueToCpp obj
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
-        origFields = (\key -> (key, CppIndexer (CppSymbol key) obj')) <$> origKeys
+        origFields = (\key -> (key, CppGet (CppSymbol key) obj')) <$> origKeys
     return $
       CppMapLiteral Record $
       (\(k, v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) (origFields ++ updatedFields)
@@ -675,7 +675,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         CppVariableIntroduction
           (propVar, Nothing)
           []
-          (Just $ CppIndexer (CppSymbol prop) (CppVar varName)) :
+          (Just $ CppGet (CppSymbol prop) (CppVar varName)) :
         cpp
   literalToBinderCpp varName done (ArrayLiteral bs) = do
     cpp <- go done 0 bs
@@ -837,12 +837,10 @@ optIndexers :: [(Cpp, Cpp)] -> Cpp -> Cpp
 optIndexers classes = everywhereOnCpp dictIndexerToEnum
   where
   dictIndexerToEnum :: Cpp -> Cpp
-  dictIndexerToEnum (CppIndexer (CppSymbol prop) dict)
+  dictIndexerToEnum (CppGet (CppSymbol prop) dict)
     | Just cls <- lookup dict classes =
-      CppBinary
-        Dot
-        (CppIndexer (CppAccessor (CppVar . identToCpp $ Ident prop) cls) (CppCast (mapType 0) dict))
-        (CppVar "second")
+      let index = CppAccessor (CppVar . identToCpp $ Ident prop) cls
+      in CppGet index dict
   dictIndexerToEnum cpp = cpp
 
 ---------------------------------------------------------------------------------------------------

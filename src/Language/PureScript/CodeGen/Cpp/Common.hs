@@ -105,6 +105,7 @@ nameIsCppReserved name =
               , "float"
               , "for"
               , "friend"
+              , "get"
               , "goto"
               , "if"
               , "import"
