@@ -13,6 +13,7 @@ import Data.Monoid
 import Data.Maybe (fromMaybe)
 import Data.List ((\\))
 import Data.Foldable
+import qualified Data.Text as T
 import System.Exit
 
 import qualified Language.PureScript as P
@@ -36,8 +37,8 @@ main = pushd "examples/docs" $ do
   case res of
     Left e -> Publish.printErrorToStdout e >> exitFailure
     Right Docs.Package{..} ->
-      forM_ testCases $ \(P.moduleNameFromString -> mn, pragmas) ->
-        let mdl = takeJust ("module not found in docs: " ++ P.runModuleName mn)
+      forM_ testCases $ \(P.moduleNameFromString . T.pack -> mn, pragmas) ->
+        let mdl = takeJust ("module not found in docs: " ++ T.unpack (P.runModuleName mn))
                           (find ((==) mn . Docs.modName) pkgModules)
         in forM_ pragmas (`runAssertionIO` mdl)
 
@@ -57,6 +58,9 @@ data Assertion
   -- | Assert that a particular declaration has a particular type class
   -- constraint.
   | ShouldBeConstrained P.ModuleName String String
+  -- | Assert that a particular typeclass declaration has a functional
+  -- dependency list.
+  | ShouldHaveFunDeps P.ModuleName String [([String],[String])]
   -- | Assert that a particular value declaration exists, and its type
   -- satisfies the given predicate.
   | ValueShouldHaveTypeSignature P.ModuleName String (ShowFn (P.Type -> Bool))
@@ -82,6 +86,8 @@ data AssertionFailure
   | ChildDocumented P.ModuleName String String
   -- | A constraint was missing.
   | ConstraintMissing P.ModuleName String String
+  -- | A functional dependency was missing.
+  | FunDepMissing P.ModuleName String [([String], [String])]
   -- | A declaration had the wrong "type" (ie, value, type, type class)
   -- Fields: declaration title, expected "type", actual "type".
   | WrongDeclarationType P.ModuleName String String String
@@ -142,6 +148,20 @@ runAssertion assertion Docs.Module{..} =
               Fail (WrongDeclarationType mn decl "value"
                      (Docs.declInfoToString declInfo))
 
+    ShouldHaveFunDeps mn decl fds ->
+      case find ((==) decl . Docs.declTitle) (declarationsFor mn) of
+        Nothing ->
+          Fail (NotDocumented mn decl)
+        Just Docs.Declaration{..} ->
+          case declInfo of
+            Docs.TypeClassDeclaration _ _ fundeps ->
+              if fundeps == fds
+                then Pass
+                else Fail (FunDepMissing mn decl fds)
+            _ ->
+              Fail (WrongDeclarationType mn decl "value"
+                     (Docs.declInfoToString declInfo))
+
     ValueShouldHaveTypeSignature mn decl (ShowFn tyPredicate) ->
       case find ((==) decl . Docs.declTitle) (declarationsFor mn) of
         Nothing ->
@@ -197,11 +217,11 @@ checkConstrained ty tyClass =
       False
   where
   matches className =
-    (==) className . P.runProperName . P.disqualify . P.constraintClass
+    (==) className . T.unpack . P.runProperName . P.disqualify . P.constraintClass
 
 runAssertionIO :: Assertion -> Docs.Module -> IO ()
 runAssertionIO assertion mdl = do
-  putStrLn ("In " ++ P.runModuleName (Docs.modName mdl) ++ ": " ++ show assertion)
+  putStrLn ("In " ++ T.unpack (P.runModuleName (Docs.modName mdl)) ++ ": " ++ show assertion)
   case runAssertion assertion mdl of
     Pass -> pure ()
     Fail reason -> do
@@ -270,6 +290,10 @@ testCases =
       , ChildShouldNotBeDocumented (n "TypeClassWithoutMembersIntermediate") "SomeClass" "member"
       ])
 
+  , ("TypeClassWithFunDeps",
+      [ ShouldHaveFunDeps          (n "TypeClassWithFunDeps") "TypeClassWithFunDeps" [(["a","b"], ["c"]), (["c"], ["d","e"])]
+      ])
+
   , ("NewOperators",
       [ ShouldBeDocumented (n "NewOperators2") "(>>>)" []
       ])
@@ -298,12 +322,12 @@ testCases =
   ]
 
   where
-  n = P.moduleNameFromString
+  n = P.moduleNameFromString . T.pack
 
   hasTypeVar varName =
     getAny . P.everythingOnTypes (<>) (Any . isVar varName)
 
-  isVar varName (P.TypeVar name) | varName == name = True
+  isVar varName (P.TypeVar name) | varName == T.unpack name = True
   isVar _ _ = False
 
   renderedType expected =
