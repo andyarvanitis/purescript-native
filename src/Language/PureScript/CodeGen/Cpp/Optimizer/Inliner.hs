@@ -46,6 +46,7 @@ shouldInline (CppStringLiteral _) = True
 shouldInline (CppBooleanLiteral _) = True
 shouldInline (CppAccessor _ val) = shouldInline val
 shouldInline (CppIndexer index val) = shouldInline index && shouldInline val
+shouldInline (CppGet index val) = shouldInline index && shouldInline val
 shouldInline (CppCast _ val) = shouldInline val
 shouldInline _ = False
 

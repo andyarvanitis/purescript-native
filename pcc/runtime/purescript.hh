@@ -454,6 +454,29 @@ inline auto cast(const any& a) ->
   return a.rawPointer();
 }
 
+template <size_t N>
+inline auto get(const any& a) -> const any& {
+  return cast<any::map<N+1>>(a)[N].second;
+}
+
+template <size_t N>
+inline auto get(const symbol_t key, const any::map<N>& a) -> const any& {
+  static_assert(N > 0, "map size must be greater than zero"); // TODO: not safe
+  typename std::remove_reference<decltype(a)>::type::size_type i = 0;
+  do {
+    if (a[i].first == key) {
+      return a[i].second;
+    }
+  } while (a[++i].first != nullptr);
+  assert(false && "map key not found");
+  static const any invalid_key(nullptr);
+  return invalid_key;
+}
+
+inline auto get(const symbol_t key, const any& a) -> const any& {
+  return get(key, cast<any::map<unknown_size>>(a));
+}
+
 } // namespace PureScript
 
 #undef WITH_ALLOCATOR

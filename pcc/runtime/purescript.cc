@@ -86,19 +86,8 @@ auto any::unthunkVariant(const any& a) -> const any& {
   return *variant;
 }
 
-static const any invalid_key(nullptr);
-
 auto any::operator[](const symbol_t key) const -> const any& {
-  // TODO: assumes at least one element -- safe assumption?
-  const auto& m = cast<map<unknown_size>>(*this);
-  std::remove_reference<decltype(m)>::type::size_type i = 0;
-  do {
-    if (m[i].first == key) {
-      return m[i].second;
-    }
-  } while (m[++i].first != nullptr);
-  assert(false && "map key not found");
-  return invalid_key;
+  return get(key, cast<map<unknown_size>>(*this));
 }
 
 auto any::operator[](const size_t rhs) const -> const any& {

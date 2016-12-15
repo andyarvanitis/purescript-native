@@ -63,6 +63,7 @@ targetVariable :: Cpp -> String
 targetVariable (CppVar var) = var
 targetVariable (CppAccessor _ tgt) = targetVariable tgt
 targetVariable (CppIndexer _ tgt) = targetVariable tgt
+targetVariable (CppGet _ tgt) = targetVariable tgt
 targetVariable _ = error "Invalid argument to targetVariable"
 
 isUpdated :: String -> Cpp -> Bool
