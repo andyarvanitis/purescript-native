@@ -14,14 +14,16 @@
 -----------------------------------------------------------------------------
 
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Language.PureScript.CodeGen.Cpp.Common where
 
-import Prelude.Compat
+import Prelude.Compat hiding (all, concatMap, last, init)
 
 import Data.Char
-import Data.List (intercalate)
-
+import Data.Text hiding (map)
+import Data.Monoid ((<>))
+import qualified Data.Text as T
 import Language.PureScript.Crash
 import Language.PureScript.Names
 
@@ -34,33 +36,35 @@ import Language.PureScript.Names
 --
 --  * Symbols are wrapped with '_' between a symbol name or their ordinal value.
 --
-identToCpp :: Ident -> String
-identToCpp (Ident name) | nameIsCppReserved name = '_' : name ++ "_"
-identToCpp (Ident name@('$' : s)) | all isDigit s = name
+identToCpp :: Ident -> Text
+identToCpp (Ident name) | nameIsCppReserved name = "_" <> name <> "_"
+identToCpp (Ident name)
+  | Just ('$', s) <- uncons name
+  , all isDigit s = name
 identToCpp (Ident name) = concatMap identCharToString name
-identToCpp (GenIdent _ _) = internalError "GenIdent in identToJs"
+identToCpp (GenIdent _ _) = internalError "GenIdent in identToCpp"
 
 -- |
 -- Test if a string is a valid Cpp identifier without escaping.
 --
-identNeedsEscaping :: String -> Bool
+identNeedsEscaping :: Text -> Bool
 identNeedsEscaping s = s /= identToCpp (Ident s)
 
 -- |
 -- Attempts to find a human-readable name for a symbol, if none has been specified returns the
 -- ordinal value.
 --
-identCharToString :: Char -> String
-identCharToString c | isAlphaNum c = [c]
+identCharToString :: Char -> Text
+identCharToString c | isAlphaNum c = singleton c
 identCharToString '_' = "_"
 identCharToString '.' = "_"
 identCharToString '\'' = "_prime"
-identCharToString c = "$0" ++ show (ord c)
+identCharToString c = "$0" <> (pack . show $ ord c)
 
 -- |
 -- Checks whether an identifier name is reserved in C++11.
 --
-nameIsCppReserved :: String -> Bool
+nameIsCppReserved :: Text -> Bool
 nameIsCppReserved name =
   name `elem` [ "alignas"
               , "alignof"
@@ -172,19 +176,23 @@ nameIsCppReserved name =
               , "xor"
               , "xor_eq" ] || properNameIsCppReserved name
 
-normalizedName :: String -> String
-normalizedName ('_' : s) | last s == '_', s' <- init s, nameIsCppReserved s' = s'
+normalizedName :: Text -> Text
+normalizedName name
+  | Just ('_', s) <- uncons name
+  , last s == '_'
+  , s' <- init s
+  , nameIsCppReserved s' = s'
 normalizedName s = s
 
-moduleNameToCpp :: ModuleName -> String
+moduleNameToCpp :: ModuleName -> Text
 moduleNameToCpp (ModuleName pns) =
-  let name = intercalate "_" (runProperName `map` pns)
-  in if properNameIsCppReserved name then '_' : name ++ "_" else name
+  let name = T.intercalate "_" (runProperName `map` pns)
+  in if properNameIsCppReserved name then "_" <> name <> "_" else name
 
 -- |
 -- Checks whether a proper name is reserved in C++11.
 --
-properNameIsCppReserved :: String -> Bool
+properNameIsCppReserved :: Text -> Bool
 properNameIsCppReserved name =
   name `elem` [ "Private"
               , "PureScript" ]

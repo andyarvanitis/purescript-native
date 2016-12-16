@@ -32,7 +32,7 @@ import qualified Data.ByteString.UTF8 as BU8
 import           Data.Char (isSpace)
 import qualified Data.Map as M
 import           Data.Maybe (maybe)
-import           Data.Text (Text)
+import           Data.Text (Text, unpack)
 import           Data.Version (showVersion)
 
 import qualified Language.PureScript as P
@@ -109,13 +109,13 @@ briefFormat (JSONResult warnings errors) =
       (startLine pos)
       (startColumn pos)
       (show t)
-      (combine msg lnk)
+      (combine msg (unpack lnk))
   renderError t (JSONError _ msg _ lnk _ module' _) =
     printf
       "%s: in module %s - %s"
       (show t)
       (maybe "?" (printf "\"%s\"") module')
-      (combine msg lnk)
+      (combine msg (unpack lnk))
   combine :: String -> String -> String
   combine msg lnk
     | null lnk = msg'

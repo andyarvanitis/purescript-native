@@ -20,6 +20,7 @@ module Language.PureScript.CodeGen.Cpp.Unicode
 
 import Prelude.Compat
 import Data.Char (isAscii, ord)
+import Data.Text (Text, pack, unpack)
 import Text.Printf (printf)
 
 import Language.PureScript.CodeGen.Cpp.AST
@@ -50,11 +51,14 @@ unicodeToUCNs (CppTypeAlias (s1,ss) t s2) =
 unicodeToUCNs cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
-toUcns :: String -> String
+toUcns :: Text -> Text
 ---------------------------------------------------------------------------------------------------
-toUcns s | any (not . isAscii) s = concatMap toUcn s
+toUcns = pack . toUcns' . unpack
   where
-  toUcn :: Char -> String
-  toUcn c | isAscii c = [c]
-  toUcn c = printf "\\U%08x" $ ord c
-toUcns s = s
+  toUcns' :: String -> String
+  toUcns' s | any (not . isAscii) s = concatMap toUcn s
+    where
+    toUcn :: Char -> String
+    toUcn c | isAscii c = [c]
+    toUcn c = printf "\\U%08x" $ ord c
+  toUcns' s = s

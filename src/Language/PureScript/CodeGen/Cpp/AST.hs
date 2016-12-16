@@ -25,6 +25,7 @@ import Control.Applicative (Applicative, (<$>), (<*>))
 import Data.Traversable (traverse)
 #endif
 import Control.Monad.Identity
+import Data.Text (Text)
 import Language.PureScript.Comments
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Traversals
@@ -149,7 +150,7 @@ data Cpp
   -- |
   -- A string literal
   --
-  | CppStringLiteral String
+  | CppStringLiteral Text
   -- |
   -- A character literal
   --
@@ -177,7 +178,7 @@ data Cpp
   -- |
   -- An enum definition (optional name, optional type)
   --
-  | CppEnum (Maybe String) (Maybe CppType) [String]
+  | CppEnum (Maybe Text) (Maybe CppType) [Text]
   -- |
   -- An array indexer expression
   --
@@ -193,11 +194,11 @@ data Cpp
   -- |
   -- A function introduction (name, arguments, return type, qualifiers, body)
   --
-  | CppFunction String [(String, Maybe CppType)] (Maybe CppType) [ValueQual] Cpp
+  | CppFunction Text [(Text, Maybe CppType)] (Maybe CppType) [ValueQual] Cpp
   -- |
   -- A lambda introduction (arguments, return type, body)
   --
-  | CppLambda [CaptureType] [(String, Maybe CppType)] (Maybe CppType) Cpp
+  | CppLambda [CaptureType] [(Text, Maybe CppType)] (Maybe CppType) Cpp
   -- |
   -- Value type cast
   --
@@ -213,11 +214,11 @@ data Cpp
   -- |
   -- Variable
   --
-  | CppVar String
+  | CppVar Text
   -- |
   -- Unique system-wide name/constant
   --
-  | CppSymbol String
+  | CppSymbol Text
   -- |
   -- |
   -- A block of expressions in braces
@@ -226,27 +227,27 @@ data Cpp
   -- |
   -- A C++ namespace
   --
-  | CppNamespace String [Cpp]
+  | CppNamespace Text [Cpp]
   -- |
   -- An C++ struct declaration (name, members)
   --
-  | CppStruct String [Cpp]
+  | CppStruct Text [Cpp]
   -- |
   -- A C++ #include
   --
-  | CppInclude String String
+  | CppInclude Text Text
   -- |
   -- A C++ using namespace declaration
   --
-  | CppUseNamespace String
+  | CppUseNamespace Text
   -- |
   -- Type alias, e.g. "using T = U" (new name and template types, original type)
   --
-  | CppTypeAlias (String,[(String, Int)]) CppType String
+  | CppTypeAlias (Text,[(Text, Int)]) CppType Text
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction (String, Maybe CppType) [ValueQual] (Maybe Cpp)
+  | CppVariableIntroduction (Text, Maybe CppType) [ValueQual] (Maybe Cpp)
   -- |
   -- A variable assignment
   --
@@ -286,7 +287,7 @@ data Cpp
   -- |
   -- Raw C++11 (generated when parsing fails for an inline foreign import declaration)
   --
-  | CppRaw String
+  | CppRaw Text
   -- |
   -- Commented C++11
   --
