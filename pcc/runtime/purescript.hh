@@ -46,17 +46,27 @@ namespace PureScript {
 using cstring = const char *;
 using std::nullptr_t;
 
-struct symbol_generator_anchor {};
-using symbol_t = const symbol_generator_anchor *;
+namespace Private {
+  struct symbol_generator_anchor_t {};
 
-template <typename T>
-struct symbol_generator {
-  constexpr static symbol_generator_anchor anchor = symbol_generator_anchor{};
-};
-template <typename T>
-constexpr symbol_generator_anchor symbol_generator<T>::anchor;
+  template <typename T>
+  struct symbol_generator {
+    constexpr static symbol_generator_anchor_t anchor = symbol_generator_anchor_t{};
+  };
+  template <typename T>
+  constexpr symbol_generator_anchor_t symbol_generator<T>::anchor;
+}
 
-#define SYMBOL(S) &symbol_generator<symbol::S>::anchor
+using symbol_t = const Private::symbol_generator_anchor_t *;
+
+#define define_symbol(S) namespace PureScript { \
+                           namespace Private { \
+                             namespace Symbol { \
+                               struct S_ ## S {}; \
+                             } \
+                           } \
+                         }
+#define symbol(S) (&Private::symbol_generator<::PureScript::Private::Symbol::S_ ## S>::anchor)
 
 // Workaround for missing C++11 version in gcc
 class runtime_error : public std::runtime_error {
@@ -65,7 +75,6 @@ public:
 };
 
 constexpr bool undefined = false;
-constexpr size_t constructor = 0;
 
 // Not a real limit, just used for simpler accessors
 static constexpr size_t unknown_size = 64;
@@ -123,10 +132,10 @@ class any {
   };
 
   template <typename T>
-  class _closure : public closure {
+  class closure_ : public closure {
     const T lambda;
   public:
-    _closure(const T& l) noexcept : lambda(l) {}
+    closure_(const T& l) noexcept : lambda(l) {}
     auto operator()(const any& arg) const -> any override {
       return lambda(arg);
     }
@@ -139,10 +148,10 @@ class any {
   };
 
   template <typename T>
-  class _eff_closure : public eff_closure {
+  class eff_closure_ : public eff_closure {
     const T lambda;
   public:
-    _eff_closure(const T& l) noexcept : lambda(l) {}
+    eff_closure_(const T& l) noexcept : lambda(l) {}
     auto operator()() const -> any override {
       return lambda();
     }
@@ -206,7 +215,7 @@ class any {
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                            !std::is_convertible<T,fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&)>,T>::value>::type* = 0)
-    : tag(tag_t::Closure), l(make_managed<_closure<T>>(val)) {}
+    : tag(tag_t::Closure), l(make_managed<closure_<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,eff_fn>::value>::type* = 0) noexcept
@@ -216,7 +225,7 @@ class any {
             typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                !std::is_convertible<T,eff_fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
-    : tag(tag_t::EffClosure), k(make_managed<_eff_closure<T>>(val)) {}
+    : tag(tag_t::EffClosure), k(make_managed<eff_closure_<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0) noexcept
@@ -340,6 +349,8 @@ class any {
   auto operator[](const size_t) const -> const any&;
   auto operator[](const any&) const -> const any&;
 
+  auto size() const -> size_t;
+  auto empty() const -> bool;
   auto contains(const symbol_t) const -> bool;
 
   auto extractPointer(IF_DEBUG(const tag_t)) const -> void*;
@@ -411,23 +422,31 @@ class any {
 
 }; // class any
 
-template <typename T, typename U=void>
-struct tag_helper {};
+namespace Private {
+  template <typename T, typename U=void>
+  struct tag_helper_t {};
 
-template <size_t N>
-struct tag_helper<any::map<N>> {
-  static constexpr any::tag_t tag = any::tag_t::Map;
-};
+  template <size_t N>
+  struct tag_helper_t<any::map<N>> {
+    static constexpr any::tag_t tag = any::tag_t::Map;
+  };
 
-template <size_t N>
-struct tag_helper<any::data<N>> {
-  static constexpr any::tag_t tag = any::tag_t::Data;
-};
+  template <size_t N>
+  struct tag_helper_t<any::data<N>> {
+    static constexpr any::tag_t tag = any::tag_t::Data;
+  };
 
+  template <typename T>
+  struct tag_helper_t<T> {
+    static constexpr any::tag_t tag = any::tag_t::Pointer;
+  };
+}
+
+// Pass-through
 template <typename T>
-struct tag_helper<T> {
-  static constexpr any::tag_t tag = any::tag_t::Pointer;
-};
+constexpr auto cast(const T& a) -> const T& {
+  return a;
+}
 
 template <typename T>
 inline auto cast(const any& a) ->
@@ -445,7 +464,7 @@ inline auto cast(const any& a) ->
 template <typename T, typename = typename std::enable_if<std::is_class<T>::value>::type>
 inline auto cast(const any& a) ->
     typename std::enable_if<!std::is_same<T, any::array>::value, T&>::type {
-  return *static_cast<T*>(a.extractPointer(IF_DEBUG(tag_helper<T>::tag)));
+  return *static_cast<T*>(a.extractPointer(IF_DEBUG(Private::tag_helper_t<T>::tag)));
 }
 
 template <typename T>
@@ -454,27 +473,53 @@ inline auto cast(const any& a) ->
   return a.rawPointer();
 }
 
-template <size_t N>
-inline auto get(const any& a) -> const any& {
-  return cast<any::map<N+1>>(a)[N].second;
+namespace map {
+  template <size_t N, typename T>
+  inline auto get(const T& a) ->
+      typename std::enable_if<!std::is_same<any, T>::value, const any&>::type {
+    return a[N].second;
+  }
+
+  template <size_t N>
+  inline auto get(const any& a) -> const any& {
+    return cast<any::map<N+1>>(a)[N].second;
+  }
+
+  template <size_t N>
+  inline auto get(const symbol_t key, const any::map<N>& a) -> const any& {
+    static_assert(N > 0, "map size must be greater than zero");
+    typename std::remove_reference<decltype(a)>::type::size_type i = 0;
+    do {
+      if (a[i].first == key) {
+        return a[i].second;
+      }
+    } while (a[++i].first != nullptr);
+    assert(false && "map key not found");
+    static const any invalid_key(nullptr);
+    return invalid_key;
+  }
+
+  inline auto get(const symbol_t key, const any& a) -> const any& {
+    return get(key, cast<any::map<unknown_size>>(a));
+  }
 }
 
-template <size_t N>
-inline auto get(const symbol_t key, const any::map<N>& a) -> const any& {
-  static_assert(N > 0, "map size must be greater than zero"); // TODO: not safe
-  typename std::remove_reference<decltype(a)>::type::size_type i = 0;
-  do {
-    if (a[i].first == key) {
-      return a[i].second;
-    }
-  } while (a[++i].first != nullptr);
-  assert(false && "map key not found");
-  static const any invalid_key(nullptr);
-  return invalid_key;
-}
+namespace data {
+  template <size_t N, typename T>
+  inline auto get(const T& a) ->
+      typename std::enable_if<!std::is_same<any, T>::value, const any&>::type {
+    return a[N];
+  }
 
-inline auto get(const symbol_t key, const any& a) -> const any& {
-  return get(key, cast<any::map<unknown_size>>(a));
+  template <size_t N>
+  inline auto get(const any& a) -> const any& {
+    return cast<any::data<N+1>>(a)[N];
+  }
+
+  template <typename T>
+  inline auto ctor(const T& a) -> const any& {
+    return get<0>(a);
+  }
 }
 
 } // namespace PureScript

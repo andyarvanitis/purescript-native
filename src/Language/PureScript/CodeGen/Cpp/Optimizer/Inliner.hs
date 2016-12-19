@@ -36,7 +36,6 @@ import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.Optimizer.Common
 import Language.PureScript.CodeGen.Cpp.Types
-import Language.PureScript.Names
 import qualified Language.PureScript.Constants as C
 
 -- TODO: Potential bug:
@@ -50,7 +49,8 @@ shouldInline (CppStringLiteral _) = True
 shouldInline (CppBooleanLiteral _) = True
 shouldInline (CppAccessor _ val) = shouldInline val
 shouldInline (CppIndexer index val) = shouldInline index && shouldInline val
-shouldInline (CppGet index val) = shouldInline index && shouldInline val
+shouldInline (CppMapGet index val) = shouldInline index && shouldInline val
+shouldInline (CppDataGet index val) = shouldInline index && shouldInline val
 shouldInline (CppCast _ val) = shouldInline val
 shouldInline _ = False
 
@@ -138,7 +138,7 @@ inlineOperator (m, op) f = everywhereOnCpp convert
   convert (CppApp op' [x, y]) | isOp op' = f x y
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
-  isOp (CppAccessor (CppVar longForm) (CppVar m')) = m == m' && longForm == identToCpp (Ident op)
+  isOp (CppAccessor (CppVar longForm) (CppVar m')) = m == m' && longForm == safeName op
   isOp (CppIndexer (CppStringLiteral op') (CppVar m')) = m == m' && op == op'
   isOp _ = False
 

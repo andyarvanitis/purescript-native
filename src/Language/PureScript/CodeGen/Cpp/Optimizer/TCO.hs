@@ -39,10 +39,10 @@ tco' :: Cpp -> Cpp
 tco' = everywhereOnCpp convert
   where
   tcoVar :: Text -> Text
-  tcoVar arg = "__tco_" <> arg
+  tcoVar arg = "tco$" <> arg
 
   copyVar :: Text -> Text
-  copyVar arg = "__copy_" <> arg
+  copyVar arg = "copy$" <> arg
 
   copyVar' :: (Text, Maybe CppType) -> (Text, Maybe CppType)
   copyVar' (arg, t) = (copyVar arg, t)

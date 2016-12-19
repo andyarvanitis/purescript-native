@@ -204,9 +204,13 @@ data Cpp
   --
   | CppCast CppType Cpp
   -- |
-  -- Call to getter from templated type
+  -- Call to getter from templated map type
   --
-  | CppGet Cpp Cpp
+  | CppMapGet Cpp Cpp
+  -- |
+  -- Call to getter from templated data type
+  --
+  | CppDataGet Cpp Cpp
   -- |
   -- Function application
   --
@@ -220,6 +224,9 @@ data Cpp
   --
   | CppSymbol Text
   -- |
+  -- Define unique system-wide name/constant
+  --
+  | CppDefineSymbol Text
   -- |
   -- A block of expressions in braces
   --
@@ -312,7 +319,8 @@ everywhereOnCpp f = go
   go (CppFunction name args rty qs j) = f (CppFunction name args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
   go (CppCast t cpp) = f (CppCast t (go cpp))
-  go (CppGet j1 j2) = f (CppGet (go j1) (go j2))
+  go (CppMapGet j1 j2) = f (CppMapGet (go j1) (go j2))
+  go (CppDataGet j1 j2) = f (CppDataGet (go j1) (go j2))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
@@ -344,7 +352,8 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppFunction name args rty qs j) = CppFunction name args rty qs <$> f' j
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
   go (CppCast t cpp) = CppCast t <$> f' cpp
-  go (CppGet j1 j2) = CppGet <$> f' j1 <*> f' j2
+  go (CppMapGet j1 j2) = CppMapGet <$> f' j1 <*> f' j2
+  go (CppDataGet j1 j2) = CppDataGet <$> f' j1 <*> f' j2
   go (CppApp j cpp) = CppApp <$> f' j <*> traverse f' cpp
   go (CppBlock cpp) = CppBlock <$> traverse f' cpp
   go (CppNamespace name cpp) = CppNamespace name <$> traverse f' cpp
@@ -372,7 +381,8 @@ everythingOnCpp (<>) f = go
   go j@(CppFunction _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1
   go j@(CppCast _ cpp) = f j <> go cpp
-  go j@(CppGet j1 j2) = f j <> go j1 <> go j2
+  go j@(CppMapGet j1 j2) = f j <> go j1 <> go j2
+  go j@(CppDataGet j1 j2) = f j <> go j1 <> go j2
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)

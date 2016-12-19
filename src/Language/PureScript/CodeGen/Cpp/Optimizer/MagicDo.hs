@@ -21,6 +21,7 @@ import Data.List (nub)
 import Data.Maybe (fromJust, isJust)
 
 import Language.PureScript.CodeGen.Cpp.AST
+import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.Optimizer.Common
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Options
@@ -62,7 +63,7 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   convert (CppApp (CppApp bind [m]) [CppLambda _ [arg] rty (CppBlock cpp)]) | isBind bind =
     CppFunction fnName [] rty [] $ CppBlock (app' : map applyReturns cpp)
     where
-      app' | fst arg == C.__unused = CppApp m []
+      app' | arg' <- fst arg, arg' == C.__unused || arg' == (safeName C.__unused) = CppApp m []
            | otherwise = CppVariableIntroduction arg [] (Just (CppApp m []))
   -- Desugar untilE
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =

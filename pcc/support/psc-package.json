@@ -1,6 +1,6 @@
 {
     "name": "Main",
-    "set": "psc-0.10.2",
+    "set": "psc-0.10.3",
     "source": "https://github.com/pure11/package-sets.git",
     "depends": [
         "console",

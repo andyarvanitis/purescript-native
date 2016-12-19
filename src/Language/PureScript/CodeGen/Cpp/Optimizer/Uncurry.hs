@@ -39,7 +39,7 @@ removeCurrying nm = everywhereOnCpp convert
     unCurried (CppAccessor var mn)
       | Just var' <- unCurried var = Just $ CppAccessor var' mn
     unCurried (CppVar name)
-      | Just ('$', name') <- uncons name = Just $ CppVar name'
+      | Just ('*', name') <- uncons name = Just $ CppVar name'
     unCurried _ = Nothing
   convert cpp = cpp
 

@@ -110,7 +110,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
       symbols = allSymbols bodyCpps
       moduleBody =
         CppInclude (runModuleName mn) (runModuleName mn) :
-        symbolDefs symbols :
+        (CppDefineSymbol <$> symbols) ++
         (if null bodyCpps
            then []
            else [ CppNamespace (runModuleName mn) $
@@ -235,7 +235,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     isAccessor Accessor {} = True
     isAccessor _ = False
     isGet :: Cpp -> Bool
-    isGet (CppGet (CppSymbol _) (CppVar _)) = True
+    isGet (CppMapGet (CppSymbol _) (CppVar _)) = True
     isGet _ = False
     classes =
       zip
@@ -249,7 +249,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
       []
       (Just $ Any [])
       [Inline]
-      (returnBlock $ CppDataLiteral [CppAccessor (CppVar $ identToCpp ident) (CppVar "data")])
+      (returnBlock $ CppDataLiteral [CppAccessor (CppVar $ identToCpp ident) (CppVar ctorNS)])
   declToCpp _ (_, ident) (Constructor _ _ (ProperName _) fields) =
     return . CppNamespace "" $
     [ CppFunction
@@ -258,7 +258,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         (Just $ Any [])
         [Inline]
         (returnBlock $
-         CppDataLiteral $ CppAccessor (CppVar name) (CppVar "data") : (CppVar <$> fields'))
+         CppDataLiteral $ CppAccessor (CppVar name) (CppVar ctorNS) : (CppVar <$> fields'))
     ] ++
     if length fields > 0
       then [ CppFunction
@@ -387,13 +387,12 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     accessed dictname name =
       ( name
       , CppApp
-          (CppIndexer
+          (CppDataGet
              (CppNumericLiteral . Left . fromIntegral . fromJust $ findIndex ((== name) . fst) fns)
-             dict'')
+             dict')
           [dict'])
       where
       dict' = CppVar dictname
-      dict'' = CppCast (dataType 1) dict'
     accessor :: Text -> (Text, Cpp) -> Cpp
     accessor dictname (name, _) =
       CppVariableIntroduction (name, Just $ Any [Const]) [] (Just . snd $ accessed dictname name)
@@ -444,13 +443,13 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Literal _ (ObjectLiteral ps)) =
     CppMapLiteral Record <$>
     mapM (sndM valueToCpp) ((\(k, v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) ps)
-  valueToCpp (Accessor _ prop val) = CppGet <$> pure (CppSymbol prop) <*> valueToCpp val
+  valueToCpp (Accessor _ prop val) = CppMapGet <$> pure (CppSymbol prop) <*> valueToCpp val
   -- TODO: use a more efficient way of copying/updating the map?
   valueToCpp (ObjectUpdate (_, _, Just ty, _) obj ps) = do
     obj' <- valueToCpp obj
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
-        origFields = (\key -> (key, CppGet (CppSymbol key) obj')) <$> origKeys
+        origFields = (\key -> (key, CppMapGet (CppSymbol key) obj')) <$> origKeys
     return $
       CppMapLiteral Record $
       (\(k, v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) (origFields ++ updatedFields)
@@ -603,7 +602,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
           [ CppIfElse
               (CppBinary
                  EqualTo
-                 (CppIndexer (CppVar ctorKey) (CppCast (dataType 1) $ CppVar varName))
+                 (CppApp (CppVar getCtor) [CppVar varName])
                  ctorCpp)
               (CppBlock cpps)
               Nothing
@@ -620,16 +619,16 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
           (argVar, Nothing)
           []
           (Just $
-           CppIndexer
+           CppDataGet
              (fieldToIndex' field)
-             (CppCast (dataType $ fieldToIndex field + 1) $ CppVar varName)) :
+             (CppVar varName)) :
         cpps
     fieldToIndex :: Ident -> Int
     fieldToIndex = (+ 1) . read . dropWhile isLetter . unpack . runIdent
     fieldToIndex' :: Ident -> Cpp
     fieldToIndex' = CppNumericLiteral . Left . toInteger . fieldToIndex
     ctor' :: Cpp
-    ctor' = CppAccessor (CppVar . identToCpp $ Ident ctor) (CppVar "data")
+    ctor' = CppAccessor (CppVar $ safeName ctor) (CppVar ctorNS)
     ctorCpp :: Cpp
     ctorCpp
       | Just mn'' <- mn'
@@ -678,18 +677,16 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         CppVariableIntroduction
           (propVar, Nothing)
           []
-          (Just $ CppGet (CppSymbol prop) (CppVar varName)) :
+          (Just $ CppMapGet (CppSymbol prop) (CppVar varName)) :
         cpp
   literalToBinderCpp varName done (ArrayLiteral bs) = do
     cpp <- go done 0 bs
     let cond =
           case length bs of
-            0 -> CppBinary Dot (CppCast arrayType $ CppVar varName) (CppApp (CppVar "empty") [])
-            n ->
-              let var = CppCast arrayType $ CppVar varName
-              in CppBinary
+            0 -> CppBinary Dot (CppVar varName) (CppApp (CppVar "empty") [])
+            n -> CppBinary
                    EqualTo
-                   (CppBinary Dot var (CppApp (CppVar "size") []))
+                   (CppBinary Dot (CppVar varName) (CppApp (CppVar "size") []))
                    (CppNumericLiteral (Left (fromIntegral n)))
     return [CppIfElse cond (CppBlock cpp) Nothing]
     where
@@ -753,7 +750,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   dataCtors =
     [ CppNamespace
-        "data"
+        ctorNS
         [ CppEnum Nothing (Just intType) . ("_" :) . catMaybes . map modCtor . M.keys $
           E.dataConstructors env
         ]
@@ -761,7 +758,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     where
     modCtor :: Qualified (ProperName a) -> Maybe Text
     modCtor (Qualified (Just mn') (ProperName name))
-      | mn' == mn = Just $ identToCpp (Ident name)
+      | mn' == mn = Just (safeName name)
     modCtor _ = Nothing
   -------------------------------------------------------------------------------------------------
   curriedForeigns :: m [Cpp]
@@ -840,10 +837,10 @@ optIndexers :: [(Cpp, Cpp)] -> Cpp -> Cpp
 optIndexers classes = everywhereOnCpp dictIndexerToEnum
   where
   dictIndexerToEnum :: Cpp -> Cpp
-  dictIndexerToEnum (CppGet (CppSymbol prop) dict)
+  dictIndexerToEnum (CppMapGet (CppSymbol prop) dict)
     | Just cls <- lookup dict classes =
-      let index = CppAccessor (CppVar . identToCpp $ Ident prop) cls
-      in CppGet index dict
+      let index = CppAccessor (CppVar $ safeName prop) cls
+      in CppMapGet index dict
   dictIndexerToEnum cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
@@ -852,8 +849,8 @@ curriedName :: Text -> Text
 curriedName name
   | Text.null name = name
 curriedName name
-  | Text.head name == '$' = name
-  | otherwise = '$' `Text.cons` name
+  | Text.head name == '*' = name
+  | otherwise = '*' `Text.cons` name
 
 ---------------------------------------------------------------------------------------------------
 curriedName' :: Cpp -> Cpp
@@ -889,7 +886,7 @@ convertIfPrimFn :: Maybe T.Type -> Cpp -> Cpp
 convertIfPrimFn ty@(Just _) (CppNamespace ns fs) = CppNamespace ns (convertIfPrimFn ty <$> fs)
 convertIfPrimFn (Just _) cpp@(CppFunction name _ _ _ _)
   | not $ Text.null name
-  , Text.head name == '$' = cpp
+  , Text.head name == '*' = cpp
 convertIfPrimFn (Just ty) (CppFunction name params _ qs body)
   | (tys', Just rty') <- primFn ty =
     CppFunction name (zipWith (\(p, _) t -> (p, Just t)) params tys') (Just rty') qs body
@@ -901,17 +898,8 @@ allSymbols :: [Cpp] -> [Text]
 allSymbols cpps = nub $ concatMap (everythingOnCpp (++) symbols) cpps
   where
   symbols :: Cpp -> [Text]
-  symbols (CppSymbol s) = [symbolname s]
+  symbols (CppSymbol s) = [s]
   symbols _ = []
-
----------------------------------------------------------------------------------------------------
-symbolDefs :: [Text] -> Cpp
----------------------------------------------------------------------------------------------------
-symbolDefs [] = CppNoOp
-symbolDefs syms = CppNamespace "PureScript" [CppNamespace "symbol" (asStruct <$> syms)]
-  where
-  asStruct :: Text -> Cpp
-  asStruct s = CppStruct s []
 
 ---------------------------------------------------------------------------------------------------
 filterInlineFuncs :: Cpp -> Cpp

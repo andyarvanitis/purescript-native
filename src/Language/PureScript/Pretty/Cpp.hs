@@ -36,12 +36,12 @@ import Control.Applicative
 import Control.Arrow ((<+>))
 import qualified Control.Arrow as A
 import Control.Monad.State
-import Numeric (showHex)
 import Control.PatternArrows
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Comments
+import Language.PureScript.CodeGen.Cpp.Common
 import qualified Language.PureScript.Constants as C
 import Language.PureScript.Pretty.Common (PrinterState(..), intercalate, parensT)
 
@@ -129,7 +129,7 @@ literals = mkPattern' match
   match (CppFunction name args rty qs ret) =  mconcat <$> sequence
     [ return . T.concat . fmap (<> " ") . filter (not . T.null) $ runValueQual <$> qs
     , return "auto "
-    , return name
+    , return $ renderName name
     , return $ parensT (T.intercalate ", " $ argstr <$> args)
     , return (maybe "" ((" -> " <>) . runType) rty)
     , if ret /= CppNoOp
@@ -237,17 +237,16 @@ literals = mkPattern' match
     vstr = prettyPrintCpp1 val
     val' | "(" `T.isInfixOf` vstr || "[" `T.isInfixOf` vstr = parensT vstr
          | otherwise = vstr
-  match (CppGet i@(CppSymbol _) val) =
-    return . prettyPrintCpp1 $ CppApp (CppVar "get") [i, val]
-  match (CppGet i val) =
-    return . prettyPrintCpp1 $ CppApp (CppVar $ "get" <> angles (prettyPrintCpp1 i)) [val]
-  match (CppVar ident)
-    | ident == C.__unused = match (CppVar $ '$' `T.cons` ident)
-  match (CppVar ident) = return ident
-  match (CppSymbol ident) = return $ "SYMBOL" <> parensT (symbolname ident)
+  match (CppMapGet i@(CppSymbol _) val) =
+    return . prettyPrintCpp1 $ CppApp (CppVar $ mapNS <> "::get") [i, val]
+  match (CppMapGet i val) =
+    return . prettyPrintCpp1 $ CppApp (CppVar $ mapNS <> "::get" <> angles (prettyPrintCpp1 i)) [val]
+  match (CppDataGet i val) =
+    return . prettyPrintCpp1 $ CppApp (CppVar $ dataNS <> "::get" <> angles (prettyPrintCpp1 i)) [val]
+  match (CppVar ident) = return $ renderName ident
+  match (CppSymbol ident) = return $ "symbol" <> parensT (safeName ident)
+  match (CppDefineSymbol ident) = return $ "define_symbol" <> parensT (safeName ident)
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
-  match (CppVariableIntroduction (ident, typ) qs value)
-    | ident == C.__unused = match (CppVariableIntroduction ('$' `T.cons` ident, typ) qs value)
   match (CppVariableIntroduction (ident, typ) qs value) =
     mconcat <$> sequence
     [ return . T.concat . fmap (<> " ") . filter (not . T.null) $ runValueQual <$> qs
@@ -355,6 +354,7 @@ string :: Text -> Text
 string s = "\"" <> T.concatMap encodeChar s <> "\""
   where
   encodeChar :: Char -> Text
+  encodeChar '\0' = "\\0"
   encodeChar '\b' = "\\b"
   encodeChar '\t' = "\\t"
   encodeChar '\n' = "\\n"
@@ -363,16 +363,7 @@ string s = "\"" <> T.concatMap encodeChar s <> "\""
   encodeChar '\r' = "\\r"
   encodeChar '"'  = "\\\""
   encodeChar '\\' = "\\\\"
-  -- PureScript strings are sequences of UTF-16 code units, so this case should never be hit.
-  -- If it is somehow hit, though, output the designated Unicode replacement character U+FFFD.
-  encodeChar c | fromEnum c > 0xFFFF = "\\uFFFD"
-  encodeChar c | fromEnum c > 0xFFF = "\\u" <> showHex' (fromEnum c) ""
-  encodeChar c | fromEnum c > 0xFF = "\\u0" <> showHex' (fromEnum c) ""
-  encodeChar c | fromEnum c < 0x10 = "\\x0" <> showHex' (fromEnum c) ""
-  encodeChar c | fromEnum c > 0x7E || fromEnum c < 0x20 = "\\x" <> showHex' (fromEnum c) ""
   encodeChar c = T.singleton c
-
-  showHex' a b = T.pack (showHex a b)
 
 accessor :: Pattern PrinterState Cpp (Text, Cpp)
 accessor = mkPattern match
@@ -515,7 +506,7 @@ dotsTo chr' = T.map (\c -> if c == '.' then chr' else c)
 argstr :: (Text, Maybe CppType) -> Text
 argstr (name, Nothing) = argStr name (Auto [])
 argstr (name, Just typ)
-  | name == C.__unused = argStr "" typ
+  | name == C.__unused || name == (safeName C.__unused) = argStr "" typ
 argstr (name, Just typ) = argStr name typ
 
 argStr :: Text -> CppType -> Text
@@ -546,3 +537,8 @@ isNoOp :: Cpp -> Bool
 isNoOp CppNoOp = True
 isNoOp (CppComment [] CppNoOp) = True
 isNoOp _ = False
+
+renderName :: Text -> Text
+renderName name
+  | Just ('*', name') <- T.uncons name = '$' `T.cons` name'
+  | otherwise = name

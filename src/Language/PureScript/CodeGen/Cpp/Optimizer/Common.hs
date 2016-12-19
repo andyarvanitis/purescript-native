@@ -64,7 +64,7 @@ targetVariable :: Cpp -> Text
 targetVariable (CppVar var) = var
 targetVariable (CppAccessor _ tgt) = targetVariable tgt
 targetVariable (CppIndexer _ tgt) = targetVariable tgt
-targetVariable (CppGet _ tgt) = targetVariable tgt
+targetVariable (CppMapGet _ tgt) = targetVariable tgt
 targetVariable _ = error "Invalid argument to targetVariable"
 
 isUpdated :: Text -> Cpp -> Bool
@@ -80,7 +80,7 @@ removeFromBlock _  cpp = cpp
 
 isFn :: (Text, Text) -> Cpp -> Bool
 isFn (moduleName, fnName) (CppAccessor (CppVar x) (CppVar y)) =
-  (x == fnName || x == ('$' `cons` fnName)) && y == moduleName
+  (x == fnName || x == ('*' `cons` fnName)) && y == moduleName
 isFn (moduleName, fnName) (CppIndexer (CppStringLiteral x) (CppVar y)) =
   x == fnName && y == moduleName
 isFn _ _ = False
