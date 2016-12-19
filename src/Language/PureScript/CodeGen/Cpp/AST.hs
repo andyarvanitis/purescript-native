@@ -25,6 +25,7 @@ import Control.Applicative (Applicative, (<$>), (<*>))
 import Data.Traversable (traverse)
 #endif
 import Control.Monad.Identity
+import Data.Text (Text)
 import Language.PureScript.Comments
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Traversals
@@ -149,7 +150,7 @@ data Cpp
   -- |
   -- A string literal
   --
-  | CppStringLiteral String
+  | CppStringLiteral Text
   -- |
   -- A character literal
   --
@@ -177,7 +178,7 @@ data Cpp
   -- |
   -- An enum definition (optional name, optional type)
   --
-  | CppEnum (Maybe String) (Maybe CppType) [String]
+  | CppEnum (Maybe Text) (Maybe CppType) [Text]
   -- |
   -- An array indexer expression
   --
@@ -193,19 +194,23 @@ data Cpp
   -- |
   -- A function introduction (name, arguments, return type, qualifiers, body)
   --
-  | CppFunction String [(String, Maybe CppType)] (Maybe CppType) [ValueQual] Cpp
+  | CppFunction Text [(Text, Maybe CppType)] (Maybe CppType) [ValueQual] Cpp
   -- |
   -- A lambda introduction (arguments, return type, body)
   --
-  | CppLambda [CaptureType] [(String, Maybe CppType)] (Maybe CppType) Cpp
+  | CppLambda [CaptureType] [(Text, Maybe CppType)] (Maybe CppType) Cpp
   -- |
   -- Value type cast
   --
   | CppCast CppType Cpp
   -- |
-  -- Call to getter from templated type
+  -- Call to getter from templated map type
   --
-  | CppGet Cpp Cpp
+  | CppMapGet Cpp Cpp
+  -- |
+  -- Call to getter from templated data type
+  --
+  | CppDataGet Cpp Cpp
   -- |
   -- Function application
   --
@@ -213,12 +218,15 @@ data Cpp
   -- |
   -- Variable
   --
-  | CppVar String
+  | CppVar Text
   -- |
   -- Unique system-wide name/constant
   --
-  | CppSymbol String
+  | CppSymbol Text
   -- |
+  -- Define unique system-wide name/constant
+  --
+  | CppDefineSymbol Text
   -- |
   -- A block of expressions in braces
   --
@@ -226,27 +234,27 @@ data Cpp
   -- |
   -- A C++ namespace
   --
-  | CppNamespace String [Cpp]
+  | CppNamespace Text [Cpp]
   -- |
   -- An C++ struct declaration (name, members)
   --
-  | CppStruct String [Cpp]
+  | CppStruct Text [Cpp]
   -- |
   -- A C++ #include
   --
-  | CppInclude String String
+  | CppInclude Text Text
   -- |
   -- A C++ using namespace declaration
   --
-  | CppUseNamespace String
+  | CppUseNamespace Text
   -- |
   -- Type alias, e.g. "using T = U" (new name and template types, original type)
   --
-  | CppTypeAlias (String,[(String, Int)]) CppType String
+  | CppTypeAlias (Text,[(Text, Int)]) CppType Text
   -- |
   -- A variable introduction and optional initialization
   --
-  | CppVariableIntroduction (String, Maybe CppType) [ValueQual] (Maybe Cpp)
+  | CppVariableIntroduction (Text, Maybe CppType) [ValueQual] (Maybe Cpp)
   -- |
   -- A variable assignment
   --
@@ -286,7 +294,7 @@ data Cpp
   -- |
   -- Raw C++11 (generated when parsing fails for an inline foreign import declaration)
   --
-  | CppRaw String
+  | CppRaw Text
   -- |
   -- Commented C++11
   --
@@ -311,7 +319,8 @@ everywhereOnCpp f = go
   go (CppFunction name args rty qs j) = f (CppFunction name args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
   go (CppCast t cpp) = f (CppCast t (go cpp))
-  go (CppGet j1 j2) = f (CppGet (go j1) (go j2))
+  go (CppMapGet j1 j2) = f (CppMapGet (go j1) (go j2))
+  go (CppDataGet j1 j2) = f (CppDataGet (go j1) (go j2))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
@@ -343,7 +352,8 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppFunction name args rty qs j) = CppFunction name args rty qs <$> f' j
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
   go (CppCast t cpp) = CppCast t <$> f' cpp
-  go (CppGet j1 j2) = CppGet <$> f' j1 <*> f' j2
+  go (CppMapGet j1 j2) = CppMapGet <$> f' j1 <*> f' j2
+  go (CppDataGet j1 j2) = CppDataGet <$> f' j1 <*> f' j2
   go (CppApp j cpp) = CppApp <$> f' j <*> traverse f' cpp
   go (CppBlock cpp) = CppBlock <$> traverse f' cpp
   go (CppNamespace name cpp) = CppNamespace name <$> traverse f' cpp
@@ -371,7 +381,8 @@ everythingOnCpp (<>) f = go
   go j@(CppFunction _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1
   go j@(CppCast _ cpp) = f j <> go cpp
-  go j@(CppGet j1 j2) = f j <> go j1 <> go j2
+  go j@(CppMapGet j1 j2) = f j <> go j1 <> go j2
+  go j@(CppDataGet j1 j2) = f j <> go j1 <> go j2
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)

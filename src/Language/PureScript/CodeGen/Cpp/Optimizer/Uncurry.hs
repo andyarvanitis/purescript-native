@@ -16,6 +16,7 @@
 module Language.PureScript.CodeGen.Cpp.Optimizer.Uncurry where
 
 import Prelude.Compat
+import Data.Text (uncons)
 
 import Language.PureScript.CodeGen.Cpp.AST
 
@@ -37,7 +38,8 @@ removeCurrying nm = everywhereOnCpp convert
     unCurried :: Cpp -> Maybe Cpp
     unCurried (CppAccessor var mn)
       | Just var' <- unCurried var = Just $ CppAccessor var' mn
-    unCurried (CppVar ('$':name)) = Just $ CppVar name
+    unCurried (CppVar name)
+      | Just ('*', name') <- uncons name = Just $ CppVar name'
     unCurried _ = Nothing
   convert cpp = cpp
 

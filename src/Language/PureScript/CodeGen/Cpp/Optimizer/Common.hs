@@ -18,25 +18,26 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Common where
 import Prelude.Compat
 
 import Data.Maybe (fromMaybe)
+import Data.Text (Text, cons)
 
 import Language.PureScript.CodeGen.Cpp.AST
 
 applyAll :: [a -> a] -> a -> a
 applyAll = foldl1 (.)
 
-replaceIdent :: String -> Cpp -> Cpp -> Cpp
+replaceIdent :: Text -> Cpp -> Cpp -> Cpp
 replaceIdent var1 cpp = everywhereOnCpp replace
   where
   replace (CppVar var2) | var1 == var2 = cpp
   replace other = other
 
-replaceIdents :: [(String, Cpp)] -> Cpp -> Cpp
+replaceIdents :: [(Text, Cpp)] -> Cpp -> Cpp
 replaceIdents vars = everywhereOnCpp replace
   where
   replace v@(CppVar var) = fromMaybe v $ lookup var vars
   replace other = other
 
-isReassigned :: String -> Cpp -> Bool
+isReassigned :: Text -> Cpp -> Bool
 isReassigned var1 = everythingOnCpp (||) check
   where
   check :: Cpp -> Bool
@@ -51,7 +52,7 @@ isRebound cpp d = any (\v -> isReassigned v d || isUpdated v d) (everythingOnCpp
   variablesOf (CppVar var) = [var]
   variablesOf _ = []
 
-isUsed :: String -> Cpp -> Bool
+isUsed :: Text -> Cpp -> Bool
 isUsed var1 = everythingOnCpp (||) check
   where
   check :: Cpp -> Bool
@@ -59,14 +60,14 @@ isUsed var1 = everythingOnCpp (||) check
   check (CppAssignment target _) | var1 == targetVariable target = True
   check _ = False
 
-targetVariable :: Cpp -> String
+targetVariable :: Cpp -> Text
 targetVariable (CppVar var) = var
 targetVariable (CppAccessor _ tgt) = targetVariable tgt
 targetVariable (CppIndexer _ tgt) = targetVariable tgt
-targetVariable (CppGet _ tgt) = targetVariable tgt
+targetVariable (CppMapGet _ tgt) = targetVariable tgt
 targetVariable _ = error "Invalid argument to targetVariable"
 
-isUpdated :: String -> Cpp -> Bool
+isUpdated :: Text -> Cpp -> Bool
 isUpdated var1 = everythingOnCpp (||) check
   where
   check :: Cpp -> Bool
@@ -77,16 +78,16 @@ removeFromBlock :: ([Cpp] -> [Cpp]) -> Cpp -> Cpp
 removeFromBlock go (CppBlock sts) = CppBlock (go sts)
 removeFromBlock _  cpp = cpp
 
-isFn :: (String, String) -> Cpp -> Bool
+isFn :: (Text, Text) -> Cpp -> Bool
 isFn (moduleName, fnName) (CppAccessor (CppVar x) (CppVar y)) =
-  (x == fnName || x == ('$':fnName)) && y == moduleName
+  (x == fnName || x == ('*' `cons` fnName)) && y == moduleName
 isFn (moduleName, fnName) (CppIndexer (CppStringLiteral x) (CppVar y)) =
   x == fnName && y == moduleName
 isFn _ _ = False
 
-isDict :: (String, String) -> Cpp -> Bool
+isDict :: (Text, Text) -> Cpp -> Bool
 isDict (moduleName, dictName) (CppAccessor (CppVar x) (CppVar y)) = x == dictName && y == moduleName
 isDict _ _ = False
 
-isDict' :: [(String, String)] -> Cpp -> Bool
+isDict' :: [(Text, Text)] -> Cpp -> Bool
 isDict' xs cpp = any (`isDict` cpp) xs

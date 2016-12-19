@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Language.PureScript.Docs.Types
   ( module Language.PureScript.Docs.Types
   , module ReExports
@@ -122,10 +120,10 @@ data DeclarationInfo
   | TypeSynonymDeclaration [(String, Maybe P.Kind)] P.Type
 
   -- |
-  -- A type class, with its type arguments and its superclasses. Instances and
-  -- members are represented as child declarations.
+  -- A type class, with its type arguments, its superclasses and functional
+  -- dependencies. Instances and members are represented as child declarations.
   --
-  | TypeClassDeclaration [(String, Maybe P.Kind)] [P.Constraint]
+  | TypeClassDeclaration [(String, Maybe P.Kind)] [P.Constraint] [([String], [String])]
 
   -- |
   -- An operator alias declaration, with the member the alias is for and the
@@ -141,7 +139,7 @@ declInfoToString (ValueDeclaration _) = "value"
 declInfoToString (DataDeclaration _ _) = "data"
 declInfoToString (ExternDataDeclaration _) = "externData"
 declInfoToString (TypeSynonymDeclaration _ _) = "typeSynonym"
-declInfoToString (TypeClassDeclaration _ _) = "typeClass"
+declInfoToString (TypeClassDeclaration _ _ _) = "typeClass"
 declInfoToString (AliasDeclaration _ _) = "alias"
 
 isTypeClass :: Declaration -> Bool
@@ -352,7 +350,7 @@ parseVersion' str =
 
 asModule :: Parse PackageError Module
 asModule =
-  Module <$> key "name" (P.moduleNameFromString <$> asString)
+  Module <$> key "name" (P.moduleNameFromString <$> asText)
          <*> key "comments" (perhaps asString)
          <*> key "declarations" (eachInArray asDeclaration)
          <*> key "reExports" (eachInArray asReExport)
@@ -413,6 +411,7 @@ asDeclarationInfo = do
     "typeClass" ->
       TypeClassDeclaration <$> key "arguments" asTypeArguments
                            <*> key "superclasses" (eachInArray asConstraint)
+                           <*> keyOrDefault "fundeps" [] asFunDeps
     "alias" ->
       AliasDeclaration <$> key "fixity" asFixity
                        <*> key "alias" asFixityAlias
@@ -429,6 +428,11 @@ asKind = fromAesonParser
 
 asType :: Parse e P.Type
 asType = fromAesonParser
+
+asFunDeps :: Parse PackageError [([String], [String])]
+asFunDeps = eachInArray asFunDep
+  where
+  asFunDep = (,) <$> nth 0 (eachInArray asString) <*> nth 1 (eachInArray asString)
 
 asDataDeclType :: Parse PackageError P.DataDeclType
 asDataDeclType =
@@ -478,7 +482,7 @@ asBookmarks = eachInArray asBookmark
 
 asBookmark :: Parse BowerError Bookmark
 asBookmark =
-  asInPackage ((,) <$> nth 0 (P.moduleNameFromString <$> asString)
+  asInPackage ((,) <$> nth 0 (P.moduleNameFromString <$> asText)
                    <*> nth 1 asString)
 
 asResolvedDependencies :: Parse PackageError [(PackageName, Version)]
@@ -556,7 +560,7 @@ instance A.ToJSON DeclarationInfo where
       DataDeclaration ty args -> ["dataDeclType" .= ty, "typeArguments" .= args]
       ExternDataDeclaration kind -> ["kind" .= kind]
       TypeSynonymDeclaration args ty -> ["arguments" .= args, "type" .= ty]
-      TypeClassDeclaration args super -> ["arguments" .= args, "superclasses" .= super]
+      TypeClassDeclaration args super fundeps -> ["arguments" .= args, "superclasses" .= super, "fundeps" .= fundeps]
       AliasDeclaration fixity alias -> ["fixity" .= fixity, "alias" .= alias]
 
 instance A.ToJSON ChildDeclarationInfo where

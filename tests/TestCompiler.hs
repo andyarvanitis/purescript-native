@@ -2,6 +2,7 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module TestCompiler where
 
@@ -30,8 +31,8 @@ import Data.Function (on)
 import Data.List (sort, stripPrefix, intercalate, groupBy, sortBy, minimumBy)
 import Data.Maybe (mapMaybe)
 import Data.Time.Clock (UTCTime())
-import Data.Tuple (swap)
 import qualified Data.Text as T
+import Data.Tuple (swap)
 
 import qualified Data.Map as M
 
@@ -46,6 +47,7 @@ import System.Exit
 import System.Process hiding (cwd)
 import System.FilePath
 import System.Directory
+import System.IO
 import System.IO.UTF8
 import System.IO.Silently
 import qualified System.FilePath.Glob as Glob
@@ -72,7 +74,7 @@ spec = do
     supportPurs <- supportFiles "purs"
     supportPursFiles <- readInput supportPurs
     supportExterns <- runExceptT $ do
-      modules <- ExceptT . return $ P.parseModulesFromFiles id (map (fmap T.pack) supportPursFiles)
+      modules <- ExceptT . return $ P.parseModulesFromFiles id supportPursFiles
       foreigns <- inferForeignModules modules
       externs <- ExceptT . fmap fst . runTest $ P.make (makeActions foreigns) (map snd modules)
       return (zip (map snd modules) externs)
@@ -80,10 +82,15 @@ spec = do
       Left errs -> fail (P.prettyPrintMultipleErrors P.defaultPPEOptions errs)
       Right externs -> return (externs, passingFiles, warningFiles, failingFiles)
 
+  outputFile <- runIO $ do
+    tmp <- getTemporaryDirectory
+    createDirectoryIfMissing False (tmp </> logpath)
+    openFile (tmp </> logpath </> logfile) WriteMode
+
   context "Passing examples" $
     forM_ passingTestCases $ \testPurs ->
       it ("'" <> takeFileName (getTestMain testPurs) <> "' should compile and run without error") $
-        assertCompiles supportExterns testPurs
+        assertCompiles supportExterns testPurs outputFile
 
   context "Warning examples" $
     forM_ warningTestCases $ \testPurs -> do
@@ -169,20 +176,20 @@ makeActions foreigns = (P.buildMakeActions modulesDir (P.internalError "makeActi
   where
   getInputTimestamp :: P.ModuleName -> P.Make (Either P.RebuildPolicy (Maybe UTCTime))
   getInputTimestamp mn
-    | isSupportModule (P.runModuleName mn) = return (Left P.RebuildNever)
+    | isSupportModule (T.unpack (P.runModuleName mn)) = return (Left P.RebuildNever)
     | otherwise = return (Left P.RebuildAlways)
     where
     isSupportModule = flip elem supportModules
 
   getOutputTimestamp :: P.ModuleName -> P.Make (Maybe UTCTime)
   getOutputTimestamp mn = do
-    let filePath = modulesDir </> P.runModuleName mn
+    let filePath = modulesDir </> T.unpack (P.runModuleName mn)
     exists <- liftIO $ doesDirectoryExist filePath
     return (if exists then Just (P.internalError "getOutputTimestamp: read timestamp") else Nothing)
 
-readInput :: [FilePath] -> IO [(FilePath, String)]
+readInput :: [FilePath] -> IO [(FilePath, T.Text)]
 readInput inputFiles = forM inputFiles $ \inputFile -> do
-  text <- readUTF8File inputFile
+  text <- readUTF8FileT inputFile
   return (inputFile, text)
 
 runTest :: P.Make a -> IO (Either P.MultipleErrors a, P.MultipleErrors)
@@ -195,7 +202,7 @@ compile
   -> IO (Either P.MultipleErrors [P.ExternsFile], P.MultipleErrors)
 compile supportExterns inputFiles check = silence $ runTest $ do
   fs <- liftIO $ readInput inputFiles
-  ms <- P.parseModulesFromFiles id (map (fmap T.pack) fs)
+  ms <- P.parseModulesFromFiles id fs
   foreigns <- inferForeignModules ms
   liftIO (check (map snd ms))
   let actions = makeActions foreigns
@@ -222,15 +229,16 @@ checkMain ms =
 checkShouldFailWith :: [String] -> P.MultipleErrors -> Maybe String
 checkShouldFailWith expected errs =
   let actual = map P.errorCode $ P.runMultipleErrors errs
-  in if sort expected == sort actual
+  in if sort expected == sort (map T.unpack actual)
     then Nothing
     else Just $ "Expected these errors: " ++ show expected ++ ", but got these: " ++ show actual
 
 assertCompiles
   :: [(P.Module, P.ExternsFile)]
   -> [FilePath]
+  -> Handle
   -> Expectation
-assertCompiles supportExterns inputFiles =
+assertCompiles supportExterns inputFiles outputFile =
   assert supportExterns inputFiles checkMain $ \e ->
     case e of
       Left errs -> return . Just . P.prettyPrintMultipleErrors P.defaultPPEOptions $ errs
@@ -239,10 +247,13 @@ assertCompiles supportExterns inputFiles =
         let entryPoint = modulesDir </> "index.js"
         writeFile entryPoint "require('Main').main()"
         result <- traverse (\node -> readProcessWithExitCode node [entryPoint] "") process
+        hPutStrLn outputFile $ "\n" <> takeFileName (last inputFiles) <> ":"
         case result of
           Just (ExitSuccess, out, err)
             | not (null err) -> return $ Just $ "Test wrote to stderr:\n\n" <> err
-            | not (null out) && trim (last (lines out)) == "Done" -> return Nothing
+            | not (null out) && trim (last (lines out)) == "Done" -> do
+                hPutStr outputFile out
+                return Nothing
             | otherwise -> return $ Just $ "Test did not finish with 'Done':\n\n" <> out
           Just (ExitFailure _, _, err) -> return $ Just err
           Nothing -> return $ Just "Couldn't find node.js executable"
@@ -285,3 +296,9 @@ assertDoesNotCompile supportExterns inputFiles shouldFailWith =
 
   where
   noPreCheck = const (return ())
+
+logpath :: FilePath
+logpath = "purescript-output"
+
+logfile :: FilePath
+logfile = "psc-tests.out"

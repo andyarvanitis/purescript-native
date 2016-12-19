@@ -13,12 +13,15 @@
 --
 -----------------------------------------------------------------------------
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Language.PureScript.CodeGen.Cpp.File where
 
 import Prelude.Compat
 
 import Data.Maybe
+import Data.Monoid ((<>))
+import Data.Text (Text)
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types
@@ -121,8 +124,8 @@ toBody = catMaybes . map go
         Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ Any [Const, Ref]) [] block
       _ -> Just $ CppVariableIntroduction (name, Just $ Any [Const]) [] (Just lambda)
     where
-    val = CppVariableIntroduction ("$value$", Just $ Any [Const]) [Static] (Just $ addCaptures cpp)
-    block = CppBlock [val, CppReturn (CppVar "$value$")]
+    val = CppVariableIntroduction ("the_value", Just $ Any [Const]) [Static] (Just $ addCaptures cpp)
+    block = CppBlock [val, CppReturn (CppVar "the_value")]
     lambda = CppLambda [] [("", Just $ thunkMarkerType)] (Just $ Any [Const, Ref]) block
     addCaptures :: Cpp -> Cpp
     addCaptures (CppMapLiteral t objs) = CppMapLiteral t (objlam <$> objs)
@@ -160,15 +163,15 @@ maybeRemCaps (CppLambda [CaptureAll] args rtyp body@(CppBlock [CppReturn (CppVar
 maybeRemCaps cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
-fileBegin :: ModuleName -> String -> [Cpp]
+fileBegin :: ModuleName -> Text -> [Cpp]
 fileBegin mn suffix =
-  [CppRaw ("#ifndef " ++ fileModName mn suffix), CppRaw ("#define " ++ fileModName mn suffix)]
+  [CppRaw ("#ifndef " <> fileModName mn suffix), CppRaw ("#define " <> fileModName mn suffix)]
 
-fileEnd :: ModuleName -> String -> [Cpp]
-fileEnd mn suffix = [CppRaw ("#endif // " ++ fileModName mn suffix)]
+fileEnd :: ModuleName -> Text -> [Cpp]
+fileEnd mn suffix = [CppRaw ("#endif // " <> fileModName mn suffix)]
 
-fileModName :: ModuleName -> String -> String
-fileModName mn suffix = P.dotsTo '_' (runModuleName mn ++ '_' : suffix)
+fileModName :: ModuleName -> Text -> Text
+fileModName mn suffix = P.dotsTo '_' (runModuleName mn <> "_" <> suffix)
 
 isMain :: ModuleName -> Bool
 isMain (ModuleName [ProperName "Main"]) = True
@@ -178,7 +181,7 @@ nativeMain :: Cpp
 nativeMain =
   CppFunction
     "main"
-    [([], Just $ Primitive "int"), ([], Just $ Primitive "char *[]")]
+    [("", Just $ Primitive "int"), ("", Just $ Primitive "char *[]")]
     (Just $ Primitive "int")
     []
     (CppBlock

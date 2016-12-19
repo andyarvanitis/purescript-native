@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 -- | Functions for converting PureScript ASTs into values of the data types
 -- from Language.PureScript.Docs.
 
@@ -18,6 +16,7 @@ import Control.Monad.Error.Class (MonadError)
 import Control.Monad.State (runStateT)
 import Control.Monad.Writer.Strict (runWriterT)
 import qualified Data.Map as Map
+import qualified Data.Text as T
 
 import Language.PureScript.Docs.Convert.ReExports (updateReExports)
 import Language.PureScript.Docs.Convert.Single (convertSingleModule, collectBookmarks)
@@ -170,7 +169,7 @@ insertValueTypes env m =
 
 runParser :: P.TokenParser a -> String -> Either String a
 runParser p s = either (Left . show) Right $ do
-  ts <- P.lex "" s
+  ts <- P.lex "" (T.pack s)
   P.runTokenParser "" (p <* eof) ts
 
 -- |

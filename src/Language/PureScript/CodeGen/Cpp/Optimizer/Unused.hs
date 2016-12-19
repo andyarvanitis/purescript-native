@@ -16,8 +16,8 @@
 module Language.PureScript.CodeGen.Cpp.Optimizer.Unused where
 
 import Prelude.Compat
-
 import Language.PureScript.CodeGen.Cpp.AST
+import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.Optimizer.Common
 
 import qualified Language.PureScript.Constants as C
@@ -43,5 +43,5 @@ removeUnusedArg :: Cpp -> Cpp
 removeUnusedArg = everywhereOnCpp convert
   where
   convert (CppFunction name [(arg,atyp)] rtyp qs body)
-    | arg == C.__unused = CppFunction name [("",atyp)] rtyp qs body
+    | arg == C.__unused || arg == (safeName C.__unused) = CppFunction name [("",atyp)] rtyp qs body
   convert cpp = cpp

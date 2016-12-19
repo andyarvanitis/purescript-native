@@ -1,5 +1,5 @@
 name: purescript
-version: 0.10.2
+version: 0.10.3
 cabal-version: >=1.8
 build-type: Simple
 license: BSD3
@@ -50,6 +50,7 @@ extra-source-files: examples/passing/*.purs
                   , examples/passing/ResolvableScopeConflict2/*.purs
                   , examples/passing/ResolvableScopeConflict3/*.purs
                   , examples/passing/ShadowedModuleName/*.purs
+                  , examples/passing/SolvingIsSymbol/*.purs
                   , examples/passing/TransitiveImport/*.purs
                   , examples/passing/TypeOperators/*.purs
                   , examples/passing/TypeWithoutParens/*.purs
@@ -292,8 +293,9 @@ library
                      Language.PureScript.Ide.Conversions
                      Language.PureScript.Ide.Externs
                      Language.PureScript.Ide.Error
-                     Language.PureScript.Ide.Imports
                      Language.PureScript.Ide.Filter
+                     Language.PureScript.Ide.Imports
+                     Language.PureScript.Ide.Logging
                      Language.PureScript.Ide.Matcher
                      Language.PureScript.Ide.Pursuit
                      Language.PureScript.Ide.Rebuild
@@ -333,6 +335,7 @@ library
                      PatternSynonyms
                      RankNTypes
                      RecordWildCards
+                     OverloadedStrings
                      ScopedTypeVariables
                      TupleSections
                      ViewPatterns

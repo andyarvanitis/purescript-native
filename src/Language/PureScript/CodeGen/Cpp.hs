@@ -34,6 +34,9 @@ import Data.Function (on)
 import Data.List
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromJust)
+import Data.Monoid ((<>))
+import Data.Text (Text, unpack)
+import qualified Data.Text as Text
 
 import Control.Monad (forM, replicateM)
 import Control.Monad.Reader (MonadReader, ask)
@@ -95,7 +98,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         P.linebreak ++
         ((\i -> CppInclude i i) <$> cppImports') ++
         (if not (null foreigns)
-           then [CppInclude [] (runModuleName mn ++ "_ffi")]
+           then [CppInclude "" (runModuleName mn <> "_ffi")]
            else []) ++
         P.linebreak ++
         [ CppNamespace (runModuleName mn) $
@@ -107,7 +110,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
       symbols = allSymbols bodyCpps
       moduleBody =
         CppInclude (runModuleName mn) (runModuleName mn) :
-        symbolDefs symbols :
+        (CppDefineSymbol <$> symbols) ++
         (if null bodyCpps
            then []
            else [ CppNamespace (runModuleName mn) $
@@ -135,8 +138,8 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   declToCpp _ (_, ident) e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
     let className = identToCpp ident
-        (supers, members) = span (C.__superclass_ `isPrefixOf`) (identToCpp <$> (fst $ unAbs e []))
-    in return $ CppStruct className [CppEnum Nothing Nothing (sort supers ++ members)]
+        (supers, members) = span (C.__superclass_ `Text.isPrefixOf`) (identToCpp <$> (fst $ unAbs e []))
+    in return $ CppStruct className [CppEnum Nothing Nothing (sort supers <> members)]
   declToCpp vqs (_, ident) (Abs (_, com, ty, _) arg body) = do
     fn <-
       if TopLevel `elem` vqs
@@ -232,7 +235,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     isAccessor Accessor {} = True
     isAccessor _ = False
     isGet :: Cpp -> Bool
-    isGet (CppGet (CppSymbol _) (CppVar _)) = True
+    isGet (CppMapGet (CppSymbol _) (CppVar _)) = True
     isGet _ = False
     classes =
       zip
@@ -246,7 +249,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
       []
       (Just $ Any [])
       [Inline]
-      (returnBlock $ CppDataLiteral [CppAccessor (CppVar $ identToCpp ident) (CppVar "data")])
+      (returnBlock $ CppDataLiteral [CppAccessor (CppVar $ identToCpp ident) (CppVar ctorNS)])
   declToCpp _ (_, ident) (Constructor _ _ (ProperName _) fields) =
     return . CppNamespace "" $
     [ CppFunction
@@ -255,7 +258,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         (Just $ Any [])
         [Inline]
         (returnBlock $
-         CppDataLiteral $ CppAccessor (CppVar name) (CppVar "data") : (CppVar <$> fields'))
+         CppDataLiteral $ CppAccessor (CppVar name) (CppVar ctorNS) : (CppVar <$> fields'))
     ] ++
     if length fields > 0
       then [ CppFunction
@@ -352,9 +355,9 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     where
     cpps' = everywhereOnCpp removeRec <$> cpps
     allCpps = CppBlock $ otherCpp : cpps'
-    fns :: [(String, Cpp)]
+    fns :: [(Text, Cpp)]
     fns = toelem <$> concatMap (everythingOnCpp (++) recursive) cpps
-    filteredFns :: Cpp -> [(String, Cpp)]
+    filteredFns :: Cpp -> [(Text, Cpp)]
     filteredFns cpp = filter (\(f, _) -> everythingOnCpp (||) (== CppVar f) cpp) fns
     recursive :: Cpp -> [Cpp]
     recursive cpp'@(CppFunction _ _ _ qs _)
@@ -368,7 +371,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     removeRec (CppVariableIntroduction _ qs _)
       | Recursive `elem` qs = CppNoOp
     removeRec cpp' = cpp'
-    replaceVar :: [(String, Cpp)] -> Cpp -> Cpp
+    replaceVar :: [(Text, Cpp)] -> Cpp -> Cpp
     replaceVar rs = go
       where
       go (CppVar var)
@@ -380,21 +383,20 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         (topdict, Just $ Any [Const])
         []
         (Just $ CppDataLiteral ((\(f, cpp) -> CppComment [LineComment f] cpp) <$> fns))
-    accessed :: String -> String -> (String, Cpp)
+    accessed :: Text -> Text -> (Text, Cpp)
     accessed dictname name =
       ( name
       , CppApp
-          (CppIndexer
+          (CppDataGet
              (CppNumericLiteral . Left . fromIntegral . fromJust $ findIndex ((== name) . fst) fns)
-             dict'')
+             dict')
           [dict'])
       where
       dict' = CppVar dictname
-      dict'' = CppCast (dataType 1) dict'
-    accessor :: String -> (String, Cpp) -> Cpp
+    accessor :: Text -> (Text, Cpp) -> Cpp
     accessor dictname (name, _) =
       CppVariableIntroduction (name, Just $ Any [Const]) [] (Just . snd $ accessed dictname name)
-    toelem :: Cpp -> (String, Cpp)
+    toelem :: Cpp -> (Text, Cpp)
     toelem (CppFunction name args rtyp _ body'@(CppBlock body)) =
       ( name
       , withdict . maybeRemCaps $
@@ -416,9 +418,9 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         [(localdict, Just $ Any [Const, Ref])]
         (Just $ Any [])
         (returnBlock cpp')
-    topdict :: String
+    topdict :: Text
     topdict = "_$dict$_"
-    localdict :: String
+    localdict :: Text
     localdict = "$dict$"
   convertRecursiveFns cpps _ = cpps
 
@@ -441,21 +443,21 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Literal _ (ObjectLiteral ps)) =
     CppMapLiteral Record <$>
     mapM (sndM valueToCpp) ((\(k, v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) ps)
-  valueToCpp (Accessor _ prop val) = CppGet <$> pure (CppSymbol prop) <*> valueToCpp val
+  valueToCpp (Accessor _ prop val) = CppMapGet <$> pure (CppSymbol prop) <*> valueToCpp val
   -- TODO: use a more efficient way of copying/updating the map?
   valueToCpp (ObjectUpdate (_, _, Just ty, _) obj ps) = do
     obj' <- valueToCpp obj
     updatedFields <- mapM (sndM valueToCpp) ps
     let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
-        origFields = (\key -> (key, CppGet (CppSymbol key) obj')) <$> origKeys
+        origFields = (\key -> (key, CppMapGet (CppSymbol key) obj')) <$> origKeys
     return $
       CppMapLiteral Record $
       (\(k, v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) (origFields ++ updatedFields)
     where
-    allKeys :: T.Type -> [String]
+    allKeys :: T.Type -> [Text]
     allKeys (T.TypeApp (T.TypeConstructor _) r@(T.RCons {})) = fst <$> (fst $ T.rowToList r)
     allKeys (T.ForAll _ t _) = allKeys t
-    allKeys _ = error $ show "Not a recognized row type"
+    allKeys _ = error "Not a recognized row type"
   valueToCpp (ObjectUpdate _ _ _) = error $ "Bad Type in object update!"
   valueToCpp (Abs (_, _, ty, _) arg body) = do
     cpp <- valueToCpp body
@@ -505,9 +507,9 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     hasRecursion :: [Cpp] -> Bool
     hasRecursion cpps' = any (everythingOnCpp (||) hasRecursiveRef) cpps'
       where
-      valnames :: [String]
+      valnames :: [Text]
       valnames = concatMap (everythingOnCpp (++) valname) cpps'
-      valname :: Cpp -> [String]
+      valname :: Cpp -> [Text]
       valname (CppFunction name _ _ _ _) = [name]
       valname (CppVariableIntroduction (name, _) _ _) = [name]
       valname _ = []
@@ -554,21 +556,21 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
            (CppBlock (assignments ++ concat cpps ++ [failedPatternError valNames])))
         []
     where
-    mkVarDecl :: String -> Maybe Cpp -> Cpp
+    mkVarDecl :: Text -> Maybe Cpp -> Cpp
     mkVarDecl name = CppVariableIntroduction (name, Nothing) []
-    go :: [String] -> [Cpp] -> [Binder Ann] -> m [Cpp]
+    go :: [Text] -> [Cpp] -> [Binder Ann] -> m [Cpp]
     go _ done [] = return done
     go (v:vs) done' (b:bs) = do
       done'' <- go vs done' bs
       binderToCpp v done'' b
     go _ _ _ = error "Invalid arguments to bindersToCpp"
-    failedPatternError :: [String] -> Cpp
+    failedPatternError :: [Text] -> Cpp
     failedPatternError _ =
       CppThrow $ CppApp (CppVar "runtime_error") [CppStringLiteral errorMessage]
-    errorMessage :: String
+    errorMessage :: Text
     errorMessage =
-      "Failed pattern match" ++
-      maybe "" (((" at " ++ runModuleName mn ++ " ") ++) . displayStartEndPos) maybeSpan ++ ": "
+      "Failed pattern match" <>
+      maybe "" (((" at " <> runModuleName mn <> " ") <>) . displayStartEndPos) maybeSpan <> ": "
     guardsToCpp :: Either [(Guard Ann, Expr Ann)] (Expr Ann) -> m [Cpp]
     guardsToCpp (Left gs) =
       forM gs $ \(cond, val) -> do
@@ -582,7 +584,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   -- binder.
   --
   -------------------------------------------------------------------------------------------------
-  binderToCpp :: String -> [Cpp] -> Binder Ann -> m [Cpp]
+  binderToCpp :: Text -> [Cpp] -> Binder Ann -> m [Cpp]
   -------------------------------------------------------------------------------------------------
   binderToCpp _ done (NullBinder {}) = return done
   binderToCpp varName done (LiteralBinder _ l) = literalToBinderCpp varName done l
@@ -600,7 +602,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
           [ CppIfElse
               (CppBinary
                  EqualTo
-                 (CppIndexer (CppVar ctorKey) (CppCast (dataType 1) $ CppVar varName))
+                 (CppApp (CppVar getCtor) [CppVar varName])
                  ctorCpp)
               (CppBlock cpps)
               Nothing
@@ -617,30 +619,30 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
           (argVar, Nothing)
           []
           (Just $
-           CppIndexer
+           CppDataGet
              (fieldToIndex' field)
-             (CppCast (dataType $ fieldToIndex field + 1) $ CppVar varName)) :
+             (CppVar varName)) :
         cpps
     fieldToIndex :: Ident -> Int
-    fieldToIndex = (+ 1) . read . dropWhile isLetter . runIdent
+    fieldToIndex = (+ 1) . read . dropWhile isLetter . unpack . runIdent
     fieldToIndex' :: Ident -> Cpp
     fieldToIndex' = CppNumericLiteral . Left . toInteger . fieldToIndex
     ctor' :: Cpp
-    ctor' = CppAccessor (CppVar . identToCpp $ Ident ctor) (CppVar "data")
+    ctor' = CppAccessor (CppVar $ safeName ctor) (CppVar ctorNS)
     ctorCpp :: Cpp
     ctorCpp
       | Just mn'' <- mn'
       , mn'' /= mn = CppAccessor ctor' (CppVar $ moduleNameToCpp mn'')
       | otherwise = ctor'
   binderToCpp _ _ b@(ConstructorBinder {}) =
-    error $ "Invalid ConstructorBinder in binderToCpp: " ++ show b
+    error $ "Invalid ConstructorBinder in binderToCpp: " <> show b
   binderToCpp varName done (NamedBinder _ ident binder) = do
     cpp <- binderToCpp varName done binder
     return $
       CppVariableIntroduction (identToCpp ident, Just $ Any [Const]) [] (Just $ CppVar varName) :
       cpp
   -------------------------------------------------------------------------------------------------
-  literalToBinderCpp :: String -> [Cpp] -> Literal (Binder Ann) -> m [Cpp]
+  literalToBinderCpp :: Text -> [Cpp] -> Literal (Binder Ann) -> m [Cpp]
   -------------------------------------------------------------------------------------------------
   literalToBinderCpp varName done (NumericLiteral num) =
     return
@@ -665,7 +667,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     return [CppIfElse (CppUnary Not (CppVar varName)) (CppBlock done) Nothing]
   literalToBinderCpp varName done (ObjectLiteral bs) = go done bs
     where
-    go :: [Cpp] -> [(String, Binder Ann)] -> m [Cpp]
+    go :: [Cpp] -> [(Text, Binder Ann)] -> m [Cpp]
     go done' [] = return done'
     go done' ((prop, binder):bs') = do
       propVar <- freshName
@@ -675,18 +677,16 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         CppVariableIntroduction
           (propVar, Nothing)
           []
-          (Just $ CppGet (CppSymbol prop) (CppVar varName)) :
+          (Just $ CppMapGet (CppSymbol prop) (CppVar varName)) :
         cpp
   literalToBinderCpp varName done (ArrayLiteral bs) = do
     cpp <- go done 0 bs
     let cond =
           case length bs of
-            0 -> CppBinary Dot (CppCast arrayType $ CppVar varName) (CppApp (CppVar "empty") [])
-            n ->
-              let var = CppCast arrayType $ CppVar varName
-              in CppBinary
+            0 -> CppBinary Dot (CppVar varName) (CppApp (CppVar "empty") [])
+            n -> CppBinary
                    EqualTo
-                   (CppBinary Dot var (CppApp (CppVar "size") []))
+                   (CppBinary Dot (CppVar varName) (CppApp (CppVar "size") []))
                    (CppNumericLiteral (Left (fromIntegral n)))
     return [CppIfElse cond (CppBlock cpp) Nothing]
     where
@@ -726,7 +726,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   --
   -------------------------------------------------------------------------------------------------
   findClass :: Qualified (ProperName 'ClassName)
-            -> Maybe ([String], [T.Constraint], [(String, T.Type)])
+            -> Maybe ([Text], [T.Constraint], [(Text, T.Type)])
   -------------------------------------------------------------------------------------------------
   findClass name
     | Just tcd <- M.lookup name (E.typeClasses env)
@@ -750,15 +750,15 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   dataCtors =
     [ CppNamespace
-        "data"
+        ctorNS
         [ CppEnum Nothing (Just intType) . ("_" :) . catMaybes . map modCtor . M.keys $
           E.dataConstructors env
         ]
     ]
     where
-    modCtor :: Qualified (ProperName a) -> Maybe String
+    modCtor :: Qualified (ProperName a) -> Maybe Text
     modCtor (Qualified (Just mn') (ProperName name))
-      | mn' == mn = Just $ identToCpp (Ident name)
+      | mn' == mn = Just (safeName name)
     modCtor _ = Nothing
   -------------------------------------------------------------------------------------------------
   curriedForeigns :: m [Cpp]
@@ -794,7 +794,7 @@ returnBlock :: Cpp -> Cpp
 returnBlock cpp = CppBlock [CppReturn cpp]
 
 ---------------------------------------------------------------------------------------------------
-curriedLambda :: [String] -> Cpp -> Cpp
+curriedLambda :: [Text] -> Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
 curriedLambda args ret =
   foldr
@@ -804,7 +804,7 @@ curriedLambda args ret =
     args
 
 ---------------------------------------------------------------------------------------------------
-curriedApp :: [String] -> Expr Ann -> Expr Ann
+curriedApp :: [Text] -> Expr Ann -> Expr Ann
 ---------------------------------------------------------------------------------------------------
 curriedApp args vals =
   foldl (\val arg -> App nullAnn val (Var nullAnn . Qualified Nothing $ Ident arg)) vals args
@@ -837,17 +837,20 @@ optIndexers :: [(Cpp, Cpp)] -> Cpp -> Cpp
 optIndexers classes = everywhereOnCpp dictIndexerToEnum
   where
   dictIndexerToEnum :: Cpp -> Cpp
-  dictIndexerToEnum (CppGet (CppSymbol prop) dict)
+  dictIndexerToEnum (CppMapGet (CppSymbol prop) dict)
     | Just cls <- lookup dict classes =
-      let index = CppAccessor (CppVar . identToCpp $ Ident prop) cls
-      in CppGet index dict
+      let index = CppAccessor (CppVar $ safeName prop) cls
+      in CppMapGet index dict
   dictIndexerToEnum cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
-curriedName :: String -> String
+curriedName :: Text -> Text
 ---------------------------------------------------------------------------------------------------
-curriedName name@('$':_) = name
-curriedName name = '$' : name
+curriedName name
+  | Text.null name = name
+curriedName name
+  | Text.head name == '*' = name
+  | otherwise = '*' `Text.cons` name
 
 ---------------------------------------------------------------------------------------------------
 curriedName' :: Cpp -> Cpp
@@ -881,29 +884,22 @@ primFn = go []
 convertIfPrimFn :: Maybe T.Type -> Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
 convertIfPrimFn ty@(Just _) (CppNamespace ns fs) = CppNamespace ns (convertIfPrimFn ty <$> fs)
-convertIfPrimFn (Just _) cpp@(CppFunction ('$':_) _ _ _ _) = cpp
+convertIfPrimFn (Just _) cpp@(CppFunction name _ _ _ _)
+  | not $ Text.null name
+  , Text.head name == '*' = cpp
 convertIfPrimFn (Just ty) (CppFunction name params _ qs body)
   | (tys', Just rty') <- primFn ty =
     CppFunction name (zipWith (\(p, _) t -> (p, Just t)) params tys') (Just rty') qs body
 convertIfPrimFn _ cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
-allSymbols :: [Cpp] -> [String]
+allSymbols :: [Cpp] -> [Text]
 ---------------------------------------------------------------------------------------------------
 allSymbols cpps = nub $ concatMap (everythingOnCpp (++) symbols) cpps
   where
-  symbols :: Cpp -> [String]
-  symbols (CppSymbol s) = [symbolname s]
+  symbols :: Cpp -> [Text]
+  symbols (CppSymbol s) = [s]
   symbols _ = []
-
----------------------------------------------------------------------------------------------------
-symbolDefs :: [String] -> Cpp
----------------------------------------------------------------------------------------------------
-symbolDefs [] = CppNoOp
-symbolDefs syms = CppNamespace "PureScript" [CppNamespace "symbol" (asStruct <$> syms)]
-  where
-  asStruct :: String -> Cpp
-  asStruct s = CppStruct s []
 
 ---------------------------------------------------------------------------------------------------
 filterInlineFuncs :: Cpp -> Cpp

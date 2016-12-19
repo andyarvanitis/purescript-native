@@ -5,15 +5,23 @@ module Language.PureScript.Docs.Convert.Single
 
 import Prelude.Compat
 
+import Control.Arrow (first)
 import Control.Category ((>>>))
 import Control.Monad
 
+import Data.Bifunctor (bimap)
 import Data.Either
 import Data.List (nub)
 import Data.Maybe (mapMaybe)
+import Data.Monoid ((<>))
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Vector as V
 
 import Language.PureScript.Docs.Types
 import qualified Language.PureScript as P
+
+-- TODO (Christoph): Get rid of the T.unpack s
 
 -- |
 -- Convert a single Module, but ignore re-exports; any re-exported types or
@@ -75,7 +83,7 @@ augmentDeclarations (partitionEithers -> (augments, toplevels)) =
   augmentWith (AugmentChild child) d =
     d { declChildren = declChildren d ++ [child] }
 
-getDeclarationTitle :: P.Declaration -> Maybe String
+getDeclarationTitle :: P.Declaration -> Maybe Text
 getDeclarationTitle (P.ValueDeclaration name _ _ _) = Just (P.showIdent name)
 getDeclarationTitle (P.ExternDeclaration name _) = Just (P.showIdent name)
 getDeclarationTitle (P.DataDeclaration _ name _ _) = Just (P.runProperName name)
@@ -83,25 +91,25 @@ getDeclarationTitle (P.ExternDataDeclaration name _) = Just (P.runProperName nam
 getDeclarationTitle (P.TypeSynonymDeclaration name _ _) = Just (P.runProperName name)
 getDeclarationTitle (P.TypeClassDeclaration name _ _ _ _) = Just (P.runProperName name)
 getDeclarationTitle (P.TypeInstanceDeclaration name _ _ _ _) = Just (P.showIdent name)
-getDeclarationTitle (P.TypeFixityDeclaration _ _ op) = Just ("type " ++ P.showOp op)
+getDeclarationTitle (P.TypeFixityDeclaration _ _ op) = Just ("type " <> P.showOp op)
 getDeclarationTitle (P.ValueFixityDeclaration _ _ op) = Just (P.showOp op)
 getDeclarationTitle (P.PositionedDeclaration _ _ d) = getDeclarationTitle d
 getDeclarationTitle _ = Nothing
 
 -- | Create a basic Declaration value.
-mkDeclaration :: String -> DeclarationInfo -> Declaration
+mkDeclaration :: Text -> DeclarationInfo -> Declaration
 mkDeclaration title info =
-  Declaration { declTitle      = title
+  Declaration { declTitle      = T.unpack title
               , declComments   = Nothing
               , declSourceSpan = Nothing
               , declChildren   = []
               , declInfo       = info
               }
 
-basicDeclaration :: String -> DeclarationInfo -> Maybe IntermediateDeclaration
+basicDeclaration :: Text -> DeclarationInfo -> Maybe IntermediateDeclaration
 basicDeclaration title info = Just $ Right $ mkDeclaration title info
 
-convertDeclaration :: P.Declaration -> String -> Maybe IntermediateDeclaration
+convertDeclaration :: P.Declaration -> Text -> Maybe IntermediateDeclaration
 convertDeclaration (P.ValueDeclaration _ _ _ (Right (P.TypedValue _ _ ty))) title =
   basicDeclaration title (ValueDeclaration ty)
 convertDeclaration P.ValueDeclaration{} title =
@@ -113,27 +121,42 @@ convertDeclaration (P.ExternDeclaration _ ty) title =
 convertDeclaration (P.DataDeclaration dtype _ args ctors) title =
   Just (Right (mkDeclaration title info) { declChildren = children })
   where
-  info = DataDeclaration dtype args
+  info = DataDeclaration dtype (map (first T.unpack) args)
   children = map convertCtor ctors
   convertCtor (ctor', tys) =
-    ChildDeclaration (P.runProperName ctor') Nothing Nothing (ChildDataConstructor tys)
+    ChildDeclaration (T.unpack (P.runProperName ctor')) Nothing Nothing (ChildDataConstructor tys)
 convertDeclaration (P.ExternDataDeclaration _ kind') title =
   basicDeclaration title (ExternDataDeclaration kind')
 convertDeclaration (P.TypeSynonymDeclaration _ args ty) title =
-  basicDeclaration title (TypeSynonymDeclaration args ty)
-convertDeclaration (P.TypeClassDeclaration _ args implies _ ds) title = -- TODO: include fundep info
+  basicDeclaration title (TypeSynonymDeclaration (map (first T.unpack) args) ty)
+convertDeclaration (P.TypeClassDeclaration _ args implies fundeps ds) title =
   Just (Right (mkDeclaration title info) { declChildren = children })
   where
-  info = TypeClassDeclaration args implies
+  info = TypeClassDeclaration (map (first T.unpack) args) implies (map (bimap (map T.unpack) (map T.unpack)) fundeps')
   children = map convertClassMember ds
   convertClassMember (P.PositionedDeclaration _ _ d) =
     convertClassMember d
   convertClassMember (P.TypeDeclaration ident' ty) =
-    ChildDeclaration (P.showIdent ident') Nothing Nothing (ChildTypeClassMember ty)
+    ChildDeclaration (T.unpack (P.showIdent ident')) Nothing Nothing (ChildTypeClassMember ty)
   convertClassMember _ =
     P.internalError "convertDeclaration: Invalid argument to convertClassMember."
+  fundeps' = map (\(P.FunctionalDependency from to) -> toArgs from to) fundeps
+    where
+      argsVec = V.fromList (map fst args)
+      getArg i =
+        maybe
+          (P.internalError $ unlines
+            [ "convertDeclaration: Functional dependency index"
+            , show i
+            , "is bigger than arguments list"
+            , show (map fst args)
+            , "Functional dependencies are"
+            , show fundeps
+            ]
+          ) id $ argsVec V.!? i
+      toArgs from to = (map getArg from, map getArg to)
 convertDeclaration (P.TypeInstanceDeclaration _ constraints className tys _) title =
-  Just (Left (classNameString : typeNameStrings, AugmentChild childDecl))
+  Just (Left (T.unpack classNameString : map T.unpack typeNameStrings, AugmentChild childDecl))
   where
   classNameString = unQual className
   typeNameStrings = nub (concatMap (P.everythingOnTypes (++) extractProperNames) tys)
@@ -142,7 +165,7 @@ convertDeclaration (P.TypeInstanceDeclaration _ constraints className tys _) tit
   extractProperNames (P.TypeConstructor n) = [unQual n]
   extractProperNames _ = []
 
-  childDecl = ChildDeclaration title Nothing Nothing (ChildInstance constraints classApp)
+  childDecl = ChildDeclaration (T.unpack title) Nothing Nothing (ChildInstance constraints classApp)
   classApp = foldl P.TypeApp (P.TypeConstructor (fmap P.coerceProperName className)) tys
 convertDeclaration (P.ValueFixityDeclaration fixity (P.Qualified mn alias) _) title =
   Just $ Right $ mkDeclaration title (AliasDeclaration fixity (P.Qualified mn (Right alias)))
@@ -174,8 +197,8 @@ convertComments cs = do
   pure (unlines docs)
 
   where
-  toLines (P.LineComment s) = [s]
-  toLines (P.BlockComment s) = lines s
+  toLines (P.LineComment s) = [T.unpack s]
+  toLines (P.BlockComment s) = lines (T.unpack s)
 
   stripPipe s' =
     case dropWhile (== ' ') s' of
@@ -196,5 +219,5 @@ collectBookmarks (FromDep pkg m) = map (FromDep pkg) (collectBookmarks' m)
 collectBookmarks' :: P.Module -> [(P.ModuleName, String)]
 collectBookmarks' m =
   map (P.getModuleName m, )
-      (mapMaybe getDeclarationTitle
+      (mapMaybe (fmap T.unpack . getDeclarationTitle)
                 (P.exportedDeclarations m))

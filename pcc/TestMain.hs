@@ -133,6 +133,8 @@ skipped :: [String]
 skipped =
   [ "NumberLiterals.purs" -- unreliable float comparison, test manually
   , "FunWithFunDeps.purs" -- requires FFI
+  , "SolvingIsSymbol.purs"
+  , "StringEscapes.purs"
   ]
 
 logpath :: FilePath

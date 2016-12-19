@@ -87,7 +87,7 @@ auto any::unthunkVariant(const any& a) -> const any& {
 }
 
 auto any::operator[](const symbol_t key) const -> const any& {
-  return get(key, cast<map<unknown_size>>(*this));
+  return PureScript::map::get(key, cast<map<unknown_size>>(*this));
 }
 
 auto any::operator[](const size_t rhs) const -> const any& {
@@ -98,6 +98,14 @@ auto any::operator[](const size_t rhs) const -> const any& {
 auto any::operator[](const any& rhs) const -> const any& {
   const auto& xs = cast<array>(*this);
   return xs[cast<int>(rhs)];
+}
+
+auto any::size() const -> size_t {
+  return cast<array>(*this).size();
+}
+
+auto any::empty() const -> bool {
+  return cast<array>(*this).empty();
 }
 
 auto any::contains(const symbol_t key) const -> bool {

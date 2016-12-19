@@ -12,13 +12,17 @@
 -- This module implements tail call elimination.
 --
 -----------------------------------------------------------------------------
+{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Language.PureScript.CodeGen.Cpp.Optimizer.TCO (tco) where
 
 import Prelude.Compat
 
 import Data.List
+import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
+import Data.Text (Text)
 
 import Language.PureScript.Options
 import Language.PureScript.CodeGen.Cpp.Types
@@ -34,13 +38,13 @@ tco opts | optionsNoTco opts = id
 tco' :: Cpp -> Cpp
 tco' = everywhereOnCpp convert
   where
-  tcoVar :: String -> String
-  tcoVar arg = "__tco_" ++ arg
+  tcoVar :: Text -> Text
+  tcoVar arg = "tco$" <> arg
 
-  copyVar :: String -> String
-  copyVar arg = "__copy_" ++ arg
+  copyVar :: Text -> Text
+  copyVar arg = "copy$" <> arg
 
-  copyVar' :: (String, Maybe CppType) -> (String, Maybe CppType)
+  copyVar' :: (Text, Maybe CppType) -> (Text, Maybe CppType)
   copyVar' (arg, t) = (copyVar arg, t)
 
   convert :: Cpp -> Cpp
@@ -69,7 +73,7 @@ tco' = everywhereOnCpp convert
 
   convert cpp = cpp
 
-  collectAllFunctionArgs :: [[(String, Maybe CppType)]] -> (Cpp -> Cpp) -> Cpp -> ([[(String, Maybe CppType)]], Cpp, Cpp -> Cpp)
+  collectAllFunctionArgs :: [[(Text, Maybe CppType)]] -> (Cpp -> Cpp) -> Cpp -> ([[(Text, Maybe CppType)]], Cpp, Cpp -> Cpp)
   collectAllFunctionArgs allArgs f (CppFunction ident args rty qs (CppBlock (body@(CppReturn _):_))) =
     collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident (map copyVar' args) rty qs (CppBlock [b]))) body
   collectAllFunctionArgs allArgs f (CppFunction ident args rty qs body@(CppBlock _)) =
@@ -80,7 +84,7 @@ tco' = everywhereOnCpp convert
     (args : allArgs, body, f . CppReturn . CppLambda cs (map copyVar' args) rty)
   collectAllFunctionArgs allArgs f body = (allArgs, body, f)
 
-  isTailCall :: String -> Cpp -> Bool
+  isTailCall :: Text -> Cpp -> Bool
   isTailCall ident cpp =
     let
       numSelfCalls = everythingOnCpp (+) countSelfCalls cpp
@@ -109,7 +113,7 @@ tco' = everywhereOnCpp convert
     countSelfCallsWithFnArgs :: Cpp -> Int
     countSelfCallsWithFnArgs ret = if isSelfCallWithFnArgs ident ret [] then 1 else 0
 
-  toLoop :: String -> [String] -> Cpp -> Cpp
+  toLoop :: Text -> [Text] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
         map (\arg -> CppVariableIntroduction (arg, Just $ Any []) [] (Just (CppVar (copyVar arg)))) allArgs ++
         [ CppWhile (CppBooleanLiteral True) (CppBlock loop) ]
@@ -134,12 +138,12 @@ tco' = everywhereOnCpp convert
     collectSelfCallArgs allArgumentValues (CppApp fn args') = collectSelfCallArgs (args' : allArgumentValues) fn
     collectSelfCallArgs allArgumentValues _ = allArgumentValues
 
-  isSelfCall :: String -> Cpp -> Bool
+  isSelfCall :: Text -> Cpp -> Bool
   isSelfCall ident (CppApp (CppVar ident') _) = ident == ident'
   isSelfCall ident (CppApp fn _) = isSelfCall ident fn
   isSelfCall _ _ = False
 
-  isSelfCallWithFnArgs :: String -> Cpp -> [Cpp] -> Bool
+  isSelfCallWithFnArgs :: Text -> Cpp -> [Cpp] -> Bool
   isSelfCallWithFnArgs ident (CppVar ident') args | ident == ident' && any hasFunction args = True
   isSelfCallWithFnArgs ident (CppApp fn args) acc = isSelfCallWithFnArgs ident fn (args ++ acc)
   isSelfCallWithFnArgs _ _ _ = False

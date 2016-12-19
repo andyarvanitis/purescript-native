@@ -12,8 +12,6 @@
 -- Generally useful functions
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE OverloadedStrings #-}
-
 module Language.PureScript.Ide.Util
   ( identifierFromIdeDeclaration
   , unwrapMatch
@@ -27,7 +25,11 @@ module Language.PureScript.Ide.Util
   , valueOperatorAliasT
   , typeOperatorAliasT
   , module Language.PureScript.Ide.Conversions
+  , module Language.PureScript.Ide.Logging
   ) where
+
+import           Protolude                           hiding (decodeUtf8,
+                                                      encodeUtf8)
 
 import           Control.Lens                        ((^.))
 import           Data.Aeson
@@ -35,9 +37,8 @@ import qualified Data.Text                           as T
 import           Data.Text.Lazy.Encoding             (decodeUtf8, encodeUtf8)
 import qualified Language.PureScript                 as P
 import           Language.PureScript.Ide.Conversions
+import           Language.PureScript.Ide.Logging
 import           Language.PureScript.Ide.Types
-import           Protolude                           hiding (decodeUtf8,
-                                                      encodeUtf8)
 
 identifierFromIdeDeclaration :: IdeDeclaration -> Text
 identifierFromIdeDeclaration d = case d of
@@ -45,9 +46,9 @@ identifierFromIdeDeclaration d = case d of
   IdeDeclType t -> t ^. ideTypeName . properNameT
   IdeDeclTypeSynonym s -> s ^. ideSynonymName . properNameT
   IdeDeclDataConstructor dtor -> dtor ^. ideDtorName . properNameT
-  IdeDeclTypeClass name -> runProperNameT name
-  IdeDeclValueOperator op -> op ^. ideValueOpName & runOpNameT
-  IdeDeclTypeOperator op -> op ^. ideTypeOpName & runOpNameT
+  IdeDeclTypeClass name -> P.runProperName name
+  IdeDeclValueOperator op -> op ^. ideValueOpName & P.runOpName
+  IdeDeclTypeOperator op -> op ^. ideTypeOpName & P.runOpName
 
 discardAnn :: IdeDeclarationAnn -> IdeDeclaration
 discardAnn (IdeDeclarationAnn _ d) = d
@@ -67,13 +68,13 @@ completionFromMatch (Match (m, IdeDeclarationAnn ann decl)) =
       IdeDeclType t -> (t ^. ideTypeName . properNameT, t ^. ideTypeKind & P.prettyPrintKind & toS )
       IdeDeclTypeSynonym s -> (s ^. ideSynonymName . properNameT, s ^. ideSynonymType & prettyTypeT)
       IdeDeclDataConstructor d -> (d ^. ideDtorName . properNameT, d ^. ideDtorType & prettyTypeT)
-      IdeDeclTypeClass name -> (runProperNameT name, "class")
+      IdeDeclTypeClass name -> (P.runProperName name, "class")
       IdeDeclValueOperator (IdeValueOperator op ref precedence associativity typeP) ->
-        (runOpNameT op, maybe (showFixity precedence associativity (valueOperatorAliasT ref) op) prettyTypeT typeP)
+        (P.runOpName op, maybe (showFixity precedence associativity (valueOperatorAliasT ref) op) prettyTypeT typeP)
       IdeDeclTypeOperator (IdeTypeOperator op ref precedence associativity kind) ->
-        (runOpNameT op, maybe (showFixity precedence associativity (typeOperatorAliasT ref) op) (toS . P.prettyPrintKind) kind)
+        (P.runOpName op, maybe (showFixity precedence associativity (typeOperatorAliasT ref) op) (toS . P.prettyPrintKind) kind)
 
-    complModule = runModuleNameT m
+    complModule = P.runModuleName m
 
     complType = maybe complExpandedType prettyTypeT (annTypeAnnotation ann)
 
@@ -86,17 +87,17 @@ completionFromMatch (Match (m, IdeDeclarationAnn ann decl)) =
             P.Infix -> "infix"
             P.Infixl -> "infixl"
             P.Infixr -> "infixr"
-      in T.unwords [asso, show p, r, "as", runOpNameT o]
+      in T.unwords [asso, show p, r, "as", P.runOpName o]
 
 valueOperatorAliasT
   :: P.Qualified (Either P.Ident (P.ProperName 'P.ConstructorName)) -> Text
 valueOperatorAliasT i =
-  toS (P.showQualified (either P.runIdent P.runProperName) i)
+  P.showQualified (either P.runIdent P.runProperName) i
 
 typeOperatorAliasT
   :: P.Qualified (P.ProperName 'P.TypeName) -> Text
 typeOperatorAliasT i =
-  toS (P.showQualified P.runProperName i)
+  P.showQualified P.runProperName i
 
 encodeT :: (ToJSON a) => a -> Text
 encodeT = toS . decodeUtf8 . encode
