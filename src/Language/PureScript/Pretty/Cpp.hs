@@ -515,9 +515,6 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ binary    Or                   " || " ]
                     ]
 
-dotsTo :: Char -> Text -> Text
-dotsTo chr' = T.map (\c -> if c == '.' then chr' else c)
-
 argstr :: (Text, Maybe CppType) -> Text
 argstr (name, Nothing) = argStr name (Auto [])
 argstr (name, Just typ)
