@@ -85,24 +85,18 @@ literals = mkPattern' match
   match (CppCharLiteral c) = return $ "'" <> T.singleton c <> "'"
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
-  match (CppArrayLiteral [x@CppArrayLiteral {}]) = -- Works around what appears to be a recent clang bug
-    mconcat <$> sequence
-    [ return $ runType arrayType
-    , return "{ { "
-    , prettyPrintCpp' x
-    , return " } }"
-    ]
+  match (CppArrayLiteral []) = return $ runType arrayType <> "{}"
   match (CppArrayLiteral xs) = mconcat <$> sequence
     [ return $ runType arrayType
-    , return "{ "
+    , return "{{ "
     , fmap (T.intercalate ", ") $ forM xs prettyPrintCpp'
-    , return " }"
+    , return " }}"
     ]
   match (CppDataLiteral xs) = mconcat <$> sequence
     [ return $ runType (dataType $ length xs)
-    , return "{ "
+    , return "{{ "
     , fmap (T.intercalate ", ") $ forM xs prettyPrintCpp'
-    , return " }"
+    , return " }}"
     ]
   match (CppEnum name ty es) = mconcat <$> sequence
     [ return "enum"
