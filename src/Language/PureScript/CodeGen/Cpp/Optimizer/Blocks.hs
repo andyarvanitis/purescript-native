@@ -17,11 +17,14 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Blocks
   ( collapseNestedBlocks
   , collapseNestedIfs
   , collapseIfElses
+  , collapseCtorChecksToSwitch
   ) where
 
 import Prelude.Compat
+import Control.Monad (foldM)
 
 import Language.PureScript.CodeGen.Cpp.AST
+import Language.PureScript.CodeGen.Cpp.Types
 import qualified Language.PureScript.Constants as C
 
 -- |
@@ -53,7 +56,7 @@ collapseIfElses = everywhereOnCpp collapse
     where
     go (st'@(CppIfElse (CppBinary EqualTo lhs _) _ Nothing) : sts') =
       if length (fst cpps') > 1
-        then CppSwitch lhs (mkCases <$> fst cpps') : snd cpps'
+        then CppSwitch lhs (mkCases <$> fst cpps') Nothing : snd cpps'
         else st' : sts'
       where
       cpps' = span (isIntEq lhs) (st' : sts')
@@ -82,4 +85,32 @@ collapseIfElses = everywhereOnCpp collapse
     go (cpp' : cpps') = cpp' : go cpps'
     go cpp' = cpp'
   collapse (CppIfElse (CppAccessor (CppVar "otherwise") (CppVar mn')) body _) | mn' == C.prelude = body
+  collapse cpp = cpp
+
+collapseCtorChecksToSwitch :: Cpp -> Cpp
+collapseCtorChecksToSwitch = everywhereOnCpp collapse
+  where
+  collapse :: Cpp -> Cpp
+  collapse (CppBlock cpps) = CppBlock (go cpps)
+    where
+    go cpps'
+      | length cpps' > 2
+      , ifs <- init cpps'
+      , def@(CppThrow _) <- last cpps'
+      , Just (cond, _, _) <- fromif $ head ifs
+      , Just (cond', cases) <- foldM builder (cond, []) ifs
+      = [CppSwitch cond' cases (Just def)]
+    go (cpp' : cpps') = cpp' : go cpps'
+    go cpp' = cpp'
+    fromif :: Cpp -> Maybe (Cpp, Cpp, Cpp)
+    fromif (CppIfElse (CppBinary EqualTo lhs rhs) stmt Nothing)
+      | CppApp (CppVar f) _ <- lhs
+      , f == getCtor = Just (lhs, rhs, stmt)
+    fromif _ = Nothing
+    builder :: (Cpp, [(Cpp, Cpp)]) -> Cpp -> Maybe (Cpp, [(Cpp, Cpp)])
+    builder (cond, cases) cpp
+      | Just (lhs, rhs, stmt) <- fromif cpp
+      , lhs == cond
+      = Just (cond, cases ++ [(rhs, stmt)])
+    builder _ _ = Nothing
   collapse cpp = cpp
