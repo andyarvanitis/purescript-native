@@ -24,10 +24,9 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 
 import Language.PureScript.CodeGen.Cpp.AST
+import Language.PureScript.CodeGen.Cpp.Common
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Names
-
-import qualified Language.PureScript.Pretty.Cpp as P
 
 ---------------------------------------------------------------------------------------------------
 toHeader :: [Cpp] -> [Cpp]
@@ -171,7 +170,7 @@ fileEnd :: ModuleName -> Text -> [Cpp]
 fileEnd mn suffix = [CppRaw ("#endif // " <> fileModName mn suffix)]
 
 fileModName :: ModuleName -> Text -> Text
-fileModName mn suffix = P.dotsTo '_' (runModuleName mn <> "_" <> suffix)
+fileModName mn suffix = dotsTo '_' (runModuleName mn <> "_" <> suffix)
 
 isMain :: ModuleName -> Bool
 isMain (ModuleName [ProperName "Main"]) = True

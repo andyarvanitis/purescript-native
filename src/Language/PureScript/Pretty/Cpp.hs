@@ -85,24 +85,18 @@ literals = mkPattern' match
   match (CppCharLiteral c) = return $ "'" <> T.singleton c <> "'"
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
-  match (CppArrayLiteral [x@CppArrayLiteral {}]) = -- Works around what appears to be a recent clang bug
-    mconcat <$> sequence
-    [ return $ runType arrayType
-    , return "{ { "
-    , prettyPrintCpp' x
-    , return " } }"
-    ]
+  match (CppArrayLiteral []) = return $ runType arrayType <> "{}"
   match (CppArrayLiteral xs) = mconcat <$> sequence
     [ return $ runType arrayType
-    , return "{ "
+    , return "{{ "
     , fmap (T.intercalate ", ") $ forM xs prettyPrintCpp'
-    , return " }"
+    , return " }}"
     ]
   match (CppDataLiteral xs) = mconcat <$> sequence
     [ return $ runType (dataType $ length xs)
-    , return "{ "
+    , return "{{ "
     , fmap (T.intercalate ", ") $ forM xs prettyPrintCpp'
-    , return " }"
+    , return " }}"
     ]
   match (CppEnum name ty es) = mconcat <$> sequence
     [ return "enum"
@@ -276,15 +270,17 @@ literals = mkPattern' match
     , prettyPrintCpp' thens
     , maybe (return "") (fmap (" else " <>) . prettyPrintCpp') elses
     ]
-  match (CppSwitch cond cases@((case1,_):_:_)) = mconcat <$> sequence
+  match (CppSwitch cond cases@((case1,_):_:_) default') = mconcat <$> sequence
     [ return "switch "
     , return . parensT $ prettyPrintCpp1 (cast case1 cond)
     , return " {\n"
     , withIndent $ do
-        cpps <- forM cases $ \(c, s) -> do
-                              c' <- prettyPrintCpp' c
-                              s' <- prettyPrintCpp' s
-                              return $ "case " <> c' <> ": " <> s' <> ";"
+        cpps <- forM (normalizeBlocks $
+                        cases ++ maybe [] (\c -> [(CppNoOp,c)]) default')
+                  $ \(c, s) -> do
+                    c' <- prettyPrintCpp' c
+                    s' <- prettyPrintCpp' s
+                    return $ label c <> c' <> ": " <> s' <> caseEnd s
         indentString <- currentIndent
         return $ T.intercalate "\n" $ map (indentString <>) cpps
     , return "\n"
@@ -297,6 +293,25 @@ literals = mkPattern' match
     cast CppBooleanLiteral {} cpp' = CppCast boolType cpp'
     cast CppCharLiteral {} cpp' = CppCast charType cpp'
     cast _ cpp' = cpp'
+    normalizeBlocks :: [(Cpp,Cpp)] -> [(Cpp,Cpp)]
+    normalizeBlocks cpps
+      | any (isBlock . snd) cpps = addBlock <$> cpps
+      | otherwise = cpps
+      where
+      addBlock (cpp1, cpp2@(CppBlock _)) = (cpp1, cpp2)
+      addBlock (cpp1, cpp2) = (cpp1, CppBlock [cpp2])
+    label :: Cpp -> Text
+    label CppNoOp = "default"
+    label _ = "case "
+    caseEnd :: Cpp -> Text
+    caseEnd (CppReturn {}) = ";"
+    caseEnd (CppThrow {}) = ";"
+    caseEnd (CppContinue) = ";"
+    caseEnd (CppBlock stmts@(_:_))
+      | (CppReturn {}) <- last stmts = ""
+      | (CppThrow {}) <- last stmts = ""
+      | CppContinue <- last stmts = ""
+    caseEnd _ = " break;"
   match (CppReturn (CppBlock (cpp:cpps))) = mconcat <$> sequence
     [   do s <- prettyPrintCpp' cpp
            return $ T.dropWhile isSpace s
@@ -500,9 +515,6 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                   , [ binary    Or                   " || " ]
                     ]
 
-dotsTo :: Char -> Text -> Text
-dotsTo chr' = T.map (\c -> if c == '.' then chr' else c)
-
 argstr :: (Text, Maybe CppType) -> Text
 argstr (name, Nothing) = argStr name (Auto [])
 argstr (name, Just typ)
@@ -537,6 +549,10 @@ isNoOp :: Cpp -> Bool
 isNoOp CppNoOp = True
 isNoOp (CppComment [] CppNoOp) = True
 isNoOp _ = False
+
+isBlock :: Cpp -> Bool
+isBlock (CppBlock {}) = True
+isBlock _ = False
 
 renderName :: Text -> Text
 renderName name

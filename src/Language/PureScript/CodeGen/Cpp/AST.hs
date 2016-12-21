@@ -270,7 +270,7 @@ data Cpp
   -- |
   -- Switch statement
   --
-  | CppSwitch Cpp [(Cpp, Cpp)]
+  | CppSwitch Cpp [(Cpp, Cpp)] (Maybe Cpp)
   -- |
   -- Return statement
   --
@@ -329,7 +329,7 @@ everywhereOnCpp f = go
   go (CppAssignment j1 j2) = f (CppAssignment (go j1) (go j2))
   go (CppWhile j1 j2) = f (CppWhile (go j1) (go j2))
   go (CppIfElse j1 j2 j3) = f (CppIfElse (go j1) (go j2) (fmap go j3))
-  go (CppSwitch cpp cpps) = f (CppSwitch (go cpp) (map (fmap go) cpps))
+  go (CppSwitch cpp cpps d) = f (CppSwitch (go cpp) (map (fmap go) cpps) (fmap go d))
   go (CppReturn cpp) = f (CppReturn (go cpp))
   go (CppThrow cpp) = f (CppThrow (go cpp))
   go (CppComment com j) = f (CppComment com (go j))
@@ -362,7 +362,7 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppAssignment j1 j2) = CppAssignment <$> f' j1 <*> f' j2
   go (CppWhile j1 j2) = CppWhile <$> f' j1 <*> f' j2
   go (CppIfElse j1 j2 j3) = CppIfElse <$> f' j1 <*> f' j2 <*> traverse f' j3
-  go (CppSwitch cpp cpps) = CppSwitch <$> f' cpp <*> traverse (pairM f' f') cpps
+  go (CppSwitch cpp cpps d) = CppSwitch <$> f' cpp <*> traverse (pairM f' f') cpps <*> traverse f' d
   go (CppReturn j) = CppReturn <$> f' j
   go (CppThrow j) = CppThrow <$> f' j
   go (CppComment com j) = CppComment com <$> f' j
@@ -392,7 +392,8 @@ everythingOnCpp (<>) f = go
   go j@(CppWhile j1 j2) = f j <> go j1 <> go j2
   go j@(CppIfElse j1 j2 Nothing) = f j <> go j1 <> go j2
   go j@(CppIfElse j1 j2 (Just j3)) = f j <> go j1 <> go j2 <> go j3
-  go j@(CppSwitch cpp cpps) = foldl (<>) (f j <> go cpp) ((map (go . fst) cpps) ++ (map (go . snd) cpps))
+  go j@(CppSwitch cpp cpps Nothing) = foldl (<>) (f j <> go cpp) ((map (go . fst) cpps) ++ (map (go . snd) cpps))
+  go j@(CppSwitch cpp cpps (Just d)) = foldl (<>) (f j <> go cpp) ((map (go . fst) cpps) ++ (map (go . snd) cpps)) <> go d
   go j@(CppReturn j1) = f j <> go j1
   go j@(CppThrow j1) = f j <> go j1
   go j@(CppComment _ j1) = f j <> go j1

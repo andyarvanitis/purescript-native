@@ -69,6 +69,7 @@ optimize' nm cpp = do
   opts <- ask
   untilFixedPoint (liftM toAutoVars . inlineFnComposition . applyAll
     [ collapseNestedBlocks
+    , collapseCtorChecksToSwitch
     , collapseNestedIfs
     , collapseIfElses
     , removeCurrying nm

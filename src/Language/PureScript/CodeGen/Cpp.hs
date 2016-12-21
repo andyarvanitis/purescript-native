@@ -28,7 +28,6 @@ module Language.PureScript.CodeGen.Cpp
   ) where
 
 import Prelude.Compat
-
 import Data.Char (isLetter)
 import Data.Function (on)
 import Data.List
@@ -110,6 +109,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
       symbols = allSymbols bodyCpps
       moduleBody =
         CppInclude (runModuleName mn) (runModuleName mn) :
+        P.linebreak ++
         (CppDefineSymbol <$> symbols) ++
         (if null bodyCpps
            then []
@@ -138,7 +138,8 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   -------------------------------------------------------------------------------------------------
   declToCpp _ (_, ident) e@(Abs (_, _, _, Just IsTypeClassConstructor) _ _) =
     let className = identToCpp ident
-        (supers, members) = span (C.__superclass_ `Text.isPrefixOf`) (identToCpp <$> (fst $ unAbs e []))
+        (supers, members) =
+           span (safeName C.__superclass_ `Text.isPrefixOf`) (identToCpp <$> (fst $ unAbs e []))
     in return $ CppStruct className [CppEnum Nothing Nothing (sort supers <> members)]
   declToCpp vqs (_, ident) (Abs (_, com, ty, _) arg body) = do
     fn <-

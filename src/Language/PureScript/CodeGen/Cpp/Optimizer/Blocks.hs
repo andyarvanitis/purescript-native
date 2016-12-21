@@ -17,11 +17,14 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Blocks
   ( collapseNestedBlocks
   , collapseNestedIfs
   , collapseIfElses
+  , collapseCtorChecksToSwitch
   ) where
 
 import Prelude.Compat
+import Data.Either
 
 import Language.PureScript.CodeGen.Cpp.AST
+import Language.PureScript.CodeGen.Cpp.Types
 import qualified Language.PureScript.Constants as C
 
 -- |
@@ -53,7 +56,7 @@ collapseIfElses = everywhereOnCpp collapse
     where
     go (st'@(CppIfElse (CppBinary EqualTo lhs _) _ Nothing) : sts') =
       if length (fst cpps') > 1
-        then CppSwitch lhs (mkCases <$> fst cpps') : snd cpps'
+        then CppSwitch lhs (mkCases <$> fst cpps') Nothing : snd cpps'
         else st' : sts'
       where
       cpps' = span (isIntEq lhs) (st' : sts')
@@ -82,4 +85,25 @@ collapseIfElses = everywhereOnCpp collapse
     go (cpp' : cpps') = cpp' : go cpps'
     go cpp' = cpp'
   collapse (CppIfElse (CppAccessor (CppVar "otherwise") (CppVar mn')) body _) | mn' == C.prelude = body
+  collapse cpp = cpp
+
+collapseCtorChecksToSwitch :: Cpp -> Cpp
+collapseCtorChecksToSwitch = everywhereOnCpp collapse
+  where
+  collapse :: Cpp -> Cpp
+  collapse (CppBlock cpps@(_:_:_)) = CppBlock (go cpps)
+    where
+    go cpps'@(cpp:_)
+      | Right (lhs, _, _) <- fromif Nothing cpp
+      , (otherCpps, ifs@(_:_:_)) <- partitionEithers $ fromif (Just lhs) <$> cpps'
+      = CppSwitch lhs ((\(_,b,c) -> (b,c)) <$> ifs) Nothing : otherCpps
+    go (cpp':cpps') = cpp' : go cpps'
+    go cpp' = cpp'
+    fromif :: Maybe Cpp -> Cpp -> Either Cpp (Cpp, Cpp, Cpp)
+    fromif cond (CppIfElse (CppBinary EqualTo lhs rhs) stmt Nothing)
+      | CppApp (CppVar f) _ <- lhs
+      , f == getCtor
+      , maybe True (lhs==) cond
+      = Right (lhs, rhs, stmt)
+    fromif _ cpp = Left cpp
   collapse cpp = cpp

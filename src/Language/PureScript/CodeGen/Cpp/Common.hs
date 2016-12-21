@@ -18,11 +18,12 @@
 
 module Language.PureScript.CodeGen.Cpp.Common where
 
-import Prelude.Compat hiding (all, concatMap, last, init, null)
+import Prelude.Compat hiding (all, any, concatMap, last, init, map, null)
 
 import Data.Char
-import Data.Text hiding (map)
+import Data.Text hiding (foldl1)
 import Data.Monoid ((<>))
+import qualified Language.PureScript.Constants as C
 import Language.PureScript.Crash
 import Language.PureScript.Names
 
@@ -46,11 +47,18 @@ safeName name
   | Just ('$', s) <- uncons name
   , all isDigit s = name
 safeName name
+  | C.__superclass_ `isPrefixOf` name
+  , any (=='.') name
+  = "$" <> (escaped $ dotsTo '_' name)
+safeName name
   | "_" `isPrefixOf` name = "$" <> escaped name
 safeName name = escaped name
 
 escaped :: Text -> Text
 escaped = escapeDoubleUnderscores . concatMap identCharToText
+
+dotsTo :: Char -> Text -> Text
+dotsTo chr' = map (\c -> if c == '.' then chr' else c)
 
 -- |
 -- C++ actually reserves all identifiers containing double
@@ -235,8 +243,12 @@ normalizedName = unescapeDoubleUnderscores . normalizedName'
 
 moduleNameToCpp :: ModuleName -> Text
 moduleNameToCpp (ModuleName pns) =
-  let name = intercalate "_" (runProperName `map` pns)
-  in if properNameIsCppReserved name then name <> "$" else name
+  if properNameIsCppReserved name then name <> "$" else name
+  where
+  pnames = runProperName <$> pns
+  name
+    | foldl1 (||) (any (=='_') <$> pnames) = error "Module names can now contain underscores"
+    | otherwise = intercalate "_" pnames
 
 -- |
 -- Checks whether a proper name is reserved in C++11.

@@ -517,7 +517,7 @@ namespace data {
   }
 
   template <typename T>
-  inline auto ctor(const T& a) -> const any& {
+  inline auto ctor(const T& a) -> int {
     return get<0>(a);
   }
 }
