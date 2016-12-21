@@ -51,9 +51,13 @@ data UnaryOperator
   --
   | Positive
   -- |
-  -- Constructor
+  -- Get size
   --
-  | New
+  | Size
+  -- |
+  -- Check if empty
+  --
+  | Empty
   deriving (Show, Eq)
 
 -- |
@@ -80,10 +84,6 @@ data BinaryOperator
   -- Remainder
   --
   | Modulus
-  -- |
-  -- TODO: revisit this
-  --
-  | Dot
   -- |
   -- Generic equality test
   --
