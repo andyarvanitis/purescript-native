@@ -237,6 +237,14 @@ literals = mkPattern' match
     return . prettyPrintCpp1 $ CppApp (CppVar $ mapNS <> "::get" <> angles (prettyPrintCpp1 i)) [val]
   match (CppDataGet i val) =
     return . prettyPrintCpp1 $ CppApp (CppVar $ dataNS <> "::get" <> angles (prettyPrintCpp1 i)) [val]
+  match (CppUnary op val) = return $ s <> "." <> f <> "()"
+    where
+    v = prettyPrintCpp1 val
+    s | CppVar {} <- val = v
+      | otherwise = parensT v
+    f | Size <- op = "size"
+      | Empty <- op = "empty"
+      | otherwise = error $ "Incorrect match on unary " <> show op
   match (CppVar ident) = return $ renderName ident
   match (CppSymbol ident) = return $ "symbol" <> parensT (safeName ident)
   match (CppDefineSymbol ident) = return $ "define_symbol" <> parensT (safeName ident)
@@ -417,6 +425,8 @@ unary' op mkStr = Wrap match (<>)
   match :: Pattern PrinterState Cpp (Text, Cpp)
   match = mkPattern match'
     where
+    match' (CppUnary Size _) = Nothing
+    match' (CppUnary Empty _) = Nothing
     match' (CppUnary op' val)
       | op' == op = Just (mkStr val, val)
     match' _ = Nothing
@@ -483,7 +493,6 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
     OperatorTable [ [ Wrap accessor $ \prop val -> val <> "::" <> prop ]
                   , [ Wrap indexer $ \index val -> val <> "[" <> index <> "]" ]
                   , [ Wrap app $ \args val -> val <> parensT args ]
-                  , [ unary New "new " ]
                   , [ Wrap lam $ \(caps, args, rty) ret -> '[' `T.cons` caps <> "]"
                         <> let args' = argstr <$> args in
                            parensT (T.intercalate ", " args')
@@ -496,8 +505,7 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
                     , negateOperator ]
                   , [ binary    Multiply             " * "
                     , binary    Divide               " / "
-                    , binary    Modulus              " % "
-                    , binary    Dot                  "." ]
+                    , binary    Modulus              " % " ]
                   , [ binary    Add                  " + "
                     , binary    Subtract             " - " ]
                   , [ binary    ShiftLeft            " << "

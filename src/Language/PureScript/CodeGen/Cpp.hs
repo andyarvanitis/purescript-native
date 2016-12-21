@@ -684,10 +684,10 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     cpp <- go done 0 bs
     let cond =
           case length bs of
-            0 -> CppBinary Dot (CppVar varName) (CppApp (CppVar "empty") [])
+            0 -> CppUnary Empty (CppVar varName)
             n -> CppBinary
                    EqualTo
-                   (CppBinary Dot (CppVar varName) (CppApp (CppVar "size") []))
+                   (CppUnary Size (CppVar varName))
                    (CppNumericLiteral (Left (fromIntegral n)))
     return [CppIfElse cond (CppBlock cpp) Nothing]
     where
