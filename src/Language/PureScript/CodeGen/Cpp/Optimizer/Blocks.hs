@@ -21,7 +21,7 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Blocks
   ) where
 
 import Prelude.Compat
-import Control.Monad (foldM)
+import Data.Either
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types
@@ -91,26 +91,19 @@ collapseCtorChecksToSwitch :: Cpp -> Cpp
 collapseCtorChecksToSwitch = everywhereOnCpp collapse
   where
   collapse :: Cpp -> Cpp
-  collapse (CppBlock cpps) = CppBlock (go cpps)
+  collapse (CppBlock cpps@(_:_:_)) = CppBlock (go cpps)
     where
-    go cpps'
-      | length cpps' > 2
-      , ifs <- init cpps'
-      , def@(CppThrow _) <- last cpps'
-      , Just (cond, _, _) <- fromif $ head ifs
-      , Just (cond', cases) <- foldM builder (cond, []) ifs
-      = [CppSwitch cond' cases (Just def)]
-    go (cpp' : cpps') = cpp' : go cpps'
+    go cpps'@(cpp:_)
+      | Right (lhs, _, _) <- fromif Nothing cpp
+      , (otherCpps, ifs@(_:_:_)) <- partitionEithers $ fromif (Just lhs) <$> cpps'
+      = CppSwitch lhs ((\(_,b,c) -> (b,c)) <$> ifs) Nothing : otherCpps
+    go (cpp':cpps') = cpp' : go cpps'
     go cpp' = cpp'
-    fromif :: Cpp -> Maybe (Cpp, Cpp, Cpp)
-    fromif (CppIfElse (CppBinary EqualTo lhs rhs) stmt Nothing)
+    fromif :: Maybe Cpp -> Cpp -> Either Cpp (Cpp, Cpp, Cpp)
+    fromif cond (CppIfElse (CppBinary EqualTo lhs rhs) stmt Nothing)
       | CppApp (CppVar f) _ <- lhs
-      , f == getCtor = Just (lhs, rhs, stmt)
-    fromif _ = Nothing
-    builder :: (Cpp, [(Cpp, Cpp)]) -> Cpp -> Maybe (Cpp, [(Cpp, Cpp)])
-    builder (cond, cases) cpp
-      | Just (lhs, rhs, stmt) <- fromif cpp
-      , lhs == cond
-      = Just (cond, cases ++ [(rhs, stmt)])
-    builder _ _ = Nothing
+      , f == getCtor
+      , maybe True (lhs==) cond
+      = Right (lhs, rhs, stmt)
+    fromif _ cpp = Left cpp
   collapse cpp = cpp

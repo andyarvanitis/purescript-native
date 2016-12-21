@@ -109,6 +109,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
       symbols = allSymbols bodyCpps
       moduleBody =
         CppInclude (runModuleName mn) (runModuleName mn) :
+        P.linebreak ++
         (CppDefineSymbol <$> symbols) ++
         (if null bodyCpps
            then []
