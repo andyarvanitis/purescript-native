@@ -106,6 +106,7 @@ literals = mkPattern' match
     , return $ T.intercalate ", " es
     , return " }"
     ]
+  match (CppMapLiteral Record []) = return "nullptr"
   match (CppMapLiteral _ ps) = mconcat <$> sequence
     [ return $ runType (mapType $ length ps + 1) <> "{{\n"
     , withIndent $ do
