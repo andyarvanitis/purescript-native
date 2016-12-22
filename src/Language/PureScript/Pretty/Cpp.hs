@@ -109,13 +109,14 @@ literals = mkPattern' match
   match (CppMapLiteral _ ps) = mconcat <$> sequence
     [ return $ runType (mapType $ length ps + 1) <> "{{\n"
     , withIndent $ do
+        let ps' = ps ++ [(CppVar "nullptr", CppVar "nullptr")]
         cpps <-
-          forM ps $ \(key, value) -> do
+          forM ps' $ \(key, value) -> do
             value' <- prettyPrintCpp' value
             key' <- prettyPrintCpp' key
             return $ "{ " <> key' <> ", " <> value' <> " }"
         indentString <- currentIndent
-        return $ T.intercalate ", \n" $ map (indentString <>) (cpps ++ ["{ nullptr, nullptr }"])
+        return $ T.intercalate ", \n" $ map (indentString <>) cpps
     , return "\n"
     , currentIndent
     , return "}}"
