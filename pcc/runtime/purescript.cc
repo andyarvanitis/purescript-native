@@ -17,6 +17,9 @@
 
 namespace PureScript {
 
+any::closure::~closure() {}
+any::eff_closure::~eff_closure() {}
+
 #define RETURN_VALUE(TAG, ACCESSOR, INDIRECTION) \
   const any& variant = unthunkVariant(*this); \
   assert(variant.tag == TAG); \

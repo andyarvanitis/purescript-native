@@ -45,6 +45,7 @@ namespace PureScript {
 
 using cstring = const char *;
 using std::nullptr_t;
+using std::runtime_error;
 
 namespace Private {
   struct symbol_generator_anchor_t {};
@@ -67,12 +68,6 @@ using symbol_t = const Private::symbol_generator_anchor_t *;
                            } \
                          }
 #define symbol(S) (&Private::symbol_generator<::PureScript::Private::Symbol::S_ ## S>::anchor)
-
-// Workaround for missing C++11 version in gcc
-class runtime_error : public std::runtime_error {
-public:
-  runtime_error(const char message[]) : std::runtime_error(std::string(message)) {}
-};
 
 constexpr bool undefined = false;
 
@@ -128,7 +123,7 @@ class any {
   class closure {
     public:
       virtual auto operator()(const any&) const -> any = 0;
-      virtual ~closure() {}
+      virtual ~closure();
   };
 
   template <typename T>
@@ -144,7 +139,7 @@ class any {
   class eff_closure {
     public:
       virtual auto operator()() const -> any = 0;
-      virtual ~eff_closure() {}
+      virtual ~eff_closure();
   };
 
   template <typename T>
