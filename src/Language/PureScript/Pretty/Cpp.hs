@@ -399,7 +399,6 @@ accessor = mkPattern match
 indexer :: Pattern PrinterState Cpp (Text, Cpp)
 indexer = mkPattern' match
   where
-  match (CppIndexer (CppNumericLiteral (Left 0)) val) = return ("0UL", val)
   match (CppIndexer (CppNumericLiteral (Left index)) val) = return (show' index, val)
   match (CppIndexer index val) = do
     index' <- prettyPrintCpp' index
