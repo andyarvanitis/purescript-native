@@ -41,7 +41,7 @@ ifeq ("$(wildcard $(PSC_PACKAGE))","")
 	PSC_PACKAGE := $(PSC_PKG_BIN)
 endif
 
-PACKAGE_SOURCES = $(shell $(PSC_PACKAGE) sources)
+PACKAGE_SOURCES = $(subst \,/,$(shell $(PSC_PACKAGE) sources))
 PURESCRIPT_PKGS := $(firstword $(subst /, ,$(PACKAGE_SOURCES)))
 
 ## Not all environments support globstar (** dir pattern)
