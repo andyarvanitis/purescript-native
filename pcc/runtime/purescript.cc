@@ -17,8 +17,8 @@
 
 namespace PureScript {
 
-any::closure::~closure() {}
-any::eff_closure::~eff_closure() {}
+any::Closure::~Closure() {}
+any::EffClosure::~EffClosure() {}
 
 #define RETURN_VALUE(TAG, ACCESSOR, INDIRECTION) \
   const any& variant = unthunkVariant(*this); \
@@ -27,41 +27,41 @@ any::eff_closure::~eff_closure() {}
 
 auto any::operator()(const any& arg) const -> any {
   const any& variant = unthunkVariant(*this);
-  if (variant.tag == tag_t::Closure) {
+  if (variant.tag == Tag::Closure) {
     return (*variant.l)(arg);
   }
-  assert(variant.tag == tag_t::Function);
+  assert(variant.tag == Tag::Function);
   return (*variant.f)(arg);
 }
 
 auto any::operator()(const as_thunk) const -> const any& {
-  assert(tag == tag_t::Thunk);
+  assert(tag == Tag::Thunk);
   return (*t)(unthunk);
 }
 
 auto any::operator()() const -> any {
   const any& variant = unthunkVariant(*this);
-  if (variant.tag == tag_t::EffClosure) {
+  if (variant.tag == Tag::EffClosure) {
     return (*variant.k)();
   }
-  assert(variant.tag == tag_t::EffFunction);
+  assert(variant.tag == Tag::EffFunction);
   return (*variant.e)();
 }
 
 any::operator int() const {
-  RETURN_VALUE(tag_t::Integer, i,)
+  RETURN_VALUE(Tag::Integer, i,)
 }
 
 any::operator double() const {
-  RETURN_VALUE(tag_t::Double, d,)
+  RETURN_VALUE(Tag::Double, d,)
 }
 
 any::operator bool() const {
-  RETURN_VALUE(tag_t::Boolean, b,)
+  RETURN_VALUE(Tag::Boolean, b,)
 }
 
 any::operator char() const {
-  RETURN_VALUE(tag_t::Character, c,)
+  RETURN_VALUE(Tag::Character, c,)
 }
 
 any::operator size_t() const {
@@ -72,24 +72,24 @@ any::operator size_t() const {
 
 any::operator cstring() const {
   const any& variant = unthunkVariant(*this);
-  if (variant.tag == tag_t::StringLiteral) {
+  if (variant.tag == Tag::StringLiteral) {
     return variant.r;
   }
-  assert(variant.tag == tag_t::String);
+  assert(variant.tag == Tag::String);
   return variant.s->c_str();
 }
 
 any::operator const array&() const {
-  RETURN_VALUE(tag_t::Array, a, *)
+  RETURN_VALUE(Tag::Array, a, *)
 }
 
-auto any::extractPointer(IF_DEBUG(const any::tag_t t)) const -> void* {
+auto any::extractPointer(IF_DEBUG(const any::Tag t)) const -> void* {
   RETURN_VALUE(t, POINTER_FROM_MEMBER(p),)
 }
 
 auto any::unthunkVariant(const any& a) -> const any& {
   const any * variant = &a;
-  while (variant->tag == tag_t::Thunk) {
+  while (variant->tag == Tag::Thunk) {
     variant = &((*variant->t)(unthunk));
   }
   return *variant;
@@ -108,7 +108,7 @@ auto any::empty() const -> bool {
   return cast<array>(*this).empty();
 }
 
-auto any::contains(const symbol_t key) const -> bool {
+auto any::contains(const Private::Symbol key) const -> bool {
   // TODO: assumes at least one element -- safe assumption?
   const auto& m = cast<map<unknown_size>>(*this);
   std::remove_reference<decltype(m)>::type::size_type i = 0;
@@ -127,16 +127,16 @@ auto any::contains(const symbol_t key) const -> bool {
 #define DEFINE_CSTR_EQUALS_OPERATOR() \
   auto operator==(const any& lhs_, const char * rhs) -> bool { \
     const any& lhs = any::unthunkVariant(lhs_); \
-    assert(lhs.tag == any::tag_t::StringLiteral || lhs.tag == any::tag_t::String); \
-    if (lhs.tag == any::tag_t::StringLiteral) { \
+    assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String); \
+    if (lhs.tag == any::Tag::StringLiteral) { \
       return (lhs.r == rhs) || (strcmp(lhs.r, rhs) == 0); \
     } \
     return strcmp(lhs.s->c_str(), rhs) == 0; \
   } \
   auto operator==(const char * lhs, const any& rhs_) -> bool { \
     const any& rhs = any::unthunkVariant(rhs_); \
-    assert(rhs.tag == any::tag_t::StringLiteral || rhs.tag == any::tag_t::String); \
-    if (rhs.tag == any::tag_t::StringLiteral) { \
+    assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String); \
+    if (rhs.tag == any::Tag::StringLiteral) { \
       return (lhs == rhs.r) || (strcmp(lhs, rhs) == 0); \
     } \
     return strcmp(lhs, rhs.s->c_str()) == 0; \
@@ -155,19 +155,19 @@ auto any::contains(const symbol_t key) const -> bool {
     const any& lhs = any::unthunkVariant(lhs_); \
     const any& rhs = any::unthunkVariant(rhs_); \
     switch (lhs.tag) { \
-      case any::tag_t::Integer:   assert(lhs.tag == any::tag_t::Integer);   return lhs.i op rhs.i; \
-      case any::tag_t::Double:    assert(lhs.tag == any::tag_t::Double);    return lhs.d op rhs.d; \
-      case any::tag_t::Character: assert(lhs.tag == any::tag_t::Character); return lhs.c op rhs.c; \
-      case any::tag_t::Boolean:   assert(lhs.tag == any::tag_t::Boolean);   return lhs.b op rhs.b; \
-      case any::tag_t::StringLiteral: \
-        assert(lhs.tag == any::tag_t::StringLiteral || lhs.tag == any::tag_t::String); \
-        assert(rhs.tag == any::tag_t::StringLiteral || rhs.tag == any::tag_t::String); \
-        return strcmp(lhs.r, rhs.tag == any::tag_t::StringLiteral ? rhs.r : rhs.s->c_str()) op 0; \
-      case any::tag_t::String: \
-        assert(lhs.tag == any::tag_t::StringLiteral || lhs.tag == any::tag_t::String); \
-        assert(rhs.tag == any::tag_t::StringLiteral || rhs.tag == any::tag_t::String); \
-        return strcmp(lhs.s->c_str(), rhs.tag == any::tag_t::StringLiteral ? rhs.r : rhs.s->c_str()) op 0; \
-      case any::tag_t::Pointer:   return lhs.p op rhs.p; \
+      case any::Tag::Integer:   assert(lhs.tag == any::Tag::Integer);   return lhs.i op rhs.i; \
+      case any::Tag::Double:    assert(lhs.tag == any::Tag::Double);    return lhs.d op rhs.d; \
+      case any::Tag::Character: assert(lhs.tag == any::Tag::Character); return lhs.c op rhs.c; \
+      case any::Tag::Boolean:   assert(lhs.tag == any::Tag::Boolean);   return lhs.b op rhs.b; \
+      case any::Tag::StringLiteral: \
+        assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String); \
+        assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String); \
+        return strcmp(lhs.r, rhs.tag == any::Tag::StringLiteral ? rhs.r : rhs.s->c_str()) op 0; \
+      case any::Tag::String: \
+        assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String); \
+        assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String); \
+        return strcmp(lhs.s->c_str(), rhs.tag == any::Tag::StringLiteral ? rhs.r : rhs.s->c_str()) op 0; \
+      case any::Tag::Pointer:   return lhs.p op rhs.p; \
       default: assert(false && "Unsupported tag for operator " #op); \
     } \
     return false; \
@@ -195,17 +195,17 @@ auto operator+(const any& lhs_, const any& rhs_) -> any {
   const any& lhs = any::unthunkVariant(lhs_);
   const any& rhs = any::unthunkVariant(rhs_);
   switch (lhs.tag) {
-    case any::tag_t::Integer:       assert(lhs.tag == any::tag_t::Integer);   return lhs.i + rhs.i;
-    case any::tag_t::Double:        assert(lhs.tag == any::tag_t::Double);    return lhs.d + rhs.d;
-    case any::tag_t::Character:     assert(lhs.tag == any::tag_t::Character); return any(char(lhs.c + rhs.c));
-    case any::tag_t::StringLiteral:
-      assert(lhs.tag == any::tag_t::StringLiteral || lhs.tag == any::tag_t::String);
-      assert(rhs.tag == any::tag_t::StringLiteral || rhs.tag == any::tag_t::String);
-      return rhs.tag == any::tag_t::StringLiteral ? std::string(lhs.r) + rhs.r : lhs.r + *rhs.s;
-    case any::tag_t::String:
-      assert(lhs.tag == any::tag_t::StringLiteral || lhs.tag == any::tag_t::String);
-      assert(rhs.tag == any::tag_t::StringLiteral || rhs.tag == any::tag_t::String);
-      return rhs.tag == any::tag_t::StringLiteral ? *lhs.s + rhs.r : *lhs.s + *rhs.s;
+    case any::Tag::Integer:       assert(lhs.tag == any::Tag::Integer);   return lhs.i + rhs.i;
+    case any::Tag::Double:        assert(lhs.tag == any::Tag::Double);    return lhs.d + rhs.d;
+    case any::Tag::Character:     assert(lhs.tag == any::Tag::Character); return any(char(lhs.c + rhs.c));
+    case any::Tag::StringLiteral:
+      assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
+      assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
+      return rhs.tag == any::Tag::StringLiteral ? std::string(lhs.r) + rhs.r : lhs.r + *rhs.s;
+    case any::Tag::String:
+      assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
+      assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
+      return rhs.tag == any::Tag::StringLiteral ? *lhs.s + rhs.r : *lhs.s + *rhs.s;
     default: assert(false && "Unsupported tag for '+' operator");
   }
   return nullptr;
@@ -213,14 +213,14 @@ auto operator+(const any& lhs_, const any& rhs_) -> any {
 
 auto operator+(const any& lhs_, const char * rhs) -> std::string {
   const any& lhs = any::unthunkVariant(lhs_);
-  assert(lhs.tag == any::tag_t::StringLiteral || lhs.tag == any::tag_t::String);
-  return lhs.tag == any::tag_t::StringLiteral ? std::string(lhs.r) + rhs : *lhs.s + rhs;
+  assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
+  return lhs.tag == any::Tag::StringLiteral ? std::string(lhs.r) + rhs : *lhs.s + rhs;
 }
 
 auto operator+(const char * lhs, const any& rhs_) -> std::string {
   const any& rhs = any::unthunkVariant(rhs_);
-  assert(rhs.tag == any::tag_t::StringLiteral || rhs.tag == any::tag_t::String);
-  return rhs.tag == any::tag_t::StringLiteral ? lhs + std::string(rhs.r) : lhs + *rhs.s;
+  assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
+  return rhs.tag == any::Tag::StringLiteral ? lhs + std::string(rhs.r) : lhs + *rhs.s;
 }
 
 auto operator-(const any& lhs_, const any& rhs_) -> any {
@@ -228,9 +228,9 @@ auto operator-(const any& lhs_, const any& rhs_) -> any {
   const any& rhs = any::unthunkVariant(rhs_);
   assert(lhs.tag == rhs.tag);
   switch (lhs.tag) {
-    case any::tag_t::Integer:   return lhs.i - rhs.i;
-    case any::tag_t::Double:    return lhs.d - rhs.d;
-    case any::tag_t::Character: return any(char(lhs.c - rhs.c));
+    case any::Tag::Integer:   return lhs.i - rhs.i;
+    case any::Tag::Double:    return lhs.d - rhs.d;
+    case any::Tag::Character: return any(char(lhs.c - rhs.c));
     default: assert(false && "Unsupported tag for '-' operator");
   }
   return nullptr;
@@ -241,9 +241,9 @@ auto operator*(const any& lhs_, const any& rhs_) -> any {
   const any& rhs = any::unthunkVariant(rhs_);
   assert(lhs.tag == rhs.tag);
   switch (lhs.tag) {
-    case any::tag_t::Integer:   return lhs.i * rhs.i;
-    case any::tag_t::Double:    return lhs.d * rhs.d;
-    case any::tag_t::Character: return any(char(lhs.c * rhs.c));
+    case any::Tag::Integer:   return lhs.i * rhs.i;
+    case any::Tag::Double:    return lhs.d * rhs.d;
+    case any::Tag::Character: return any(char(lhs.c * rhs.c));
     default: assert(false && "Unsupported tag for '*' operator");
   }
   return nullptr;
@@ -254,9 +254,9 @@ auto operator/(const any& lhs_, const any& rhs_) -> any {
   const any& rhs = any::unthunkVariant(rhs_);
   assert(lhs.tag == rhs.tag);
   switch (lhs.tag) {
-    case any::tag_t::Integer:   return lhs.i / rhs.i;
-    case any::tag_t::Double:    return lhs.d / rhs.d;
-    case any::tag_t::Character: return any(char(lhs.c / rhs.c));
+    case any::Tag::Integer:   return lhs.i / rhs.i;
+    case any::Tag::Double:    return lhs.d / rhs.d;
+    case any::Tag::Character: return any(char(lhs.c / rhs.c));
     default: assert(false && "Unsupported tag for '/' operator");
   }
   return nullptr;
@@ -267,8 +267,8 @@ auto operator%(const any& lhs_, const any& rhs_) -> any {
   const any& rhs = any::unthunkVariant(rhs_);
   assert(lhs.tag == rhs.tag);
   switch (lhs.tag) {
-    case any::tag_t::Integer:   return lhs.i % rhs.i;
-    case any::tag_t::Character: return any(char(lhs.c % rhs.c));
+    case any::Tag::Integer:   return lhs.i % rhs.i;
+    case any::Tag::Character: return any(char(lhs.c % rhs.c));
     default: assert(false && "Unsupported tag for '%' operator");
   }
   return nullptr;
@@ -278,8 +278,8 @@ auto operator%(const any& lhs_, const any& rhs_) -> any {
 auto operator-(const any& rhs_) -> any {
   const any& rhs = any::unthunkVariant(rhs_);
   switch (rhs.tag) {
-    case any::tag_t::Integer: return (- rhs.i);
-    case any::tag_t::Double:  return (- rhs.d);
+    case any::Tag::Integer: return (- rhs.i);
+    case any::Tag::Double:  return (- rhs.d);
     default: assert(false && "Unsupported tag for unary '-' operator");
   }
   return nullptr;
