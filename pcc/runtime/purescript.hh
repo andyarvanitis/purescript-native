@@ -337,12 +337,11 @@ class any {
   operator double() const;
   operator bool() const;
   operator char() const;
+  operator size_t() const;
   operator cstring() const;
   operator const array&() const;
 
-  auto operator[](const symbol_t) const -> const any&;
   auto operator[](const size_t) const -> const any&;
-  auto operator[](const any&) const -> const any&;
 
   auto size() const -> size_t;
   auto empty() const -> bool;

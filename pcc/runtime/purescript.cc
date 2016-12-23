@@ -64,6 +64,12 @@ any::operator char() const {
   RETURN_VALUE(tag_t::Character, c,)
 }
 
+any::operator size_t() const {
+  const auto sz = cast<int>(*this);
+  assert(sz >= 0);
+  return static_cast<size_t>(sz);
+}
+
 any::operator cstring() const {
   const any& variant = unthunkVariant(*this);
   if (variant.tag == tag_t::StringLiteral) {
@@ -89,18 +95,9 @@ auto any::unthunkVariant(const any& a) -> const any& {
   return *variant;
 }
 
-auto any::operator[](const symbol_t key) const -> const any& {
-  return PureScript::map::get(key, cast<map<unknown_size>>(*this));
-}
-
 auto any::operator[](const size_t rhs) const -> const any& {
   const auto& xs = cast<array>(*this);
   return xs[rhs];
-}
-
-auto any::operator[](const any& rhs) const -> const any& {
-  const auto& xs = cast<array>(*this);
-  return xs[cast<int>(rhs)];
 }
 
 auto any::size() const -> size_t {
