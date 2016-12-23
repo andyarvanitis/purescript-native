@@ -204,7 +204,6 @@ nameIsCppReserved name =
               , "struct"
               , "switch"
               , "symbol"
-              , "symbol_t"
               , "synchronized"
               , "template"
               , "the_value"
