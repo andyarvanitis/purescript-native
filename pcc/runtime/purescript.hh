@@ -44,6 +44,7 @@
 namespace PureScript {
 
 using cstring = const char *;
+using std::string;
 using std::nullptr_t;
 using std::runtime_error;
 
@@ -163,7 +164,7 @@ class any {
     mutable fn                    f;
     mutable eff_fn                e;
     mutable void *                u;
-    mutable managed<std::string>  s;
+    mutable managed<string>       s;
     mutable managed<array>        a;
     mutable managed<Closure>      l;
     mutable managed<EffClosure>   k;
@@ -186,13 +187,13 @@ class any {
 
   template <size_t N>
   any(const char (&val)[N]) noexcept : tag(Tag::StringLiteral), r(val) {}
-  any(char * val) : tag(Tag::String), s(make_managed<std::string>(val)) {}
+  any(char * val) : tag(Tag::String), s(make_managed<string>(val)) {}
 
-  any(const std::string& val) : tag(Tag::String), s(make_managed<std::string>(val)) {}
-  any(std::string&& val) noexcept : tag(Tag::String), s(make_managed<std::string>(std::move(val))) {}
+  any(const string& val) : tag(Tag::String), s(make_managed<string>(val)) {}
+  any(string&& val) noexcept : tag(Tag::String), s(make_managed<string>(std::move(val))) {}
 
-  any(const managed<std::string>& val) noexcept : tag(Tag::String), s(val) {}
-  any(managed<std::string>&& val) noexcept : tag(Tag::String), s(std::move(val)) {}
+  any(const managed<string>& val) noexcept : tag(Tag::String), s(val) {}
+  any(managed<string>&& val) noexcept : tag(Tag::String), s(std::move(val)) {}
 
   template <size_t N>
   any(map<N>&& val) noexcept : tag(Tag::Map), p(make_managed<map<N>>(std::move(val))) {}
@@ -272,13 +273,13 @@ class any {
       case Tag::EffFunction:    e = other.e;  break;
       case Tag::RawPointer:     u = other.u;  break;
 
-      case Tag::String:      new (&s) managed<std::string>(move_if_rvalue<T>(other.s));  break;
-      case Tag::Array:       new (&a) managed<array>(move_if_rvalue<T>(other.a));        break;
-      case Tag::Closure:     new (&l) managed<Closure>(move_if_rvalue<T>(other.l));      break;
+      case Tag::String:      new (&s) managed<string>(move_if_rvalue<T>(other.s));      break;
+      case Tag::Array:       new (&a) managed<array>(move_if_rvalue<T>(other.a));       break;
+      case Tag::Closure:     new (&l) managed<Closure>(move_if_rvalue<T>(other.l));     break;
       case Tag::EffClosure:  new (&k) managed<EffClosure>(move_if_rvalue<T>(other.k));  break;
       case Tag::Map:
       case Tag::Data:
-      case Tag::Pointer:     new (&p) managed<void>(move_if_rvalue<T>(other.p));         break;
+      case Tag::Pointer:     new (&p) managed<void>(move_if_rvalue<T>(other.p));        break;
 
       default: assert(false && "Bad 'any' tag"); break;
     }
@@ -286,13 +287,13 @@ class any {
 
   auto destruct() -> void {
     switch (tag) {
-      case Tag::String:      s.~managed<std::string>();   break;
-      case Tag::Array:       a.~managed<array>();         break;
-      case Tag::Closure:     l.~managed<Closure>();       break;
-      case Tag::EffClosure:  k.~managed<EffClosure>();   break;
+      case Tag::String:      s.~managed<string>();      break;
+      case Tag::Array:       a.~managed<array>();       break;
+      case Tag::Closure:     l.~managed<Closure>();     break;
+      case Tag::EffClosure:  k.~managed<EffClosure>();  break;
       case Tag::Map:
       case Tag::Data:
-      case Tag::Pointer:     p.~managed<void>();          break;
+      case Tag::Pointer:     p.~managed<void>();        break;
 
       default: break;
     }
@@ -386,8 +387,8 @@ class any {
   DEFINE_OPERATOR(+, int, int)
   DEFINE_OPERATOR(+, double, double)
   DEFINE_OPERATOR(+, char, char)
-  friend auto operator+(const any& lhs, const char * const rhs) -> std::string;
-  friend auto operator+(const char * const lhs, const any& rhs) -> std::string;
+  friend auto operator+(const any& lhs, const char * const rhs) -> string;
+  friend auto operator+(const char * const lhs, const any& rhs) -> string;
 
   friend auto operator-(const any&, const any&) -> any;
 
@@ -461,6 +462,14 @@ inline auto cast(const any& a) ->
   return *static_cast<T*>(a.extractPointer(IF_DEBUG(Private::TagHelper<T>::tag)));
 }
 
+template <typename T,
+          typename = typename std::enable_if<std::is_pointer<T>::value &&
+                                            !std::is_same<T,void*>::value &&
+                                            !std::is_same<T,cstring>::value>::type>
+inline auto cast(const any& a) -> T {
+  return static_cast<T>(a.extractPointer(IF_DEBUG(Private::TagHelper<T>::tag)));
+}
+
 template <typename T>
 inline auto cast(const any& a) ->
     typename std::enable_if<std::is_same<void*, T>::value, T>::type {
@@ -496,7 +505,44 @@ namespace map {
   inline auto get(const Private::Symbol key, const any& a) -> const any& {
     return get(key, cast<any::map<unknown_size>>(a));
   }
+
+  #define P(N)    any::map_pair&& arg ## N
+  #define T(N)    any::map<N+1>
+  #define E(N)    std::forward<decltype(arg ## N)>(arg ## N)
+  #define M(...)  {{ __VA_ARGS__, { nullptr, nullptr } }}
+
+  inline auto make(P(1)) -> T(1) {
+    return T(1) M(E(1));
+  }
+  inline auto make(P(1), P(2)) -> T(2) {
+    return T(2) M(E(1), E(2));
+  }
+  inline auto make(P(1), P(2), P(3)) -> T(3) {
+    return T(3) M(E(1), E(2), E(3));
+  }
+  inline auto make(P(1), P(2), P(3), P(4)) -> T(4) {
+    return T(4) M(E(1), E(2), E(3), E(4));
+  }
+  inline auto make(P(1), P(2), P(3), P(4), P(5)) -> T(5) {
+    return T(5) M(E(1), E(2), E(3), E(4), E(5));
+  }
+  inline auto make(P(1), P(2), P(3), P(4), P(5), P(6)) -> T(6) {
+    return T(6) M(E(1), E(2), E(3), E(4), E(5), E(6));
+  }
+  inline auto make(P(1), P(2), P(3), P(4), P(5), P(6), P(7)) -> T(7) {
+    return T(7) M(E(1), E(2), E(3), E(4), E(5), E(6), E(7));
+  }
+  inline auto make(P(1), P(2), P(3), P(4), P(5), P(6), P(7), P(8)) -> T(8) {
+    return T(8) M(E(1), E(2), E(3), E(4), E(5), E(6), E(7), E(8));
+  }
+
+  #undef P
+  #undef T
+  #undef E
+  #undef M
 }
+
+namespace record = map;
 
 namespace data {
   template <size_t N, typename T>

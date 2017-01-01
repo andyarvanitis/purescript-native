@@ -107,6 +107,21 @@ literals = mkPattern' match
     , return " }"
     ]
   match (CppMapLiteral Record []) = return "nullptr"
+  match (CppMapLiteral _ ps)
+    | length ps <= 8 = mconcat <$> sequence
+    [ return $ mapNS <> "::make(\n"
+    , withIndent $ do
+        cpps <-
+          forM ps $ \(key, value) -> do
+            value' <- prettyPrintCpp' value
+            key' <- prettyPrintCpp' key
+            return $ "{ " <> key' <> ", " <> value' <> " }"
+        indentString <- currentIndent
+        return $ T.intercalate ", \n" $ map (indentString <>) cpps
+    , return "\n"
+    , currentIndent
+    , return ")"
+    ]
   match (CppMapLiteral _ ps) = mconcat <$> sequence
     [ return $ runType (mapType $ length ps + 1) <> "{{\n"
     , withIndent $ do

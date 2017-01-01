@@ -74,7 +74,7 @@ main = do
     when testCaseDirExists $ callProcess "cp" ["-R", testCaseDir, srcDir]
 
     callProcess "make" ["clean"]
-    callProcess "make" ["debug"]
+    callProcess "make" ["debug", "-Werror", "-j2"]
     --
     -- Run C++ files
     --

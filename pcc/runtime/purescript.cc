@@ -201,7 +201,7 @@ auto operator+(const any& lhs_, const any& rhs_) -> any {
     case any::Tag::StringLiteral:
       assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
       assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
-      return rhs.tag == any::Tag::StringLiteral ? std::string(lhs.r) + rhs.r : lhs.r + *rhs.s;
+      return rhs.tag == any::Tag::StringLiteral ? string(lhs.r) + rhs.r : lhs.r + *rhs.s;
     case any::Tag::String:
       assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
       assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
@@ -211,16 +211,16 @@ auto operator+(const any& lhs_, const any& rhs_) -> any {
   return nullptr;
 }
 
-auto operator+(const any& lhs_, const char * rhs) -> std::string {
+auto operator+(const any& lhs_, const char * rhs) -> string {
   const any& lhs = any::unthunkVariant(lhs_);
   assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
-  return lhs.tag == any::Tag::StringLiteral ? std::string(lhs.r) + rhs : *lhs.s + rhs;
+  return lhs.tag == any::Tag::StringLiteral ? string(lhs.r) + rhs : *lhs.s + rhs;
 }
 
-auto operator+(const char * lhs, const any& rhs_) -> std::string {
+auto operator+(const char * lhs, const any& rhs_) -> string {
   const any& rhs = any::unthunkVariant(rhs_);
   assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
-  return rhs.tag == any::Tag::StringLiteral ? lhs + std::string(rhs.r) : lhs + *rhs.s;
+  return rhs.tag == any::Tag::StringLiteral ? lhs + string(rhs.r) : lhs + *rhs.s;
 }
 
 auto operator-(const any& lhs_, const any& rhs_) -> any {
