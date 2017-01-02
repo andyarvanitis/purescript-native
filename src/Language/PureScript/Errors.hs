@@ -289,8 +289,8 @@ onTypesInErrorMessageM f (ErrorMessage hints simple) = ErrorMessage <$> traverse
   gTypeSearch (TSBefore env) = pure (TSBefore env)
   gTypeSearch (TSAfter result) = TSAfter <$> traverse (traverse f) result
 
-wikiUri :: ErrorMessage -> Text
-wikiUri e = "https://github.com/purescript/purescript/wiki/Error-Code-" <> errorCode e
+errorDocUri :: ErrorMessage -> Text
+errorDocUri e = "https://github.com/purescript/documentation/blob/master/errors/" <> errorCode e <> ".md"
 
 -- TODO Other possible suggestions:
 -- WildcardInferredType - source span not small enough
@@ -373,7 +373,7 @@ data PPEOptions = PPEOptions
   { ppeCodeColor :: Maybe (ANSI.ColorIntensity, ANSI.Color) -- ^ Color code with this color... or not
   , ppeFull      :: Bool -- ^ Should write a full error message?
   , ppeLevel     :: Level -- ^ Should this report an error or a warning?
-  , ppeShowWiki  :: Bool -- ^ Should show a link to error message's wiki page?
+  , ppeShowDocs  :: Bool -- ^ Should show a link to error message's doc page?
   }
 
 -- | Default options for PPEOptions
@@ -382,7 +382,7 @@ defaultPPEOptions = PPEOptions
   { ppeCodeColor = Just defaultCodeColor
   , ppeFull      = False
   , ppeLevel     = Error
-  , ppeShowWiki  = True
+  , ppeShowDocs  = True
   }
 
 
@@ -390,7 +390,7 @@ defaultPPEOptions = PPEOptions
 -- Pretty print a single error, simplifying if necessary
 --
 prettyPrintSingleError :: PPEOptions -> ErrorMessage -> Box.Box
-prettyPrintSingleError (PPEOptions codeColor full level showWiki) e = flip evalState defaultUnknownMap $ do
+prettyPrintSingleError (PPEOptions codeColor full level showDocs) e = flip evalState defaultUnknownMap $ do
   em <- onTypesInErrorMessageM replaceUnknowns (if full then e else simplifyErrorMessage e)
   um <- get
   return (prettyPrintErrorMessage um em)
@@ -405,10 +405,10 @@ prettyPrintSingleError (PPEOptions codeColor full level showWiki) e = flip evalS
       ] ++
       maybe [] (return . Box.moveDown 1) typeInformation ++
       [ Box.moveDown 1 $ paras
-          [ line $ "See " <> wikiUri e <> " for more information, "
+          [ line $ "See " <> errorDocUri e <> " for more information, "
           , line $ "or to contribute content related to this " <> levelText <> "."
           ]
-      | showWiki
+      | showDocs
       ]
     where
     typeInformation :: Maybe Box.Box
@@ -716,7 +716,7 @@ prettyPrintSingleError (PPEOptions codeColor full level showWiki) e = flip evalS
                 , Box.vcat Box.left (map typeAtomAsBox ts)
                 ]
             , line "is an orphan instance."
-            , line "An orphan instance is an instance which is defined in neither the class module nor the data type module."
+            , line "An orphan instance is one which is defined in a module that is unrelated to either the class or the collection of data types that the instance is defined for."
             , line "Consider moving the instance, if possible, or using a newtype wrapper."
             ]
     renderSimpleErrorMessage (InvalidNewtype name) =
@@ -1030,6 +1030,7 @@ prettyPrintSingleError (PPEOptions codeColor full level showWiki) e = flip evalS
     nameType (DctorName _) = "data constructor"
     nameType (TyClassName _) = "type class"
     nameType (ModName _) = "module"
+    nameType (KiName _) = "kind"
 
     runName :: Qualified Name -> Text
     runName (Qualified mn (IdentName name)) =
@@ -1043,6 +1044,8 @@ prettyPrintSingleError (PPEOptions codeColor full level showWiki) e = flip evalS
     runName (Qualified mn (DctorName name)) =
       showQualified runProperName (Qualified mn name)
     runName (Qualified mn (TyClassName name)) =
+      showQualified runProperName (Qualified mn name)
+    runName (Qualified mn (KiName name)) =
       showQualified runProperName (Qualified mn name)
     runName (Qualified Nothing (ModName name)) =
       runModuleName name
@@ -1148,6 +1151,8 @@ prettyPrintRef (TypeInstanceRef ident) =
   Just $ showIdent ident
 prettyPrintRef (ModuleRef name) =
   Just $ "module " <> runModuleName name
+prettyPrintRef (KindRef pn) =
+  Just $ "kind " <> runProperName pn
 prettyPrintRef (ReExportRef _ _) =
   Nothing
 prettyPrintRef (PositionedDeclarationRef _ _ ref) =
