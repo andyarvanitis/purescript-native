@@ -24,6 +24,7 @@ import Data.Maybe
 import Data.Monoid
 import Data.Version
 import qualified Data.List.NonEmpty as NonEmpty
+import Data.Text (Text)
 import qualified Data.Text as T
 
 import Language.PureScript.Publish.BoxesHelpers
@@ -43,7 +44,7 @@ data PackageError
 data PackageWarning
   = NoResolvedVersion PackageName
   | UndeclaredDependency PackageName
-  | UnacceptableVersion (PackageName, String)
+  | UnacceptableVersion (PackageName, Text)
   | DirtyWorkingTree_Warn
   deriving (Show)
 
@@ -64,7 +65,7 @@ data UserError
 
 data RepositoryFieldError
   = RepositoryFieldMissing
-  | BadRepositoryType String
+  | BadRepositoryType Text
   | NotOnGithub
   deriving (Show)
 
@@ -147,9 +148,8 @@ displayUserError e = case e of
             , "version."
             ])
         , spacer
-        , para "Note: tagged versions must be in one of the following forms:"
-        , indented (para "* v{MAJOR}.{MINOR}.{PATCH} (example: \"v1.6.2\")")
-        , indented (para "* {MAJOR}.{MINOR}.{PATCH} (example: \"1.6.2\")")
+        , para "Note: tagged versions must be in the form"
+        , indented (para "v{MAJOR}.{MINOR}.{PATCH} (example: \"v1.6.2\")")
         , spacer
         , para (concat
            [ "If the version you are publishing is not yet tagged, you might "
@@ -213,7 +213,7 @@ displayUserError e = case e of
         , "installed:"
         ])
       ] ++
-        bulletedList runPackageName (NonEmpty.toList pkgs)
+        bulletedListT runPackageName (NonEmpty.toList pkgs)
         ++
       [ spacer
       , para (concat
@@ -263,7 +263,7 @@ displayRepositoryError err = case err of
   BadRepositoryType ty ->
     para (concat
       [ "In your bower.json file, the repository type is currently listed as "
-      , "\"" ++ ty ++ "\". Currently, only git repositories are supported. "
+      , "\"" ++ T.unpack ty ++ "\". Currently, only git repositories are supported. "
       , "Please publish your code in a git repository, and then update the "
       , "repository type in your bower.json file to \"git\"."
       ])
@@ -311,7 +311,7 @@ displayOtherError e = case e of
 data CollectedWarnings = CollectedWarnings
   { noResolvedVersions     :: [PackageName]
   , undeclaredDependencies :: [PackageName]
-  , unacceptableVersions   :: [(PackageName, String)]
+  , unacceptableVersions   :: [(PackageName, Text)]
   , dirtyWorkingTree       :: Any
   }
   deriving (Show, Eq, Ord)
@@ -361,7 +361,7 @@ warnNoResolvedVersions pkgNames =
       ["The following ", packages, " did not appear to have a resolved "
       , "version:"])
     ] ++
-      bulletedList runPackageName (NonEmpty.toList pkgNames)
+      bulletedListT runPackageName (NonEmpty.toList pkgNames)
       ++
     [ spacer
     , para (concat
@@ -385,9 +385,9 @@ warnUndeclaredDependencies pkgNames =
       [ "The following Bower ", packages, " ", are, " installed, but not "
       , "declared as ", dependencies, " in your bower.json file:"
       ])
-    : bulletedList runPackageName (NonEmpty.toList pkgNames)
+    : bulletedListT runPackageName (NonEmpty.toList pkgNames)
 
-warnUnacceptableVersions :: NonEmpty (PackageName, String) -> Box
+warnUnacceptableVersions :: NonEmpty (PackageName, Text) -> Box
 warnUnacceptableVersions pkgs =
   let singular = NonEmpty.length pkgs == 1
       pl a b = if singular then b else a
@@ -403,7 +403,7 @@ warnUnacceptableVersions pkgs =
       , "not be parsed:"
       ])
     ] ++
-      bulletedList showTuple (NonEmpty.toList pkgs)
+      bulletedListT showTuple (NonEmpty.toList pkgs)
       ++
     [ spacer
     , para (concat
@@ -414,7 +414,7 @@ warnUnacceptableVersions pkgs =
       ])
     ]
   where
-  showTuple (pkgName, tag) = runPackageName pkgName ++ "#" ++ tag
+  showTuple (pkgName, tag) = runPackageName pkgName <> "#" <> tag
 
 warnDirtyWorkingTree :: Box
 warnDirtyWorkingTree =

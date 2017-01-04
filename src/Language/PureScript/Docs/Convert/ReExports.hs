@@ -16,6 +16,7 @@ import Data.Map (Map)
 import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Map as Map
+import Data.Text (Text)
 import qualified Data.Text as T
 
 import Language.PureScript.Docs.Types
@@ -34,9 +35,10 @@ import qualified Language.PureScript as P
 updateReExports ::
   P.Env ->
   [P.ModuleName] ->
+  (P.ModuleName -> InPackage P.ModuleName) ->
   Map P.ModuleName Module ->
   Map P.ModuleName Module
-updateReExports env order = execState action
+updateReExports env order withPackage = execState action
   where
   action =
     void (traverse go order)
@@ -44,7 +46,7 @@ updateReExports env order = execState action
   go mn = do
     mdl <- lookup' mn
     reExports <- getReExports env mn
-    let mdl' = mdl { modReExports = reExports }
+    let mdl' = mdl { modReExports = map (first withPackage) reExports }
     modify (Map.insert mn mdl')
 
   lookup' mn = do
@@ -108,13 +110,14 @@ collectDeclarations imports exports = do
   typeClasses <- collect lookupTypeClassDeclaration impTCs expTCs
   types <- collect lookupTypeDeclaration impTypes expTypes
   typeOps <- collect lookupTypeOpDeclaration impTypeOps expTypeOps
+  kinds <- collect lookupKindDeclaration impKinds expKinds
 
   (vals, classes) <- handleTypeClassMembers valsAndMembers typeClasses
 
   let filteredTypes = filterDataConstructors expCtors types
   let filteredClasses = filterTypeClassMembers (Map.keys expVals) classes
 
-  pure (Map.toList (Map.unionsWith (<>) [filteredTypes, filteredClasses, vals, valOps, typeOps]))
+  pure (Map.toList (Map.unionsWith (<>) [filteredTypes, filteredClasses, vals, valOps, typeOps, kinds]))
 
   where
 
@@ -144,6 +147,9 @@ collectDeclarations imports exports = do
 
   expTCs = P.exportedTypeClasses exports
   impTCs = concat (Map.elems (P.importedTypeClasses imports))
+
+  expKinds = P.exportedKinds exports
+  impKinds = concat (Map.elems (P.importedKinds imports))
 
 -- |
 -- Given a list of imported declarations (of a particular kind, ie. type, data,
@@ -184,12 +190,12 @@ lookupValueDeclaration ::
    MonadReader P.ModuleName m) =>
   P.ModuleName ->
   P.Ident ->
-  m (P.ModuleName, [Either (String, P.Constraint, ChildDeclaration) Declaration])
+  m (P.ModuleName, [Either (Text, P.Constraint, ChildDeclaration) Declaration])
 lookupValueDeclaration importedFrom ident = do
   decls <- lookupModuleDeclarations "lookupValueDeclaration" importedFrom
   let
     rs =
-      filter (\d -> declTitle d == T.unpack (P.showIdent ident)
+      filter (\d -> declTitle d == P.showIdent ident
                     && (isValue d || isValueAlias d)) decls
     errOther other =
       internalErrorInModule
@@ -215,7 +221,7 @@ lookupValueDeclaration importedFrom ident = do
                     (declChildren d))
 
         matchesIdent cdecl =
-          cdeclTitle cdecl == T.unpack (P.showIdent ident)
+          cdeclTitle cdecl == P.showIdent ident
 
         matchesAndIsTypeClassMember =
           uncurry (&&) . (matchesIdent &&& isTypeClassMember)
@@ -239,7 +245,7 @@ lookupValueOpDeclaration
   -> m (P.ModuleName, [Declaration])
 lookupValueOpDeclaration importedFrom op = do
   decls <- lookupModuleDeclarations "lookupValueOpDeclaration" importedFrom
-  case filter (\d -> declTitle d == T.unpack (P.showOp op) && isValueAlias d) decls of
+  case filter (\d -> declTitle d == P.showOp op && isValueAlias d) decls of
     [d] ->
       pure (importedFrom, [d])
     other ->
@@ -259,7 +265,7 @@ lookupTypeDeclaration ::
 lookupTypeDeclaration importedFrom ty = do
   decls <- lookupModuleDeclarations "lookupTypeDeclaration" importedFrom
   let
-    ds = filter (\d -> declTitle d == T.unpack (P.runProperName ty) && isType d) decls
+    ds = filter (\d -> declTitle d == P.runProperName ty && isType d) decls
   case ds of
     [d] ->
       pure (importedFrom, [d])
@@ -275,7 +281,7 @@ lookupTypeOpDeclaration
 lookupTypeOpDeclaration importedFrom tyOp = do
   decls <- lookupModuleDeclarations "lookupTypeOpDeclaration" importedFrom
   let
-    ds = filter (\d -> declTitle d == ("type " ++ T.unpack (P.showOp tyOp)) && isTypeAlias d) decls
+    ds = filter (\d -> declTitle d == ("type " <> P.showOp tyOp) && isTypeAlias d) decls
   case ds of
     [d] ->
       pure (importedFrom, [d])
@@ -291,7 +297,7 @@ lookupTypeClassDeclaration
 lookupTypeClassDeclaration importedFrom tyClass = do
   decls <- lookupModuleDeclarations "lookupTypeClassDeclaration" importedFrom
   let
-    ds = filter (\d -> declTitle d == T.unpack (P.runProperName tyClass)
+    ds = filter (\d -> declTitle d == P.runProperName tyClass
                        && isTypeClass d)
                 decls
   case ds of
@@ -301,6 +307,24 @@ lookupTypeClassDeclaration importedFrom tyClass = do
       internalErrorInModule
         ("lookupTypeClassDeclaration: unexpected result: "
          ++ (unlines . map show) other)
+
+lookupKindDeclaration
+  :: (MonadState (Map P.ModuleName Module) m, MonadReader P.ModuleName m)
+  => P.ModuleName
+  -> P.ProperName 'P.KindName
+  -> m (P.ModuleName, [Declaration])
+lookupKindDeclaration importedFrom kind = do
+  decls <- lookupModuleDeclarations "lookupKindDeclaration" importedFrom
+  let
+    ds = filter (\d -> declTitle d == P.runProperName kind
+                       && isKind d)
+                decls
+  case ds of
+    [d] ->
+      pure (importedFrom, [d])
+    other ->
+      internalErrorInModule
+        ("lookupKindDeclaration: unexpected result: " ++ show other)
 
 -- |
 -- Get the full list of declarations for a particular module out of the
@@ -324,7 +348,7 @@ lookupModuleDeclarations definedIn moduleName = do
 
 handleTypeClassMembers ::
   (MonadReader P.ModuleName m) =>
-  Map P.ModuleName [Either (String, P.Constraint, ChildDeclaration) Declaration] ->
+  Map P.ModuleName [Either (Text, P.Constraint, ChildDeclaration) Declaration] ->
   Map P.ModuleName [Declaration] ->
   m (Map P.ModuleName [Declaration], Map P.ModuleName [Declaration])
 handleTypeClassMembers valsAndMembers typeClasses =
@@ -339,7 +363,7 @@ handleTypeClassMembers valsAndMembers typeClasses =
       |> fmap splitMap
 
 valsAndMembersToEnv ::
-  [Either (String, P.Constraint, ChildDeclaration) Declaration] -> TypeClassEnv
+  [Either (Text, P.Constraint, ChildDeclaration) Declaration] -> TypeClassEnv
 valsAndMembersToEnv xs =
   let (envUnhandledMembers, envValues) = partitionEithers xs
       envTypeClasses = []
@@ -360,11 +384,11 @@ typeClassesToEnv classes =
 --
 data TypeClassEnv = TypeClassEnv
   { -- |
-    -- Type class members which have not yet been dealt with. The String is the
+    -- Type class members which have not yet been dealt with. The Text is the
     -- name of the type class they belong to, and the constraint is used to
     -- make sure that they have the correct type if they get promoted.
     --
-    envUnhandledMembers :: [(String, P.Constraint, ChildDeclaration)]
+    envUnhandledMembers :: [(Text, P.Constraint, ChildDeclaration)]
     -- |
     -- A list of normal value declarations. Type class members will be added to
     -- this list if their parent type class is not available.
@@ -428,7 +452,7 @@ handleEnv TypeClassEnv{..} =
       _ ->
         internalErrorInModule
           ("handleEnv: Bad child declaration passed to promoteChild: "
-          ++ cdeclTitle)
+          ++ T.unpack cdeclTitle)
 
   addConstraint constraint =
     P.quantify . P.moveQuantifiersToFront . P.ConstrainedType [constraint]
@@ -448,7 +472,7 @@ filterDataConstructors
   -> Map P.ModuleName [Declaration]
   -> Map P.ModuleName [Declaration]
 filterDataConstructors =
-  filterExportedChildren isDataConstructor (T.unpack . P.runProperName)
+  filterExportedChildren isDataConstructor P.runProperName
 
 -- |
 -- Given a list of exported type class member names, remove any data
@@ -460,12 +484,12 @@ filterTypeClassMembers
   -> Map P.ModuleName [Declaration]
   -> Map P.ModuleName [Declaration]
 filterTypeClassMembers =
-  filterExportedChildren isTypeClassMember (T.unpack . P.showIdent)
+  filterExportedChildren isTypeClassMember P.showIdent
 
 filterExportedChildren
   :: (Functor f)
   => (ChildDeclaration -> Bool)
-  -> (name -> String)
+  -> (name -> Text)
   -> [name]
   -> f [Declaration]
   -> f [Declaration]
@@ -504,7 +528,7 @@ typeClassConstraintFor :: Declaration -> Maybe P.Constraint
 typeClassConstraintFor Declaration{..} =
   case declInfo of
     TypeClassDeclaration tyArgs _ _ ->
-      Just (P.Constraint (P.Qualified Nothing (P.ProperName (T.pack declTitle))) (mkConstraint (map (first T.pack) tyArgs)) Nothing)
+      Just (P.Constraint (P.Qualified Nothing (P.ProperName declTitle)) (mkConstraint tyArgs) Nothing)
     _ ->
       Nothing
   where

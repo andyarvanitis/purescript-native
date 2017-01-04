@@ -1,18 +1,21 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module TestDocs where
 
 import Prelude ()
 import Prelude.Compat
 
-import Data.Version (Version(..))
+import Control.Arrow (first)
 
+import Data.Version (Version(..))
 import Data.Monoid
 import Data.Maybe (fromMaybe)
 import Data.List ((\\))
 import Data.Foldable
+import Data.Text (Text)
 import qualified Data.Text as T
 import System.Exit
 
@@ -21,6 +24,8 @@ import qualified Language.PureScript.Docs as Docs
 import Language.PureScript.Docs.AsMarkdown (codeToString)
 import qualified Language.PureScript.Publish as Publish
 import qualified Language.PureScript.Publish.ErrorsWarnings as Publish
+
+import Web.Bower.PackageMeta (parsePackageName)
 
 import TestUtils
 
@@ -37,7 +42,7 @@ main = pushd "examples/docs" $ do
   case res of
     Left e -> Publish.printErrorToStdout e >> exitFailure
     Right Docs.Package{..} ->
-      forM_ testCases $ \(P.moduleNameFromString . T.pack -> mn, pragmas) ->
+      forM_ testCases $ \(P.moduleNameFromString -> mn, pragmas) ->
         let mdl = takeJust ("module not found in docs: " ++ T.unpack (P.runModuleName mn))
                           (find ((==) mn . Docs.modName) pkgModules)
         in forM_ pragmas (`runAssertionIO` mdl)
@@ -49,25 +54,31 @@ takeJust msg = fromMaybe (error msg)
 data Assertion
   -- | Assert that a particular declaration is documented with the given
   -- children
-  = ShouldBeDocumented P.ModuleName String [String]
+  = ShouldBeDocumented P.ModuleName Text [Text]
   -- | Assert that a particular declaration is not documented
-  | ShouldNotBeDocumented P.ModuleName String
+  | ShouldNotBeDocumented P.ModuleName Text
   -- | Assert that a particular declaration exists, but without a particular
   -- child.
-  | ChildShouldNotBeDocumented P.ModuleName String String
+  | ChildShouldNotBeDocumented P.ModuleName Text Text
   -- | Assert that a particular declaration has a particular type class
   -- constraint.
-  | ShouldBeConstrained P.ModuleName String String
+  | ShouldBeConstrained P.ModuleName Text Text
   -- | Assert that a particular typeclass declaration has a functional
   -- dependency list.
-  | ShouldHaveFunDeps P.ModuleName String [([String],[String])]
+  | ShouldHaveFunDeps P.ModuleName Text [([Text],[Text])]
   -- | Assert that a particular value declaration exists, and its type
   -- satisfies the given predicate.
-  | ValueShouldHaveTypeSignature P.ModuleName String (ShowFn (P.Type -> Bool))
+  | ValueShouldHaveTypeSignature P.ModuleName Text (ShowFn (P.Type -> Bool))
   -- | Assert that a particular type alias exists, and its corresponding
   -- type, when rendered, matches a given string exactly
   -- fields: module, type synonym name, expected type
-  | TypeSynonymShouldRenderAs P.ModuleName String String
+  | TypeSynonymShouldRenderAs P.ModuleName Text Text
+  -- | Assert that a documented declaration includes a documentation comment
+  -- containing a particular string
+  | ShouldHaveDocComment P.ModuleName Text Text
+  -- | Assert that there should be some declarations re-exported from a
+  -- particular module in a particular package.
+  | ShouldHaveReExport (Docs.InPackage P.ModuleName)
   deriving (Show)
 
 newtype ShowFn a = ShowFn a
@@ -77,28 +88,34 @@ instance Show (ShowFn a) where
 
 data AssertionFailure
   -- | A declaration was not documented, but should have been
-  = NotDocumented P.ModuleName String
+  = NotDocumented P.ModuleName Text
   -- | A child declaration was not documented, but should have been
-  | ChildrenNotDocumented P.ModuleName String [String]
+  | ChildrenNotDocumented P.ModuleName Text [Text]
   -- | A declaration was documented, but should not have been
-  | Documented P.ModuleName String
+  | Documented P.ModuleName Text
   -- | A child declaration was documented, but should not have been
-  | ChildDocumented P.ModuleName String String
+  | ChildDocumented P.ModuleName Text Text
   -- | A constraint was missing.
-  | ConstraintMissing P.ModuleName String String
+  | ConstraintMissing P.ModuleName Text Text
   -- | A functional dependency was missing.
-  | FunDepMissing P.ModuleName String [([String], [String])]
+  | FunDepMissing P.ModuleName Text [([Text], [Text])]
   -- | A declaration had the wrong "type" (ie, value, type, type class)
   -- Fields: declaration title, expected "type", actual "type".
-  | WrongDeclarationType P.ModuleName String String String
+  | WrongDeclarationType P.ModuleName Text Text Text
   -- | A value declaration had the wrong type (in the sense of "type
   -- checking"), eg, because the inferred type was used when the explicit type
   -- should have been.
   -- Fields: module name, declaration name, actual type.
-  | ValueDeclarationWrongType P.ModuleName String P.Type
+  | ValueDeclarationWrongType P.ModuleName Text P.Type
   -- | A Type synonym has been rendered in an unexpected format
   -- Fields: module name, declaration name, expected rendering, actual rendering
-  | TypeSynonymMismatch P.ModuleName String String String
+  | TypeSynonymMismatch P.ModuleName Text Text Text
+  -- | A doc comment was not found or did not match what was expected
+  -- Fields: module name, expected substring, actual comments
+  | DocCommentMissing P.ModuleName Text (Maybe Text)
+  -- | A module was missing re-exports from a particular module.
+  -- Fields: module name, expected re-export, actual re-exports.
+  | ReExportMissing P.ModuleName (Docs.InPackage P.ModuleName) [Docs.InPackage P.ModuleName]
   deriving (Show)
 
 data AssertionResult
@@ -135,75 +152,84 @@ runAssertion assertion Docs.Module{..} =
           Fail (NotDocumented mn decl)
 
     ShouldBeConstrained mn decl tyClass ->
-      case find ((==) decl . Docs.declTitle) (declarationsFor mn) of
-        Nothing ->
-          Fail (NotDocumented mn decl)
-        Just Docs.Declaration{..} ->
-          case declInfo of
-            Docs.ValueDeclaration ty ->
-              if checkConstrained ty tyClass
-                then Pass
-                else Fail (ConstraintMissing mn decl tyClass)
-            _ ->
-              Fail (WrongDeclarationType mn decl "value"
-                     (Docs.declInfoToString declInfo))
+      findDecl mn decl $ \Docs.Declaration{..} ->
+        case declInfo of
+          Docs.ValueDeclaration ty ->
+            if checkConstrained ty tyClass
+              then Pass
+              else Fail (ConstraintMissing mn decl tyClass)
+          _ ->
+            Fail (WrongDeclarationType mn decl "value"
+                   (Docs.declInfoToString declInfo))
 
     ShouldHaveFunDeps mn decl fds ->
-      case find ((==) decl . Docs.declTitle) (declarationsFor mn) of
-        Nothing ->
-          Fail (NotDocumented mn decl)
-        Just Docs.Declaration{..} ->
-          case declInfo of
-            Docs.TypeClassDeclaration _ _ fundeps ->
-              if fundeps == fds
-                then Pass
-                else Fail (FunDepMissing mn decl fds)
-            _ ->
-              Fail (WrongDeclarationType mn decl "value"
-                     (Docs.declInfoToString declInfo))
+      findDecl mn decl $ \Docs.Declaration{..} ->
+        case declInfo of
+          Docs.TypeClassDeclaration _ _ fundeps ->
+            if fundeps == fds
+              then Pass
+              else Fail (FunDepMissing mn decl fds)
+          _ ->
+            Fail (WrongDeclarationType mn decl "value"
+                   (Docs.declInfoToString declInfo))
 
     ValueShouldHaveTypeSignature mn decl (ShowFn tyPredicate) ->
-      case find ((==) decl . Docs.declTitle) (declarationsFor mn) of
-        Nothing ->
-          Fail (NotDocumented mn decl)
-        Just Docs.Declaration{..} ->
-          case declInfo of
-            Docs.ValueDeclaration ty ->
-              if tyPredicate ty
-                then Pass
-                else Fail
-                  (ValueDeclarationWrongType mn decl ty)
-            _ ->
-              Fail (WrongDeclarationType mn decl "value"
-                     (Docs.declInfoToString declInfo))
+      findDecl mn decl $ \Docs.Declaration{..} ->
+        case declInfo of
+          Docs.ValueDeclaration ty ->
+            if tyPredicate ty
+              then Pass
+              else Fail
+                (ValueDeclarationWrongType mn decl ty)
+          _ ->
+            Fail (WrongDeclarationType mn decl "value"
+                   (Docs.declInfoToString declInfo))
 
     TypeSynonymShouldRenderAs mn decl expected ->
-      case find ((==) decl . Docs.declTitle) (declarationsFor mn) of
-        Nothing ->
-          Fail (NotDocumented mn decl)
-        Just Docs.Declaration{..} ->
-          case declInfo of
-            Docs.TypeSynonymDeclaration [] ty ->
-              let actual = codeToString (Docs.renderType ty) in
-              if actual == expected
-                 then Pass
-                 else Fail (TypeSynonymMismatch mn decl expected actual)
-            _ ->
-              Fail (WrongDeclarationType mn decl "synonym"
-                    (Docs.declInfoToString declInfo))
+      findDecl mn decl $ \Docs.Declaration{..} ->
+        case declInfo of
+          Docs.TypeSynonymDeclaration [] ty ->
+            let actual = codeToString (Docs.renderType ty) in
+            if actual == expected
+               then Pass
+               else Fail (TypeSynonymMismatch mn decl expected actual)
+          _ ->
+            Fail (WrongDeclarationType mn decl "synonym"
+                  (Docs.declInfoToString declInfo))
+
+    ShouldHaveDocComment mn decl expected ->
+      findDecl mn decl $ \Docs.Declaration{..} ->
+        if maybe False (expected `T.isInfixOf`) declComments
+          then Pass
+          else Fail (DocCommentMissing mn decl declComments)
+
+    ShouldHaveReExport reExp ->
+      let
+        reExps = map fst modReExports
+      in
+        if reExp `elem` reExps
+          then Pass
+          else Fail (ReExportMissing modName reExp reExps)
 
   where
   declarationsFor mn =
     if mn == modName
       then modDeclarations
-      else fromMaybe [] (lookup mn modReExports)
+      else fromMaybe [] (lookup mn (map (first Docs.ignorePackage) modReExports))
 
   findChildren title =
     fmap childrenTitles . find ((==) title . Docs.declTitle)
 
+  findDecl mn title f =
+      case find ((==) title . Docs.declTitle) (declarationsFor mn) of
+        Nothing ->
+          Fail (NotDocumented mn title)
+        Just decl ->
+          f decl
+
   childrenTitles = map Docs.cdeclTitle . Docs.declChildren
 
-checkConstrained :: P.Type -> String -> Bool
+checkConstrained :: P.Type -> Text -> Bool
 checkConstrained ty tyClass =
   -- Note that we don't recurse on ConstrainedType if none of the constraints
   -- match; this is by design, as constraints should be moved to the front
@@ -217,7 +243,7 @@ checkConstrained ty tyClass =
       False
   where
   matches className =
-    (==) className . T.unpack . P.runProperName . P.disqualify . P.constraintClass
+    (==) className . P.runProperName . P.disqualify . P.constraintClass
 
 runAssertionIO :: Assertion -> Docs.Module -> IO ()
 runAssertionIO assertion mdl = do
@@ -228,7 +254,7 @@ runAssertionIO assertion mdl = do
       putStrLn ("Failed: " <> show reason)
       exitFailure
 
-testCases :: [(String, [Assertion])]
+testCases :: [(Text, [Assertion])]
 testCases =
   [ ("Example",
       [ -- From dependencies
@@ -238,7 +264,12 @@ testCases =
         -- From local files
       , ShouldBeDocumented    (n "Example2") "one" []
       , ShouldNotBeDocumented (n "Example2") "two"
+
+        -- Re-exports
+      , ShouldHaveReExport (Docs.FromDep (pkg "purescript-prelude") (n "Prelude"))
+      , ShouldHaveReExport (Docs.Local (n "Example2"))
       ])
+
   , ("Example2",
       [ ShouldBeDocumented (n "Example2") "one" []
       , ShouldBeDocumented (n "Example2") "two" []
@@ -319,10 +350,15 @@ testCases =
       , ValueShouldHaveTypeSignature (n "TypeOpAliases") "test4" (renderedType "forall a b c d. ((a ~> b) ~> c) ~> d")
       , ValueShouldHaveTypeSignature (n "TypeOpAliases") "third" (renderedType "forall a b c. a × b × c -> c")
       ])
+
+  , ("DocComments",
+      [ ShouldHaveDocComment (n "DocComments") "example" "    example == 0"
+      ])
   ]
 
   where
   n = P.moduleNameFromString . T.pack
+  pkg str = let Right p = parsePackageName str in p
 
   hasTypeVar varName =
     getAny . P.everythingOnTypes (<>) (Any . isVar varName)

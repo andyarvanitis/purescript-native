@@ -133,7 +133,9 @@ skipped :: [String]
 skipped =
   [ "NumberLiterals.purs" -- unreliable float comparison, test manually
   , "FunWithFunDeps.purs" -- requires FFI
-  , "SolvingIsSymbol.purs"
+  , "SolvingAppendSymbol.purs"  -- TODO: depend on new package needing porting
+  , "SolvingCompareSymbol.purs" --
+  , "SolvingIsSymbol.purs"      --
   , "StringEscapes.purs"
   ]
 
