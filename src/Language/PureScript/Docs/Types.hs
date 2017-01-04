@@ -10,6 +10,7 @@ import Control.Arrow (first, (***))
 import Control.Monad (when)
 import Control.Monad.Error.Class (catchError)
 
+import Data.Monoid ((<>))
 import Data.Aeson ((.=))
 import Data.Aeson.BetterErrors
 import Data.ByteString.Lazy (ByteString)
@@ -358,8 +359,6 @@ displayPackageError e = case e of
     "Invalid kind: \"" <> str <> "\""
   InvalidDataDeclType str ->
     "Invalid data declaration type: \"" <> str <> "\""
-  where
-  (<>) = T.append
 
 instance A.FromJSON a => A.FromJSON (Package a) where
   parseJSON = toAesonParser displayPackageError
@@ -413,7 +412,7 @@ asReExport =
 
 asInPackage :: Parse BowerError a -> Parse BowerError (InPackage a)
 asInPackage inner =
-  build <$> key "package" (perhaps (withString parsePackageName))
+  build <$> key "package" (perhaps (withText parsePackageName))
         <*> key "item" inner
   where
   build Nothing = Local
@@ -468,8 +467,8 @@ asTypeArguments = eachInArray asTypeArgument
   where
   asTypeArgument = (,) <$> nth 0 asText <*> nth 1 (perhaps asKind)
 
-asKind :: Parse e P.Kind
-asKind = fromAesonParser
+asKind :: Parse PackageError P.Kind
+asKind = P.kindFromJSON .! InvalidKind
 
 asType :: Parse e P.Type
 asType = fromAesonParser
@@ -532,7 +531,7 @@ asBookmark =
 
 asResolvedDependencies :: Parse PackageError [(PackageName, Version)]
 asResolvedDependencies =
-  eachInObjectWithKey (mapLeft ErrorInPackageMeta . parsePackageName . T.unpack) asVersion
+  eachInObjectWithKey (mapLeft ErrorInPackageMeta . parsePackageName) asVersion
   where
   mapLeft f (Left x) = Left (f x)
   mapLeft _ (Right x) = Right x
@@ -557,7 +556,7 @@ instance A.ToJSON a => A.ToJSON (Package a) where
       , "versionTag"           .= pkgVersionTag
       , "modules"              .= pkgModules
       , "bookmarks"            .= map (fmap (first P.runModuleName)) pkgBookmarks
-      , "resolvedDependencies" .= assocListToJSON (T.pack . runPackageName)
+      , "resolvedDependencies" .= assocListToJSON runPackageName
                                                   (T.pack . showVersion)
                                                   pkgResolvedDependencies
       , "github"               .= pkgGithub
