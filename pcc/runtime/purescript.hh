@@ -187,6 +187,7 @@ class any {
 
   template <size_t N>
   any(const char (&val)[N]) noexcept : tag(Tag::StringLiteral), r(val) {}
+  any(const char * val) : tag(Tag::String), s(make_managed<string>(val)) {}
   any(char * val) : tag(Tag::String), s(make_managed<string>(val)) {}
 
   any(const string& val) : tag(Tag::String), s(make_managed<string>(val)) {}
