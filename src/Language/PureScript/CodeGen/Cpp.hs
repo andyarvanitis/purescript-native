@@ -52,11 +52,13 @@ import Language.PureScript.Comments
 import Language.PureScript.CoreFn
 import Language.PureScript.Names
 import Language.PureScript.Options
+import Language.PureScript.PSString (PSString, mkString)
 import Language.PureScript.Sugar.TypeClasses (superClassDictionaryNames)
 import Language.PureScript.Traversals (sndM)
 
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.Environment as E
+import Language.PureScript.Label (runLabel)
 import qualified Language.PureScript.Pretty.Cpp as P
 import qualified Language.PureScript.Types as T
 
@@ -455,8 +457,8 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
       CppMapLiteral Record $
       (\(k, v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) (origFields ++ updatedFields)
     where
-    allKeys :: T.Type -> [Text]
-    allKeys (T.TypeApp (T.TypeConstructor _) r@(T.RCons {})) = fst <$> (fst $ T.rowToList r)
+    allKeys :: T.Type -> [PSString]
+    allKeys (T.TypeApp (T.TypeConstructor _) r@(T.RCons {})) = runLabel . fst <$> (fst $ T.rowToList r)
     allKeys (T.ForAll _ t _) = allKeys t
     allKeys _ = error "Not a recognized row type"
   valueToCpp (ObjectUpdate _ _ _) = error $ "Bad Type in object update!"
@@ -485,7 +487,9 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname))
         in return . CppMapLiteral Instance $
-           zip (CppSymbol <$> (sort $ superClassDictionaryNames constraints) ++ (fst <$> fns)) args'
+           zip
+             (CppSymbol . mkString <$> (sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
+             args'
       Var _ (Qualified (Just _) _) -> applied f args' curriedName'
       _ -> applied f args' id
     where
@@ -567,7 +571,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     go _ _ _ = error "Invalid arguments to bindersToCpp"
     failedPatternError :: [Text] -> Cpp
     failedPatternError _ =
-      CppThrow $ CppApp (CppVar "runtime_error") [CppStringLiteral errorMessage]
+      CppThrow $ CppApp (CppVar "runtime_error") [CppStringLiteral $ mkString errorMessage]
     errorMessage :: Text
     errorMessage =
       "Failed pattern match" <>
@@ -668,7 +672,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     return [CppIfElse (CppUnary Not (CppVar varName)) (CppBlock done) Nothing]
   literalToBinderCpp varName done (ObjectLiteral bs) = go done bs
     where
-    go :: [Cpp] -> [(Text, Binder Ann)] -> m [Cpp]
+    go :: [Cpp] -> [(PSString, Binder Ann)] -> m [Cpp]
     go done' [] = return done'
     go done' ((prop, binder):bs') = do
       propVar <- freshName
@@ -840,7 +844,7 @@ optIndexers classes = everywhereOnCpp dictIndexerToEnum
   dictIndexerToEnum :: Cpp -> Cpp
   dictIndexerToEnum (CppMapGet (CppSymbol prop) dict)
     | Just cls <- lookup dict classes =
-      let index = CppAccessor (CppVar $ safeName prop) cls
+      let index = CppAccessor (CppVar . safeName $ P.utf16Text prop) cls
       in CppMapGet index dict
   dictIndexerToEnum cpp = cpp
 
@@ -894,11 +898,11 @@ convertIfPrimFn (Just ty) (CppFunction name params _ qs body)
 convertIfPrimFn _ cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
-allSymbols :: [Cpp] -> [Text]
+allSymbols :: [Cpp] -> [PSString]
 ---------------------------------------------------------------------------------------------------
 allSymbols cpps = nub $ concatMap (everythingOnCpp (++) symbols) cpps
   where
-  symbols :: Cpp -> [Text]
+  symbols :: Cpp -> [PSString]
   symbols (CppSymbol s) = [s]
   symbols _ = []
 

@@ -20,6 +20,7 @@ module Language.PureScript.Pretty.Cpp
   ( dotsTo
   , linebreak
   , prettyPrintCpp
+  , utf16Text
   ) where
 
 import Prelude.Compat
@@ -44,6 +45,7 @@ import Language.PureScript.Comments
 import Language.PureScript.CodeGen.Cpp.Common
 import qualified Language.PureScript.Constants as C
 import Language.PureScript.Pretty.Common (PrinterState(..), intercalate, parensT)
+import Language.PureScript.PSString (PSString, decodeString, decodeStringEither)
 
 -- |
 -- Get the current indentation level
@@ -80,9 +82,12 @@ literals = mkPattern' match
   match (CppNumericLiteral (Left n)) = return $ show' n
   match (CppNumericLiteral n) = return $ either show' show' n
   match (CppStringLiteral s)
-    | T.all isAscii s = return $ string s
-  match (CppStringLiteral s) = return $ "u8" <> string s
-  match (CppCharLiteral c) = return $ "'" <> T.singleton c <> "'"
+    | Just s' <- decodeString s
+    , T.all isAscii s' = return $ string s'
+  match (CppStringLiteral s) = return $ "u8" <> string (utf16Text s)
+  match (CppCharLiteral c)
+    | isAscii c = return $ "'" <> encodeChar c <> "'"
+  match (CppCharLiteral c) = return $ "U'" <> T.singleton c <> "'"
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
   match (CppArrayLiteral []) = return $ runType arrayType <> "{}"
@@ -263,8 +268,8 @@ literals = mkPattern' match
       | Empty <- op = "empty"
       | otherwise = error $ "Incorrect match on unary " <> show op
   match (CppVar ident) = return $ renderName ident
-  match (CppSymbol ident) = return $ "symbol" <> parensT (safeName ident)
-  match (CppDefineSymbol ident) = return $ "define_symbol" <> parensT (safeName ident)
+  match (CppSymbol ident) = return $ "symbol" <> parensT (safeSymbol ident)
+  match (CppDefineSymbol ident) = return $ "define_symbol" <> parensT (safeSymbol ident)
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction (ident, typ) qs value) =
     mconcat <$> sequence
@@ -392,18 +397,23 @@ literals = mkPattern' match
 
 string :: Text -> Text
 string s = "\"" <> T.concatMap encodeChar s <> "\""
-  where
-  encodeChar :: Char -> Text
-  encodeChar '\0' = "\\0"
-  encodeChar '\b' = "\\b"
-  encodeChar '\t' = "\\t"
-  encodeChar '\n' = "\\n"
-  encodeChar '\v' = "\\v"
-  encodeChar '\f' = "\\f"
-  encodeChar '\r' = "\\r"
-  encodeChar '"'  = "\\\""
-  encodeChar '\\' = "\\\\"
-  encodeChar c = T.singleton c
+
+encodeChar :: Char -> Text
+encodeChar '\0' = "\\0"
+encodeChar '\b' = "\\b"
+encodeChar '\t' = "\\t"
+encodeChar '\n' = "\\n"
+encodeChar '\v' = "\\v"
+encodeChar '\f' = "\\f"
+encodeChar '\r' = "\\r"
+encodeChar '"'  = "\\\""
+encodeChar '\\' = "\\\\"
+encodeChar c = T.singleton c
+
+-- Note: Any lone surrogates will be replaced with U+FFFD
+--
+utf16Text :: PSString -> Text
+utf16Text = T.pack . map (either (chr . fromIntegral) id) . decodeStringEither
 
 accessor :: Pattern PrinterState Cpp (Text, Cpp)
 accessor = mkPattern match

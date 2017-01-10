@@ -28,6 +28,7 @@ import Control.Monad.Identity
 import Data.Text (Text)
 import Language.PureScript.Comments
 import Language.PureScript.CodeGen.Cpp.Types
+import Language.PureScript.PSString (PSString)
 import Language.PureScript.Traversals
 
 -- |
@@ -150,7 +151,7 @@ data Cpp
   -- |
   -- A string literal
   --
-  | CppStringLiteral Text
+  | CppStringLiteral PSString
   -- |
   -- A character literal
   --
@@ -222,11 +223,11 @@ data Cpp
   -- |
   -- Unique system-wide name/constant
   --
-  | CppSymbol Text
+  | CppSymbol PSString
   -- |
   -- Define unique system-wide name/constant
   --
-  | CppDefineSymbol Text
+  | CppDefineSymbol PSString
   -- |
   -- A block of expressions in braces
   --

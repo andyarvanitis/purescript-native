@@ -139,7 +139,6 @@ inlineOperator (m, op) f = everywhereOnCpp convert
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
   isOp (CppAccessor (CppVar longForm) (CppVar m')) = m == m' && longForm == safeName op
-  isOp (CppIndexer (CppStringLiteral op') (CppVar m')) = m == m' && op == op'
   isOp _ = False
 
 inlineCommonOperators :: Cpp -> Cpp
