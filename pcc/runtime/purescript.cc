@@ -70,7 +70,7 @@ any::operator size_t() const {
   return static_cast<size_t>(sz);
 }
 
-any::operator cstring() const {
+any::operator const char *() const {
   const any& variant = unthunkVariant(*this);
   if (variant.tag == Tag::StringLiteral) {
     return variant.r;
@@ -144,10 +144,10 @@ auto any::contains(const Private::Symbol key) const -> bool {
 
 #define DEFINE_CSTR_COMPARISON_OPERATOR(op) \
   auto operator op (const any& lhs, const char * rhs) -> bool { \
-    return strcmp(cast<cstring>(lhs), rhs) op 0; \
+    return strcmp(cast<const char *>(lhs), rhs) op 0; \
   } \
   auto operator op (const char * lhs, const any& rhs) -> bool { \
-    return strcmp(lhs, cast<cstring>(rhs)) op 0; \
+    return strcmp(lhs, cast<const char *>(rhs)) op 0; \
   }
 
 #define DEFINE_COMPARISON_OPERATOR(op) \
