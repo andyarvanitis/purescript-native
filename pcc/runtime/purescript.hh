@@ -158,7 +158,7 @@ class any {
     mutable thunk                 t;
     mutable int                   i;
     mutable double                d;
-    mutable char                  c;
+    mutable char32_t              c;
     mutable bool                  b;
     mutable cstring               r;
     mutable fn                    f;
@@ -178,10 +178,9 @@ class any {
     assert(val >= std::numeric_limits<decltype(i)>::min() &&
            val <= std::numeric_limits<decltype(i)>::max());
   }
-
   any(const double val) noexcept : tag(Tag::Double), d(val) {}
+  any(const char32_t val) noexcept : tag(Tag::Character), c(val) {}
   any(const char val) noexcept : tag(Tag::Character), c(val) {}
-  any(const char32_t val) noexcept : tag(Tag::Integer), i(val) {}
 
   template <typename T, typename = typename std::enable_if<std::is_same<bool,T>::value>::type>
   any(const T val) noexcept : tag(Tag::Boolean), b(val) {}
@@ -335,6 +334,7 @@ class any {
   operator int() const;
   operator double() const;
   operator bool() const;
+  operator char32_t() const;
   operator char() const;
   operator size_t() const;
   operator const char *() const;

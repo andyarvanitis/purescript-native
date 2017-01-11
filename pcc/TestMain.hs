@@ -74,7 +74,7 @@ main = do
     when testCaseDirExists $ callProcess "cp" ["-R", testCaseDir, srcDir]
 
     callProcess "make" ["clean"]
-    callProcess "make" ["debug", "-Werror", "-j2"]
+    callProcess "make" ["debug", "CXXFLAGS=-Werror", "-j2"]
     --
     -- Run C++ files
     --
@@ -136,6 +136,7 @@ skipped =
   , "SolvingAppendSymbol.purs"  -- TODO: depend on new package needing porting
   , "SolvingCompareSymbol.purs" --
   , "SolvingIsSymbol.purs"      --
+  , "StringEdgeCases.purs"
   , "StringEscapes.purs"
   ]
 

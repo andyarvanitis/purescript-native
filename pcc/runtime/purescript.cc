@@ -60,8 +60,14 @@ any::operator bool() const {
   RETURN_VALUE(Tag::Boolean, b,)
 }
 
-any::operator char() const {
+any::operator char32_t() const {
   RETURN_VALUE(Tag::Character, c,)
+}
+
+any::operator char() const {
+  const auto val = cast<decltype(c)>(*this);
+  assert(val <= std::numeric_limits<char>::max());
+  return static_cast<char>(val);
 }
 
 any::operator size_t() const {
@@ -197,7 +203,7 @@ auto operator+(const any& lhs_, const any& rhs_) -> any {
   switch (lhs.tag) {
     case any::Tag::Integer:       assert(lhs.tag == any::Tag::Integer);   return lhs.i + rhs.i;
     case any::Tag::Double:        assert(lhs.tag == any::Tag::Double);    return lhs.d + rhs.d;
-    case any::Tag::Character:     assert(lhs.tag == any::Tag::Character); return any(char(lhs.c + rhs.c));
+    case any::Tag::Character:     assert(lhs.tag == any::Tag::Character); return decltype(any::c){lhs.c + rhs.c};
     case any::Tag::StringLiteral:
       assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
       assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
@@ -230,7 +236,7 @@ auto operator-(const any& lhs_, const any& rhs_) -> any {
   switch (lhs.tag) {
     case any::Tag::Integer:   return lhs.i - rhs.i;
     case any::Tag::Double:    return lhs.d - rhs.d;
-    case any::Tag::Character: return any(char(lhs.c - rhs.c));
+    case any::Tag::Character: return decltype(any::c){lhs.c - rhs.c};
     default: assert(false && "Unsupported tag for '-' operator");
   }
   return nullptr;
@@ -243,7 +249,7 @@ auto operator*(const any& lhs_, const any& rhs_) -> any {
   switch (lhs.tag) {
     case any::Tag::Integer:   return lhs.i * rhs.i;
     case any::Tag::Double:    return lhs.d * rhs.d;
-    case any::Tag::Character: return any(char(lhs.c * rhs.c));
+    case any::Tag::Character: return decltype(lhs.c){lhs.c - rhs.c};
     default: assert(false && "Unsupported tag for '*' operator");
   }
   return nullptr;
@@ -256,7 +262,7 @@ auto operator/(const any& lhs_, const any& rhs_) -> any {
   switch (lhs.tag) {
     case any::Tag::Integer:   return lhs.i / rhs.i;
     case any::Tag::Double:    return lhs.d / rhs.d;
-    case any::Tag::Character: return any(char(lhs.c / rhs.c));
+    case any::Tag::Character: return decltype(any::c){lhs.c / rhs.c};
     default: assert(false && "Unsupported tag for '/' operator");
   }
   return nullptr;
@@ -268,7 +274,7 @@ auto operator%(const any& lhs_, const any& rhs_) -> any {
   assert(lhs.tag == rhs.tag);
   switch (lhs.tag) {
     case any::Tag::Integer:   return lhs.i % rhs.i;
-    case any::Tag::Character: return any(char(lhs.c % rhs.c));
+    case any::Tag::Character: return decltype(any::c){lhs.c % rhs.c};
     default: assert(false && "Unsupported tag for '%' operator");
   }
   return nullptr;
