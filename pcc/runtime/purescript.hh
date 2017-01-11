@@ -86,7 +86,6 @@ class any {
     Double,
     Character,
     Boolean,
-    StringLiteral,
     Function,
     EffFunction,
     RawPointer,
@@ -115,10 +114,10 @@ class any {
   template <size_t N>
   using data = std::array<const any, N>;
 
-  using array    = std::deque<any WITH_ALLOCATOR(any)>;
-  using fn       = auto (*)(const any&) -> any;
-  using eff_fn   = auto (*)() -> any;
-  using thunk    = auto (*)(const as_thunk) -> const any&;
+  using array  = std::deque<any WITH_ALLOCATOR(any)>;
+  using fn     = auto (*)(const any&) -> any;
+  using eff_fn = auto (*)() -> any;
+  using thunk  = auto (*)(const as_thunk) -> const any&;
 
   private:
   class Closure {
@@ -160,7 +159,6 @@ class any {
     mutable double                d;
     mutable char32_t              c;
     mutable bool                  b;
-    mutable cstring               r;
     mutable fn                    f;
     mutable eff_fn                e;
     mutable void *                v;
@@ -265,7 +263,6 @@ class any {
       case Tag::Double:         d = other.d;  break;
       case Tag::Character:      c = other.c;  break;
       case Tag::Boolean:        b = other.b;  break;
-      case Tag::StringLiteral:  r = other.r;  break;
       case Tag::Function:       f = other.f;  break;
       case Tag::EffFunction:    e = other.e;  break;
       case Tag::RawPointer:     v = other.v;  break;
@@ -337,6 +334,7 @@ class any {
   operator char32_t() const;
   operator char() const;
   operator size_t() const;
+  operator const string&() const;
   operator const char *() const;
   operator const array&() const;
 
@@ -357,28 +355,40 @@ class any {
   static auto unthunkVariant(const any&) -> const any&;
 
   #define DEFINE_OPERATOR(op) \
-    template <typename T> \
+    template <typename T, \
+              typename = typename std::enable_if<!std::is_same<T,any>::value && \
+                                                 !std::is_same<T,const char *>::value>::type> \
     inline friend auto operator op (const any& lhs, T rhs) -> T { \
-      return static_cast<T>(lhs) op rhs; \
+      return static_cast<typename std::add_lvalue_reference<typename std::add_const<T>::type >::type>(lhs) op rhs; \
     } \
-    template <typename T> \
+    template <typename T, \
+              typename = typename std::enable_if<!std::is_same<T,any>::value && \
+                                                 !std::is_same<T,const char *>::value>::type> \
     inline friend auto operator op (T lhs, const any& rhs) -> T { \
-      return lhs op static_cast<T>(rhs); \
+      return lhs op static_cast<typename std::add_lvalue_reference<typename std::add_const<T>::type >::type>(rhs); \
     } \
-    friend auto operator op (const any&, const any&) -> any;
+    friend auto operator op (const any&, const any&) -> any; \
 
   #define DEFINE_COMPARISON_OPERATOR(op) \
-    template <typename T> \
+    template <typename T, \
+              typename = typename std::enable_if<!std::is_same<T,any>::value && \
+                                                 !std::is_same<T,const char *>::value>::type> \
     inline friend auto operator op (const any& lhs, T rhs) -> bool { \
-      return static_cast<T>(lhs) op rhs; \
+      return static_cast<typename std::add_lvalue_reference<typename std::add_const<T>::type >::type>(lhs) op rhs; \
     } \
-    template <typename T> \
+    template <typename T, \
+              typename = typename std::enable_if<!std::is_same<T,any>::value && \
+                                                 !std::is_same<T,const char *>::value>::type> \
     inline friend auto operator op (T lhs, const any& rhs) -> bool { \
-      return lhs op static_cast<T>(rhs); \
+      return lhs op static_cast<typename std::add_lvalue_reference<typename std::add_const<T>::type >::type>(rhs); \
+    } \
+    inline friend auto operator op (const any& lhs, const char * rhs) -> bool { \
+      return static_cast<const string&>(lhs) op rhs; \
+    } \
+    inline friend auto operator op (const char * lhs, const any& rhs) -> bool { \
+      return lhs op static_cast<const string&>(rhs); \
     } \
     friend auto operator op (const any&, const any&) -> bool; \
-    friend auto operator op (const any&, const char * const) -> bool; \
-    friend auto operator op (const char * const, const any&) -> bool;
 
   DEFINE_COMPARISON_OPERATOR(==)
   DEFINE_COMPARISON_OPERATOR(!=)
@@ -393,8 +403,12 @@ class any {
   DEFINE_OPERATOR(/)
   DEFINE_OPERATOR(%)
 
-  friend auto operator+(const any& lhs, const char * const rhs) -> string;
-  friend auto operator+(const char * const lhs, const any& rhs) -> string;
+  inline friend auto operator+(const any& lhs, const char * rhs) -> string {
+    return static_cast<const string&>(lhs) + rhs;
+  }
+  inline friend auto operator+(const char * lhs, const any& rhs) -> string {
+    return lhs + static_cast<const string&>(rhs);
+  }
 
   friend auto operator-(const any&) -> any; // unary negate
 
