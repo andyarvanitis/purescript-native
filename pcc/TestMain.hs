@@ -107,17 +107,22 @@ packages :: [String]
 -------------------------------------------------------------------------------
 packages =
   [ "eff"
-  , "prelude"
   , "assert"
-  , "st"
   , "console"
-  , "functions"
-  , "partial"
-  , "newtype"
   , "control"
+  , "foldable-traversable"
+  , "functions"
+  , "generics-rep"
   , "invariant"
   , "monoid"
-  , "generics-rep"
+  , "newtype"
+  , "partial"
+  , "prelude"
+  , "proxy"
+  , "st"
+  , "symbols"
+  , "type-equality"
+  , "typelevel-prelude"
   ]
 
 -------------------------------------------------------------------------------
@@ -133,11 +138,8 @@ skipped :: [String]
 skipped =
   [ "NumberLiterals.purs" -- unreliable float comparison, test manually
   , "FunWithFunDeps.purs" -- requires FFI
-  , "SolvingAppendSymbol.purs"  -- TODO: depend on new package needing porting
-  , "SolvingCompareSymbol.purs" --
-  , "SolvingIsSymbol.purs"      --
-  , "StringEdgeCases.purs"
-  , "StringEscapes.purs"
+  , "StringEdgeCases.purs" -- TODO: depends on new package needing porting
+  , "StringEscapes.purs" -- TODO: UTF16-specific
   ]
 
 logpath :: FilePath
