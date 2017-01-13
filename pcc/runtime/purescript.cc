@@ -60,23 +60,28 @@ any::operator bool() const {
   RETURN_VALUE(Tag::Boolean, b,)
 }
 
-any::operator char() const {
+any::operator char32_t() const {
   RETURN_VALUE(Tag::Character, c,)
 }
 
-any::operator size_t() const {
-  const auto sz = cast<int>(*this);
-  assert(sz >= 0);
-  return static_cast<size_t>(sz);
+any::operator char() const {
+  const auto val = static_cast<decltype(c)>(*this);
+  assert(val <= std::numeric_limits<char>::max());
+  return static_cast<char>(val);
 }
 
-any::operator cstring() const {
-  const any& variant = unthunkVariant(*this);
-  if (variant.tag == Tag::StringLiteral) {
-    return variant.r;
-  }
-  assert(variant.tag == Tag::String);
-  return variant.s->c_str();
+any::operator size_t() const {
+  const auto val = static_cast<decltype(i)>(*this);
+  assert(val >= 0);
+  return static_cast<size_t>(val);
+}
+
+any::operator const string&() const {
+  RETURN_VALUE(Tag::String, s, *)
+}
+
+any::operator const char *() const {
+  RETURN_VALUE(Tag::String, s->c_str(),)
 }
 
 any::operator const array&() const {
@@ -96,16 +101,16 @@ auto any::unthunkVariant(const any& a) -> const any& {
 }
 
 auto any::operator[](const size_t rhs) const -> const any& {
-  const auto& xs = cast<array>(*this);
+  const auto& xs = static_cast<const array&>(*this);
   return xs[rhs];
 }
 
 auto any::size() const -> size_t {
-  return cast<array>(*this).size();
+  return static_cast<const array&>(*this).size();
 }
 
 auto any::empty() const -> bool {
-  return cast<array>(*this).empty();
+  return static_cast<const array&>(*this).empty();
 }
 
 auto any::contains(const Private::Symbol key) const -> bool {
@@ -124,50 +129,17 @@ auto any::contains(const Private::Symbol key) const -> bool {
 // Operator helper macros
 //-----------------------------------------------------------------------------
 
-#define DEFINE_CSTR_EQUALS_OPERATOR() \
-  auto operator==(const any& lhs_, const char * rhs) -> bool { \
-    const any& lhs = any::unthunkVariant(lhs_); \
-    assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String); \
-    if (lhs.tag == any::Tag::StringLiteral) { \
-      return (lhs.r == rhs) || (strcmp(lhs.r, rhs) == 0); \
-    } \
-    return strcmp(lhs.s->c_str(), rhs) == 0; \
-  } \
-  auto operator==(const char * lhs, const any& rhs_) -> bool { \
-    const any& rhs = any::unthunkVariant(rhs_); \
-    assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String); \
-    if (rhs.tag == any::Tag::StringLiteral) { \
-      return (lhs == rhs.r) || (strcmp(lhs, rhs) == 0); \
-    } \
-    return strcmp(lhs, rhs.s->c_str()) == 0; \
-  }
-
-#define DEFINE_CSTR_COMPARISON_OPERATOR(op) \
-  auto operator op (const any& lhs, const char * rhs) -> bool { \
-    return strcmp(cast<cstring>(lhs), rhs) op 0; \
-  } \
-  auto operator op (const char * lhs, const any& rhs) -> bool { \
-    return strcmp(lhs, cast<cstring>(rhs)) op 0; \
-  }
-
 #define DEFINE_COMPARISON_OPERATOR(op) \
-  auto operator op (const any& lhs_, const any& rhs_) -> bool { \
+  auto operator op (const any& lhs_, const any& rhs) -> bool { \
     const any& lhs = any::unthunkVariant(lhs_); \
-    const any& rhs = any::unthunkVariant(rhs_); \
     switch (lhs.tag) { \
-      case any::Tag::Integer:   assert(lhs.tag == any::Tag::Integer);   return lhs.i op rhs.i; \
-      case any::Tag::Double:    assert(lhs.tag == any::Tag::Double);    return lhs.d op rhs.d; \
-      case any::Tag::Character: assert(lhs.tag == any::Tag::Character); return lhs.c op rhs.c; \
-      case any::Tag::Boolean:   assert(lhs.tag == any::Tag::Boolean);   return lhs.b op rhs.b; \
-      case any::Tag::StringLiteral: \
-        assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String); \
-        assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String); \
-        return strcmp(lhs.r, rhs.tag == any::Tag::StringLiteral ? rhs.r : rhs.s->c_str()) op 0; \
-      case any::Tag::String: \
-        assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String); \
-        assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String); \
-        return strcmp(lhs.s->c_str(), rhs.tag == any::Tag::StringLiteral ? rhs.r : rhs.s->c_str()) op 0; \
-      case any::Tag::Pointer:   return lhs.p op rhs.p; \
+      case any::Tag::Integer:    return lhs.i op static_cast<decltype(any::i)>(rhs); \
+      case any::Tag::Double:     return lhs.d op static_cast<decltype(any::d)>(rhs); \
+      case any::Tag::Character:  return lhs.c op static_cast<decltype(any::c)>(rhs); \
+      case any::Tag::Boolean:    return lhs.b op static_cast<decltype(any::b)>(rhs); \
+      case any::Tag::String:     return *lhs.s op static_cast<const string&>(rhs); \
+      case any::Tag::RawPointer: return lhs.v op cast<decltype(any::v)>(rhs); \
+      case any::Tag::Pointer:    return lhs.p op any::unthunkVariant(rhs).p; \
       default: assert(false && "Unsupported tag for operator " #op); \
     } \
     return false; \
@@ -184,91 +156,56 @@ DEFINE_COMPARISON_OPERATOR(<=)
 DEFINE_COMPARISON_OPERATOR(>)
 DEFINE_COMPARISON_OPERATOR(>=)
 
-DEFINE_CSTR_EQUALS_OPERATOR()
-DEFINE_CSTR_COMPARISON_OPERATOR(!=)
-DEFINE_CSTR_COMPARISON_OPERATOR(<)
-DEFINE_CSTR_COMPARISON_OPERATOR(<=)
-DEFINE_CSTR_COMPARISON_OPERATOR(>)
-DEFINE_CSTR_COMPARISON_OPERATOR(>=)
-
-auto operator+(const any& lhs_, const any& rhs_) -> any {
+auto operator+(const any& lhs_, const any& rhs) -> any {
   const any& lhs = any::unthunkVariant(lhs_);
-  const any& rhs = any::unthunkVariant(rhs_);
   switch (lhs.tag) {
-    case any::Tag::Integer:       assert(lhs.tag == any::Tag::Integer);   return lhs.i + rhs.i;
-    case any::Tag::Double:        assert(lhs.tag == any::Tag::Double);    return lhs.d + rhs.d;
-    case any::Tag::Character:     assert(lhs.tag == any::Tag::Character); return any(char(lhs.c + rhs.c));
-    case any::Tag::StringLiteral:
-      assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
-      assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
-      return rhs.tag == any::Tag::StringLiteral ? string(lhs.r) + rhs.r : lhs.r + *rhs.s;
-    case any::Tag::String:
-      assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
-      assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
-      return rhs.tag == any::Tag::StringLiteral ? *lhs.s + rhs.r : *lhs.s + *rhs.s;
+    case any::Tag::Integer:   return lhs.i + static_cast<decltype(any::i)>(rhs);
+    case any::Tag::Double:    return lhs.d + static_cast<decltype(any::d)>(rhs);
+    case any::Tag::Character: return decltype(any::c){lhs.c + static_cast<decltype(any::c)>(rhs)};
+    case any::Tag::String:    return *lhs.s + static_cast<const string&>(rhs);
     default: assert(false && "Unsupported tag for '+' operator");
   }
   return nullptr;
 }
 
-auto operator+(const any& lhs_, const char * rhs) -> string {
+auto operator-(const any& lhs_, const any& rhs) -> any {
   const any& lhs = any::unthunkVariant(lhs_);
-  assert(lhs.tag == any::Tag::StringLiteral || lhs.tag == any::Tag::String);
-  return lhs.tag == any::Tag::StringLiteral ? string(lhs.r) + rhs : *lhs.s + rhs;
-}
-
-auto operator+(const char * lhs, const any& rhs_) -> string {
-  const any& rhs = any::unthunkVariant(rhs_);
-  assert(rhs.tag == any::Tag::StringLiteral || rhs.tag == any::Tag::String);
-  return rhs.tag == any::Tag::StringLiteral ? lhs + string(rhs.r) : lhs + *rhs.s;
-}
-
-auto operator-(const any& lhs_, const any& rhs_) -> any {
-  const any& lhs = any::unthunkVariant(lhs_);
-  const any& rhs = any::unthunkVariant(rhs_);
-  assert(lhs.tag == rhs.tag);
   switch (lhs.tag) {
-    case any::Tag::Integer:   return lhs.i - rhs.i;
-    case any::Tag::Double:    return lhs.d - rhs.d;
-    case any::Tag::Character: return any(char(lhs.c - rhs.c));
+    case any::Tag::Integer:   return lhs.i - static_cast<decltype(any::i)>(rhs);
+    case any::Tag::Double:    return lhs.d - static_cast<decltype(any::d)>(rhs);
+    case any::Tag::Character: return decltype(any::c){lhs.c - static_cast<decltype(any::c)>(rhs)};
     default: assert(false && "Unsupported tag for '-' operator");
   }
   return nullptr;
 }
 
-auto operator*(const any& lhs_, const any& rhs_) -> any {
+auto operator*(const any& lhs_, const any& rhs) -> any {
   const any& lhs = any::unthunkVariant(lhs_);
-  const any& rhs = any::unthunkVariant(rhs_);
-  assert(lhs.tag == rhs.tag);
   switch (lhs.tag) {
-    case any::Tag::Integer:   return lhs.i * rhs.i;
-    case any::Tag::Double:    return lhs.d * rhs.d;
-    case any::Tag::Character: return any(char(lhs.c * rhs.c));
+    case any::Tag::Integer:   return lhs.i * static_cast<decltype(any::i)>(rhs);
+    case any::Tag::Double:    return lhs.d * static_cast<decltype(any::d)>(rhs);
+    case any::Tag::Character: return decltype(lhs.c){lhs.c - static_cast<decltype(any::c)>(rhs)};
     default: assert(false && "Unsupported tag for '*' operator");
   }
   return nullptr;
 }
 
-auto operator/(const any& lhs_, const any& rhs_) -> any {
+auto operator/(const any& lhs_, const any& rhs) -> any {
   const any& lhs = any::unthunkVariant(lhs_);
-  const any& rhs = any::unthunkVariant(rhs_);
-  assert(lhs.tag == rhs.tag);
   switch (lhs.tag) {
-    case any::Tag::Integer:   return lhs.i / rhs.i;
-    case any::Tag::Double:    return lhs.d / rhs.d;
-    case any::Tag::Character: return any(char(lhs.c / rhs.c));
+    case any::Tag::Integer:   return lhs.i / static_cast<decltype(any::i)>(rhs);
+    case any::Tag::Double:    return lhs.d / static_cast<decltype(any::d)>(rhs);
+    case any::Tag::Character: return decltype(any::c){lhs.c / static_cast<decltype(any::c)>(rhs)};
     default: assert(false && "Unsupported tag for '/' operator");
   }
   return nullptr;
 }
 
-auto operator%(const any& lhs_, const any& rhs_) -> any {
+auto operator%(const any& lhs_, const any& rhs) -> any {
   const any& lhs = any::unthunkVariant(lhs_);
-  const any& rhs = any::unthunkVariant(rhs_);
-  assert(lhs.tag == rhs.tag);
   switch (lhs.tag) {
-    case any::Tag::Integer:   return lhs.i % rhs.i;
-    case any::Tag::Character: return any(char(lhs.c % rhs.c));
+    case any::Tag::Integer:   return lhs.i % static_cast<decltype(any::i)>(rhs);
+    case any::Tag::Character: return decltype(any::c){lhs.c % static_cast<decltype(any::c)>(rhs)};
     default: assert(false && "Unsupported tag for '%' operator");
   }
   return nullptr;

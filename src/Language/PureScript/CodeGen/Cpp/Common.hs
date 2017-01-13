@@ -18,14 +18,16 @@
 
 module Language.PureScript.CodeGen.Cpp.Common where
 
-import Prelude.Compat hiding (all, any, concatMap, last, init, map, null)
+import Prelude.Compat hiding (all, any, concatMap, last, init, null)
 
 import Data.Char
-import Data.Text hiding (foldl1)
+import Data.Text hiding (foldl1, map)
+import qualified Data.Text as T
 import Data.Monoid ((<>))
 import qualified Language.PureScript.Constants as C
 import Language.PureScript.Crash
 import Language.PureScript.Names
+import Language.PureScript.PSString (PSString, decodeStringEither)
 
 -- |
 -- Convert an Ident into a valid C++11 identifier:
@@ -58,7 +60,13 @@ escaped :: Text -> Text
 escaped = escapeDoubleUnderscores . concatMap identCharToText
 
 dotsTo :: Char -> Text -> Text
-dotsTo chr' = map (\c -> if c == '.' then chr' else c)
+dotsTo chr' = T.map (\c -> if c == '.' then chr' else c)
+
+codePoints :: PSString -> String
+codePoints = map (either (chr . fromIntegral) id) . decodeStringEither
+
+safeSymbol :: PSString -> Text
+safeSymbol = T.concat . map identCharToText . codePoints
 
 -- |
 -- C++ actually reserves all identifiers containing double

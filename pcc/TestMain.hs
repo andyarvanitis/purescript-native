@@ -74,7 +74,7 @@ main = do
     when testCaseDirExists $ callProcess "cp" ["-R", testCaseDir, srcDir]
 
     callProcess "make" ["clean"]
-    callProcess "make" ["debug", "-Werror", "-j2"]
+    callProcess "make" ["debug", "CXXFLAGS=-Werror", "-j2"]
     --
     -- Run C++ files
     --
@@ -107,17 +107,22 @@ packages :: [String]
 -------------------------------------------------------------------------------
 packages =
   [ "eff"
-  , "prelude"
   , "assert"
-  , "st"
   , "console"
-  , "functions"
-  , "partial"
-  , "newtype"
   , "control"
+  , "foldable-traversable"
+  , "functions"
+  , "generics-rep"
   , "invariant"
   , "monoid"
-  , "generics-rep"
+  , "newtype"
+  , "partial"
+  , "prelude"
+  , "proxy"
+  , "st"
+  , "symbols"
+  , "type-equality"
+  , "typelevel-prelude"
   ]
 
 -------------------------------------------------------------------------------
@@ -133,10 +138,8 @@ skipped :: [String]
 skipped =
   [ "NumberLiterals.purs" -- unreliable float comparison, test manually
   , "FunWithFunDeps.purs" -- requires FFI
-  , "SolvingAppendSymbol.purs"  -- TODO: depend on new package needing porting
-  , "SolvingCompareSymbol.purs" --
-  , "SolvingIsSymbol.purs"      --
-  , "StringEscapes.purs"
+  , "StringEdgeCases.purs" -- TODO: depends on new package needing porting
+  , "StringEscapes.purs" -- TODO: UTF16-specific
   ]
 
 logpath :: FilePath

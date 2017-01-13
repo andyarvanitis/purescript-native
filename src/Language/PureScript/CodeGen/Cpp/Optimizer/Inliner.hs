@@ -111,6 +111,8 @@ inlineCommonValues = everywhereOnCpp convert
     | isDict' [semiringNumber, semiringInt] dict && isFn fnOne fn = CppNumericLiteral (Left 1)
     | isDict boundedBoolean dict && isFn fnBottom fn = CppBooleanLiteral False
     | isDict boundedBoolean dict && isFn fnTop fn = CppBooleanLiteral True
+  convert (CppApp (CppApp fn [dict]) [x])
+    | isDict ringInt dict && isFn fnNegate fn = CppUnary Negate x
   convert (CppApp fn [dict, x, y])
     | isDict semiringInt dict && isFn fnAdd fn = CppBinary Add x y
     | isDict semiringInt dict && isFn fnMultiply fn = CppBinary Multiply x y
@@ -130,6 +132,7 @@ inlineCommonValues = everywhereOnCpp convert
   fnDivide = (C.dataEuclideanRing, C.div)
   fnMultiply = (C.dataSemiring, C.mul)
   fnSubtract = (C.dataRing, C.sub)
+  fnNegate = (C.dataRing, C.negate)
 
 inlineOperator :: (Text, Text) -> (Cpp -> Cpp -> Cpp) -> Cpp -> Cpp
 inlineOperator (m, op) f = everywhereOnCpp convert
@@ -139,7 +142,6 @@ inlineOperator (m, op) f = everywhereOnCpp convert
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
   isOp (CppAccessor (CppVar longForm) (CppVar m')) = m == m' && longForm == safeName op
-  isOp (CppIndexer (CppStringLiteral op') (CppVar m')) = m == m' && op == op'
   isOp _ = False
 
 inlineCommonOperators :: Cpp -> Cpp
@@ -149,8 +151,6 @@ inlineCommonOperators = applyAll $
 
   , binary ringNumber opSub Subtract
   , unary  ringNumber opNegate Negate
-  , binary ringInt opSub Subtract
-  , unary  ringInt opNegate Negate
 
   , binary euclideanRingNumber opDiv Divide
   , binary euclideanRingInt opMod Modulus
