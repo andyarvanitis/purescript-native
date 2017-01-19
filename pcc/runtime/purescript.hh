@@ -449,13 +449,16 @@ inline auto cast(const any& a) ->
 
 template <typename T>
 inline auto cast(const any& a) ->
-    typename std::enable_if<std::is_same<T, any::array>::value, const T&>::type {
+    typename std::enable_if<std::is_same<T, string>::value ||
+                            std::is_same<T, any::array>::value, const T&>::type {
   return a;
 }
 
-template <typename T, typename = typename std::enable_if<std::is_class<T>::value>::type>
-inline auto cast(const any& a) ->
-    typename std::enable_if<!std::is_same<T, any::array>::value, T&>::type {
+template <typename T,
+          typename = typename std::enable_if<std::is_class<T>::value &&
+                                            !std::is_same<T,string>::value &&
+                                            !std::is_same<T,any::array>::value>::type>
+inline auto cast(const any& a) -> T& {
   return *static_cast<T*>(a.extractPointer(IF_DEBUG(Private::TagHelper<T>::tag)));
 }
 
