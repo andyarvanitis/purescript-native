@@ -12,6 +12,7 @@ import Control.Monad.Identity
 import Data.Aeson.TH
 import qualified Data.Map as M
 import Data.Text (Text)
+import Data.List.NonEmpty (NonEmpty(..))
 
 import Language.PureScript.AST.Binders
 import Language.PureScript.AST.Literals
@@ -43,7 +44,8 @@ data TypeSearch
 
 -- | A type of error messages
 data SimpleErrorMessage
-  = ErrorParsingFFIModule FilePath (Maybe Bundle.ErrorMessage)
+  = ModuleNotFound ModuleName 
+  | ErrorParsingFFIModule FilePath (Maybe Bundle.ErrorMessage)
   | ErrorParsingModule P.ParseError
   | MissingFFIModule ModuleName
   | MultipleFFIModules ModuleName [FilePath]
@@ -134,11 +136,14 @@ data SimpleErrorMessage
   | CaseBinderLengthDiffers Int [Binder]
   | IncorrectAnonymousArgument
   | InvalidOperatorInBinder (Qualified (OpName 'ValueOpName)) (Qualified Ident)
-  | DeprecatedRequirePath
   | CannotGeneralizeRecursiveFunction Ident Type
   | CannotDeriveNewtypeForData (ProperName 'TypeName)
   | ExpectedWildcard (ProperName 'TypeName)
   | CannotUseBindWithDo
+  -- | instance name, type class, expected argument count, actual argument count
+  | ClassInstanceArityMismatch Ident (Qualified (ProperName 'ClassName)) Int Int
+  -- | a user-defined warning raised by using the Warn type class
+  | UserDefinedWarning Type
   deriving (Show)
 
 -- | Error message hints, providing more detailed information about failure.
@@ -581,6 +586,11 @@ data Expr
   -- Partial record update
   --
   | ObjectUpdate Expr [(PSString, Expr)]
+  -- |
+  -- Object updates with nested support: `x { foo.bar = e }`
+  -- Replaced during desugaring into a `Let` and nested `ObjectUpdate`s
+  --
+  | ObjectUpdateNested Expr [(NonEmpty PSString, Expr)]
   -- |
   -- Function introduction
   --
