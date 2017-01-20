@@ -53,7 +53,9 @@ safeName name
   , any (=='.') name
   = "$" <> (escaped $ dotsTo '_' name)
 safeName name
-  | "_" `isPrefixOf` name = "$" <> escaped name
+  | Just ('_', rest) <- uncons name
+  , not (null rest)
+  , isUpper (T.head rest) = "_$" <> escaped rest
 safeName name = escaped name
 
 escaped :: Text -> Text
@@ -159,6 +161,7 @@ nameIsCppReserved name =
               , "dynamic_cast"
               , "else"
               , "enum"
+              , "errno"
               , "explicit"
               , "export"
               , "extern"
@@ -176,6 +179,7 @@ nameIsCppReserved name =
               , "make_managed"
               , "make_managed_and_finalized"
               , "managed"
+              , "math_errhandling"
               , "mutable"
               , "namespace"
               , "new"
@@ -199,6 +203,7 @@ nameIsCppReserved name =
               , "requires"
               , "return"
               , "runtime_error"
+              , "setjmp"
               , "short"
               , "signed"
               , "sizeof"
@@ -226,6 +231,7 @@ nameIsCppReserved name =
               , "unknown_size"
               , "unsigned"
               , "using"
+              , "va_end"
               , "virtual"
               , "void"
               , "volatile"
