@@ -146,3 +146,8 @@ getCtor = dataNS <> "::ctor"
 
 constAnyRef :: Maybe CppType
 constAnyRef = Just $ Any [Const, Ref]
+
+-- Prevents any optimization changes to type
+--
+alwaysType :: CppType -> Maybe CppType
+alwaysType t = Just . Primitive $ runType t

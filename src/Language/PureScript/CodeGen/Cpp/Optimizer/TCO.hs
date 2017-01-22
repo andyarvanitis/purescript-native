@@ -48,10 +48,9 @@ tco' = everywhereOnCpp convert
   copyVar' (arg, t) = (copyVar arg, t)
 
   convert :: Cpp -> Cpp
-
-  convert cpp@(CppVariableIntroduction (name, ty) qs (Just fn@CppLambda {})) =
+  convert cpp@(CppVariableIntroduction (name, ty) qs (Just lambda@CppLambda {})) =
     let
-      (argss, body', replace) = collectAllFunctionArgs [] id fn
+      (argss, body', replace) = collectAllLambdaArgs [] id lambda
     in case () of
       _ | isTailCall name body' ->
             let
@@ -59,29 +58,34 @@ tco' = everywhereOnCpp convert
             in
               CppVariableIntroduction (name, ty) qs (Just (replace (toLoop name allArgs body')))
         | otherwise -> cpp
-
-  convert fn@(CppFunction name (_:_) _ _ _) =
+  convert cpp@(CppFunction name _ _ _ _) =
     let
-      (argss, body', replace) = collectAllFunctionArgs [] id fn
+      (argss, body', replace) = collectAllFunctionArgs [] id cpp
     in case () of
       _ | isTailCall name body' ->
             let
               allArgs = fst <$> (concat $ reverse argss)
             in
               replace (toLoop name allArgs body')
-        | otherwise -> fn
-
+        | otherwise -> cpp
   convert cpp = cpp
 
-  collectAllFunctionArgs :: [[(Text, Maybe CppType)]] -> (Cpp -> Cpp) -> Cpp -> ([[(Text, Maybe CppType)]], Cpp, Cpp -> Cpp)
-  collectAllFunctionArgs allArgs f (CppFunction ident args rty qs (CppBlock (body@(CppReturn _):_))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction ident (map copyVar' args) rty qs (CppBlock [b]))) body
-  collectAllFunctionArgs allArgs f (CppFunction ident args rty qs body@(CppBlock _)) =
-    (args : allArgs, body, f . CppFunction ident (map copyVar' args) rty qs)
-  collectAllFunctionArgs allArgs f (CppReturn (CppLambda cs args rty (CppBlock [body]))) =
-    collectAllFunctionArgs (args : allArgs) (\b -> f (CppReturn (CppLambda cs (map copyVar' args) rty (CppBlock [b])))) body
-  collectAllFunctionArgs allArgs f (CppReturn (CppLambda cs args rty body@(CppBlock _))) =
+  collectAllLambdaArgs :: [[(Text, Maybe CppType)]] -> (Cpp -> Cpp) -> Cpp -> ([[(Text, Maybe CppType)]], Cpp, Cpp -> Cpp)
+  collectAllLambdaArgs allArgs f (CppLambda cs args rty (CppBlock (body@(CppReturn _):_))) =
+    collectAllLambdaArgs (args : allArgs) (\b -> f (CppLambda cs (map copyVar' args) rty (CppBlock [b]))) body
+  collectAllLambdaArgs allArgs f (CppLambda cs args rty body@(CppBlock _)) =
+    (args : allArgs, body, f . CppLambda cs (map copyVar' args) rty)
+  collectAllLambdaArgs allArgs f (CppReturn (CppLambda cs args rty (CppBlock [body]))) =
+    collectAllLambdaArgs (args : allArgs) (\b -> f (CppReturn (CppLambda cs (map copyVar' args) rty (CppBlock [b])))) body
+  collectAllLambdaArgs allArgs f (CppReturn (CppLambda cs args rty body@(CppBlock _))) =
     (args : allArgs, body, f . CppReturn . CppLambda cs (map copyVar' args) rty)
+  collectAllLambdaArgs allArgs f body = (allArgs, body, f)
+
+  collectAllFunctionArgs :: [[(Text, Maybe CppType)]] -> (Cpp -> Cpp) -> Cpp -> ([[(Text, Maybe CppType)]], Cpp, Cpp -> Cpp)
+  collectAllFunctionArgs allArgs f (CppFunction name args rty qs (CppBlock (body@(CppReturn _):_))) =
+    collectAllFunctionArgs (args : allArgs) (\b -> f (CppFunction name (map copyVar' args) rty qs (CppBlock [b]))) body
+  collectAllFunctionArgs allArgs f (CppFunction name args rty qs body@(CppBlock _)) =
+    (args : allArgs, body, f . CppFunction name (map copyVar' args) rty qs)
   collectAllFunctionArgs allArgs f body = (allArgs, body, f)
 
   isTailCall :: Text -> Cpp -> Bool
@@ -107,15 +111,26 @@ tco' = everywhereOnCpp convert
 
     countSelfCallsUnderFunctions :: Cpp -> Int
     countSelfCallsUnderFunctions (CppFunction _ _ _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
-    countSelfCallsUnderFunctions (CppLambda _ (_:_) _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
+    countSelfCallsUnderFunctions (CppLambda _ _ _ cpp') = everythingOnCpp (+) countSelfCalls cpp'
     countSelfCallsUnderFunctions _ = 0
 
     countSelfCallsWithFnArgs :: Cpp -> Int
-    countSelfCallsWithFnArgs ret = if isSelfCallWithFnArgs ident ret [] then 1 else 0
+    countSelfCallsWithFnArgs = go [] where
+      go acc (CppVar ident')
+        | ident == ident' && any hasFunction acc = 1
+      go acc (CppApp fn args) = go (args ++ acc) fn
+      go _ _ = 0
+
+    hasFunction :: Cpp -> Bool
+    hasFunction = Monoid.getAny . everythingOnCpp mappend (Monoid.Any . isFunction)
+      where
+      isFunction (CppFunction {}) = True
+      isFunction (CppLambda {}) = True
+      isFunction _ = False
 
   toLoop :: Text -> [Text] -> Cpp -> Cpp
   toLoop ident allArgs cpp = CppBlock $
-        map (\arg -> CppVariableIntroduction (arg, Just $ Any []) [] (Just (CppVar (copyVar arg)))) allArgs ++
+        map (\arg -> CppVariableIntroduction (arg, alwaysType (Auto [])) [] (Just (CppVar (copyVar arg)))) allArgs ++
         [ CppWhile (CppBooleanLiteral True) (CppBlock loop) ]
     where
     loop :: [Cpp]
@@ -129,7 +144,7 @@ tco' = everywhereOnCpp convert
         allArgumentValues = concat $ collectSelfCallArgs [] ret
       in
         CppBlock $ zipWith (\val arg ->
-                    CppVariableIntroduction (tcoVar arg, Just $ Any [Const]) [] (Just val)) allArgumentValues allArgs
+                    CppVariableIntroduction (tcoVar arg, alwaysType (Auto [Const])) [] (Just val)) allArgumentValues allArgs
                   ++ map (\arg ->
                     CppAssignment (CppVar arg) (CppVar (tcoVar arg))) allArgs
                   ++ [ CppContinue ]
@@ -142,14 +157,3 @@ tco' = everywhereOnCpp convert
   isSelfCall ident (CppApp (CppVar ident') _) = ident == ident'
   isSelfCall ident (CppApp fn _) = isSelfCall ident fn
   isSelfCall _ _ = False
-
-  isSelfCallWithFnArgs :: Text -> Cpp -> [Cpp] -> Bool
-  isSelfCallWithFnArgs ident (CppVar ident') args | ident == ident' && any hasFunction args = True
-  isSelfCallWithFnArgs ident (CppApp fn args) acc = isSelfCallWithFnArgs ident fn (args ++ acc)
-  isSelfCallWithFnArgs _ _ _ = False
-
-  hasFunction :: Cpp -> Bool
-  hasFunction = Monoid.getAny . everythingOnCpp mappend (Monoid.Any . isFunction)
-    where
-    isFunction (CppFunction {}) = True
-    isFunction _ = False
