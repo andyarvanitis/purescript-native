@@ -92,7 +92,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         E.dataConstructors env
   cpps' <- traverse (optimize $ namesmap ++ datamap) cpps
   foreignWrappers <- curriedForeigns
-  let optimized = (otherTransforms otherOpts . convertRecursiveRefs <$> cpps') ++ foreignWrappers
+  let optimized = (otherTransforms otherOpts . convertRecursiveLets <$> cpps') ++ foreignWrappers
   let moduleHeader =
         fileBegin mn "HH" ++
         P.linebreak ++

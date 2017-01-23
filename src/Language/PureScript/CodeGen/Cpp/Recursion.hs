@@ -13,127 +13,115 @@
 {-# LANGUAGE PatternGuards #-}
 
 module Language.PureScript.CodeGen.Cpp.Recursion
-  ( convertRecursiveRefs
+  ( convertRecursiveLets
   ) where
 
 import Prelude.Compat
 import Data.List
 import Data.Maybe (fromJust)
+import Data.Monoid ((<>))
 import Data.Text (Text)
 
 import Language.PureScript.CodeGen.Cpp.AST as AST
 import Language.PureScript.CodeGen.Cpp.File
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Comments (Comment(..))
+import qualified Language.PureScript.Pretty.Cpp as P
 
 -------------------------------------------------------------------------------------------------
-convertRecursiveRefs :: Cpp -> Cpp
+convertRecursiveLets :: Cpp -> Cpp
 -------------------------------------------------------------------------------------------------
-convertRecursiveRefs = everywhereOnCpp go
+convertRecursiveLets = everywhereOnCpp go
   where
   go :: Cpp -> Cpp
   go (CppFunction name args rty qs (CppBlock cpps)) =
-    CppFunction name args rty qs (CppBlock (convertRecursive cpps))
+    CppFunction name args rty qs (CppBlock (convertIfRecursive cpps))
   go (CppLambda cs args rty (CppBlock cpps)) =
-    CppLambda cs args rty (CppBlock (convertRecursive cpps))
+    CppLambda cs args rty (CppBlock (convertIfRecursive cpps))
   go cpp = cpp
-  convertRecursive :: [Cpp] -> [Cpp]
-  convertRecursive cpps
-    | hasRecursion cpps
-    = convertRecursiveRefs' cpps
+  convertIfRecursive :: [Cpp] -> [Cpp]
+  convertIfRecursive cpps
+    | names@(_:_) <- recNames cpps = convertRecursive names cpps
     where
-    hasRecursion :: [Cpp] -> Bool
-    hasRecursion cpps' = any (everythingOnCpp (||) hasRecursiveRef) cpps'
+    recNames :: [Cpp] -> [Text]
+    recNames cpps' = nub $ concatMap (everythingOnCpp (++) recRefs) cpps'
       where
-      valnames :: [Text]
-      valnames = concatMap (everythingOnCpp (++) valname) cpps'
-      valname :: Cpp -> [Text]
-      valname (CppFunction name' _ _ _ _) = [name']
-      valname (CppVariableIntroduction (name', _) _ _) = [name']
-      valname _ = []
-      hasRecursiveRef :: Cpp -> Bool
-      hasRecursiveRef (CppFunction _ _ _ _ body) = everythingOnCpp (||) ref body
-      hasRecursiveRef (CppVariableIntroduction _ _ (Just value)) = everythingOnCpp (||) ref value
-      hasRecursiveRef _ = False
-      ref :: Cpp -> Bool
-      ref (CppVar name')
-        | name' `elem` valnames = True
-      ref _ = False
-  convertRecursive cpp = cpp
+      recRefs :: Cpp -> [Text]
+      recRefs (CppVariableIntroduction _ qs (Just cpp))
+        | Recursive `elem` qs = everythingOnCpp (++) recRef cpp
+      recRefs _ = []
+      --
+      recRef :: Cpp -> [Text]
+      recRef (CppVar name') | name' `elem` possiblyRecNames = [name']
+      recRef _ = []
+      --
+      possiblyRecNames :: [Text]
+      possiblyRecNames = concatMap (everythingOnCpp (++) possiblyRecName) cpps'
+        where
+        possiblyRecName :: Cpp -> [Text]
+        possiblyRecName (CppVariableIntroduction (name', _) qs (Just _))
+          | Recursive `elem` qs = [name']
+        possiblyRecName _ = []
+  convertIfRecursive cpp = cpp
 
 -------------------------------------------------------------------------------------------------
-convertRecursiveRefs' :: [Cpp] -> [Cpp]
+convertRecursive :: [Text] -> [Cpp] -> [Cpp]
 -------------------------------------------------------------------------------------------------
-convertRecursiveRefs' cpps
-  | not $ null fns = dict : (accessor topdict <$> filteredFns allCpps) ++ cpps'
+convertRecursive names cpps
+  | not $ null lets
+    = defines ++
+      [letTable] ++
+      (everywhereOnCpp remRecLet <$> cpps) ++
+      undefines
   where
-  cpps' = everywhereOnCpp removeRec <$> cpps
-  allCpps = CppBlock cpps'
-  fns :: [(Text, Cpp)]
-  fns = toelem <$> concatMap (everythingOnCpp (++) recursive) cpps
-  filteredFns :: Cpp -> [(Text, Cpp)]
-  filteredFns cpp = filter (\(f, _) -> everythingOnCpp (||) (== CppVar f) cpp) fns
-  recursive :: Cpp -> [Cpp]
-  recursive cpp'@(CppFunction _ _ _ qs _)
-    | Recursive `elem` qs = [cpp']
-  recursive cpp'@(CppVariableIntroduction _ qs _)
-    | Recursive `elem` qs = [cpp']
-  recursive _ = []
-  removeRec :: Cpp -> Cpp
-  removeRec (CppFunction _ _ _ qs _)
-    | Recursive `elem` qs = CppNoOp
-  removeRec (CppVariableIntroduction _ qs _)
-    | Recursive `elem` qs = CppNoOp
-  removeRec cpp' = cpp'
-  replaceVar :: [(Text, Cpp)] -> Cpp -> Cpp
-  replaceVar rs = go
-    where
-    go (CppVar var)
-      | Just var' <- lookup var rs = var'
-    go cpp' = cpp'
-  dict :: Cpp
-  dict =
+  tableName :: Text
+  tableName = "let"
+  --
+  letTable :: Cpp
+  letTable =
     CppVariableIntroduction
-      (topdict, Just $ Any [Const])
+      (tableName, Just $ Any [Const])
       []
-      (Just $ CppDataLiteral ((\(f, cpp) -> CppComment [LineComment f] cpp) <$> fns))
-  accessed :: Text -> Text -> (Text, Cpp)
-  accessed dictname name =
+      (Just $ CppDataLiteral ((\(f, cpp) -> CppComment [LineComment f] cpp) <$> lets))
+  --
+  lets :: [(Text, Cpp)]
+  lets = tableItem <$> concatMap (everythingOnCpp (++) recLet) cpps
+  --
+  recLet :: Cpp -> [Cpp]
+  recLet cpp@(CppVariableIntroduction (name, _) _ (Just _))
+    | name `elem` names = [cpp]
+  recLet _ = []
+  --
+  remRecLet :: Cpp -> Cpp
+  remRecLet (CppVariableIntroduction (name, _) _ (Just _))
+    | name `elem` names = CppNoOp
+  remRecLet cpp = cpp
+  --
+  tableItem :: Cpp -> (Text, Cpp)
+  tableItem (CppVariableIntroduction (name, _) _ (Just body)) =
+    (name, maybeRemCaps . addItemArg $ CppBlock [CppReturn body])
+    where
+    addItemArg :: Cpp -> Cpp
+    addItemArg cpp = CppLambda [CaptureAll] [(tableName, constAnyRef)] (Just $ Any []) (CppBlock [CppReturn cpp])
+  tableItem _ = error "not a variable introduction"
+  --
+  tableAccessor :: Text -> (Text, Cpp)
+  tableAccessor name =
     ( name
     , CppApp
         (CppDataGet
-           (CppNumericLiteral . Left . fromIntegral . fromJust $ findIndex ((== name) . fst) fns)
-           dict')
-        [dict'])
+           (CppNumericLiteral . Left . fromIntegral . fromJust $ findIndex ((== name) . fst) lets)
+           (CppVar tableName))
+      [CppVar tableName])
+  --
+  defines :: [Cpp]
+  defines = def . tableAccessor . fst <$> lets
     where
-    dict' = CppVar dictname
-  accessor :: Text -> (Text, Cpp) -> Cpp
-  accessor dictname (name, _) =
-    CppVariableIntroduction (name, Just $ Any [Const]) [] (Just . snd $ accessed dictname name)
-  toelem :: Cpp -> (Text, Cpp)
-  toelem (CppFunction name args rtyp _ body'@(CppBlock body)) =
-    ( name
-    , withdict . maybeRemCaps $
-      CppLambda
-        [CaptureAll]
-        args
-        rtyp
-        (CppBlock $ (accessor localdict <$> filteredFns body') ++ body))
-  toelem (CppVariableIntroduction (name, _) _ (Just body')) =
-    let replacements = accessed localdict . fst <$> filteredFns body'
-        replaced = everywhereOnCpp (replaceVar replacements) body'
-    in (name, withdict . maybeRemCaps $ CppBlock [CppReturn replaced])
-  toelem _ = error "not a function"
-  withdict :: Cpp -> Cpp
-  withdict cpp' =
-    maybeRemCaps $
-    CppLambda
-      [CaptureAll]
-      [(localdict, Just $ Any [Const, Ref])]
-      (Just $ Any [])
-      (CppBlock [CppReturn cpp'])
-  topdict :: Text
-  topdict = "_$dict$_"
-  localdict :: Text
-  localdict = "$dict$"
-convertRecursiveRefs' cpps = cpps
+    def (name, cpp) = CppRaw $ "#define " <> name <> " " <> P.prettyPrintCpp1 cpp <> "#"
+  --
+  undefines :: [Cpp]
+  undefines = undef . tableAccessor . fst <$> lets
+    where
+    undef (name, _) = CppRaw $ "#undef " <> name <> "#"
+  --
+convertRecursive _ cpps = cpps

@@ -20,6 +20,7 @@ module Language.PureScript.Pretty.Cpp
   ( dotsTo
   , linebreak
   , prettyPrintCpp
+  , prettyPrintCpp1
   , utf16Text
   ) where
 
