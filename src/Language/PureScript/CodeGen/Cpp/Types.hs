@@ -24,12 +24,6 @@ import Data.List
 import Data.Monoid ((<>))
 import Data.Text
 
-import Language.PureScript.CodeGen.Cpp.Common
-import Language.PureScript.Names
-import qualified Language.PureScript.Constants as C
-
--- import Debug.Trace
-
 data CppType = Primitive Text | Auto [TypeQual] | Any [TypeQual]
   deriving (Show, Read, Eq)
 
@@ -104,15 +98,6 @@ runValueQual TopLevel  = ""
 runCaptureType :: CaptureType -> Text
 runCaptureType CaptureAll = "="
 
--- TODO: move or remove this
---
-qualifiedToStr :: ModuleName -> (a -> Ident) -> Qualified a -> Text
-qualifiedToStr _ f (Qualified (Just (ModuleName [ProperName mn])) a)
-  | mn == C.prim = runIdent $ f a
-qualifiedToStr m f (Qualified (Just m') a)
-  | m /= m' = moduleNameToCpp m' <> "::" <> identToCpp (f a)
-qualifiedToStr _ f (Qualified _ a) = identToCpp (f a)
-
 boolType :: CppType
 boolType = Primitive "bool"
 
@@ -161,3 +146,8 @@ getCtor = dataNS <> "::ctor"
 
 constAnyRef :: Maybe CppType
 constAnyRef = Just $ Any [Const, Ref]
+
+-- Prevents any optimization changes to type
+--
+alwaysType :: CppType -> Maybe CppType
+alwaysType t = Just . Primitive $ runType t

@@ -21,7 +21,7 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Blocks
   ) where
 
 import Prelude.Compat
-import Data.Either
+import Data.Maybe
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types
@@ -94,16 +94,16 @@ collapseCtorChecksToSwitch = everywhereOnCpp collapse
   collapse (CppBlock cpps@(_:_:_)) = CppBlock (go cpps)
     where
     go cpps'@(cpp:_)
-      | Right (lhs, _, _) <- fromif Nothing cpp
-      , (otherCpps, ifs@(_:_:_)) <- partitionEithers $ fromif (Just lhs) <$> cpps'
-      = CppSwitch lhs ((\(_,b,c) -> (b,c)) <$> ifs) Nothing : otherCpps
+      | Just (lhs, _, _) <- fromif Nothing cpp
+      , ifs@(_:_:_) <- catMaybes . takeWhile (isJust) $ fromif (Just lhs) <$> cpps'
+      = CppSwitch lhs ((\(_,b,c) -> (b,c)) <$> ifs) Nothing : drop (length ifs) cpps'
     go (cpp':cpps') = cpp' : go cpps'
     go cpp' = cpp'
-    fromif :: Maybe Cpp -> Cpp -> Either Cpp (Cpp, Cpp, Cpp)
+    fromif :: Maybe Cpp -> Cpp -> Maybe (Cpp, Cpp, Cpp)
     fromif cond (CppIfElse (CppBinary EqualTo lhs rhs) stmt Nothing)
       | CppApp (CppVar f) _ <- lhs
       , f == getCtor
       , maybe True (lhs==) cond
-      = Right (lhs, rhs, stmt)
-    fromif _ cpp = Left cpp
+      = Just (lhs, rhs, stmt)
+    fromif _ _ = Nothing
   collapse cpp = cpp

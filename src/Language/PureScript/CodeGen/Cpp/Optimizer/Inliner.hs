@@ -21,6 +21,7 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
   , inlineOperator
   , inlineCommonOperators
   , inlineFnComposition
+  , inlineUnsafePartial
   , etaConvert
   , unThunk
   , evaluateIifes
@@ -269,10 +270,9 @@ inlineCommonOperators = applyAll $
 
 -- (f <<< g $ x) = f (g x)
 -- (f <<< g)     = \x -> f (g x)
-inlineFnComposition :: (MonadSupply m) => Cpp -> m Cpp
-inlineFnComposition = everywhereOnCppTopDownM convert
-  where
-  convert :: (MonadSupply m) => Cpp -> m Cpp
+inlineFnComposition :: forall m. MonadSupply m => Cpp -> m Cpp
+inlineFnComposition = everywhereOnCppTopDownM convert where
+  convert :: Cpp -> m Cpp
   convert (CppApp fn [dict', x, y, z])
     | isFnCompose dict' fn = return $ CppApp  x [CppApp  y [z]]
     | isFnComposeFlipped dict' fn = return $ CppApp  y [CppApp  x [z]]
@@ -302,6 +302,15 @@ inlineFnComposition = everywhereOnCppTopDownM convert
   fnCompose = (C.controlSemigroupoid, C.compose)
   fnComposeFlipped :: (Text, Text)
   fnComposeFlipped = (C.controlSemigroupoid, C.composeFlipped)
+
+inlineUnsafePartial :: Cpp -> Cpp
+inlineUnsafePartial = everywhereOnCppTopDown convert where
+  convert (CppApp (CppAccessor (CppVar unsafePartial) (CppVar partialUnsafe)) [ comp ])
+    | unsafePartial == C.unsafePartial && partialUnsafe == C.partialUnsafe
+    -- Apply to undefined here, the application should be optimized away
+    -- if it is safe to do so
+    = CppApp comp [ CppVar C.undefined ]
+  convert other = other
 
 toAutoVars :: Cpp -> Cpp
 toAutoVars = everywhereOnCpp convert

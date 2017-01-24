@@ -77,11 +77,11 @@ typesOf
   -> [(Ident, Expr)]
   -> m [(Ident, (Expr, Type))]
 typesOf bindingGroupType moduleName vals = withFreshSubstitution $ do
-    tys <- capturingSubstitution tidyUp $ do
-      SplitBindingGroup untyped typed dict <- typeDictionaryForBindingGroup (Just moduleName) vals
+    (tys, wInfer) <- capturingSubstitution tidyUp $ do
+      (SplitBindingGroup untyped typed dict, w) <- withoutWarnings $ typeDictionaryForBindingGroup (Just moduleName) vals
       ds1 <- parU typed $ \e -> withoutWarnings $ checkTypedBindingGroupElement moduleName e dict
       ds2 <- forM untyped $ \e -> withoutWarnings $ typeForBindingGroupElement e dict
-      return (map (False, ) ds1 ++ map (True, ) ds2)
+      return (map (False, ) ds1 ++ map (True, ) ds2, w)
 
     inferred <- forM tys $ \(shouldGeneralize, ((ident, (val, ty)), _)) -> do
       -- Replace type class dictionary placeholders with actual dictionaries
@@ -123,10 +123,13 @@ typesOf bindingGroupType moduleName vals = withFreshSubstitution $ do
     -- Show warnings here, since types in wildcards might have been solved during
     -- instance resolution (by functional dependencies).
     finalState <- get
+    let replaceTypes' = replaceTypes (checkSubstitution finalState)
+        runTypeSearch' gen = runTypeSearch (guard gen $> foldMap snd inferred) finalState
+        raisePreviousWarnings gen w = (escalateWarningWhen isHoleError . tell . onErrorMessages (runTypeSearch' gen . replaceTypes')) w
+
+    raisePreviousWarnings False wInfer
     forM_ tys $ \(shouldGeneralize, ((_, (_, _)), w)) -> do
-      let replaceTypes' = replaceTypes (checkSubstitution finalState)
-          runTypeSearch' = runTypeSearch (guard shouldGeneralize $> foldMap snd inferred) finalState
-      (escalateWarningWhen isHoleError . tell . onErrorMessages (runTypeSearch' . replaceTypes')) w
+      raisePreviousWarnings shouldGeneralize w
 
     return (map fst inferred)
   where
@@ -160,7 +163,7 @@ typesOf bindingGroupType moduleName vals = withFreshSubstitution $ do
     constrain cs = ConstrainedType (map (\(_, _, x) -> x) cs)
 
     -- Apply the substitution that was returned from runUnify to both types and (type-annotated) values
-    tidyUp ts sub = map (second (first (second (overTypes (substituteType sub) *** substituteType sub)))) ts
+    tidyUp ts sub = first (map (second (first (second (overTypes (substituteType sub) *** substituteType sub))))) ts
 
     isHoleError :: ErrorMessage -> Bool
     isHoleError (ErrorMessage _ HoleInferredType{}) = True
@@ -187,7 +190,7 @@ data SplitBindingGroup = SplitBindingGroup
 -- This function also generates fresh unification variables for the types of
 -- declarations without type annotations, returned in the 'UntypedData' structure.
 typeDictionaryForBindingGroup
-  :: (MonadState CheckState m, MonadError MultipleErrors m, MonadWriter MultipleErrors m)
+  :: (MonadState CheckState m, MonadWriter MultipleErrors m)
   => Maybe ModuleName
   -> [(Ident, Expr)]
   -> m SplitBindingGroup
@@ -197,7 +200,7 @@ typeDictionaryForBindingGroup moduleName vals = do
     -- fully expanded types.
     let (untyped, typed) = partitionEithers (map splitTypeAnnotation vals)
     (typedDict, typed') <- fmap unzip . for typed $ \(ident, (expr, ty, checkType)) -> do
-      ty' <- introduceSkolemScope <=< replaceAllTypeSynonyms <=< replaceTypeWildcards $ ty
+      ty' <- replaceTypeWildcards ty
       return ((ident, ty'), (ident, (expr, ty', checkType)))
     -- Create fresh unification variables for the types of untyped declarations
     (untypedDict, untyped') <- fmap unzip . for untyped $ \(ident, expr) -> do
@@ -233,11 +236,14 @@ checkTypedBindingGroupElement mn (ident, (val, ty, checkType)) dict = do
   -- Kind check
   (kind, args) <- kindOfWithScopedVars ty
   checkTypeKind ty kind
+  -- We replace type synonyms _after_ kind-checking, since we don't want type
+  -- synonym expansion to bring type variables into scope. See #2542.
+  ty' <- introduceSkolemScope <=< replaceAllTypeSynonyms $ ty
   -- Check the type with the new names in scope
   val' <- if checkType
-            then withScopedTypeVars mn args $ bindNames dict $ TypedValue True <$> check val ty <*> pure ty
-            else return (TypedValue False val ty)
-  return (ident, (val', ty))
+            then withScopedTypeVars mn args $ bindNames dict $ TypedValue True <$> check val ty' <*> pure ty'
+            else return (TypedValue False val ty')
+  return (ident, (val', ty'))
 
 -- | Infer a type for a value in a binding group which lacks an annotation.
 typeForBindingGroupElement

@@ -32,23 +32,22 @@ import Data.Char (isLetter)
 import Data.Function (on)
 import Data.List
 import qualified Data.Map as M
-import Data.Maybe (catMaybes, fromJust)
+import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack)
 import qualified Data.Text as Text
 
 import Control.Monad (forM, replicateM)
-import Control.Monad.Reader (MonadReader, ask)
+import Control.Monad.Reader (MonadReader)
 import Control.Monad.Supply.Class
 import Language.PureScript.AST.SourcePos
 import Language.PureScript.CodeGen.Cpp.AST as AST
 import Language.PureScript.CodeGen.Cpp.Common as Common
 import Language.PureScript.CodeGen.Cpp.File
 import Language.PureScript.CodeGen.Cpp.Optimizer
-import Language.PureScript.CodeGen.Cpp.Optimizer.TCO
+import Language.PureScript.CodeGen.Cpp.Recursion
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.CodeGen.Cpp.Unicode
-import Language.PureScript.Comments
 import Language.PureScript.CoreFn
 import Language.PureScript.Names
 import Language.PureScript.Options
@@ -93,7 +92,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         E.dataConstructors env
   cpps' <- traverse (optimize $ namesmap ++ datamap) cpps
   foreignWrappers <- curriedForeigns
-  let optimized = (otherTransforms otherOpts <$> cpps') ++ foreignWrappers
+  let optimized = (otherTransforms otherOpts . convertRecursiveLets <$> cpps') ++ foreignWrappers
   let moduleHeader =
         fileBegin mn "HH" ++
         P.linebreak ++
@@ -333,7 +332,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   fnToLambda (CppFunction name args _ qs body) =
     CppVariableIntroduction
       (name, Just $ Any [Const])
-      (filter (== Static) qs)
+      qs -- (filter (== Static) qs)
       (Just $ CppLambda cs args (Just $ Any []) body)
     where
     cs
@@ -350,82 +349,6 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     go f@(CppFunction {}) = maybeRemCaps $ fnToLambda f
     go (CppLambda _ args rtyp body) = maybeRemCaps $ CppLambda [CaptureAll] args rtyp body
     go cpp = cpp
-  -------------------------------------------------------------------------------------------------
-  convertRecursiveFns :: [Cpp] -> Cpp -> [Cpp]
-  -------------------------------------------------------------------------------------------------
-  convertRecursiveFns cpps otherCpp
-    | not $ null fns = dict : (accessor topdict <$> filteredFns allCpps) ++ cpps'
-    where
-    cpps' = everywhereOnCpp removeRec <$> cpps
-    allCpps = CppBlock $ otherCpp : cpps'
-    fns :: [(Text, Cpp)]
-    fns = toelem <$> concatMap (everythingOnCpp (++) recursive) cpps
-    filteredFns :: Cpp -> [(Text, Cpp)]
-    filteredFns cpp = filter (\(f, _) -> everythingOnCpp (||) (== CppVar f) cpp) fns
-    recursive :: Cpp -> [Cpp]
-    recursive cpp'@(CppFunction _ _ _ qs _)
-      | Recursive `elem` qs = [cpp']
-    recursive cpp'@(CppVariableIntroduction _ qs _)
-      | Recursive `elem` qs = [cpp']
-    recursive _ = []
-    removeRec :: Cpp -> Cpp
-    removeRec (CppFunction _ _ _ qs _)
-      | Recursive `elem` qs = CppNoOp
-    removeRec (CppVariableIntroduction _ qs _)
-      | Recursive `elem` qs = CppNoOp
-    removeRec cpp' = cpp'
-    replaceVar :: [(Text, Cpp)] -> Cpp -> Cpp
-    replaceVar rs = go
-      where
-      go (CppVar var)
-        | Just var' <- lookup var rs = var'
-      go cpp' = cpp'
-    dict :: Cpp
-    dict =
-      CppVariableIntroduction
-        (topdict, Just $ Any [Const])
-        []
-        (Just $ CppDataLiteral ((\(f, cpp) -> CppComment [LineComment f] cpp) <$> fns))
-    accessed :: Text -> Text -> (Text, Cpp)
-    accessed dictname name =
-      ( name
-      , CppApp
-          (CppDataGet
-             (CppNumericLiteral . Left . fromIntegral . fromJust $ findIndex ((== name) . fst) fns)
-             dict')
-          [dict'])
-      where
-      dict' = CppVar dictname
-    accessor :: Text -> (Text, Cpp) -> Cpp
-    accessor dictname (name, _) =
-      CppVariableIntroduction (name, Just $ Any [Const]) [] (Just . snd $ accessed dictname name)
-    toelem :: Cpp -> (Text, Cpp)
-    toelem (CppFunction name args rtyp _ body'@(CppBlock body)) =
-      ( name
-      , withdict . maybeRemCaps $
-        CppLambda
-          [CaptureAll]
-          args
-          rtyp
-          (CppBlock $ (accessor localdict <$> filteredFns body') ++ body))
-    toelem (CppVariableIntroduction (name, _) _ (Just body')) =
-      let replacements = accessed localdict . fst <$> filteredFns body'
-          replaced = everywhereOnCpp (replaceVar replacements) body'
-      in (name, withdict . maybeRemCaps $ CppBlock [CppReturn replaced])
-    toelem _ = error "not a function"
-    withdict :: Cpp -> Cpp
-    withdict cpp' =
-      maybeRemCaps $
-      CppLambda
-        [CaptureAll]
-        [(localdict, Just $ Any [Const, Ref])]
-        (Just $ Any [])
-        (returnBlock cpp')
-    topdict :: Text
-    topdict = "_$dict$_"
-    localdict :: Text
-    localdict = "$dict$"
-  convertRecursiveFns cpps _ = cpps
 
   -- |
   -- Generate code in the simplified C++1x intermediate representation for a value or expression.
@@ -437,6 +360,9 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Var (_, _, _, Just (IsConstructor _ [])) ident) = return $ CppApp (varToCpp ident) []
   valueToCpp (Var (_, _, Just ty, _) ident@(Qualified (Just _) _))
     | arity ty > 0 = return . curriedName' $ varToCpp ident
+  valueToCpp (Var (_, _, Nothing, _) ident@(Qualified (Just _) _))
+    | Just (ty, _, _) <- M.lookup ident (E.names env)
+    , arity ty > 0 = return . curriedName' $ varToCpp ident
   valueToCpp (Var _ ident) = return $ varToCpp ident
   valueToCpp (Literal _ (NumericLiteral n)) = return (CppNumericLiteral n)
   valueToCpp (Literal _ (StringLiteral s)) = return (CppStringLiteral s)
@@ -500,32 +426,8 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Let _ ds val) = do
     ds' <- concat <$> mapM (bindToCpp []) ds
     ret <- valueToCpp val
-    opts <- ask
-    let ds'' = tco opts <$> ds'
-    let rs =
-          if hasRecursion ds''
-            then convertRecursiveFns ds'' ret
-            else ds''
-    let cpps = innerLambdas <$> rs
-    return $ CppApp (CppLambda [] [] Nothing (CppBlock (cpps ++ [CppReturn ret]))) []
-    where
-    hasRecursion :: [Cpp] -> Bool
-    hasRecursion cpps' = any (everythingOnCpp (||) hasRecursiveRef) cpps'
-      where
-      valnames :: [Text]
-      valnames = concatMap (everythingOnCpp (++) valname) cpps'
-      valname :: Cpp -> [Text]
-      valname (CppFunction name _ _ _ _) = [name]
-      valname (CppVariableIntroduction (name, _) _ _) = [name]
-      valname _ = []
-      hasRecursiveRef :: Cpp -> Bool
-      hasRecursiveRef (CppFunction _ _ _ _ body) = everythingOnCpp (||) ref body
-      hasRecursiveRef (CppVariableIntroduction _ _ (Just value)) = everythingOnCpp (||) ref value
-      hasRecursiveRef _ = False
-      ref :: Cpp -> Bool
-      ref (CppVar name)
-        | name `elem` valnames = True
-      ref _ = False
+    let cpps = (innerLambdas <$> ds') ++ [CppReturn ret]
+    return $ CppApp (CppLambda [] [] Nothing (CppBlock cpps)) []
   valueToCpp Constructor {} = return CppNoOp
 
   -- |

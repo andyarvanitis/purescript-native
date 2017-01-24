@@ -67,7 +67,7 @@ optimize nm cpp = do
 optimize' :: (MonadReader Options m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
 optimize' nm cpp = do
   opts <- ask
-  untilFixedPoint (liftM toAutoVars . inlineFnComposition . applyAll
+  untilFixedPoint (liftM toAutoVars . inlineFnComposition . inlineUnsafePartial . applyAll
     [ collapseNestedBlocks
     , collapseCtorChecksToSwitch
     , collapseNestedIfs
