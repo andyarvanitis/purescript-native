@@ -20,7 +20,7 @@ OUTPUT := output
 BIN    := main
 
 override PCCFLAGS += --comments
-override CXXFLAGS += -std=c++11
+override CXXFLAGS += -std=c++11 -Wno-logical-op-parentheses
 override LDFLAGS  +=
 
 ifeq ($(GC),yes)

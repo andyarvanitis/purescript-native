@@ -107,6 +107,7 @@ packages :: [String]
 -------------------------------------------------------------------------------
 packages =
   [ "eff"
+  , "arrays"
   , "assert"
   , "console"
   , "control"
