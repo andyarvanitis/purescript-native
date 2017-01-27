@@ -68,11 +68,7 @@ convertRecursiveLets = everywhereOnCpp go
 convertRecursive :: [Text] -> [Cpp] -> [Cpp]
 -------------------------------------------------------------------------------------------------
 convertRecursive names cpps
-  | not $ null lets
-    = defines ++
-      [letTable] ++
-      (everywhereOnCpp remRecLet <$> cpps) ++
-      undefines
+  | (_:_) <- lets = (everywhereOnCppTopDown remRecLet <$> cpps) ++ undefines
   where
   tableName :: Text
   tableName = "let"
@@ -93,8 +89,10 @@ convertRecursive names cpps
   recLet _ = []
   --
   remRecLet :: Cpp -> Cpp
-  remRecLet (CppVariableIntroduction (name, _) _ (Just _))
+  remRecLet cpp@(CppVariableIntroduction (name, _) _ (Just _))
+    | name == head names = CppNamespace "" $ defines ++ [letTable]
     | name `elem` names = CppNoOp
+    | otherwise = cpp
   remRecLet cpp = cpp
   --
   tableItem :: Cpp -> (Text, Cpp)
