@@ -84,7 +84,7 @@ collapseIfElses = everywhereOnCpp collapse
       returns _ = False
     go (cpp' : cpps') = cpp' : go cpps'
     go cpp' = cpp'
-  collapse (CppIfElse (CppAccessor (CppVar "otherwise") (CppVar mn')) body _) | mn' == C.prelude = body
+  collapse (CppIfElse (CppAccessor (CppVar "otherwise") (CppVar mn')) body _) | mn' == "Data_Boolean" = body
   collapse cpp = cpp
 
 collapseCtorChecksToSwitch :: Cpp -> Cpp
