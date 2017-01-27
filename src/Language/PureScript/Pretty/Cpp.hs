@@ -31,6 +31,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid ((<>))
+import Numeric (showHex)
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
@@ -410,6 +411,7 @@ encodeChar '\r' = "\\r"
 encodeChar '"'  = "\\\""
 encodeChar '\'' = "\\'"
 encodeChar '\\' = "\\\\"
+encodeChar c | isControl c = T.pack $ "\\x" ++ showHex (fromEnum c) ""
 encodeChar c = T.singleton c
 
 -- Note: Any lone surrogates will be replaced with U+FFFD
