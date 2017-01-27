@@ -408,6 +408,7 @@ encodeChar '\v' = "\\v"
 encodeChar '\f' = "\\f"
 encodeChar '\r' = "\\r"
 encodeChar '"'  = "\\\""
+encodeChar '\'' = "\\'"
 encodeChar '\\' = "\\\\"
 encodeChar c = T.singleton c
 
