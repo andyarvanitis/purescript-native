@@ -13,7 +13,7 @@
 -- and bind for the Eff monad, as well as some of its actions.
 --
 -----------------------------------------------------------------------------
-module Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo (magicDo) where
+module Language.PureScript.CodeGen.Cpp.Optimizer.MagicDo (magicDo, inlineST) where
 
 import Prelude.Compat
 
@@ -26,7 +26,7 @@ import Language.PureScript.CodeGen.Cpp.Optimizer.Common
 import Language.PureScript.CodeGen.Cpp.Types
 import Language.PureScript.Options
 import qualified Language.PureScript.Constants as C
-import Language.PureScript.PSString (mkString)
+-- import Language.PureScript.PSString (mkString)
 
 magicDo :: Options -> Cpp -> Cpp
 magicDo opts | optionsNoMagicDo opts = id
@@ -121,8 +121,8 @@ inlineST = everywhereOnCpp convertBlock
   -- Convert a block in a safe way, preserving object wrappers of references,
   -- or in a more aggressive way, turning wrappers into local variables depending on the
   -- agg(ressive) parameter.
-  convert agg (CppApp f [arg]) | isSTFunc C.newSTRef f =
-   CppLambda [CaptureAll] [] Nothing (CppBlock [CppReturn $ if agg then arg else CppMapLiteral Record [(CppSymbol $ mkString C.stRefValue, arg)]])
+  -- convert agg (CppApp f [arg]) | isSTFunc C.newSTRef f =
+  --  CppLambda [CaptureAll] [] Nothing (CppBlock [CppReturn $ if agg then arg else CppMapLiteral Record [(CppSymbol $ mkString C.stRefValue, arg)]])
   convert agg (CppApp (CppApp f [ref]) []) | isSTFunc C.readSTRef f =
     if agg then ref else CppAccessor (CppVar C.stRefValue) ref
   convert agg (CppApp (CppApp (CppApp f [ref]) [arg]) []) | isSTFunc C.writeSTRef f =

@@ -93,17 +93,21 @@ literals = mkPattern' match
   match (CppBooleanLiteral True) = return "true"
   match (CppBooleanLiteral False) = return "false"
   match (CppArrayLiteral []) = return $ runType arrayType <> "{}"
+  match (CppArrayLiteral [x]) =
+    return $ runType arrayType <> "{ { " <> prettyPrintCpp1 x <> " } }"
   match (CppArrayLiteral xs) = mconcat <$> sequence
     [ return $ runType arrayType
-    , return "{{ "
+    , return "{ "
     , fmap (T.intercalate ", ") $ forM xs prettyPrintCpp'
-    , return " }}"
+    , return " }"
     ]
+  match (CppDataLiteral [x]) =
+    return $ runType (dataType 1) <> "{ { " <> prettyPrintCpp1 x <> " } }"
   match (CppDataLiteral xs) = mconcat <$> sequence
     [ return $ runType (dataType $ length xs)
-    , return "{{ "
+    , return "{ "
     , fmap (T.intercalate ", ") $ forM xs prettyPrintCpp'
-    , return " }}"
+    , return " }"
     ]
   match (CppEnum name ty es) = mconcat <$> sequence
     [ return "enum"
@@ -113,10 +117,9 @@ literals = mkPattern' match
     , return $ T.intercalate ", " es
     , return " }"
     ]
-  match (CppMapLiteral Record []) = return "nullptr"
-  match (CppMapLiteral _ ps)
+  match (CppDictLiteral ps)
     | length ps <= 8 = mconcat <$> sequence
-    [ return $ mapNS <> "::make(\n"
+    [ return $ dictNS <> "::make(\n"
     , withIndent $ do
         cpps <-
           forM ps $ \(key, value) -> do
@@ -129,8 +132,8 @@ literals = mkPattern' match
     , currentIndent
     , return ")"
     ]
-  match (CppMapLiteral _ ps) = mconcat <$> sequence
-    [ return $ runType (mapType $ length ps + 1) <> "{{\n"
+  match (CppDictLiteral ps) = mconcat <$> sequence
+    [ return $ runType (dictType $ length ps + 1) <> "{\n"
     , withIndent $ do
         let ps' = ps ++ [(CppVar "nullptr", CppVar "nullptr")]
         cpps <-
@@ -142,7 +145,22 @@ literals = mkPattern' match
         return $ T.intercalate ", \n" $ map (indentString <>) cpps
     , return "\n"
     , currentIndent
-    , return "}}"
+    , return "}"
+    ]
+  match (CppRecordLiteral []) = return "nullptr"
+  match (CppRecordLiteral ps) = mconcat <$> sequence
+    [ return $ runType recordType <> "{\n"
+    , withIndent $ do
+        cpps <-
+          forM ps $ \(key, value) -> do
+            value' <- prettyPrintCpp' value
+            key' <- prettyPrintCpp' key
+            return $ "{ " <> key' <> ", " <> value' <> " }"
+        indentString <- currentIndent
+        return $ T.intercalate ", \n" $ map (indentString <>) cpps
+    , return "\n"
+    , currentIndent
+    , return "}"
     ]
   match (CppFunction name args rty qs ret) =  mconcat <$> sequence
     [ return . T.concat . fmap (<> " ") . filter (not . T.null) $ runValueQual <$> qs
@@ -255,12 +273,18 @@ literals = mkPattern' match
     vstr = prettyPrintCpp1 val
     val' | "(" `T.isInfixOf` vstr || "[" `T.isInfixOf` vstr = parensT vstr
          | otherwise = vstr
-  match (CppMapGet i@(CppSymbol _) val) =
-    return . prettyPrintCpp1 $ CppApp (CppVar $ mapNS <> "::get") [i, val]
-  match (CppMapGet i val) =
-    return . prettyPrintCpp1 $ CppApp (CppVar $ mapNS <> "::get" <> angles (prettyPrintCpp1 i)) [val]
+  match (CppDictGet i@(CppSymbol _) val) =
+    return . prettyPrintCpp1 $ CppApp (CppVar $ dictNS <> "::get") [i, val]
+  match (CppDictGet i val) =
+    return . prettyPrintCpp1 $ CppApp (CppVar $ dictNS <> "::get" <> angles (prettyPrintCpp1 i)) [val]
   match (CppDataGet i val) =
     return . prettyPrintCpp1 $ CppApp (CppVar $ dataNS <> "::get" <> angles (prettyPrintCpp1 i)) [val]
+  match (CppRecordGet k val) =
+    return $ parens' (prettyPrintCpp1 val) <> "." <> prettyPrintCpp1 (CppApp (CppVar "at") [CppStringLiteral k])
+    where
+    parens' | CppVar{} <- val = id
+            | CppAccessor{} <- val = id
+            | otherwise = parensT
   match (CppUnary op val) = return $ s <> "." <> f <> "()"
     where
     v = prettyPrintCpp1 val
@@ -270,8 +294,8 @@ literals = mkPattern' match
       | Empty <- op = "empty"
       | otherwise = error $ "Incorrect match on unary " <> show op
   match (CppVar ident) = return $ renderName ident
-  match (CppSymbol ident) = return $ "symbol" <> parensT (safeSymbol ident)
-  match (CppDefineSymbol ident) = return $ "define_symbol" <> parensT (safeSymbol ident)
+  match (CppSymbol ident) = return $ "SYM" <> parensT (safeSymbol ident)
+  match (CppDefineSymbol ident) = return $ "DEFINE_SYMBOL" <> parensT (safeSymbol ident) <> "#"
   match (CppApp v [CppNoOp]) = return (prettyPrintCpp1 v)
   match (CppVariableIntroduction (ident, typ) qs value) =
     mconcat <$> sequence

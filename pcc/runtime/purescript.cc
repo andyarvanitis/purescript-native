@@ -88,6 +88,10 @@ any::operator const array&() const {
   RETURN_VALUE(Tag::Array, a, *)
 }
 
+any::operator const record&() const {
+  RETURN_VALUE(Tag::Record, r, *)
+}
+
 auto any::extractPointer(IF_DEBUG(const any::Tag t)) const -> void* {
   RETURN_VALUE(t, POINTER_FROM_MEMBER(p),)
 }
@@ -115,7 +119,7 @@ auto any::empty() const -> bool {
 
 auto any::contains(const Private::Symbol key) const -> bool {
   // TODO: assumes at least one element -- safe assumption?
-  const auto& m = cast<map<unknown_size>>(*this);
+  const auto& m = cast<dict<unknown_size>>(*this);
   std::remove_reference<decltype(m)>::type::size_type i = 0;
   do {
     if (m[i].first == key) {
@@ -123,6 +127,10 @@ auto any::contains(const Private::Symbol key) const -> bool {
     }
   } while (m[++i].first != nullptr);
   return false;
+}
+
+auto any::at(const std::string& key) const -> const any& {
+  return static_cast<const record&>(*this).at(key);
 }
 
 //-----------------------------------------------------------------------------

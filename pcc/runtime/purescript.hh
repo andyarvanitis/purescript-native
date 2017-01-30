@@ -36,6 +36,7 @@
 #include <string>
 #include <array>
 #include <deque>
+#include <unordered_map>
 #include <utility>
 #include <stdexcept>
 #include <iso646.h> // mostly for MS Visual Studio compiler
@@ -61,14 +62,14 @@ namespace Private {
   using Symbol = const SymbolGeneratorAnchor *;
 }
 
-#define define_symbol(S) namespace PureScript { \
+#define DEFINE_SYMBOL(S) namespace PureScript { \
                            namespace Private { \
                              namespace Symbols { \
                                struct S_ ## S {}; \
                              } \
                            } \
                          }
-#define symbol(S) (&Private::SymbolGenerator<::PureScript::Private::Symbols::S_ ## S>::anchor)
+#define SYM(S) (&Private::SymbolGenerator<::PureScript::Private::Symbols::S_ ## S>::anchor)
 
 constexpr bool undefined = false;
 
@@ -93,6 +94,7 @@ class any {
     Map,
     Data,
     Array,
+    Record,
     Closure,
     EffClosure,
     Pointer
@@ -106,15 +108,17 @@ class any {
   };
   static constexpr as_thunk unthunk = as_thunk{};
 
-  using map_pair = std::pair<const Private::Symbol, const any>;
+  using dict_pair = std::pair<const Private::Symbol, const any>;
 
   template <size_t N>
-  using map = std::array<const map_pair, N>;
+  using dict = std::array<const dict_pair, N>;
 
   template <size_t N>
   using data = std::array<const any, N>;
 
-  using array  = std::deque<any WITH_ALLOCATOR(any)>;
+  using array = std::deque<any WITH_ALLOCATOR(any)>;
+  using record = std::unordered_map<std::string, any WITH_ALLOCATOR(any)>;
+
   using fn     = auto (*)(const any&) -> any;
   using eff_fn = auto (*)() -> any;
   using thunk  = auto (*)(const as_thunk) -> const any&;
@@ -164,6 +168,7 @@ class any {
     mutable void *                v;
     mutable managed<string>       s;
     mutable managed<array>        a;
+    mutable managed<record>       r;
     mutable managed<Closure>      l;
     mutable managed<EffClosure>   k;
     mutable managed<void>         p;
@@ -191,13 +196,16 @@ class any {
   any(managed<string>&& val) noexcept : tag(Tag::String), s(std::move(val)) {}
 
   template <size_t N>
-  any(map<N>&& val) noexcept : tag(Tag::Map), p(make_managed<map<N>>(std::move(val))) {}
+  any(dict<N>&& val) noexcept : tag(Tag::Map), p(make_managed<dict<N>>(std::move(val))) {}
 
   template <size_t N>
   any(data<N>&& val) noexcept : tag(Tag::Data), p(make_managed<data<N>>(std::move(val))) {}
 
   any(const array& val) : tag(Tag::Array), a(make_managed<array>(val)) {}
   any(array&& val) noexcept : tag(Tag::Array), a(make_managed<array>(std::move(val))) {}
+
+  any(const record& val) : tag(Tag::Record), r(make_managed<record>(val)) {}
+  any(record&& val) noexcept : tag(Tag::Record), r(make_managed<record>(std::move(val))) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0) noexcept
@@ -269,6 +277,7 @@ class any {
 
       case Tag::String:      new (&s) managed<string>(move_if_rvalue<T>(other.s));      break;
       case Tag::Array:       new (&a) managed<array>(move_if_rvalue<T>(other.a));       break;
+      case Tag::Record:      new (&r) managed<record>(move_if_rvalue<T>(other.r));      break;
       case Tag::Closure:     new (&l) managed<Closure>(move_if_rvalue<T>(other.l));     break;
       case Tag::EffClosure:  new (&k) managed<EffClosure>(move_if_rvalue<T>(other.k));  break;
       case Tag::Map:
@@ -283,6 +292,7 @@ class any {
     switch (tag) {
       case Tag::String:      s.~managed<string>();      break;
       case Tag::Array:       a.~managed<array>();       break;
+      case Tag::Record:      r.~managed<record>();      break;
       case Tag::Closure:     l.~managed<Closure>();     break;
       case Tag::EffClosure:  k.~managed<EffClosure>();  break;
       case Tag::Map:
@@ -337,9 +347,10 @@ class any {
   operator const string&() const;
   operator const char *() const;
   operator const array&() const;
+  operator const record&() const;
 
   auto operator[](const size_t) const -> const any&;
-
+  auto at(const std::string&) const -> const any&;
   auto size() const -> size_t;
   auto empty() const -> bool;
   auto contains(const Private::Symbol) const -> bool;
@@ -419,7 +430,7 @@ namespace Private {
   struct TagHelper {};
 
   template <size_t N>
-  struct TagHelper<any::map<N>> {
+  struct TagHelper<any::dict<N>> {
     static constexpr any::Tag tag = any::Tag::Map;
   };
 
@@ -450,14 +461,16 @@ inline auto cast(const any& a) ->
 template <typename T>
 inline auto cast(const any& a) ->
     typename std::enable_if<std::is_same<T, string>::value ||
-                            std::is_same<T, any::array>::value, const T&>::type {
+                            std::is_same<T, any::array>::value ||
+                            std::is_same<T, any::record>::value, const T&>::type {
   return a;
 }
 
 template <typename T,
           typename = typename std::enable_if<std::is_class<T>::value &&
                                             !std::is_same<T,string>::value &&
-                                            !std::is_same<T,any::array>::value>::type>
+                                            !std::is_same<T,any::array>::value &&
+                                            !std::is_same<T,any::record>::value>::type>
 inline auto cast(const any& a) -> T& {
   return *static_cast<T*>(a.extractPointer(IF_DEBUG(Private::TagHelper<T>::tag)));
 }
@@ -476,7 +489,7 @@ inline auto cast(const any& a) ->
   return a.rawPointer();
 }
 
-namespace map {
+namespace dict {
   template <size_t N, typename T>
   inline auto get(const T& a) ->
       typename std::enable_if<!std::is_same<any, T>::value, const any&>::type {
@@ -485,29 +498,29 @@ namespace map {
 
   template <size_t N>
   inline auto get(const any& a) -> const any& {
-    return cast<any::map<N+1>>(a)[N].second;
+    return cast<any::dict<N+1>>(a)[N].second;
   }
 
   template <size_t N>
-  inline auto get(const Private::Symbol key, const any::map<N>& a) -> const any& {
-    static_assert(N > 0, "map size must be greater than zero");
+  inline auto get(const Private::Symbol key, const any::dict<N>& a) -> const any& {
+    static_assert(N > 0, "dict size must be greater than zero");
     typename std::remove_reference<decltype(a)>::type::size_type i = 0;
     do {
       if (a[i].first == key) {
         return a[i].second;
       }
     } while (a[++i].first != nullptr);
-    assert(false && "map key not found");
+    assert(false && "dict key not found");
     static const any invalid_key(nullptr);
     return invalid_key;
   }
 
   inline auto get(const Private::Symbol key, const any& a) -> const any& {
-    return get(key, cast<any::map<unknown_size>>(a));
+    return get(key, cast<any::dict<unknown_size>>(a));
   }
 
-  #define P(N)    any::map_pair&& arg ## N
-  #define T(N)    any::map<N+1>
+  #define P(N)    any::dict_pair&& arg ## N
+  #define T(N)    any::dict<N+1>
   #define E(N)    std::forward<decltype(arg ## N)>(arg ## N)
   #define M(...)  {{ __VA_ARGS__, { nullptr, nullptr } }}
 
@@ -541,8 +554,6 @@ namespace map {
   #undef E
   #undef M
 }
-
-namespace record = map;
 
 namespace data {
   template <size_t N, typename T>

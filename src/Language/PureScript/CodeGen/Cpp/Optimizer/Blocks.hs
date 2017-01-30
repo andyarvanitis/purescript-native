@@ -25,7 +25,6 @@ import Data.Maybe
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.CodeGen.Cpp.Types
-import qualified Language.PureScript.Constants as C
 
 -- |
 -- Collapse blocks which appear nested directly below another block

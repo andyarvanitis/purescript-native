@@ -57,7 +57,6 @@ import Language.PureScript.Traversals (sndM)
 
 import qualified Language.PureScript.Constants as C
 import qualified Language.PureScript.Environment as E
-import Language.PureScript.Label (runLabel)
 import qualified Language.PureScript.Pretty.Cpp as P
 import qualified Language.PureScript.Types as T
 
@@ -237,7 +236,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
     isAccessor Accessor {} = True
     isAccessor _ = False
     isGet :: Cpp -> Bool
-    isGet (CppMapGet (CppSymbol _) (CppVar _)) = True
+    isGet (CppDictGet (CppSymbol _) (CppVar _)) = True
     isGet _ = False
     classes =
       zip
@@ -370,24 +369,19 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Literal _ (BooleanLiteral b)) = return (CppBooleanLiteral b)
   valueToCpp (Literal _ (ArrayLiteral xs)) = CppArrayLiteral <$> mapM valueToCpp xs
   valueToCpp (Literal _ (ObjectLiteral ps)) =
-    CppMapLiteral Record <$>
-    mapM (sndM valueToCpp) ((\(k, v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) ps)
-  valueToCpp (Accessor _ prop val) = CppMapGet <$> pure (CppSymbol prop) <*> valueToCpp val
-  -- TODO: use a more efficient way of copying/updating the map?
-  valueToCpp (ObjectUpdate (_, _, Just ty, _) obj ps) = do
-    obj' <- valueToCpp obj
-    updatedFields <- mapM (sndM valueToCpp) ps
-    let origKeys = (allKeys ty) \\ (fst <$> updatedFields)
-        origFields = (\key -> (key, CppMapGet (CppSymbol key) obj')) <$> origKeys
-    return $
-      CppMapLiteral Record $
-      (\(k, v) -> (CppSymbol k, v)) <$> sortBy (compare `on` fst) (origFields ++ updatedFields)
-    where
-    allKeys :: T.Type -> [PSString]
-    allKeys (T.TypeApp (T.TypeConstructor _) r@(T.RCons {})) = runLabel . fst <$> (fst $ T.rowToList r)
-    allKeys (T.ForAll _ t _) = allKeys t
-    allKeys _ = error "Not a recognized row type"
-  valueToCpp (ObjectUpdate _ _ _) = error $ "Bad Type in object update!"
+    CppRecordLiteral <$>
+      mapM (sndM valueToCpp) ((\(k, v) -> (CppStringLiteral k, v)) <$> ps)
+  valueToCpp (Accessor (_, _, Just _, _) prop val) = CppRecordGet <$> pure prop <*> valueToCpp val
+  valueToCpp (Accessor _ prop val) = CppDictGet <$> pure (CppSymbol prop) <*> valueToCpp val
+
+  valueToCpp (ObjectUpdate _ o ps) = do
+    obj <- valueToCpp o
+    updates <- mapM (sndM valueToCpp) ps
+    obj' <- freshName
+    let copy = CppVariableIntroduction (obj', Just recordType) [] (Just obj)
+        assign (k, v) = CppAssignment (CppRecordGet k (CppVar obj')) v
+        sts = copy : (assign <$> updates) ++ [CppReturn (CppVar obj')]
+    return $ CppApp (CppLambda [CaptureAll] [] Nothing (CppBlock sts)) []
   valueToCpp (Abs (_, _, ty, _) arg body) = do
     cpp <- valueToCpp body
     let cpp' = innerLambdas cpp
@@ -412,7 +406,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
       Var (_, _, _, Just IsTypeClassConstructor) (Qualified mn' (Ident classname)) ->
         let Just (_, constraints, fns) = findClass (Qualified mn' (ProperName classname))
-        in return . CppMapLiteral Instance $
+        in return . CppDictLiteral $
            zip
              (CppSymbol . mkString <$> (sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
              args'
@@ -584,7 +578,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
         CppVariableIntroduction
           (propVar, Nothing)
           []
-          (Just $ CppMapGet (CppSymbol prop) (CppVar varName)) :
+          (Just $ CppRecordGet prop (CppVar varName)) :
         cpp
   literalToBinderCpp varName done (ArrayLiteral bs) = do
     cpp <- go done 0 bs
@@ -744,10 +738,10 @@ optIndexers :: [(Cpp, Cpp)] -> Cpp -> Cpp
 optIndexers classes = everywhereOnCpp dictIndexerToEnum
   where
   dictIndexerToEnum :: Cpp -> Cpp
-  dictIndexerToEnum (CppMapGet (CppSymbol prop) dict)
+  dictIndexerToEnum (CppDictGet (CppSymbol prop) dict)
     | Just cls <- lookup dict classes =
       let index = CppAccessor (CppVar . safeName $ P.utf16Text prop) cls
-      in CppMapGet index dict
+      in CppDictGet index dict
   dictIndexerToEnum cpp = cpp
 
 ---------------------------------------------------------------------------------------------------

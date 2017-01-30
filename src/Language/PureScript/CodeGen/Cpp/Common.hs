@@ -154,7 +154,6 @@ nameIsCppReserved name =
               , "ctor"
               , "decltype"
               , "default"
-              , "define_symbol"
               , "delete"
               , "do"
               , "double"
@@ -213,7 +212,6 @@ nameIsCppReserved name =
               , "string"
               , "struct"
               , "switch"
-              , "symbol"
               , "synchronized"
               , "template"
               , "the_value"
@@ -267,4 +265,6 @@ properNameIsCppReserved :: Text -> Bool
 properNameIsCppReserved name =
   name `elem` [ "Private"
               , "PureScript"
+              , "SYM"
+              , "DEFINE_SYMBOL"
               ]

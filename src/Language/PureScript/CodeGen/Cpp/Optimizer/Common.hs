@@ -65,7 +65,8 @@ targetVariable :: Cpp -> Text
 targetVariable (CppVar var) = var
 targetVariable (CppAccessor _ tgt) = targetVariable tgt
 targetVariable (CppIndexer _ tgt) = targetVariable tgt
-targetVariable (CppMapGet _ tgt) = targetVariable tgt
+targetVariable (CppDictGet _ tgt) = targetVariable tgt
+targetVariable (CppRecordGet _ tgt) = targetVariable tgt
 targetVariable _ = error "Invalid argument to targetVariable"
 
 isUpdated :: Text -> Cpp -> Bool
