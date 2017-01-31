@@ -66,12 +66,6 @@ data ValueQual
 data CaptureType = CaptureAll
   deriving (Show, Read, Eq)
 
--- |
--- C++ object/map literal type
---
-data MapType = Instance | Record
-  deriving (Show, Eq)
-
 runType :: CppType -> Text
 runType (Primitive t) = t
 runType (Auto []) = "auto"
@@ -116,12 +110,12 @@ charType = Primitive "char"
 voidType :: CppType
 voidType = Primitive "void"
 
-mapType :: Int -> CppType
-mapType = maptype
+dictType :: Int -> CppType
+dictType = typ
   where
-  maptype 0 = mapprim "unknown_size"
-  maptype n = mapprim . pack $ show n
-  mapprim s = Primitive $ "any::map<" <> s <> ">"
+  typ 0 = prim "unknown_size"
+  typ n = prim . pack $ show n
+  prim s = Primitive $ "any::dict<" <> s <> ">"
 
 dataType :: Int -> CppType
 dataType n = Primitive $ "any::data<" <> pack (show n) <> ">"
@@ -129,11 +123,14 @@ dataType n = Primitive $ "any::data<" <> pack (show n) <> ">"
 arrayType :: CppType
 arrayType = Primitive "any::array"
 
+recordType :: CppType
+recordType = Primitive "any::record"
+
 thunkMarkerType :: CppType
 thunkMarkerType = Primitive "any::as_thunk"
 
-mapNS :: Text
-mapNS = "map"
+dictNS :: Text
+dictNS = "dict"
 
 dataNS :: Text
 dataNS = "data"

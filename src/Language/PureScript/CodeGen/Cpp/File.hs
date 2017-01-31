@@ -54,7 +54,7 @@ toHeader = catMaybes . map go
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
-      CppMapLiteral Instance _ ->
+      CppDictLiteral _ ->
         Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ Any [Const, Ref]) [] CppNoOp
       _ -> Just $ CppVariableIntroduction (name, Just $ Any [Const]) [Extern] Nothing
   go cpp@(CppStruct {}) = Just cpp
@@ -119,7 +119,7 @@ toBody = catMaybes . map go
   -- Generate thunks for top-level values
   go (CppVariableIntroduction (name, _) _ (Just cpp)) =
     case cpp of
-      CppMapLiteral Instance _ ->
+      CppDictLiteral _ ->
         Just $ CppFunction name [("", Just thunkMarkerType)] (Just $ Any [Const, Ref]) [] block
       _ -> Just $ CppVariableIntroduction (name, Just $ Any [Const]) [] (Just lambda)
     where
@@ -127,7 +127,7 @@ toBody = catMaybes . map go
     block = CppBlock [val, CppReturn (CppVar "the_value")]
     lambda = CppLambda [] [("", Just $ thunkMarkerType)] (Just $ Any [Const, Ref]) block
     addCaptures :: Cpp -> Cpp
-    addCaptures (CppMapLiteral t objs) = CppMapLiteral t (objlam <$> objs)
+    addCaptures (CppDictLiteral objs) = CppDictLiteral (objlam <$> objs)
       where
       objlam :: (Cpp, Cpp) -> (Cpp, Cpp)
       objlam (name', (CppLambda _ args rty body)) =

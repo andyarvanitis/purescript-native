@@ -185,9 +185,13 @@ data Cpp
   --
   | CppIndexer Cpp Cpp
   -- |
-  -- An object literal
+  -- An instance dictionary literal
   --
-  | CppMapLiteral MapType [(Cpp, Cpp)]
+  | CppDictLiteral [(Cpp, Cpp)]
+  -- |
+  -- An record literal
+  --
+  | CppRecordLiteral [(Cpp, Cpp)]
   -- |
   -- An general property accessor expression (property, expr)
   --
@@ -205,13 +209,17 @@ data Cpp
   --
   | CppCast CppType Cpp
   -- |
-  -- Call to getter from templated map type
+  -- Call to getter from templated dict type
   --
-  | CppMapGet Cpp Cpp
+  | CppDictGet Cpp Cpp
   -- |
   -- Call to getter from templated data type
   --
   | CppDataGet Cpp Cpp
+  -- |
+  -- Call to getter from record type
+  --
+  | CppRecordGet PSString Cpp
   -- |
   -- Function application
   --
@@ -315,13 +323,15 @@ everywhereOnCpp f = go
   go (CppArrayLiteral cpp) = f (CppArrayLiteral (map go cpp))
   go (CppDataLiteral cpp) = f (CppDataLiteral (map go cpp))
   go (CppIndexer j1 j2) = f (CppIndexer (go j1) (go j2))
-  go (CppMapLiteral t cpps) = f (CppMapLiteral t (map (fmap go) cpps))
+  go (CppDictLiteral cpps) = f (CppDictLiteral (map (fmap go) cpps))
+  go (CppRecordLiteral cpps) = f (CppRecordLiteral (map (fmap go) cpps))
   go (CppAccessor prop j) = f (CppAccessor (go prop) (go j))
   go (CppFunction name args rty qs j) = f (CppFunction name args rty qs (go j))
   go (CppLambda cps args rty j) = f (CppLambda cps args rty (go j))
   go (CppCast t cpp) = f (CppCast t (go cpp))
-  go (CppMapGet j1 j2) = f (CppMapGet (go j1) (go j2))
+  go (CppDictGet j1 j2) = f (CppDictGet (go j1) (go j2))
   go (CppDataGet j1 j2) = f (CppDataGet (go j1) (go j2))
+  go (CppRecordGet k j) = f (CppRecordGet k (go j))
   go (CppApp j cpp) = f (CppApp (go j) (map go cpp))
   go (CppBlock cpp) = f (CppBlock (map go cpp))
   go (CppNamespace name cpp) = f (CppNamespace name (map go cpp))
@@ -348,13 +358,15 @@ everywhereOnCppTopDownM f = f >=> go
   go (CppArrayLiteral cpp) = CppArrayLiteral <$> traverse f' cpp
   go (CppDataLiteral cpp) = CppDataLiteral <$> traverse f' cpp
   go (CppIndexer j1 j2) = CppIndexer <$> f' j1 <*> f' j2
-  go (CppMapLiteral t cpps) = CppMapLiteral t <$> traverse (pairM f' f') cpps
+  go (CppDictLiteral cpps) = CppDictLiteral <$> traverse (pairM f' f') cpps
+  go (CppRecordLiteral cpps) = CppRecordLiteral <$> traverse (pairM f' f') cpps
   go (CppAccessor prop j) = CppAccessor prop <$> f' j
   go (CppFunction name args rty qs j) = CppFunction name args rty qs <$> f' j
   go (CppLambda cps args rty j) = CppLambda cps args rty <$> f' j
   go (CppCast t cpp) = CppCast t <$> f' cpp
-  go (CppMapGet j1 j2) = CppMapGet <$> f' j1 <*> f' j2
+  go (CppDictGet j1 j2) = CppDictGet <$> f' j1 <*> f' j2
   go (CppDataGet j1 j2) = CppDataGet <$> f' j1 <*> f' j2
+  go (CppRecordGet k j) = CppRecordGet k <$> f' j
   go (CppApp j cpp) = CppApp <$> f' j <*> traverse f' cpp
   go (CppBlock cpp) = CppBlock <$> traverse f' cpp
   go (CppNamespace name cpp) = CppNamespace name <$> traverse f' cpp
@@ -377,13 +389,15 @@ everythingOnCpp (<>) f = go
   go j@(CppArrayLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppDataLiteral cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppIndexer j1 j2) = f j <> go j1 <> go j2
-  go j@(CppMapLiteral _ cpps) = foldl (<>) (f j) ((map (go . fst) cpps) ++ (map (go . snd) cpps))
+  go j@(CppDictLiteral cpps) = foldl (<>) (f j) ((map (go . fst) cpps) ++ (map (go . snd) cpps))
+  go j@(CppRecordLiteral cpps) = foldl (<>) (f j) ((map (go . fst) cpps) ++ (map (go . snd) cpps))
   go j@(CppAccessor j1 j2) = f j <> go j1 <> go j2
   go j@(CppFunction _ _ _ _ j1) = f j <> go j1
   go j@(CppLambda _ _ _ j1) = f j <> go j1
   go j@(CppCast _ cpp) = f j <> go cpp
-  go j@(CppMapGet j1 j2) = f j <> go j1 <> go j2
+  go j@(CppDictGet j1 j2) = f j <> go j1 <> go j2
   go j@(CppDataGet j1 j2) = f j <> go j1 <> go j2
+  go j@(CppRecordGet _ j1) = f j <> go j1
   go j@(CppApp j1 cpp) = foldl (<>) (f j <> go j1) (map go cpp)
   go j@(CppBlock cpp) = foldl (<>) (f j) (map go cpp)
   go j@(CppNamespace _ cpp) = foldl (<>) (f j) (map go cpp)
