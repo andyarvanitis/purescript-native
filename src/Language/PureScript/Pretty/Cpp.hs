@@ -94,7 +94,7 @@ literals = mkPattern' match
   match (CppBooleanLiteral False) = return "false"
   match (CppArrayLiteral []) = return $ runType arrayType <> "{}"
   match (CppArrayLiteral [x]) =
-    return $ runType arrayType <> "{ { " <> prettyPrintCpp1 x <> " } }"
+    return $ runType arrayType <> "{ {" <> prettyPrintCpp1 x <> "} }"
   match (CppArrayLiteral xs) = mconcat <$> sequence
     [ return $ runType arrayType
     , return "{ "
@@ -102,7 +102,7 @@ literals = mkPattern' match
     , return " }"
     ]
   match (CppDataLiteral [x]) =
-    return $ runType (dataType 1) <> "{ { " <> prettyPrintCpp1 x <> " } }"
+    return $ runType (dataType 1) <> "{ {" <> prettyPrintCpp1 x <> "} }"
   match (CppDataLiteral xs) = mconcat <$> sequence
     [ return $ runType (dataType $ length xs)
     , return "{ "
