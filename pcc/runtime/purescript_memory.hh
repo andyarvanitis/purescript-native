@@ -20,15 +20,17 @@
   #include <gc/gc_cpp.h>
   #include <gc/gc_allocator.h>
   #define WITH_ALLOCATOR(T) , gc_allocator<T>
+  #define WITH_ALLOCATOR_PAIR(T, U) , std::hash<T>, std::equal_to<T>, gc_allocator<std::pair<const T, U>>
   #define MANAGED_TYPE(T) T*
   #define MAKE_MANAGED(T) new (GC) T
-  #define MAKE_MANAGED_FINALIZED(T) new (GC, [](void* p, void*){ static_cast<T*>(p)->~T(); }) T
+  #define MAKE_MANAGED_FINALIZED(T) new (PointerFreeGC, [](void* p, void*){ static_cast<T*>(p)->~T(); }) T
   #define IS_POINTER_TYPE(T) std::is_pointer<T>
   #define POINTER_FROM_MEMBER(P) P
   #define INITIALIZE_GC() GC_INIT()
 #else
   #include <memory>
   #define WITH_ALLOCATOR(_)
+  #define WITH_ALLOCATOR_PAIR(...)
   #define MANAGED_TYPE(T) std::shared_ptr<T>
   #define MAKE_MANAGED(T) std::make_shared<T>
   #define MAKE_MANAGED_FINALIZED(T) MAKE_MANAGED(T)

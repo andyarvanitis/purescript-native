@@ -117,7 +117,7 @@ class any {
   using data = std::array<const any, N>;
 
   using array = std::deque<any WITH_ALLOCATOR(any)>;
-  using record = std::unordered_map<std::string, any WITH_ALLOCATOR(any)>;
+  using record = std::unordered_map<std::string, any WITH_ALLOCATOR_PAIR(std::string, any)>;
 
   using fn     = auto (*)(const any&) -> any;
   using eff_fn = auto (*)() -> any;
@@ -188,9 +188,9 @@ class any {
   template <typename T, typename = typename std::enable_if<std::is_same<bool,T>::value>::type>
   any(const T val) noexcept : tag(Tag::Boolean), b(val) {}
 
-  any(const char * val) : tag(Tag::String), s(make_managed<string>(val)) {}
-  any(const string& val) : tag(Tag::String), s(make_managed<string>(val)) {}
-  any(string&& val) noexcept : tag(Tag::String), s(make_managed<string>(std::move(val))) {}
+  any(const char * val) : tag(Tag::String), s(make_managed_and_finalized<string>(val)) {}
+  any(const string& val) : tag(Tag::String), s(make_managed_and_finalized<string>(val)) {}
+  any(string&& val) noexcept : tag(Tag::String), s(make_managed_and_finalized<string>(std::move(val))) {}
 
   any(const managed<string>& val) noexcept : tag(Tag::String), s(val) {}
   any(managed<string>&& val) noexcept : tag(Tag::String), s(std::move(val)) {}
@@ -576,6 +576,7 @@ namespace data {
 } // namespace PureScript
 
 #undef WITH_ALLOCATOR
+#undef WITH_ALLOCATOR_PAIR
 #undef IS_POINTER_TYPE
 #undef DEFINE_OPERATOR
 #undef DEFINE_COMPARISON_OPERATOR
