@@ -28,14 +28,13 @@ import qualified Language.PureScript           as P
 import           Language.PureScript.Ide.Error
 import           Language.PureScript.Ide.Types
 import           Language.PureScript.Ide.Util
-import           System.IO.UTF8                (readUTF8FileT)
 
 parseModule
-  :: (MonadIO m)
+  :: (MonadIO m, MonadError IdeError m)
   => FilePath
   -> m (Either FilePath (FilePath, P.Module))
 parseModule path = do
-  contents <- liftIO (readUTF8FileT path)
+  contents <- ideReadFile path
   case P.parseModuleFromFile identity (path, contents) of
     Left _ -> pure (Left path)
     Right m -> pure (Right m)
@@ -47,7 +46,7 @@ getImports (P.Module _ _ _ declarations _) =
     isImport (P.PositionedDeclaration _ _ (P.ImportDeclaration a b c)) = Just (a, b, c)
     isImport _ = Nothing
 
-getImportsForFile :: (MonadIO m, MonadError PscIdeError m) =>
+getImportsForFile :: (MonadIO m, MonadError IdeError m) =>
                      FilePath -> m [ModuleImport]
 getImportsForFile fp = do
   moduleE <- parseModule fp
@@ -106,6 +105,10 @@ extractSpans ss d = case d of
   P.DataDeclaration _ name _ ctors ->
     (IdeNSType (P.runProperName name), ss)
     : map (\(cname, _) -> (IdeNSValue (P.runProperName cname), ss)) ctors
+  P.FixityDeclaration (Left (P.ValueFixity _ _ opName)) ->
+    [(IdeNSValue (P.runOpName opName), ss)]
+  P.FixityDeclaration (Right (P.TypeFixity _ _ opName)) ->
+    [(IdeNSType (P.runOpName opName), ss)]
   P.ExternDeclaration ident _ ->
     [(IdeNSValue (P.runIdent ident), ss)]
   P.ExternDataDeclaration name _ ->

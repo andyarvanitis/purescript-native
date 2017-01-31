@@ -28,13 +28,13 @@ import           Data.Aeson (decodeStrict)
 import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import           Data.Version (showVersion)
-import           Language.PureScript.Ide.Error (PscIdeError (..))
+import           Language.PureScript.Ide.Error (IdeError (..))
 import           Language.PureScript.Ide.Types
 import           Language.PureScript.Ide.Util
 
 import qualified Language.PureScript as P
 
-readExternFile :: (MonadIO m, MonadError PscIdeError m, MonadLogger m) =>
+readExternFile :: (MonadIO m, MonadError IdeError m, MonadLogger m) =>
                   FilePath -> m P.ExternsFile
 readExternFile fp = do
    parseResult <- liftIO (decodeStrict <$> BS.readFile fp)
@@ -138,9 +138,9 @@ annotateModule (defs, types) decls =
       IdeDeclTypeClass tc ->
         annotateType (tc ^. ideTCName . properNameT) (IdeDeclTypeClass tc)
       IdeDeclValueOperator op ->
-        annotateValue (op ^. ideValueOpAlias & valueOperatorAliasT) (IdeDeclValueOperator op)
+        annotateValue (op ^. ideValueOpName . opNameT) (IdeDeclValueOperator op)
       IdeDeclTypeOperator op ->
-        annotateType (op ^. ideTypeOpAlias & typeOperatorAliasT) (IdeDeclTypeOperator op)
+        annotateType (op ^. ideTypeOpName . opNameT) (IdeDeclTypeOperator op)
       IdeDeclKind i ->
         annotateKind (i ^. properNameT) (IdeDeclKind i)
       where
