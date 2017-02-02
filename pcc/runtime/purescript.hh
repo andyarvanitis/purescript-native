@@ -80,13 +80,9 @@ static constexpr size_t unknown_size = 64;
 //
 class any {
 
-  private:
-  static constexpr auto _managed_ = 0x10;
-
   public:
   enum class Tag {
-    Unknown,
-    Thunk,
+    Thunk = 0x10,
     Integer,
     Double,
     Character,
@@ -94,24 +90,18 @@ class any {
     Function,
     EffFunction,
     RawPointer,
-    String = _managed_,
-    Dictionary,
+    String,
+    Map,
     Data,
     Array,
     Record,
     Closure,
     EffClosure,
-    Pointer,
-    Invalid
+    Pointer
   };
 
   private:
   mutable Tag tag;
-
-  inline static auto isManaged(const Tag tag) -> decltype(_managed_) {
-    return static_cast<decltype(_managed_)>(tag) & _managed_;
-  }
-  static_assert(static_cast<decltype(_managed_)>(Tag::Invalid) & _managed_, "outside of range");
 
   public:
   struct as_thunk {
@@ -168,16 +158,20 @@ class any {
 
   private:
   union {
-    mutable thunk         t;
-    mutable int           i;
-    mutable double        d;
-    mutable char32_t      c;
-    mutable bool          b;
-    mutable fn            f;
-    mutable eff_fn        e;
-    mutable void *        v;
-    mutable uint64_t      u;
-    mutable managed<void> p;
+    mutable thunk                 t;
+    mutable int                   i;
+    mutable double                d;
+    mutable char32_t              c;
+    mutable bool                  b;
+    mutable fn                    f;
+    mutable eff_fn                e;
+    mutable void *                v;
+    mutable managed<string>       s;
+    mutable managed<array>        a;
+    mutable managed<record>       r;
+    mutable managed<Closure>      l;
+    mutable managed<EffClosure>   k;
+    mutable managed<void>         p;
   };
 
   public:
@@ -194,24 +188,24 @@ class any {
   template <typename T, typename = typename std::enable_if<std::is_same<bool,T>::value>::type>
   any(const T val) noexcept : tag(Tag::Boolean), b(val) {}
 
-  any(const char * val) : tag(Tag::String), p(make_managed_and_finalized<string>(val)) {}
-  any(const string& val) : tag(Tag::String), p(make_managed_and_finalized<string>(val)) {}
-  any(string&& val) noexcept : tag(Tag::String), p(make_managed_and_finalized<string>(std::move(val))) {}
+  any(const char * val) : tag(Tag::String), s(make_managed_and_finalized<string>(val)) {}
+  any(const string& val) : tag(Tag::String), s(make_managed_and_finalized<string>(val)) {}
+  any(string&& val) noexcept : tag(Tag::String), s(make_managed_and_finalized<string>(std::move(val))) {}
 
-  any(const managed<string>& val) noexcept : tag(Tag::String), p(val) {}
-  any(managed<string>&& val) noexcept : tag(Tag::String), p(std::move(val)) {}
+  any(const managed<string>& val) noexcept : tag(Tag::String), s(val) {}
+  any(managed<string>&& val) noexcept : tag(Tag::String), s(std::move(val)) {}
 
   template <size_t N>
-  any(dict<N>&& val) noexcept : tag(Tag::Dictionary), p(make_managed<dict<N>>(std::move(val))) {}
+  any(dict<N>&& val) noexcept : tag(Tag::Map), p(make_managed<dict<N>>(std::move(val))) {}
 
   template <size_t N>
   any(data<N>&& val) noexcept : tag(Tag::Data), p(make_managed<data<N>>(std::move(val))) {}
 
-  any(const array& val) : tag(Tag::Array), p(make_managed<array>(val)) {}
-  any(array&& val) noexcept : tag(Tag::Array), p(make_managed<array>(std::move(val))) {}
+  any(const array& val) : tag(Tag::Array), a(make_managed<array>(val)) {}
+  any(array&& val) noexcept : tag(Tag::Array), a(make_managed<array>(std::move(val))) {}
 
-  any(const record& val) : tag(Tag::Record), p(make_managed<record>(val)) {}
-  any(record&& val) noexcept : tag(Tag::Record), p(make_managed<record>(std::move(val))) {}
+  any(const record& val) : tag(Tag::Record), r(make_managed<record>(val)) {}
+  any(record&& val) noexcept : tag(Tag::Record), r(make_managed<record>(std::move(val))) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,fn>::value>::type* = 0) noexcept
@@ -220,7 +214,7 @@ class any {
   template <typename T, typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                            !std::is_convertible<T,fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any(const any&)>,T>::value>::type* = 0)
-    : tag(Tag::Closure), p(make_managed<Closure_<T>>(val)) {}
+    : tag(Tag::Closure), l(make_managed<Closure_<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,eff_fn>::value>::type* = 0) noexcept
@@ -230,7 +224,7 @@ class any {
             typename = typename std::enable_if<!std::is_same<any,T>::value &&
                                                !std::is_convertible<T,eff_fn>::value>::type>
   any(const T& val, typename std::enable_if<std::is_assignable<std::function<any()>,T>::value>::type* = 0)
-    : tag(Tag::EffClosure), p(make_managed<EffClosure_<T>>(val)) {}
+    : tag(Tag::EffClosure), k(make_managed<EffClosure_<T>>(val)) {}
 
   template <typename T>
   any(const T& val, typename std::enable_if<std::is_convertible<T,thunk>::value>::type* = 0) noexcept
@@ -255,56 +249,80 @@ class any {
 
 #if !defined(USE_GC)
   private:
-  auto destruct() const noexcept -> void {
-    if (isManaged(tag)) {
-      p.~managed<void>();
+  template <typename T,
+            typename U,
+            typename = typename std::enable_if<!std::is_reference<T>::value>::type>
+  static constexpr auto move_if_rvalue(U&& u) noexcept -> U&& {
+    return static_cast<U&&>(u);
+  }
+
+  template <typename T,
+            typename U,
+            typename = typename std::enable_if<std::is_reference<T>::value>::type>
+  static constexpr auto move_if_rvalue(U& u) noexcept -> U& {
+    return static_cast<U&>(u);
+  }
+
+  template <typename T>
+  auto assign(T&& other) const noexcept -> void {
+    switch (other.tag) {
+      case Tag::Thunk:          t = other.t;  break;
+      case Tag::Integer:        i = other.i;  break;
+      case Tag::Double:         d = other.d;  break;
+      case Tag::Character:      c = other.c;  break;
+      case Tag::Boolean:        b = other.b;  break;
+      case Tag::Function:       f = other.f;  break;
+      case Tag::EffFunction:    e = other.e;  break;
+      case Tag::RawPointer:     v = other.v;  break;
+
+      case Tag::String:      new (&s) managed<string>(move_if_rvalue<T>(other.s));      break;
+      case Tag::Array:       new (&a) managed<array>(move_if_rvalue<T>(other.a));       break;
+      case Tag::Record:      new (&r) managed<record>(move_if_rvalue<T>(other.r));      break;
+      case Tag::Closure:     new (&l) managed<Closure>(move_if_rvalue<T>(other.l));     break;
+      case Tag::EffClosure:  new (&k) managed<EffClosure>(move_if_rvalue<T>(other.k));  break;
+      case Tag::Map:
+      case Tag::Data:
+      case Tag::Pointer:     new (&p) managed<void>(move_if_rvalue<T>(other.p));        break;
+
+      default: assert(false && "Bad 'any' tag"); break;
     }
   }
 
-  static_assert(sizeof(u) >= sizeof(t), "size assumption");
-  static_assert(sizeof(u) >= sizeof(i), "size assumption");
-  static_assert(sizeof(u) >= sizeof(d), "size assumption");
-  static_assert(sizeof(u) >= sizeof(c), "size assumption");
-  static_assert(sizeof(u) >= sizeof(b), "size assumption");
-  static_assert(sizeof(u) >= sizeof(f), "size assumption");
-  static_assert(sizeof(u) >= sizeof(e), "size assumption");
-  static_assert(sizeof(u) >= sizeof(v), "size assumption");
+  auto destruct() -> void {
+    switch (tag) {
+      case Tag::String:      s.~managed<string>();      break;
+      case Tag::Array:       a.~managed<array>();       break;
+      case Tag::Record:      r.~managed<record>();      break;
+      case Tag::Closure:     l.~managed<Closure>();     break;
+      case Tag::EffClosure:  k.~managed<EffClosure>();  break;
+      case Tag::Map:
+      case Tag::Data:
+      case Tag::Pointer:     p.~managed<void>();        break;
 
-  auto copyAssign(const any& other) const noexcept -> void {
-    if (isManaged(other.tag)) {
-      new (&p) managed<void>(other.p);
-    } else {
-      u = other.u;
-    }
-  }
-  auto moveAssign(any& other) const noexcept -> void {
-    if (isManaged(other.tag)) {
-      new (&p) managed<void>(std::move(other.p));
-    } else {
-      u = other.u;
+      default: break;
     }
   }
 
   public:
   any(const any& other) noexcept : tag(other.tag) {
-    copyAssign(other);
+    assign(other);
   }
 
   any(any&& other) noexcept : tag(other.tag) {
-    moveAssign(other);
+    assign(std::move(other));
   }
 
   auto operator=(const any& rhs) noexcept -> any& {
     destruct();
     tag = rhs.tag;
-    copyAssign(rhs);
+    assign(rhs);
     return *this;
   }
 
   auto operator=(any&& rhs) noexcept -> any& {
     destruct();
     tag = rhs.tag;
-    moveAssign(rhs);
+    assign(std::move(rhs));
     return *this;
   }
 
@@ -413,7 +431,7 @@ namespace Private {
 
   template <size_t N>
   struct TagHelper<any::dict<N>> {
-    static constexpr any::Tag tag = any::Tag::Dictionary;
+    static constexpr any::Tag tag = any::Tag::Map;
   };
 
   template <size_t N>
@@ -440,8 +458,19 @@ inline auto cast(const any& a) ->
   return a;
 }
 
+template <typename T>
+inline auto cast(const any& a) ->
+    typename std::enable_if<std::is_same<T, string>::value ||
+                            std::is_same<T, any::array>::value ||
+                            std::is_same<T, any::record>::value, const T&>::type {
+  return a;
+}
+
 template <typename T,
-          typename = typename std::enable_if<std::is_class<T>::value>::type>
+          typename = typename std::enable_if<std::is_class<T>::value &&
+                                            !std::is_same<T,string>::value &&
+                                            !std::is_same<T,any::array>::value &&
+                                            !std::is_same<T,any::record>::value>::type>
 inline auto cast(const any& a) -> T& {
   return *static_cast<T*>(a.extractPointer(IF_DEBUG(Private::TagHelper<T>::tag)));
 }
