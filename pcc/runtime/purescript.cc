@@ -129,7 +129,11 @@ auto any::contains(const Private::Symbol key) const -> bool {
   return false;
 }
 
-auto any::at(const std::string& key) const -> const any& {
+auto any::cstr_cmp::operator ()(const char * a, const char * b) const -> bool {
+  return a == b ? false : std::strcmp(a, b) < 0;
+}
+
+auto any::at(const char * key) const -> const any& {
   return static_cast<const record&>(*this).at(key);
 }
 

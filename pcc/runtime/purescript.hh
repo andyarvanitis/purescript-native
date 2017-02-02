@@ -36,7 +36,7 @@
 #include <string>
 #include <array>
 #include <deque>
-#include <unordered_map>
+#include <map>
 #include <utility>
 #include <stdexcept>
 #include <iso646.h> // mostly for MS Visual Studio compiler
@@ -119,7 +119,6 @@ class any {
   static constexpr as_thunk unthunk = as_thunk{};
 
   using dict_pair = std::pair<const Private::Symbol, const any>;
-
   template <size_t N>
   using dict = std::array<const dict_pair, N>;
 
@@ -127,7 +126,14 @@ class any {
   using data = std::array<const any, N>;
 
   using array = std::deque<any WITH_ALLOCATOR(any)>;
-  using record = std::unordered_map<std::string, any WITH_ALLOCATOR_PAIR(std::string, any)>;
+
+  struct cstr_cmp {
+    auto operator ()(const char *, const char *) const -> bool;
+  };
+  using record = std::map<const char *,
+                          any,
+                          cstr_cmp
+                          WITH_ALLOCATOR_PAIR(const char *, any)>;
 
   using fn     = auto (*)(const any&) -> any;
   using eff_fn = auto (*)() -> any;
@@ -332,7 +338,7 @@ class any {
   operator const record&() const;
 
   auto operator[](const size_t) const -> const any&;
-  auto at(const std::string&) const -> const any&;
+  auto at(const char *) const -> const any&;
   auto size() const -> size_t;
   auto empty() const -> bool;
   auto contains(const Private::Symbol) const -> bool;
@@ -411,6 +417,16 @@ namespace Private {
   template <typename T, typename U=void>
   struct TagHelper {};
 
+  template <>
+  struct TagHelper<string> {
+    static constexpr any::Tag tag = any::Tag::String;
+  };
+
+  template <>
+  struct TagHelper<const char *> {
+    static constexpr any::Tag tag = any::Tag::String;
+  };
+
   template <size_t N>
   struct TagHelper<any::dict<N>> {
     static constexpr any::Tag tag = any::Tag::Dictionary;
@@ -419,6 +435,16 @@ namespace Private {
   template <size_t N>
   struct TagHelper<any::data<N>> {
     static constexpr any::Tag tag = any::Tag::Data;
+  };
+
+  template <>
+  struct TagHelper<any::array> {
+    static constexpr any::Tag tag = any::Tag::Array;
+  };
+
+  template <>
+  struct TagHelper<any::record> {
+    static constexpr any::Tag tag = any::Tag::Record;
   };
 
   template <typename T>
