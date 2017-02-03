@@ -133,7 +133,7 @@ class any {
   using record = std::map<const char *,
                           any,
                           cstr_cmp
-                          WITH_ALLOCATOR_PAIR(const char *, any)>;
+                          WITH_ALLOCATOR_PAIR(char * const, any)>;
 
   using fn     = auto (*)(const any&) -> any;
   using eff_fn = auto (*)() -> any;
