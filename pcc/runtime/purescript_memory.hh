@@ -20,7 +20,7 @@
   #include <gc/gc_cpp.h>
   #include <gc/gc_allocator.h>
   #define WITH_ALLOCATOR(T) , gc_allocator<T>
-  #define WITH_ALLOCATOR_PAIR(T, U) , std::hash<T>, std::equal_to<T>, gc_allocator<std::pair<const T, U>>
+  #define WITH_ALLOCATOR_PAIR(T, U) , gc_allocator<std::pair<const T, U>>
   #define MANAGED_TYPE(T) T*
   #define MAKE_MANAGED(T) new (GC) T
   #define MAKE_MANAGED_FINALIZED(T) new (PointerFreeGC, [](void* p, void*){ static_cast<T*>(p)->~T(); }) T
