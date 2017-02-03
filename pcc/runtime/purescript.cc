@@ -28,7 +28,7 @@ any::EffClosure::~EffClosure() {}
 auto any::operator()(const any& arg) const -> any {
   const any& variant = unthunkVariant(*this);
   if (variant.tag == Tag::Closure) {
-    return (*variant.l)(arg);
+    return (*static_cast<const Closure*>(POINTER_FROM_MEMBER(variant.p)))(arg);
   }
   assert(variant.tag == Tag::Function);
   return (*variant.f)(arg);
@@ -42,7 +42,7 @@ auto any::operator()(const as_thunk) const -> const any& {
 auto any::operator()() const -> any {
   const any& variant = unthunkVariant(*this);
   if (variant.tag == Tag::EffClosure) {
-    return (*variant.k)();
+    return (*static_cast<const EffClosure*>(POINTER_FROM_MEMBER(variant.p)))();
   }
   assert(variant.tag == Tag::EffFunction);
   return (*variant.e)();
@@ -77,19 +77,19 @@ any::operator size_t() const {
 }
 
 any::operator const string&() const {
-  RETURN_VALUE(Tag::String, s, *)
+  return *static_cast<const string*>(extractPointer(IF_DEBUG(Tag::String)));
 }
 
 any::operator const char *() const {
-  RETURN_VALUE(Tag::String, s->c_str(),)
+  return static_cast<const string*>(extractPointer(IF_DEBUG(Tag::String)))->c_str();
 }
 
 any::operator const array&() const {
-  RETURN_VALUE(Tag::Array, a, *)
+  return *static_cast<const array*>(extractPointer(IF_DEBUG(Tag::Array)));
 }
 
 any::operator const record&() const {
-  RETURN_VALUE(Tag::Record, r, *)
+  return *static_cast<const record*>(extractPointer(IF_DEBUG(Tag::Record)));
 }
 
 auto any::extractPointer(IF_DEBUG(const any::Tag t)) const -> void* {
@@ -129,7 +129,11 @@ auto any::contains(const Private::Symbol key) const -> bool {
   return false;
 }
 
-auto any::at(const std::string& key) const -> const any& {
+auto any::cstr_cmp::operator ()(const char * a, const char * b) const -> bool {
+  return a == b ? false : std::strcmp(a, b) < 0;
+}
+
+auto any::at(const char * key) const -> const any& {
   return static_cast<const record&>(*this).at(key);
 }
 
@@ -145,7 +149,8 @@ auto any::at(const std::string& key) const -> const any& {
       case any::Tag::Double:     return lhs.d op static_cast<decltype(any::d)>(rhs); \
       case any::Tag::Character:  return lhs.c op static_cast<decltype(any::c)>(rhs); \
       case any::Tag::Boolean:    return lhs.b op static_cast<decltype(any::b)>(rhs); \
-      case any::Tag::String:     return *lhs.s op static_cast<const string&>(rhs); \
+      case any::Tag::String:     return *static_cast<const string*>(POINTER_FROM_MEMBER(lhs.p)) \
+                                      op static_cast<const string&>(rhs); \
       case any::Tag::RawPointer: return lhs.v op cast<decltype(any::v)>(rhs); \
       case any::Tag::Pointer:    return lhs.p op any::unthunkVariant(rhs).p; \
       default: assert(false && "Unsupported tag for operator " #op); \
@@ -170,7 +175,8 @@ auto operator+(const any& lhs_, const any& rhs) -> any {
     case any::Tag::Integer:   return lhs.i + static_cast<decltype(any::i)>(rhs);
     case any::Tag::Double:    return lhs.d + static_cast<decltype(any::d)>(rhs);
     case any::Tag::Character: return decltype(any::c){lhs.c + static_cast<decltype(any::c)>(rhs)};
-    case any::Tag::String:    return *lhs.s + static_cast<const string&>(rhs);
+    case any::Tag::String:    return *static_cast<const string*>(POINTER_FROM_MEMBER(lhs.p))
+                                    + static_cast<const string&>(rhs);
     default: assert(false && "Unsupported tag for '+' operator");
   }
   return nullptr;
