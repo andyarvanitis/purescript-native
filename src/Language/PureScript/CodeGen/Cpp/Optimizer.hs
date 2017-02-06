@@ -67,14 +67,26 @@ optimize nm cpp = do
 optimize' :: (MonadReader Options m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
 optimize' nm cpp = do
   opts <- ask
-  untilFixedPoint (liftM toAutoVars . inlineFnComposition . inlineUnsafePartial . applyAll
+  cpp' <- untilFixedPoint (liftM toAutoVars .
+                           inlineFnComposition .
+                           inlineUnsafePartial .
+                           tidyUp .
+                           applyAll
+    [ inlineCommonValues
+    , inlineCommonOperators
+    , inlineOperator (C.dataFunction, C.apply) $ \f x -> CppApp f [x]
+    , inlineOperator (C.dataFunction, C.applyFlipped) $ \x f -> CppApp f [x]
+    , inlineOperator (C.dataArray, C.unsafeIndex) $ flip CppIndexer
+    ]) cpp
+  untilFixedPoint (return . tidyUp) . tco opts . magicDo opts $ cpp'
+  where
+  tidyUp :: Cpp -> Cpp
+  tidyUp = applyAll
     [ collapseNestedBlocks
     , collapseCtorChecksToSwitch
     , collapseNestedIfs
     , collapseIfElses
     , removeCurrying nm
-    , tco opts
-    , magicDo opts
     , removeCodeAfterReturnStatements
     , removeCodeAfterContinueStatements
     , removeUnusedArg
@@ -82,14 +94,7 @@ optimize' nm cpp = do
     , etaConvert
     , evaluateIifes
     , inlineVariables
-    , inlineCommonValues
-    , inlineOperator (C.prelude, (C.$)) $ \f x -> CppApp f [x]
-    , inlineOperator (C.dataFunction, C.apply) $ \f x -> CppApp f [x]
-    , inlineOperator (C.prelude, (C.#)) $ \x f -> CppApp f [x]
-    , inlineOperator (C.dataFunction, C.applyFlipped) $ \x f -> CppApp f [x]
-    , inlineOperator (C.dataArray, C.unsafeIndex) $ flip CppIndexer
-    , inlineCommonOperators
-    ]) cpp
+    ]
 
 untilFixedPoint :: (Monad m, Eq a) => (a -> m a) -> a -> m a
 untilFixedPoint f = go

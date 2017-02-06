@@ -18,7 +18,7 @@ module Language.PureScript.CodeGen.Cpp.Recursion
 
 import Prelude.Compat
 import Data.List
-import Data.Maybe (fromJust)
+import Data.Maybe (catMaybes, fromJust)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 
@@ -68,7 +68,10 @@ convertRecursiveLets = everywhereOnCpp go
 convertRecursive :: [Text] -> [Cpp] -> [Cpp]
 -------------------------------------------------------------------------------------------------
 convertRecursive names cpps
-  | (_:_) <- lets = (everywhereOnCppTopDown remRecLet <$> cpps) ++ undefines
+  | (_:_) <- lets
+  = let recLets = everywhereOnCppTopDown convRecLet <$> cpps
+        letDeps = catMaybes (letDep <$> cpps)
+    in nub (letDeps ++ recLets) ++ undefines
   where
   tableName :: Text
   tableName = "let"
@@ -88,12 +91,19 @@ convertRecursive names cpps
     | name `elem` names = [cpp]
   recLet _ = []
   --
-  remRecLet :: Cpp -> Cpp
-  remRecLet cpp@(CppVariableIntroduction (name, _) _ (Just _))
+  convRecLet :: Cpp -> Cpp
+  convRecLet cpp@(CppVariableIntroduction (name, _) _ (Just _))
     | name == head names = CppNamespace "" $ defines ++ [letTable]
     | name `elem` names = CppNoOp
     | otherwise = cpp
-  remRecLet cpp = cpp
+  convRecLet cpp = cpp
+  --
+  letDep :: Cpp -> Maybe Cpp
+  letDep cpp@(CppVariableIntroduction (name, _) _ (Just _))
+    | name `elem` names = Nothing
+    | everythingOnCpp (||) (\v -> v == CppVar name) letTable = Just cpp
+    | otherwise = Nothing
+  letDep _ = Nothing
   --
   tableItem :: Cpp -> (Text, Cpp)
   tableItem (CppVariableIntroduction (name, _) _ (Just body)) =
