@@ -108,8 +108,10 @@ inlineCommonValues = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
   convert (CppApp fn [dict])
-    | isDict' [semiringNumber, semiringInt] dict && isFn fnZero fn = CppNumericLiteral (Left 0)
-    | isDict' [semiringNumber, semiringInt] dict && isFn fnOne fn = CppNumericLiteral (Left 1)
+    | isDict semiringInt dict && isFn fnZero fn = CppNumericLiteral (Left 0)
+    | isDict semiringInt dict && isFn fnOne fn = CppNumericLiteral (Left 1)
+    | isDict semiringNumber dict && isFn fnZero fn = CppNumericLiteral (Right 0.0)
+    | isDict semiringNumber dict && isFn fnOne fn = CppNumericLiteral (Right 1.0)
     | isDict boundedBoolean dict && isFn fnBottom fn = CppBooleanLiteral False
     | isDict boundedBoolean dict && isFn fnTop fn = CppBooleanLiteral True
   convert (CppApp (CppApp fn [dict]) [x])
