@@ -267,14 +267,14 @@ class any {
     }
   }
 
-  static_assert(sizeof(u) >= sizeof(t), "size assumption");
-  static_assert(sizeof(u) >= sizeof(i), "size assumption");
-  static_assert(sizeof(u) >= sizeof(d), "size assumption");
-  static_assert(sizeof(u) >= sizeof(c), "size assumption");
-  static_assert(sizeof(u) >= sizeof(b), "size assumption");
-  static_assert(sizeof(u) >= sizeof(f), "size assumption");
-  static_assert(sizeof(u) >= sizeof(e), "size assumption");
-  static_assert(sizeof(u) >= sizeof(v), "size assumption");
+  static_assert(sizeof(any::u) >= sizeof(any::t), "size assumption");
+  static_assert(sizeof(any::u) >= sizeof(any::i), "size assumption");
+  static_assert(sizeof(any::u) >= sizeof(any::d), "size assumption");
+  static_assert(sizeof(any::u) >= sizeof(any::c), "size assumption");
+  static_assert(sizeof(any::u) >= sizeof(any::b), "size assumption");
+  static_assert(sizeof(any::u) >= sizeof(any::f), "size assumption");
+  static_assert(sizeof(any::u) >= sizeof(any::e), "size assumption");
+  static_assert(sizeof(any::u) >= sizeof(any::v), "size assumption");
 
   auto copyAssign(const any& other) const noexcept -> void {
     if (isManaged(other.tag)) {
