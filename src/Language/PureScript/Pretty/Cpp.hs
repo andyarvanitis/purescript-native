@@ -501,7 +501,7 @@ binary op str = AssocL match (\v1 v2 -> v1 <> str <> v2)
   match = mkPattern match'
     where
     match' (CppBinary op' v1@(CppStringLiteral _) v2@(CppStringLiteral _))
-      | op' == op = Just (CppApp (CppVar "std::string") [v1], v2)
+      | op' == op = Just (CppApp (CppVar $ runType stringType) [v1], v2)
     match' (CppBinary op' v1 v2)
       | op' == op = Just (v1, v2)
     match' _ = Nothing

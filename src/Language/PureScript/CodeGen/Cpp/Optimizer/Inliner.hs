@@ -18,7 +18,6 @@
 module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
   ( inlineVariables
   , inlineCommonValues
-  , inlineOperator
   , inlineCommonOperators
   , inlineFnComposition
   , inlineUnsafePartial
@@ -29,7 +28,7 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
   ) where
 
 import Prelude.Compat
-import Data.Text (Text)
+import Data.Text (Text, cons)
 
 import Control.Monad.Supply.Class (MonadSupply, freshName)
 
@@ -137,14 +136,15 @@ inlineCommonValues = everywhereOnCpp convert
   fnSubtract = (C.dataRing, C.sub)
   fnNegate = (C.dataRing, C.negate)
 
-inlineOperator :: (Text, Text) -> (Cpp -> Cpp -> Cpp) -> Cpp -> Cpp
-inlineOperator (m, op) f = everywhereOnCpp convert
+inlineNonClassFunction :: (Text, Text) -> (Cpp -> Cpp -> Cpp) -> Cpp -> Cpp
+inlineNonClassFunction (m, op) f = everywhereOnCpp convert
   where
   convert :: Cpp -> Cpp
   convert (CppApp op' [x, y]) | isOp op' = f x y
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
-  isOp (CppAccessor (CppVar longForm) (CppVar m')) = m == m' && longForm == safeName op
+  isOp (CppAccessor (CppVar longForm) (CppVar m')) =
+    m == m' && (longForm == safeName op || longForm == ('*' `cons` safeName op))
   isOp _ = False
 
 inlineCommonOperators :: Cpp -> Cpp
@@ -203,6 +203,10 @@ inlineCommonOperators = applyAll $
   , binary' C.dataIntBits C.shr ShiftRight
   -- , binary' C.dataIntBits C.zshr ZeroFillShiftRight
   , unary'  C.dataIntBits C.complement BitwiseNot
+
+  , inlineNonClassFunction (C.dataFunction, C.apply) $ \f x -> CppApp f [x]
+  , inlineNonClassFunction (C.dataFunction, C.applyFlipped) $ \x f -> CppApp f [x]
+  , inlineNonClassFunction (C.dataArray, C.unsafeIndex) $ flip CppIndexer
   ] ++
   []
   -- [ fn | i <- [0..10], fn <- [ mkFn i, runFn i ] ]
@@ -443,4 +447,4 @@ opDisj :: (Text, Text)
 opDisj = (C.dataHeytingAlgebra, C.disj)
 
 opNot :: (Text, Text)
-opNot = (C.dataHeytingAlgebra, C.not)
+opNot = (C.dataHeytingAlgebra, safeName C.not)
