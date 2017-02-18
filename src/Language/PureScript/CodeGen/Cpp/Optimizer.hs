@@ -40,13 +40,11 @@ module Language.PureScript.CodeGen.Cpp.Optimizer (
 
 import Prelude.Compat
 
-import Control.Monad (liftM)
 import Control.Monad.Reader (MonadReader, ask, asks)
 import Control.Monad.Supply.Class (MonadSupply)
 
 import Language.PureScript.CodeGen.Cpp.AST
 import Language.PureScript.Options
-import qualified Language.PureScript.Constants as C
 
 import Language.PureScript.CodeGen.Cpp.Optimizer.Blocks
 import Language.PureScript.CodeGen.Cpp.Optimizer.Common
@@ -67,18 +65,14 @@ optimize nm cpp = do
 optimize' :: (MonadReader Options m, MonadSupply m) => NamesMap -> Cpp -> m Cpp
 optimize' nm cpp = do
   opts <- ask
-  cpp' <- untilFixedPoint (liftM toAutoVars .
-                           inlineFnComposition .
+  cpp' <- untilFixedPoint (inlineFnComposition .
                            inlineUnsafePartial .
                            tidyUp .
                            applyAll
     [ inlineCommonValues
     , inlineCommonOperators
-    , inlineOperator (C.dataFunction, C.apply) $ \f x -> CppApp f [x]
-    , inlineOperator (C.dataFunction, C.applyFlipped) $ \x f -> CppApp f [x]
-    , inlineOperator (C.dataArray, C.unsafeIndex) $ flip CppIndexer
     ]) cpp
-  untilFixedPoint (return . tidyUp) . tco opts . magicDo opts $ cpp'
+  untilFixedPoint (return . removeCurrying nm) . toAutoVars . tidyUp . tco opts . magicDo opts $ cpp'
   where
   tidyUp :: Cpp -> Cpp
   tidyUp = applyAll
@@ -86,7 +80,6 @@ optimize' nm cpp = do
     , collapseCtorChecksToSwitch
     , collapseNestedIfs
     , collapseIfElses
-    , removeCurrying nm
     , removeCodeAfterReturnStatements
     , removeCodeAfterContinueStatements
     , removeUnusedArg
