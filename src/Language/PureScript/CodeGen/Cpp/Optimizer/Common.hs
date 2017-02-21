@@ -18,9 +18,10 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Common where
 import Prelude.Compat
 
 import Data.Maybe (fromMaybe)
-import Data.Text (Text, cons)
+import Data.Text (Text)
 
 import Language.PureScript.CodeGen.Cpp.AST
+import Language.PureScript.CodeGen.Cpp.Common
 
 applyAll :: [a -> a] -> a -> a
 applyAll = foldl1 (.)
@@ -82,7 +83,7 @@ removeFromBlock _  cpp = cpp
 
 isFn :: (Text, Text) -> Cpp -> Bool
 isFn (moduleName, fnName) (CppAccessor (CppVar x) (CppVar y)) =
-  (x == fnName || x == ('*' `cons` fnName)) && y == moduleName
+  (x == fnName || x == curriedName fnName) && y == moduleName
 isFn _ _ = False
 
 isDict :: (Text, Text) -> Cpp -> Bool

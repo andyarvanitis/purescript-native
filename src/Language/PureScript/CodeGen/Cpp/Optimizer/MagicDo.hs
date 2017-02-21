@@ -86,7 +86,8 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   -- Check if an expression represents the polymorphic pure or return function
   isPurePoly = isFn (C.controlApplicative, C.pure')
   -- Check if an expression represents a function in the Eff module
-  isEffFunc name (CppAccessor (CppVar name') (CppVar eff)) = eff == C.eff && name == name'
+  isEffFunc name (CppAccessor (CppVar name') (CppVar eff)) =
+    eff == C.eff && (name == name' || curriedName name == name')
   isEffFunc _ _ = False
 
   -- Remove __do function applications which remain after desugaring
@@ -131,7 +132,7 @@ inlineST = everywhereOnCpp convertBlock
     if agg then CppAssignment ref (CppApp func [ref]) else CppAssignment (CppAccessor (CppVar C.stRefValue) ref) (CppApp func [CppAccessor (CppVar C.stRefValue) ref])
   convert _ other = other
   -- Check if an expression represents a function in the ST module
-  isSTFunc name (CppAccessor (CppVar name') (CppVar st)) = st == C.st && name == name'
+  isSTFunc name (CppAccessor (CppVar name') (CppVar st)) = st == C.st && (name == name' || curriedName name == name')
   isSTFunc _ _ = False
   -- Find all ST Refs initialized in this block
   findSTRefsIn = everythingOnCpp (++) isSTRef

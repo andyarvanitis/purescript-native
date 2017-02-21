@@ -267,3 +267,10 @@ properNameIsCppReserved name =
               , "PureScript"
               , "SYM"
               ]
+
+curriedName :: Text -> Text
+curriedName name
+  | T.null name = name
+curriedName name
+  | T.head name == '*' = name
+  | otherwise = '*' `T.cons` name
