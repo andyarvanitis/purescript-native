@@ -251,13 +251,8 @@ class any {
   any(T&& val, typename std::enable_if<std::is_assignable<managed<void>,T>::value>::type* = 0) noexcept
     : tag(Tag::Pointer), p(std::move(val)) {}
 
-  // Explicit void* to raw pointer value
-  template <typename T>
-  any(const T& val, typename std::enable_if<std::is_same<T,void*>::value>::type* = 0) noexcept
-    : tag(Tag::RawPointer), v(val) {}
-
+  any(void * val) noexcept : tag(Tag::RawPointer), v(val) {}
   any(nullptr_t) noexcept : tag(Tag::RawPointer), v(nullptr) {}
-
 
 #if !defined(USE_GC)
   private:
@@ -336,6 +331,17 @@ class any {
   operator const char *() const;
   operator const array&() const;
   operator const record&() const;
+
+  operator void *() const {
+    return extractPointer(IF_DEBUG(Tag::RawPointer));
+  }
+
+  template <typename T,
+            typename = typename std::enable_if<std::is_pointer<T>::value &&
+                                               std::is_class<typename std::remove_pointer<T>::type>::value>::type>
+  operator T() const {
+    return static_cast<T>(extractPointer(IF_DEBUG(Tag::RawPointer)));
+  }
 
   auto operator[](const size_t) const -> const any&;
   auto at(const char *) const -> const any&;

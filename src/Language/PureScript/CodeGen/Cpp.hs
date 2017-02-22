@@ -358,10 +358,10 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Var (_, _, _, Just IsNewtype) ident) = return $ varToCpp ident
   valueToCpp (Var (_, _, _, Just (IsConstructor _ [])) ident) = return $ CppApp (varToCpp ident) []
   valueToCpp (Var (_, _, Just ty, _) ident@(Qualified (Just _) _))
-    | arity ty > 0 = return . curriedName' $ varToCpp ident
+    | arity ty > 0 = return . curriedVar $ varToCpp ident
   valueToCpp (Var (_, _, Nothing, _) ident@(Qualified (Just _) _))
     | Just (ty, _, _) <- M.lookup ident (E.names env)
-    , arity ty > 0 = return . curriedName' $ varToCpp ident
+    , arity ty > 0 = return . curriedVar $ varToCpp ident
   valueToCpp (Var _ ident) = return $ varToCpp ident
   valueToCpp (Literal _ (NumericLiteral n)) = return (CppNumericLiteral n)
   valueToCpp (Literal _ (StringLiteral s)) = return (CppStringLiteral s)
@@ -410,7 +410,7 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
            zip
              (CppSymbol . mkString <$> (sort $ superClassDictionaryNames constraints) ++ (fst <$> fns))
              args'
-      Var _ (Qualified (Just _) _) -> applied f args' curriedName'
+      Var _ (Qualified (Just _) _) -> applied f args' curriedVar
       _ -> applied f args' id
     where
     applied f args g = flip (foldl (\fn a -> CppApp (g fn) [a])) args <$> valueToCpp f
@@ -745,20 +745,11 @@ optIndexers classes = everywhereOnCpp dictIndexerToEnum
   dictIndexerToEnum cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
-curriedName :: Text -> Text
+curriedVar :: Cpp -> Cpp
 ---------------------------------------------------------------------------------------------------
-curriedName name
-  | Text.null name = name
-curriedName name
-  | Text.head name == '*' = name
-  | otherwise = '*' `Text.cons` name
-
----------------------------------------------------------------------------------------------------
-curriedName' :: Cpp -> Cpp
----------------------------------------------------------------------------------------------------
-curriedName' (CppVar name) = CppVar (curriedName name)
-curriedName' (CppAccessor a b) = CppAccessor (curriedName' a) b
-curriedName' cpp = cpp
+curriedVar (CppVar name) = CppVar (curriedName name)
+curriedVar (CppAccessor a b) = CppAccessor (curriedVar a) b
+curriedVar cpp = cpp
 
 ---------------------------------------------------------------------------------------------------
 primFn :: T.Type -> ([CppType], Maybe CppType)

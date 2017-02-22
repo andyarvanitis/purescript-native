@@ -186,8 +186,6 @@ nameIsCppReserved name =
               , "noexcept"
               , "not"
               , "not_eq"
-              , "NULL"
-              , "null"
               , "nullptr"
               , "nullptr_t"
               , "operator"
@@ -263,8 +261,16 @@ moduleNameToCpp (ModuleName pns) =
 --
 properNameIsCppReserved :: Text -> Bool
 properNameIsCppReserved name =
-  name `elem` [ "Private"
+  name `elem` [ "DEFINE_SYMBOL"
+              , "NULL"
+              , "Private"
               , "PureScript"
               , "SYM"
-              , "DEFINE_SYMBOL"
               ]
+
+curriedName :: Text -> Text
+curriedName name
+  | T.null name = name
+curriedName name
+  | T.head name == '*' = name
+  | otherwise = '*' `T.cons` name

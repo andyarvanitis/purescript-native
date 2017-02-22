@@ -28,7 +28,7 @@ module Language.PureScript.CodeGen.Cpp.Optimizer.Inliner
   ) where
 
 import Prelude.Compat
-import Data.Text (Text, cons)
+import Data.Text (Text)
 
 import Control.Monad.Supply.Class (MonadSupply, freshName)
 
@@ -144,7 +144,17 @@ inlineNonClassFunction (m, op) f = everywhereOnCpp convert
   convert (CppApp (CppApp op' [x]) [y]) | isOp op' = f x y
   convert other = other
   isOp (CppAccessor (CppVar longForm) (CppVar m')) =
-    m == m' && (longForm == safeName op || longForm == ('*' `cons` safeName op))
+    m == m' && (longForm == safeName op || longForm == (curriedName $ safeName op))
+  isOp _ = False
+
+inlineFunctionWithDict :: (Text, Text) -> (Cpp -> Cpp -> Cpp) -> Cpp -> Cpp
+inlineFunctionWithDict (m, op) f = everywhereOnCpp convert
+  where
+  convert :: Cpp -> Cpp
+  convert (CppApp (CppApp (CppApp op' [_]) [x]) [y]) | isOp op' = f x y
+  convert other = other
+  isOp (CppAccessor (CppVar longForm) (CppVar m')) =
+    m == m' && (longForm == safeName op || longForm == (curriedName $ safeName op))
   isOp _ = False
 
 inlineCommonOperators :: Cpp -> Cpp
@@ -206,7 +216,7 @@ inlineCommonOperators = applyAll $
 
   , inlineNonClassFunction (C.dataFunction, C.apply) $ \f x -> CppApp f [x]
   , inlineNonClassFunction (C.dataFunction, C.applyFlipped) $ \x f -> CppApp f [x]
-  , inlineNonClassFunction (C.dataArray, C.unsafeIndex) $ flip CppIndexer
+  , inlineFunctionWithDict (C.dataArray, C.unsafeIndex) $ flip CppIndexer
   ] ++
   []
   -- [ fn | i <- [0..10], fn <- [ mkFn i, runFn i ] ]
