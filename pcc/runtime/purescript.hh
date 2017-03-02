@@ -44,7 +44,7 @@
 
 namespace PureScript {
 
-using cstring = const char *;
+using cstring = const char *; // TODO: deprecated
 using std::string;
 using std::nullptr_t;
 using std::runtime_error;
@@ -193,6 +193,9 @@ class any {
     assert(val >= std::numeric_limits<decltype(i)>::min() &&
            val <= std::numeric_limits<decltype(i)>::max());
   }
+  any(const size_t val) noexcept : tag(Tag::Integer), i(static_cast<decltype(i)>(val)) {
+    assert(val <= std::numeric_limits<decltype(i)>::max());
+  }
   any(const double val) noexcept : tag(Tag::Double), d(val) {}
   any(const char32_t val) noexcept : tag(Tag::Character), c(val) {}
   any(const char val) noexcept : tag(Tag::Character), c(val) {}
@@ -333,14 +336,14 @@ class any {
   operator const record&() const;
 
   operator void *() const {
-    return extractPointer(IF_DEBUG(Tag::RawPointer));
+    return rawPointer();
   }
 
   template <typename T,
             typename = typename std::enable_if<std::is_pointer<T>::value &&
                                                std::is_class<typename std::remove_pointer<T>::type>::value>::type>
   operator T() const {
-    return static_cast<T>(extractPointer(IF_DEBUG(Tag::RawPointer)));
+    return static_cast<T>(rawPointer());
   }
 
   auto operator[](const size_t) const -> const any&;
@@ -419,77 +422,24 @@ class any {
 
 }; // class any
 
-namespace Private {
-  template <typename T, typename U=void>
-  struct TagHelper {};
-
-  template <>
-  struct TagHelper<string> {
-    static constexpr any::Tag tag = any::Tag::String;
-  };
-
-  template <>
-  struct TagHelper<const char *> {
-    static constexpr any::Tag tag = any::Tag::String;
-  };
-
-  template <size_t N>
-  struct TagHelper<any::dict<N>> {
-    static constexpr any::Tag tag = any::Tag::Dictionary;
-  };
-
-  template <size_t N>
-  struct TagHelper<any::data<N>> {
-    static constexpr any::Tag tag = any::Tag::Data;
-  };
-
-  template <>
-  struct TagHelper<any::array> {
-    static constexpr any::Tag tag = any::Tag::Array;
-  };
-
-  template <>
-  struct TagHelper<any::record> {
-    static constexpr any::Tag tag = any::Tag::Record;
-  };
-
-  template <typename T>
-  struct TagHelper<T> {
-    static constexpr any::Tag tag = any::Tag::Pointer;
-  };
+template <typename T,
+          typename = typename std::enable_if<std::is_class<T>::value>::type>
+inline auto cast_managed(const any& a) -> T& {
+  return *static_cast<T*>(a.extractPointer(IF_DEBUG(any::Tag::Pointer)));
 }
 
-// Pass-through
-template <typename T>
-constexpr auto cast(const T& a) -> const T& {
-  return a;
+// TODO: Deprecated - use static_cast
+template <typename T,
+          typename = typename std::enable_if<!std::is_class<T>::value>::type>
+inline auto cast(const any& a) -> T {
+  return static_cast<T>(a);
 }
 
-template <typename T>
-inline auto cast(const any& a) ->
-    typename std::enable_if<std::is_arithmetic<T>::value ||
-                            std::is_same<T,const char *>::value, T>::type {
-  return a;
-}
-
+// TODO: Deprecated - use cast_managed
 template <typename T,
           typename = typename std::enable_if<std::is_class<T>::value>::type>
 inline auto cast(const any& a) -> T& {
-  return *static_cast<T*>(a.extractPointer(IF_DEBUG(Private::TagHelper<T>::tag)));
-}
-
-template <typename T,
-          typename = typename std::enable_if<std::is_pointer<T>::value &&
-                                            !std::is_same<T,void*>::value &&
-                                            !std::is_same<T,const char *>::value>::type>
-inline auto cast(const any& a) -> T {
-  return static_cast<T>(a.extractPointer(IF_DEBUG(Private::TagHelper<T>::tag)));
-}
-
-template <typename T>
-inline auto cast(const any& a) ->
-    typename std::enable_if<std::is_same<void*, T>::value, T>::type {
-  return a.rawPointer();
+  return cast_managed<T>(a);
 }
 
 namespace dict {
@@ -501,7 +451,7 @@ namespace dict {
 
   template <size_t N>
   inline auto get(const any& a) -> const any& {
-    return cast<any::dict<N+1>>(a)[N].second;
+    return (*static_cast<const any::dict<N+1>*>(a.extractPointer(IF_DEBUG(any::Tag::Dictionary))))[N].second;
   }
 
   template <size_t N>
@@ -519,7 +469,7 @@ namespace dict {
   }
 
   inline auto get(const Private::Symbol key, const any& a) -> const any& {
-    return get(key, cast<any::dict<unknown_size>>(a));
+    return get(key, *static_cast<const any::dict<unknown_size>*>(a.extractPointer(IF_DEBUG(any::Tag::Dictionary))));
   }
 
   #define P(N)    any::dict_pair&& arg ## N
@@ -567,7 +517,7 @@ namespace data {
 
   template <size_t N>
   inline auto get(const any& a) -> const any& {
-    return cast<any::data<N+1>>(a)[N];
+    return (*static_cast<const any::data<N+1>*>(a.extractPointer(IF_DEBUG(any::Tag::Data))))[N];
   }
 
   template <typename T>
