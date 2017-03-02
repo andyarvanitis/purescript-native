@@ -119,7 +119,8 @@ auto any::empty() const -> bool {
 
 auto any::contains(const Private::Symbol key) const -> bool {
   // TODO: assumes at least one element -- safe assumption?
-  const auto& m = cast<dict<unknown_size>>(*this);
+  const auto& m =
+    *static_cast<const any::dict<unknown_size>*>(this->extractPointer(IF_DEBUG(any::Tag::Dictionary)));
   std::remove_reference<decltype(m)>::type::size_type i = 0;
   do {
     if (m[i].first == key) {
@@ -151,7 +152,7 @@ auto any::at(const char * key) const -> const any& {
       case any::Tag::Boolean:    return lhs.b op static_cast<decltype(any::b)>(rhs); \
       case any::Tag::String:     return *static_cast<const string*>(POINTER_FROM_MEMBER(lhs.p)) \
                                       op static_cast<const string&>(rhs); \
-      case any::Tag::RawPointer: return lhs.v op cast<decltype(any::v)>(rhs); \
+      case any::Tag::RawPointer: return lhs.v op static_cast<decltype(any::v)>(rhs); \
       case any::Tag::Pointer:    return lhs.p op any::unthunkVariant(rhs).p; \
       default: assert(false && "Unsupported tag for operator " #op); \
     } \

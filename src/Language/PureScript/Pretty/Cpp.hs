@@ -268,7 +268,7 @@ literals = mkPattern' match
       CppNumericLiteral {} -> vstr
       CppStringLiteral {} -> vstr
       CppBooleanLiteral {} -> vstr
-      _ -> "cast" <> angles (runType typ) <> parensT val'
+      _ -> "static_cast" <> angles (runType typ) <> parensT val'
     where
     vstr = prettyPrintCpp1 val
     val' | "(" `T.isInfixOf` vstr || "[" `T.isInfixOf` vstr = parensT vstr
