@@ -422,10 +422,50 @@ class any {
 
 }; // class any
 
+namespace Private {
+  template <typename T, typename U=void>
+  struct TagHelper {};
+
+  template <>
+  struct TagHelper<string> {
+    static constexpr any::Tag tag = any::Tag::String;
+  };
+
+  template <>
+  struct TagHelper<const char *> {
+    static constexpr any::Tag tag = any::Tag::String;
+  };
+
+  template <size_t N>
+  struct TagHelper<any::dict<N>> {
+    static constexpr any::Tag tag = any::Tag::Dictionary;
+  };
+
+  template <size_t N>
+  struct TagHelper<any::data<N>> {
+    static constexpr any::Tag tag = any::Tag::Data;
+  };
+
+  template <>
+  struct TagHelper<any::array> {
+    static constexpr any::Tag tag = any::Tag::Array;
+  };
+
+  template <>
+  struct TagHelper<any::record> {
+    static constexpr any::Tag tag = any::Tag::Record;
+  };
+
+  template <typename T>
+  struct TagHelper<T> {
+    static constexpr any::Tag tag = any::Tag::Pointer;
+  };
+}
+
 template <typename T,
           typename = typename std::enable_if<std::is_class<T>::value>::type>
 inline auto cast_managed(const any& a) -> T& {
-  return *static_cast<T*>(a.extractPointer(IF_DEBUG(any::Tag::Pointer)));
+  return *static_cast<T*>(a.extractPointer(IF_DEBUG(Private::TagHelper<T>::tag)));
 }
 
 // TODO: Deprecated - use static_cast
@@ -451,7 +491,7 @@ namespace dict {
 
   template <size_t N>
   inline auto get(const any& a) -> const any& {
-    return (*static_cast<const any::dict<N+1>*>(a.extractPointer(IF_DEBUG(any::Tag::Dictionary))))[N].second;
+    return cast_managed<any::dict<N+1>>(a)[N].second;
   }
 
   template <size_t N>
@@ -469,7 +509,7 @@ namespace dict {
   }
 
   inline auto get(const Private::Symbol key, const any& a) -> const any& {
-    return get(key, *static_cast<const any::dict<unknown_size>*>(a.extractPointer(IF_DEBUG(any::Tag::Dictionary))));
+    return get(key, cast_managed<any::dict<unknown_size>>(a));
   }
 
   #define P(N)    any::dict_pair&& arg ## N
@@ -517,7 +557,7 @@ namespace data {
 
   template <size_t N>
   inline auto get(const any& a) -> const any& {
-    return (*static_cast<const any::data<N+1>*>(a.extractPointer(IF_DEBUG(any::Tag::Data))))[N];
+    return cast_managed<any::data<N+1>>(a)[N];
   }
 
   template <typename T>
