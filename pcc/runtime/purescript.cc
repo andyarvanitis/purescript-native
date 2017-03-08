@@ -104,7 +104,8 @@ auto any::unthunkVariant(const any& a) -> const any& {
   return *variant;
 }
 
-auto any::operator[](const size_t rhs) const -> const any& {
+auto any::operator[](const int rhs) const -> const any& {
+  assert(rhs >= 0);
   const auto& xs = static_cast<const array&>(*this);
   return xs[rhs];
 }

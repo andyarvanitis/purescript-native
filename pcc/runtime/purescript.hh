@@ -346,7 +346,7 @@ class any {
     return static_cast<T>(rawPointer());
   }
 
-  auto operator[](const size_t) const -> const any&;
+  auto operator[](const int) const -> const any&;
   auto at(const char *) const -> const any&;
   auto size() const -> size_t;
   auto empty() const -> bool;
