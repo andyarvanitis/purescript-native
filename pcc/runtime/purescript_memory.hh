@@ -44,12 +44,12 @@ namespace PureScript {
   using managed = MANAGED_TYPE(T);
 
   template <typename T, typename... Args>
-  inline static auto make_managed(Args&&... args) -> MANAGED_TYPE(T) {
+  inline auto make_managed(Args&&... args) -> MANAGED_TYPE(T) {
     return MAKE_MANAGED(T)(std::forward<Args>(args)...);
   }
 
   template <typename T, typename... Args>
-  inline static auto make_managed_and_finalized(Args&&... args) -> MANAGED_TYPE(T) {
+  inline auto make_managed_and_finalized(Args&&... args) -> MANAGED_TYPE(T) {
     return MAKE_MANAGED_FINALIZED(T)(std::forward<Args>(args)...);
   }
 }
