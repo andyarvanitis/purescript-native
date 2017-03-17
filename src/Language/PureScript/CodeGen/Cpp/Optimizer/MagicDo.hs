@@ -70,8 +70,6 @@ magicDo' = everywhereOnCpp undo . everywhereOnCppTopDown convert
   convert (CppApp (CppApp f [arg]) []) | isEffFunc C.untilE f =
     CppApp (CppLambda [CaptureAll] [] Nothing (CppBlock [ CppWhile (CppUnary Not (CppApp arg [])) (CppBlock []), CppReturn $ CppVar "nullptr"])) []
   -- Desugar whileE
-  convert (CppApp (CppApp f [arg1, arg2]) []) | isEffFunc C.whileE f =
-    CppApp (CppLambda [CaptureAll] [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppVar "nullptr"])) []
   convert (CppApp (CppApp (CppApp f [arg1]) [arg2]) []) | isEffFunc C.whileE f =
     CppApp (CppLambda [CaptureAll] [] Nothing (CppBlock [ CppWhile (CppApp arg1 []) (CppBlock [ CppApp arg2 [] ]), CppReturn $ CppVar "nullptr"])) []
   convert other = other
