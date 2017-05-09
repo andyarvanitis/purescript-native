@@ -371,9 +371,13 @@ moduleToCpp otherOpts env (Module _ mn imps _ foreigns decls) = do
   valueToCpp (Literal _ (ObjectLiteral ps)) =
     CppRecordLiteral <$>
       mapM (sndM valueToCpp) ((\(k, v) -> (CppStringLiteral k, v)) <$> ps)
-  valueToCpp (Accessor (_, _, Just _, _) prop val) = CppRecordGet <$> pure prop <*> valueToCpp val
-  valueToCpp (Accessor _ prop val) = CppDictGet <$> pure (CppSymbol prop) <*> valueToCpp val
-
+  valueToCpp (Accessor ann1 prop val@(Var ann2 (Qualified Nothing _)))
+    | ann1 == nullAnn && ann2 == nullAnn
+    = CppDictGet <$> pure (CppSymbol prop) <*> valueToCpp val
+  valueToCpp (Accessor _ prop val)
+    | C.__superclass_ `isPrefixOf` codePoints prop
+    = CppDictGet <$> pure (CppSymbol prop) <*> valueToCpp val
+  valueToCpp (Accessor _ prop val) = CppRecordGet <$> pure prop <*> valueToCpp val
   valueToCpp (ObjectUpdate _ o ps) = do
     obj <- valueToCpp o
     updates <- mapM (sndM valueToCpp) ps
