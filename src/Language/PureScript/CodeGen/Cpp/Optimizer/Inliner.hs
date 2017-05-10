@@ -73,7 +73,10 @@ unThunk = everywhereOnCpp convert
   convert (CppBlock []) = CppBlock []
   convert (CppBlock cpps) =
     case last cpps of
-      CppReturn (CppApp (CppLambda _ [] _ (CppBlock body)) []) -> CppBlock $ init cpps ++ body
+      CppReturn (CppApp (CppLambda _ [] _ (CppBlock body)) []) ->
+        case last body of
+          CppReturn _ -> CppBlock $ init cpps ++ [CppIfElse (CppBooleanLiteral True) (CppBlock body) Nothing]
+          _ -> CppBlock cpps
       _ -> CppBlock cpps
   convert cpp = cpp
 
