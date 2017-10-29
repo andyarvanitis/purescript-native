@@ -23,8 +23,8 @@ This is an experimental C++11/native compiler backend for [PureScript](https://g
 
 #### Other notes:
 
-* PureScript arrays are implmented using [`std::deque`](http://en.cppreference.com/w/cpp/container/deque) (random access *O(1)*)
-* `String` types are implmented using either C-strings (for literals) or `std::string`
+* PureScript arrays are implemented using [`std::deque`](http://en.cppreference.com/w/cpp/container/deque) (random access *O(1)*)
+* `String` types are implemented using either C-strings (for literals) or `std::string`
 * `Number` is C++ `double`, `Int` is C++ `int`, `Char` is `char`, `Boolean` is `bool`
 * [The current tested/supported package set is here.](https://github.com/pure11/package-sets/blob/psc-0.10.2/packages.json) Please feel free to submit a PR if you've had success with any others.
 
