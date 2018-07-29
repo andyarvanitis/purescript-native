@@ -1,0 +1,80 @@
+name:                purecc
+version:             0.1.0.0
+github:              "githubuser/purecc"
+license:             BSD3
+author:              "Author name here"
+maintainer:          "example@example.com"
+copyright:           "2018 Author name here"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/githubuser/purecc#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- purescript -any
+- base-compat >=0.6.0
+- protolude >=0.1.6
+- text
+- containers
+- filepath
+- pattern-arrows >=0.0.2 && <0.1
+- safe >=0.3.9 && <0.4
+- transformers >=0.3.0 && <0.6
+- mtl >=2.1.0 && <2.3.0
+- aeson >=1.0 && <1.3
+- directory -any
+- process -any
+- file-embed -any
+
+library:
+  source-dirs: src
+  default-extensions:
+    - ConstraintKinds
+    - DataKinds
+    - DeriveFunctor
+    - EmptyDataDecls
+    - FlexibleContexts
+    - KindSignatures
+    - LambdaCase
+    - MultiParamTypeClasses
+    - NoImplicitPrelude
+    - PatternGuards
+    - PatternSynonyms
+    - RankNTypes
+    - RecordWildCards
+    - OverloadedStrings
+    - ScopedTypeVariables
+    - TupleSections
+    - ViewPatterns
+
+executables:
+  purecc:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - purecc
+
+tests:
+  purecc-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - purecc
