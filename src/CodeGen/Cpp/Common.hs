@@ -196,4 +196,4 @@ unretainedSuffix :: Text
 unretainedSuffix = "＿unretained"
 
 tcoLoop :: Text
-tcoLoop = "$tco_loop"
+tcoLoop = "＿TCO_loop＿"
