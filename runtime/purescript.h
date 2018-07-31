@@ -60,18 +60,6 @@ namespace purescript {
               typename std::enable_if<std::is_assignable<std::function<boxed(void)>,T>::value>::type* = 0) : std::shared_ptr<void>(std::make_shared<eff_fn>(f)) {
         }
 
-        // operator int64_t() const {
-        //     return *static_cast<int64_t*>(get());
-        // }
-        //
-        // operator double() const {
-        //     return *static_cast<double*>(get());
-        // }
-        //
-        // operator bool() const {
-        //     return *static_cast<bool*>(get());
-        // }
-
         template <typename T,
         typename = typename std::enable_if<!std::is_same<boxed,T>::value &&
                                             std::is_convertible<T,fn>::value>::type>
@@ -123,14 +111,6 @@ namespace purescript {
     inline auto copy(const boxed& b) -> boxed {
         return box<T>(unbox<T>(b));
     }
-
-    // inline auto operator ==(const boxed& left, const int right) -> bool {
-    //     return unbox<int64_t>(left) == right;
-    // }
-    //
-    // inline auto operator !=(const boxed& left, const int right) -> bool {
-    //     return unbox<int64_t>(left) != right;
-    // }
 
     using fn_t = std::function<boxed(const boxed&)>;
     using dict_t = std::map<const string, boxed>;
