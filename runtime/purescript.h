@@ -21,16 +21,13 @@ namespace purescript {
     public:
         using std::shared_ptr<void>::shared_ptr;
 
-        boxed(const int64_t n) : std::shared_ptr<void>(std::make_shared<int64_t>(n)) {
-        }
-
-        boxed(const int n) : std::shared_ptr<void>(std::make_shared<int64_t>(n)) {
-        }
-
-        boxed(const unsigned int n) : std::shared_ptr<void>(std::make_shared<int64_t>(n)) {
+        boxed(const int n) : std::shared_ptr<void>(std::make_shared<int>(n)) {
         }
 
         boxed(const double n) : std::shared_ptr<void>(std::make_shared<double>(n)) {
+        }
+
+        boxed(const bool b) : std::shared_ptr<void>(std::make_shared<bool>(b)) {
         }
 
         boxed(const char s[]) : std::shared_ptr<void>(std::make_shared<string>(s)) {

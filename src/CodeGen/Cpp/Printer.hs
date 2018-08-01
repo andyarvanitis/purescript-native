@@ -237,7 +237,7 @@ literals = mkPattern' match'
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintCpp') elses
     ]
     where
-    t | Left _ <- n  = "int64_t"
+    t | Left _ <- n  = "int"
       | Right _ <- n = "double"
 
   match (IfElse _ cond thens elses) = mconcat <$> sequence
@@ -383,7 +383,7 @@ unboxType :: Text -> Maybe Text
 unboxType t
   | t == C.semiringInt ||
     t == C.ringInt
-    = Just "int64_t"
+    = Just "int"
   | t == C.semiringNumber ||
     t == C.ringNumber ||
     t == C.euclideanRingNumber
