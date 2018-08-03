@@ -14,6 +14,7 @@ import Control.Arrow ((<+>))
 import Control.Monad (forM, mzero)
 import Control.Monad.State (StateT, evalStateT)
 import Control.PatternArrows
+import Data.Char (isAscii)
 import Data.List ((\\))
 import qualified Control.Arrow as A
 
@@ -43,7 +44,14 @@ literals = mkPattern' match'
 
   match :: (Emit gen) => AST -> StateT PrinterState Maybe gen
   match (NumericLiteral _ n) = return $ emit $ T.pack $ either show show n
-  match (StringLiteral _ s) = return $ emit $ prettyPrintString s
+  match (StringLiteral _ s)
+    | Just s' <- decodeString s = return $ emit $
+      if T.all isAscii s'
+        then stringLiteral s'
+        else "u8" <> stringLiteral s'
+  match (StringLiteral _ s)
+    | Just s' <- decodeString s = return $ emit $ "u8" <> stringLiteral s'
+  match (StringLiteral _ s) = error $ "Bad character in string literal " ++ show s
   match (BooleanLiteral _ True) = return $ emit "true"
   match (BooleanLiteral _ False) = return $ emit "false"
   -- match (ArrayLiteral _ []) = return $ emit "std::initializer_list<boxed>{}"
@@ -372,6 +380,9 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
 
 prettyPrintCpp1 :: AST -> Text
 prettyPrintCpp1 = maybe (internalError "Incomplete pattern") runPlainString . flip evalStateT (PrinterState 0) . prettyPrintCpp'
+
+stringLiteral :: Text -> Text
+stringLiteral s = "\"" <> s <> "\""
 
 unbox :: Text -> AST -> Text
 unbox _ v@(NumericLiteral{}) = prettyPrintCpp1 v
