@@ -29,7 +29,7 @@ import Language.PureScript.Comments
 import Language.PureScript.Crash
 import Language.PureScript.Names (Ident)
 import Language.PureScript.Pretty.Common
-import Language.PureScript.PSString (PSString, decodeString, mkString, prettyPrintString)
+import Language.PureScript.PSString (PSString, decodeString, mkString)
 import CodeGen.Cpp.Common
 
 import qualified Language.PureScript.Constants as C
@@ -45,13 +45,9 @@ literals = mkPattern' match'
   match :: (Emit gen) => AST -> StateT PrinterState Maybe gen
   match (NumericLiteral _ n) = return $ emit $ T.pack $ either show show n
   match (StringLiteral _ s)
-    | Just s' <- decodeString s = return $ emit $
-      if T.all isAscii s'
-        then stringLiteral s'
-        else "u8" <> stringLiteral s'
-  match (StringLiteral _ s)
-    | Just s' <- decodeString s = return $ emit $ "u8" <> stringLiteral s'
-  match (StringLiteral _ s) = error $ "Bad character in string literal " ++ show s
+    | Just s' <- decodeString s
+    , T.all isAscii s' = return $ emit $ stringLiteral s
+  match (StringLiteral _ s) = return $ emit $ "u8" <> stringLiteral s
   match (BooleanLiteral _ True) = return $ emit "true"
   match (BooleanLiteral _ False) = return $ emit "false"
   -- match (ArrayLiteral _ []) = return $ emit "std::initializer_list<boxed>{}"
@@ -75,7 +71,7 @@ literals = mkPattern' match'
     ]
     where
     objectPropertyToString :: (Emit gen) => PSString -> gen
-    objectPropertyToString s = emit $ prettyPrintString s <> ", "
+    objectPropertyToString s = emit $ stringLiteral s <> ", "
   match (Block _ sts) = mconcat <$> sequence
     [ return $ emit "{\n"
     , withIndent $ prettyStatements sts
@@ -381,8 +377,21 @@ prettyPrintCpp' = A.runKleisli $ runPattern matchValue
 prettyPrintCpp1 :: AST -> Text
 prettyPrintCpp1 = maybe (internalError "Incomplete pattern") runPlainString . flip evalStateT (PrinterState 0) . prettyPrintCpp'
 
-stringLiteral :: Text -> Text
-stringLiteral s = "\"" <> (T.replace "\\" "\\\\" s) <> "\""
+stringLiteral :: PSString -> Text
+stringLiteral pss | Just s <- decodeString pss = stringLiteral' s
+  where
+  stringLiteral' :: Text -> Text
+  stringLiteral' s = "\"" <> T.concatMap encodeChar s <> "\""
+  encodeChar :: Char -> Text
+  encodeChar '\b' = "\\b"
+  encodeChar '\t' = "\\t"
+  encodeChar '\n' = "\\n"
+  encodeChar '\v' = "\\v"
+  encodeChar '\f' = "\\f"
+  encodeChar '\r' = "\\r"
+  encodeChar '"'  = "\\\""
+  encodeChar '\\' = "\\\\"
+  encodeChar c = T.singleton $ c
 
 unbox :: Text -> AST -> Text
 unbox _ v@(NumericLiteral{}) = prettyPrintCpp1 v
