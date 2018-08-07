@@ -382,7 +382,7 @@ prettyPrintCpp1 :: AST -> Text
 prettyPrintCpp1 = maybe (internalError "Incomplete pattern") runPlainString . flip evalStateT (PrinterState 0) . prettyPrintCpp'
 
 stringLiteral :: Text -> Text
-stringLiteral s = "\"" <> s <> "\""
+stringLiteral s = "\"" <> (T.replace "\\" "\\\\" s) <> "\""
 
 unbox :: Text -> AST -> Text
 unbox _ v@(NumericLiteral{}) = prettyPrintCpp1 v
