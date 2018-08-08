@@ -241,8 +241,8 @@ literals = mkPattern' match'
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintCpp') elses
     ]
     where
-    t | Left _ <- n  = "int"
-      | Right _ <- n = "double"
+    t | Left _ <- n  = int
+      | Right _ <- n = float
 
   match (IfElse _ cond thens elses) = mconcat <$> sequence
     [ return $ emit "if ("
@@ -403,11 +403,11 @@ unboxType :: Text -> Maybe Text
 unboxType t
   | t == C.semiringInt ||
     t == C.ringInt
-    = Just "int"
+    = Just int
   | t == C.semiringNumber ||
     t == C.ringNumber ||
     t == C.euclideanRingNumber
-    = Just "double"
+    = Just float
   | otherwise = Nothing
 
 renderOp :: Text -> Text
@@ -452,7 +452,7 @@ implFooterSource :: Text -> [Ident] -> Text
 implFooterSource mn foreigns =
   "\n\n" <>
   (if null foreigns then "" else ("auto " <> foreignDict <> "() -> " <> dictType <> "& {\n" <>
-                                  "    static dict_t ＿dict＿;\n" <>
+                                  "    static " <> dictType <> " ＿dict＿;\n" <>
                                   "    return ＿dict＿;\n" <>
                                   "}\n\n")) <>
   "} // end namespace " <> mn <>
@@ -469,6 +469,12 @@ implFooterSource mn foreigns =
 
 dictType :: Text
 dictType = "dict_t"
+
+int :: Text
+int = "int"
+
+float :: Text
+float = "double"
 
 foreignDict :: Text
 foreignDict = "＿foreign＿"
