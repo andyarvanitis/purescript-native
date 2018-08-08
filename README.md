@@ -13,14 +13,13 @@ This is an experimental C++(11+)/native compiler backend for [PureScript](https:
 #### Differences from PureScript:
 
 * Foreign imports are C++(11+) (or C) instead of JavaScript ([FFI examples](https://github.com/andyarvanitis/purescript-native/wiki/FFI_Examples))
-* Compiler is `purecc` instead of `purs`, `make` is recommended for building
 * No C++-specific REPL
 
 #### Other notes:
 
 * PureScript arrays are implemented using [`std::deque`](http://en.cppreference.com/w/cpp/container/deque) (random access *O(1)*)
 * `String` types are implemented using either C-strings (for literals) or `std::string`
-* `Number` is C++ `double`, `Int` is C++ `int`, `Char` is `std::string` (single utf-8 entity), `Boolean` is `bool`
+* `Number` is C++ `double`, `Int` is C++ `int`, `Char` is `std::string` (single UTF-8 entity), `Boolean` is `bool`
 
 #### Future ideas:
 
@@ -44,13 +43,13 @@ If you're running macOS 10.13+ (High Sierra or later), you can avoid building it
 
 3. Under your working directory, also create an `ffi` subdirectory, which will be where you will place your own C/C++ FFI source files.
 
-4. Copy the [`Makefile`](https://github.com/andyarvanitis/purescript-native/blob/native-dump-corefn/support/Makefile) into your working directory.
+4. Copy this [`Makefile`](https://github.com/andyarvanitis/purescript-native/blob/native-dump-corefn/support/Makefile) into your working directory.
 
-5. Use PureScript's standard `psc-package` utility to add and manage package dependencies.
+5. Use PureScript's standard [`psc-package]`(https://psc-package.readthedocs.io/en/latest/) utility to add and manage package dependencies.
 
 6. You should now be ready to build a PureScript program.
   * As stated above, place your source file(s) in the working directory's `src` subdirectory and execute `make`. If your machine has multiple cores, you might want to use `make -jN`, where `N` is the number of cores.
 
-  * This will generate the C++ source tree for your program and then build an executable binary. The resulting executable will be in the `bin` subdirectory under the output directory and called `main` (so `output/bin/main`, by default). Source files will be in output/src/...
+  * This will generate the C++ source tree for your program and then build an executable binary. The resulting executable will be in the `bin` subdirectory under the output directory and called `main` (so `output/bin/main`, by default). Source files will be in output/src/*
 
 ---
