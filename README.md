@@ -50,6 +50,6 @@ If you're running macOS 10.13+ (High Sierra or later), you can avoid building it
 6. You should now be ready to build a PureScript program.
   * As stated above, place your source file(s) in the working directory's `src` subdirectory and execute `make`. If your machine has multiple cores, you might want to use `make -jN`, where `N` is the number of cores.
 
-  * This will generate the C++ source tree for your program and then build an executable binary. The resulting executable will be in the `bin` subdirectory under the output directory and called `main` (so `output/bin/main`, by default). Source files will be in output/src/*
+  * This will generate the C++ source tree for your program and then build an executable binary. The resulting executable will be in the `bin` subdirectory under the output directory and called `main` (so `output/bin/main`, by default). Source files will be in `output/src/*`
 
 ---
