@@ -45,7 +45,7 @@ If you're running macOS 10.13+ (High Sierra or later), you can avoid building it
 
 4. Copy this [`Makefile`](https://github.com/andyarvanitis/purescript-native/blob/native-dump-corefn/support/Makefile) into your working directory.
 
-5. Use PureScript's standard [`psc-package]`(https://psc-package.readthedocs.io/en/latest/) utility to add and manage package dependencies.
+5. Use PureScript's standard [`psc-package`](https://psc-package.readthedocs.io/en/latest/) utility to add and manage package dependencies.
 
 6. You should now be ready to build a PureScript program.
   * As stated above, place your source file(s) in the working directory's `src` subdirectory and execute `make`. If your machine has multiple cores, you might want to use `make -jN`, where `N` is the number of cores.
