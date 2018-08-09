@@ -16,7 +16,7 @@
 #
 PURS        := purs
 PSC_PACKAGE := psc-package
-PSOBJC      := purecc
+PSCPP       := pscpp
 SRC         := src
 OUTPUT      := output
 CC_SRC      := $(OUTPUT)/src
@@ -53,7 +53,7 @@ corefn: $(PURESCRIPT_PKGS)
 .PHONY: codegen
 codegen: COREFN_SRCS=$(call rwildcard,$(OUTPUT)/,corefn.json)
 codegen: corefn
-	@$(PSOBJC) $(COREFN_SRCS)
+	@$(PSCPP) $(COREFN_SRCS)
 
 $(PURESCRIPT_PKGS):
 	@echo "Getting packages using" $(PSC_PACKAGE) "..."

@@ -1,10 +1,10 @@
-name:                purecc
+name:                pscpp
 version:             0.1.0.0
-github:              "githubuser/purecc"
+github:              "andyarvanitis/purescript-cpp"
 license:             BSD3
-author:              "Author name here"
+author:              "Andy Arvanitis"
 maintainer:          "example@example.com"
-copyright:           "2018 Author name here"
+copyright:           "2018 Andy Arvanitis"
 
 extra-source-files:
 - README.md
@@ -17,7 +17,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on Github at <https://github.com/githubuser/purecc#readme>
+description:         Please see the README on Github at <https://github.com/andyarvanitis/purescript-cpp#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -58,7 +58,7 @@ library:
     - ViewPatterns
 
 executables:
-  purecc:
+  pscpp:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -66,10 +66,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - purecc
+    - pscpp
 
 tests:
-  purecc-test:
+  pscpp-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -77,4 +77,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - purecc
+    - pscpp

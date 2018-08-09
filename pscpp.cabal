@@ -2,16 +2,16 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0d9df9089392ad0c15d94a9c539993640aa31983b415eb926d9e920d2836beb5
+-- hash: e5a3087784164da529b9f673d964db77b198c936e428ed7c2fe54b479a06d0c7
 
-name:           purecc
+name:           pscpp
 version:        0.1.0.0
-description:    Please see the README on Github at <https://github.com/githubuser/purecc#readme>
-homepage:       https://github.com/githubuser/purecc#readme
-bug-reports:    https://github.com/githubuser/purecc/issues
-author:         Author name here
+description:    Please see the README on Github at <https://github.com/andyarvanitis/purescript-cpp#readme>
+homepage:       https://github.com/andyarvanitis/purescript-cpp#readme
+bug-reports:    https://github.com/andyarvanitis/purescript-cpp/issues
+author:         Andy Arvanitis
 maintainer:     example@example.com
-copyright:      2018 Author name here
+copyright:      2018 Andy Arvanitis
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -22,7 +22,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/purecc
+  location: https://github.com/andyarvanitis/purescript-cpp
 
 library
   exposed-modules:
@@ -33,7 +33,7 @@ library
       CodeGen.Cpp.Printer
       Tests
   other-modules:
-      Paths_purecc
+      Paths_pscpp
   hs-source-dirs:
       src
   default-extensions: ConstraintKinds DataKinds DeriveFunctor EmptyDataDecls FlexibleContexts KindSignatures LambdaCase MultiParamTypeClasses NoImplicitPrelude PatternGuards PatternSynonyms RankNTypes RecordWildCards OverloadedStrings ScopedTypeVariables TupleSections ViewPatterns
@@ -55,10 +55,10 @@ library
     , transformers >=0.3.0 && <0.6
   default-language: Haskell2010
 
-executable purecc
+executable pscpp
   main-is: Main.hs
   other-modules:
-      Paths_purecc
+      Paths_pscpp
   hs-source-dirs:
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -74,18 +74,18 @@ executable purecc
     , pattern-arrows >=0.0.2 && <0.1
     , process
     , protolude >=0.1.6
-    , purecc
+    , pscpp
     , purescript
     , safe >=0.3.9 && <0.4
     , text
     , transformers >=0.3.0 && <0.6
   default-language: Haskell2010
 
-test-suite purecc-test
+test-suite pscpp-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_purecc
+      Paths_pscpp
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -101,7 +101,7 @@ test-suite purecc-test
     , pattern-arrows >=0.0.2 && <0.1
     , process
     , protolude >=0.1.6
-    , purecc
+    , pscpp
     , purescript
     , safe >=0.3.9 && <0.4
     , text

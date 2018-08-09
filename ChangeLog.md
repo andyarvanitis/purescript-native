@@ -1,3 +1,3 @@
-# Changelog for purecc
+# Changelog for pscpp
 
 ## Unreleased changes
