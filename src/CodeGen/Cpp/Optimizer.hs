@@ -1,22 +1,4 @@
--- | This module optimizes code in the simplified-Objective-C intermediate representation.
---
--- The following optimizations are supported:
---
---  * Collapsing nested blocks
---
---  * Tail call elimination
---
---  * Inlining of (>>=) and ret for the Eff monad
---
---  * Removal of unnecessary thunks
---
---  * Eta conversion
---
---  * Inlining variables
---
---  * Inline Prelude.($), Prelude.(#), Prelude.(++), Prelude.(!!)
---
---  * Inlining primitive Objective-C operators
+-- | This module optimizes code in the intermediate representation.
 module CodeGen.Cpp.Optimizer (optimize) where
 
 import Prelude.Compat

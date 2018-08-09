@@ -1,16 +1,3 @@
--------------------------------------------------------------------------------
---
--- Module      :  Main
--- Copyright   :  (c) 2015 Andy Arvanitis and other contributors
--- License     :  MIT
---
--- Maintainer  :  Andy Arvanitis
--- Stability   :  experimental
--- Portability :
---
---
---
--------------------------------------------------------------------------------
 module Tests (runTests) where
 
 import Prelude.Compat

@@ -1,3 +1,17 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// Module      :  purescript.h
+// Copyright   :  (c) Andy Arvanitis 2018
+// License     :  BSD
+//
+// Maintainer  :  Andy Arvanitis
+// Stability   :  experimental
+// Portability :
+//
+// Basic types and functions to support purescript-to-C++ rendering
+//
+///////////////////////////////////////////////////////////////////////////////
+//
 #ifndef purescript_H
 #define purescript_H
 

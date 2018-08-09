@@ -1,4 +1,4 @@
--- | Pretty printer for the Objective-C AST
+-- | Pretty printer for the AST
 module CodeGen.Cpp.Printer
   ( prettyPrintCpp
   , prettyPrintCpp1
