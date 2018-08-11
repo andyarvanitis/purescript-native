@@ -134,7 +134,11 @@ namespace purescript {
 
 } // namespace purescript
 
-#define FOREIGN_EXPORTS(NS) namespace NS { using namespace purescript; auto ＿foreign＿() -> dict_t&; static const auto& NS ## ＿foreign_init = []() { dict_t& foreign = ＿foreign＿();
-#define END_FOREIGN_EXPORTS return foreign; }(); }
+#define FOREIGN_BEGIN(NS) namespace NS {\
+    using namespace purescript;\
+    auto ＿foreign＿() -> dict_t&;\
+    static const auto& NS ## ＿foreign_init = []() {\
+        dict_t& exports = ＿foreign＿();
+#define FOREIGN_END return exports; }(); }
 
 #endif // purescript_H
