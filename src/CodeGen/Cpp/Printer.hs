@@ -107,10 +107,11 @@ literals = mkPattern' match'
   match (App ss (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y])
     | fnMod == dictMod
     , dictMod == C.dataEq || dictMod == C.dataSemiring || dictMod == C.dataRing || dictMod == C.dataEuclideanRing
+    , Just op <- renderOp fn
     , Just t <- unboxType dict
     = mconcat <$> sequence
     [ return $ emit $ unbox t x
-    , return $ emit $ renderOp fn
+    , return $ emit op
     , return $ emit $ unbox t y
     ]
   match (App _ val args) = mconcat <$> sequence
@@ -419,14 +420,15 @@ unboxType t
     = Just float
   | otherwise = Nothing
 
-renderOp :: Text -> Text
+renderOp :: Text -> Maybe Text
 renderOp op
-  | op == C.eq = " == "
-  | op == C.add = " + "
-  | op == C.sub = " - "
-  | op == C.mul = " * "
-  | op == C.div = " / "
-  | otherwise = error $ "Unknown operator " <> T.unpack op
+  | op == C.eq = Just " == "
+  | op == C.notEq = Just " != "
+  | op == C.add = Just " + "
+  | op == C.sub = Just " - "
+  | op == C.mul = Just " * "
+  | op == C.div = Just " / "
+  | otherwise = Nothing
 
 interfaceSource :: Text -> [Ident] -> [Ident] -> Text
 interfaceSource mn exports foreigns =
