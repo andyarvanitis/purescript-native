@@ -52,13 +52,13 @@ literals = mkPattern' match'
   match (BooleanLiteral _ False) = return $ emit "false"
   -- match (ArrayLiteral _ []) = return $ emit "std::initializer_list<boxed>{}"
   match (ArrayLiteral _ xs) = mconcat <$> sequence
-    [ return $ emit "as_array { "
+    [ return $ emit "array_t{ {"
     , intercalate (emit ", ") <$> forM xs prettyPrintCpp'
-    , return $ emit " }"
+    , return $ emit "} }"
     ]
   -- match (ObjectLiteral _ []) = return $ emit "std::initializer_list<std::pair<const string, boxed>>{}"
   match (ObjectLiteral _ ps) = mconcat <$> sequence
-    [ return $ emit "as_dict {\n"
+    [ return $ emit "dict_t{ {\n"
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
                   value' <- prettyPrintCpp' value
@@ -67,7 +67,7 @@ literals = mkPattern' match'
         return $ intercalate (emit ",\n") $ map (indentString <>) cpps
     , return $ emit "\n"
     , currentIndent
-    , return $ emit "}"
+    , return $ emit "} }"
     ]
     where
     objectPropertyToString :: (Emit gen) => PSString -> gen
@@ -106,7 +106,7 @@ literals = mkPattern' match'
     ]
   match (App ss (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y])
     | fnMod == dictMod
-    , dictMod == C.dataSemiring || dictMod == C.dataRing || dictMod == C.dataEuclideanRing
+    , dictMod == C.dataEq || dictMod == C.dataSemiring || dictMod == C.dataRing || dictMod == C.dataEuclideanRing
     , Just t <- unboxType dict
     = mconcat <$> sequence
     [ return $ emit $ unbox t x
@@ -231,7 +231,7 @@ literals = mkPattern' match'
     , prettyPrintCpp' thens
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintCpp') elses
     ]
-  match (IfElse _ (Binary _ EqualTo x@Var{} y@(NumericLiteral _ n)) thens elses) = mconcat <$> sequence
+  match (IfElse _ (Binary _ EqualTo x y@(NumericLiteral _ n)) thens elses) = mconcat <$> sequence
     [ return $ emit "if ("
     , return $ emit $ unbox t x
     , return $ emit $ " == "
@@ -243,7 +243,15 @@ literals = mkPattern' match'
     where
     t | Left _ <- n  = int
       | Right _ <- n = float
-
+  match (IfElse _ (Binary _ EqualTo a b@StringLiteral{}) thens elses) = mconcat <$> sequence
+    [ return $ emit "if ("
+    , return $ emit $ unbox string a
+    , return $ emit $ " == "
+    , prettyPrintCpp' b
+    , return $ emit ") "
+    , prettyPrintCpp' thens
+    , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintCpp') elses
+    ]
   match (IfElse _ cond thens elses) = mconcat <$> sequence
     [ return $ emit "if ("
     , prettyPrintCpp' cond
@@ -401,7 +409,8 @@ unbox t v = "unbox<" <> t <> ">(" <> prettyPrintCpp1 v <> ")"
 
 unboxType :: Text -> Maybe Text
 unboxType t
-  | t == C.semiringInt ||
+  | t == C.eqInt ||
+    t == C.semiringInt ||
     t == C.ringInt
     = Just int
   | t == C.semiringNumber ||
@@ -412,6 +421,7 @@ unboxType t
 
 renderOp :: Text -> Text
 renderOp op
+  | op == C.eq = " == "
   | op == C.add = " + "
   | op == C.sub = " - "
   | op == C.mul = " * "
@@ -475,6 +485,12 @@ int = "int"
 
 float :: Text
 float = "double"
+
+bool :: Text
+bool = "bool"
+
+string :: Text
+string = "string"
 
 foreignDict :: Text
 foreignDict = "＿foreign＿"

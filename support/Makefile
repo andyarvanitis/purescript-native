@@ -27,7 +27,7 @@ override PURSFLAGS += compile --codegen corefn
 override CFLAGS += --std=c++11
 
 DEBUG := "-DDEBUG -g"
-RELEASE := "-O3"
+RELEASE := "-DNDEBUG -O3"
 
 INCLUDES := -I $(CC_SRC)
 BIN_DIR := $(OUTPUT)/bin

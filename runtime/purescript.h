@@ -29,8 +29,11 @@ namespace purescript {
 
     class boxed : public std::shared_ptr<void> {
         
-        using fn = std::function<boxed(const boxed&)>;
-        using eff_fn = std::function<boxed(void)>;
+    public:
+        using fn_t = std::function<boxed(const boxed&)>;
+        using eff_fn_t = std::function<boxed(void)>;
+        using dict_t = std::map<const string, boxed>;
+        using array_t = std::deque<boxed>;
 
     public:
         using std::shared_ptr<void>::shared_ptr;
@@ -52,54 +55,71 @@ namespace purescript {
 
         boxed(const std::nullptr_t) : std::shared_ptr<void>() {
         }
-        
-        boxed(std::initializer_list<boxed> l) : std::shared_ptr<void>(std::make_shared<std::deque<boxed>>(l)) {
+
+        boxed(array_t&& l) : std::shared_ptr<void>(std::make_shared<array_t>(std::move(l))) {
         }
 
-        boxed(std::initializer_list<std::pair<const string, boxed>> m) : std::shared_ptr<void>(std::make_shared<std::map<string, boxed>>(m)) {
-        }
-
-        template <typename T,
-                  typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
-        boxed(const T& f,
-              typename std::enable_if<std::is_assignable<std::function<boxed(boxed)>,T>::value>::type* = 0) : std::shared_ptr<void>(std::make_shared<fn>(f)) {
+        boxed(dict_t&& m) : std::shared_ptr<void>(std::make_shared<dict_t>(std::move(m))) {
         }
 
         template <typename T,
                   typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
         boxed(const T& f,
-              typename std::enable_if<std::is_assignable<std::function<boxed(void)>,T>::value>::type* = 0) : std::shared_ptr<void>(std::make_shared<eff_fn>(f)) {
+              typename std::enable_if<std::is_assignable<std::function<boxed(boxed)>,T>::value>::type* = 0) : std::shared_ptr<void>(std::make_shared<fn_t>(f)) {
+        }
+
+        template <typename T,
+                  typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
+        boxed(const T& f,
+              typename std::enable_if<std::is_assignable<std::function<boxed(void)>,T>::value>::type* = 0) : std::shared_ptr<void>(std::make_shared<eff_fn_t>(f)) {
         }
 
         template <typename T,
         typename = typename std::enable_if<!std::is_same<boxed,T>::value &&
-                                            std::is_convertible<T,fn>::value>::type>
+                                            std::is_convertible<T,fn_t>::value>::type>
         auto operator=(const T& right) -> boxed& {
             if (std::shared_ptr<void>::operator bool()) {
-                auto& f = *static_cast<fn*>(get());
+                auto& f = *static_cast<fn_t*>(get());
                 f = right;
             } else {
-                reset(new fn(right));
+                reset(new fn_t(right));
             }
             return *this;
         }
 
         auto operator()(const boxed& arg) const -> boxed {
-            auto& f = *static_cast<fn*>(get());
+            auto& f = *static_cast<fn_t*>(get());
             return f(arg);
         }
 
         auto operator()() const -> boxed {
-            auto& f = *static_cast<eff_fn*>(get());
+            auto& f = *static_cast<eff_fn_t*>(get());
             return f();
         }
 
-        auto operator[](const char key[]) const -> boxed {
-          const auto& dict = *static_cast<const std::map<const string, boxed>*>(get());
+        auto operator[](const char key[]) const -> const boxed& {
+          const auto& dict = *static_cast<const dict_t*>(get());
           return dict.at(key);
         }
 
-    };
+        auto operator[](const char key[]) -> boxed& {
+          auto& dict = *static_cast<dict_t*>(get());
+          return dict[key];
+        }
+
+#ifdef NDEBUG
+        auto operator[](const int index) const -> const boxed& {
+          const auto& array = *static_cast<const array_t*>(get());
+          return array[index];
+        }
+#else
+        auto operator[](const int index) const -> const boxed& {
+          const auto& array = *static_cast<const array_t*>(get());
+          return array.at(index);
+        }
+#endif // NDEBUG
+
+    }; // class boxed
 
     template <typename T, typename... Args>
     inline auto box(Args&&... args) -> boxed {
@@ -110,6 +130,12 @@ namespace purescript {
     inline auto unbox(const boxed& b) -> const T& {
         const auto& unboxed = *static_cast<const T*>(b.get());
         return unboxed;
+    }
+
+    template <typename T,
+              typename = typename std::enable_if<!std::is_same<T, const boxed&>::value>::type>
+    constexpr auto unbox(const T value) -> T {
+        return value;
     }
 
     template <typename T>
@@ -123,12 +149,10 @@ namespace purescript {
         return box<T>(unbox<T>(b));
     }
 
-    using fn_t = std::function<boxed(const boxed&)>;
-    using dict_t = std::map<const string, boxed>;
-    using array_t = std::deque<boxed>;
-
-    using as_array = std::initializer_list<boxed>;
-    using as_dict = std::initializer_list<std::pair<const string, boxed>>;
+    using fn_t = boxed::fn_t;
+    using eff_fn_t = boxed::eff_fn_t;
+    using dict_t = boxed::dict_t;
+    using array_t = boxed::array_t;
 
     constexpr auto undefined = nullptr;
 
