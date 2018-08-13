@@ -52,13 +52,13 @@ literals = mkPattern' match'
   match (BooleanLiteral _ False) = return $ emit "false"
   -- match (ArrayLiteral _ []) = return $ emit "std::initializer_list<boxed>{}"
   match (ArrayLiteral _ xs) = mconcat <$> sequence
-    [ return $ emit "array_t{ {"
+    [ return $ emit "array_t{"
     , intercalate (emit ", ") <$> forM xs prettyPrintCpp'
-    , return $ emit "} }"
+    , return $ emit "}"
     ]
   -- match (ObjectLiteral _ []) = return $ emit "std::initializer_list<std::pair<const string, boxed>>{}"
   match (ObjectLiteral _ ps) = mconcat <$> sequence
-    [ return $ emit "dict_t{ {\n"
+    [ return $ emit "dict_t{\n"
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
                   value' <- prettyPrintCpp' value
@@ -67,7 +67,7 @@ literals = mkPattern' match'
         return $ intercalate (emit ",\n") $ map (indentString <>) cpps
     , return $ emit "\n"
     , currentIndent
-    , return $ emit "} }"
+    , return $ emit "}"
     ]
     where
     objectPropertyToString :: (Emit gen) => PSString -> gen
