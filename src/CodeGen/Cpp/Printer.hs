@@ -48,13 +48,13 @@ literals = mkPattern' match'
   match (BooleanLiteral _ True) = return $ emit "true"
   match (BooleanLiteral _ False) = return $ emit "false"
   match (ArrayLiteral _ xs) = mconcat <$> sequence
-    [ return $ emit "array_t{"
+    [ return . emit $ arrayType <> "{"
     , intercalate (emit ", ") <$> forM xs prettyPrintCpp'
     , return $ emit "}"
     ]
   -- match (ObjectLiteral _ []) = return $ emit "std::initializer_list<std::pair<const string, boxed>>{}"
   match (ObjectLiteral _ ps) = mconcat <$> sequence
-    [ return $ emit "dict_t{\n"
+    [ return . emit $ dictType <> "{\n"
     , withIndent $ do
         cpps <- forM ps $ \(key, value) -> do
                   value' <- prettyPrintCpp' value
@@ -384,9 +384,9 @@ prettyPrintCpp1 = maybe (internalError "Incomplete pattern") runPlainString . fl
 
 stringLiteral :: PSString -> Text
 stringLiteral pss | Just s <- decodeString pss =
-  if T.all isAscii s
-    then ""
-    else ("u8") <> stringLiteral' s
+  (if T.all isAscii s
+     then ""
+     else ("u8")) <> stringLiteral' s
   where
   stringLiteral' :: Text -> Text
   stringLiteral' s = "\"" <> T.concatMap encodeChar s <> "\""
@@ -480,6 +480,9 @@ implFooterSource mn foreigns =
 
 dictType :: Text
 dictType = "dict_t"
+
+arrayType :: Text
+arrayType = "array_t"
 
 int :: Text
 int = "int"
