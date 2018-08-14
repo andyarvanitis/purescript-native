@@ -27,7 +27,7 @@ import Language.PureScript.AST (SourceSpan(..))
 import Language.PureScript.CoreImp.AST
 import Language.PureScript.Comments
 import Language.PureScript.Crash
-import Language.PureScript.Names (Ident)
+import Language.PureScript.Names (Ident, runIdent)
 import Language.PureScript.Pretty.Common
 import Language.PureScript.PSString (PSString, decodeString, mkString)
 import CodeGen.Cpp.Common
@@ -445,7 +445,8 @@ interfaceSource mn exports foreigns =
                             identToCpp foreign' <>
                             "() -> const boxed& { " <>
                             dispatchOnceBegin <>
-                            foreignDict <> "().at(\"" <> identToCpp foreign' <> "\"); " <>
+                            foreignDict <> "().at(" <>
+                                (stringLiteral . mkString $ runIdent foreign') <> "); " <>
                             dispatchOnceEnd <>
                             " };\n") <$> foreigns) <>
   "\n" <>

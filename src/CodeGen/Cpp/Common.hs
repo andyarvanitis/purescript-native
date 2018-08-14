@@ -46,7 +46,7 @@ identNeedsEscaping s = s /= properToCpp s || T.null s
 identCharToText :: Char -> Text
 identCharToText c | isAlphaNum c = T.singleton c
 identCharToText '_' = "_"
-identCharToText '\'' = "ʹ"
+identCharToText '\'' = "$prime"
 identCharToText '$' = "$"
 identCharToText c = '$' `T.cons` T.pack (show (ord c))
 
