@@ -41,7 +41,7 @@ import CodeGen.Cpp.Printer
 
 data DeclType = ModuleDecl | LetDecl | RecLetDecl deriving (Eq)
 
--- | Generate code in the simplified Objective-C intermediate representation for all declarations in a
+-- | Generate code in the simplified intermediate representation for all declarations in a
 -- module.
 moduleToCpp
   :: forall m
@@ -93,7 +93,7 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
          then freshModuleName (i + 1) mn' used
          else newName
 
-  -- | Generates Objective-C code for a module import, binding the required module
+  -- | Generates C++ code for a module import, binding the required module
   -- to the alternative
   importToCpp :: M.Map ModuleName (Ann, ModuleName) -> ModuleName -> m Text
   importToCpp mnLookup mn' = do
@@ -121,7 +121,7 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
     renameQual q = q
 
   -- |
-  -- Generate code in the simplified Objective-C intermediate representation for a declaration
+  -- Generate code in the simplified intermediate representation for a declaration
   --
   bindToCpp :: DeclType -> Bind Ann -> m [AST]
   bindToCpp dt (NonRec ann ident val) = return <$> nonRecToCpp dt ann ident val
@@ -129,7 +129,7 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
     where
     dt' = if dt == LetDecl then RecLetDecl else dt
 
-  -- | Generate code in the simplified Objective-C intermediate representation for a single non-recursive
+  -- | Generate code in the simplified intermediate representation for a single non-recursive
   -- declaration.
   --
   -- The main purpose of this function is to handle code generation for comments.
@@ -166,13 +166,13 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
     cpp <- valueToCpp val
     pure $ AST.VariableIntroduction Nothing (identToCpp ident) (Just cpp)
 
-  -- | Generate code in the simplified Objective-C intermediate representation for a variable based on a
+  -- | Generate code in the simplified intermediate representation for a variable based on a
   -- PureScript identifier.
   var :: Ident -> AST
   var = AST.Var Nothing . identToCpp
 
-  -- | Generate code in the simplified Objective-C intermediate representation for an accessor based on
-  -- a PureScript identifier. If the name is not valid in Objective-C (symbol based, reserved name) an
+  -- | Generate code in the simplified intermediate representation for an accessor based on
+  -- a PureScript identifier. If the name is not valid in C++ (symbol based, reserved name) an
   -- indexer is returned.
   accessor :: Ident -> AST -> AST
   accessor (Ident prop) = accessorString $ mkString prop
@@ -182,7 +182,7 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
   accessorString :: PSString -> AST -> AST
   accessorString prop = AST.Indexer Nothing (AST.StringLiteral Nothing prop)
 
-  -- | Generate code in the simplified Objective-C intermediate representation for a value or expression.
+  -- | Generate code in the simplified intermediate representation for a value or expression.
 
   valueToCpp :: Expr Ann -> m AST
   valueToCpp (Literal (pos, _, _, _) l) = literalToValueCpp pos l
@@ -266,13 +266,13 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
   literalToValueCpp ss (ArrayLiteral xs) = AST.ArrayLiteral (Just ss) <$> mapM valueToCpp xs
   literalToValueCpp ss (ObjectLiteral ps) = AST.ObjectLiteral (Just ss) <$> mapM (sndM valueToCpp) ps
 
-  -- | Generate code in the simplified Objective-C intermediate representation for a reference to a
+  -- | Generate code in the simplified intermediate representation for a reference to a
   -- variable.
   varToCpp :: Qualified Ident -> AST
   varToCpp (Qualified Nothing ident) = var ident
   varToCpp qual = qualifiedToCpp id qual
 
-  -- | Generate code in the simplified Objective-C intermediate representation for a reference to a
+  -- | Generate code in the simplified intermediate representation for a reference to a
   -- variable that may have a qualified name.
   qualifiedToCpp :: (a -> Ident) -> Qualified a -> AST
   qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . runIdent $ f a
@@ -282,7 +282,7 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
   -- foreignIdent :: Ident -> AST
   -- foreignIdent ident = accessorString (mkString $ runIdent ident) (AST.Var Nothing "$foreign")
 
-  -- | Generate code in the simplified Objective-C intermediate representation for pattern match binders
+  -- | Generate code in the simplified intermediate representation for pattern match binders
   -- and guards.
   bindersToCpp :: SourceSpan -> [CaseAlternative Ann] -> [AST] -> m AST
   bindersToCpp ss binders vals = do
@@ -315,7 +315,7 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
 
       guardsToCpp (Right v) = return . AST.Return Nothing <$> valueToCpp v
 
-  -- | Generate code in the simplified Objective-C intermediate representation for a pattern match
+  -- | Generate code in the simplified intermediate representation for a pattern match
   -- binder.
   binderToCpp :: Text -> [AST] -> Binder Ann -> m [AST]
   binderToCpp _ done NullBinder{} = return done
