@@ -44,13 +44,9 @@ literals = mkPattern' match'
 
   match :: (Emit gen) => AST -> StateT PrinterState Maybe gen
   match (NumericLiteral _ n) = return $ emit $ T.pack $ either show show n
-  match (StringLiteral _ s)
-    | Just s' <- decodeString s
-    , T.all isAscii s' = return $ emit $ stringLiteral s
-  match (StringLiteral _ s) = return $ emit $ "u8" <> stringLiteral s
+  match (StringLiteral _ s) = return $ emit $ stringLiteral s
   match (BooleanLiteral _ True) = return $ emit "true"
   match (BooleanLiteral _ False) = return $ emit "false"
-  -- match (ArrayLiteral _ []) = return $ emit "std::initializer_list<boxed>{}"
   match (ArrayLiteral _ xs) = mconcat <$> sequence
     [ return $ emit "array_t{"
     , intercalate (emit ", ") <$> forM xs prettyPrintCpp'
@@ -387,7 +383,10 @@ prettyPrintCpp1 :: AST -> Text
 prettyPrintCpp1 = maybe (internalError "Incomplete pattern") runPlainString . flip evalStateT (PrinterState 0) . prettyPrintCpp'
 
 stringLiteral :: PSString -> Text
-stringLiteral pss | Just s <- decodeString pss = stringLiteral' s
+stringLiteral pss | Just s <- decodeString pss =
+  if T.all isAscii s
+    then ""
+    else ("u8") <> stringLiteral' s
   where
   stringLiteral' :: Text -> Text
   stringLiteral' s = "\"" <> T.concatMap encodeChar s <> "\""
