@@ -110,6 +110,15 @@ literals = mkPattern' match'
     , return $ emit op
     , return $ emit $ unbox t y
     ]
+  match (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [n])
+    | fnMod == dictMod
+    , dictMod == C.dataRing
+    , fn == C.negate
+    , Just t <- unboxType dict
+    = mconcat <$> sequence
+    [ return $ emit "-"
+    , return $ emit $ unbox t n
+    ]
   match (App _ val args) = mconcat <$> sequence
     [ prettyPrintCpp' val
     , return $ emit "("
