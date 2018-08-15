@@ -15,7 +15,7 @@ testsDir :: IO (FilePath, FilePath)
 -------------------------------------------------------------------------------
 testsDir = do
   baseDir <- getCurrentDirectory
-  return (baseDir </> "objc-tests", baseDir)
+  return (baseDir </> "purescript-tests", baseDir)
 
 -------------------------------------------------------------------------------
 runTests :: IO ()
@@ -31,7 +31,7 @@ runTests = do
   let srcDir = outputDir </> "src"
   createDirectory srcDir
 
-  let passingDir = baseDir </> "examples" </> "passing"
+  let passingDir = baseDir </> "tests" </> "purs" </> "passing"
   passingTestCases <- sort . filter (".purs" `isSuffixOf`) <$> getDirectoryContents passingDir
 
   -- Auto-generate Makefile
@@ -39,6 +39,10 @@ runTests = do
   callProcess "cp" ["../Makefile", "."]
 
   fetchPackages
+  callProcess "git" ["clone", "https://github.com/andyarvanitis/purescript-cpp-ffi.git", "ffi"]
+
+  callProcess "rm" ["-rf", ".psc-package/psc-0.12.0/prelude/v4.0.0"]
+  callProcess "git" ["clone", "https://github.com/andyarvanitis/purescript-prelude.git", ".psc-package/psc-0.12.0/prelude/v4.0.0"]
 
   let tests = filter (`notElem` skipped) passingTestCases
 
@@ -62,7 +66,7 @@ runTests = do
     when testCaseDirExists $ callProcess "cp" ["-R", testCaseDir, srcDir]
 
     callProcess "make" ["clean"]
-    callProcess "make" ["release", "-j12"]
+    callProcess "make" ["debug", "-j12"]
     --
     -- Run C++ files
     --
@@ -80,7 +84,7 @@ runTests = do
   --
 
   setCurrentDirectory baseDir
-  putStrLn "objc-tests finished"
+  putStrLn "PureScript tests finished"
   putStrLn $ "Total tests available: " ++ show (length passingTestCases)
   putStrLn $ "Tests run: " ++ show (length tests)
   putStrLn $ "Tests skipped: " ++ show (length skipped)
@@ -89,23 +93,21 @@ runTests = do
 packages :: [String]
 -------------------------------------------------------------------------------
 packages =
-  [ "eff"
-  , "arrays"
+  [ "arrays"
   , "assert"
   , "console"
   , "control"
+  , "effect"
   , "foldable-traversable"
   , "functions"
   , "generics-rep"
   , "invariant"
-  , "monoid"
   , "newtype"
   , "partial"
   , "prelude"
   , "proxy"
   , "refs"
   , "st"
-  , "symbols"
   , "type-equality"
   , "typelevel-prelude"
   ]
@@ -123,16 +125,14 @@ skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
   [ 
-    "NumberLiterals.purs" -- unreliable float comparison, test manually
-  , "2172.purs" -- ps-side foreign issue
-  , "AppendInReverse.purs" -- test not updated to post-0.12?
-  , "EffFn.purs" -- ps-side foreign issue
+    "EffFn.purs" -- ps-side foreign issue
+  , "FunWithFunDeps.purs" -- requires FFI
   , "MultiArgFunctions.purs" -- not supported (needed?) right now
-  , "NegativeIntInRange.purs" -- supposed to fail?
+  , "NegativeIntInRange.purs" -- C++ literal restriction
+  , "NumberLiterals.purs" -- unreliable float comparison, test manually
   , "PolyLabels.purs" -- ps-side foreign issue
   , "RowUnion.purs" -- ps-side foreign issue
   , "ShadowedModuleName.purs" -- ?
-  , "FunWithFunDeps.purs" -- requires FFI
   , "StringEdgeCases.purs" -- ?
   , "StringEscapes.purs" -- TODO: UTF16-specific?
   ]
@@ -141,4 +141,4 @@ logpath :: FilePath
 logpath = "purescript-output"
 
 logfile :: FilePath
-logfile = "objc-tests.out"
+logfile = "purescript-tests.out"
