@@ -97,12 +97,12 @@ namespace purescript {
             return f();
         }
 
-        auto operator[](const char key[]) const -> const boxed& {
+        auto operator[](const string& key) const -> const boxed& {
           const auto& dict = *static_cast<const dict_t*>(get());
           return dict.at(key);
         }
 
-        auto operator[](const char key[]) -> boxed& {
+        auto operator[](const string& key) -> boxed& {
           auto& dict = *static_cast<dict_t*>(get());
           return dict[key];
         }
@@ -112,11 +112,22 @@ namespace purescript {
           const auto& array = *static_cast<const array_t*>(get());
           return array[index];
         }
+
+        auto operator[](const int index) -> boxed& {
+          auto& array = *static_cast<array_t*>(get());
+          return array[index];
+        }
 #else
         auto operator[](const int index) const -> const boxed& {
           const auto& array = *static_cast<const array_t*>(get());
           return array.at(index);
         }
+
+        auto operator[](const int index) -> boxed& {
+          auto& array = *static_cast<array_t*>(get());
+          return array.at(index);
+        }
+
 #endif // NDEBUG
 
     }; // class boxed
