@@ -41,6 +41,14 @@ namespace purescript {
         boxed(const int n) : std::shared_ptr<void>(std::make_shared<int>(n)) {
         }
 
+        boxed(const long n) : std::shared_ptr<void>(std::make_shared<int>(static_cast<int>(n))) {
+#ifndef NDEBUG
+            if (n < std::numeric_limits<int>::min() || n > std::numeric_limits<int>::max()) {
+                throw std::runtime_error("integer out of range");
+            }
+#endif // !NDEBUG
+        }
+
         boxed(const double n) : std::shared_ptr<void>(std::make_shared<double>(n)) {
         }
 
