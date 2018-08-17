@@ -87,6 +87,7 @@ all: release
 
 .PHONY: clean
 clean:
+	@-rm -f $(OBJS) $(DEPS)
 	@-rm -rf $(OUTPUT)
 
 .PHONY: run
