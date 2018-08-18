@@ -400,6 +400,7 @@ stringLiteral pss | Just s <- decodeString pss =
   stringLiteral' :: Text -> Text
   stringLiteral' s = "\"" <> T.concatMap encodeChar s <> "\""
   encodeChar :: Char -> Text
+  encodeChar '\0' = "\\0"
   encodeChar '\b' = "\\b"
   encodeChar '\t' = "\\t"
   encodeChar '\n' = "\\n"
@@ -409,6 +410,7 @@ stringLiteral pss | Just s <- decodeString pss =
   encodeChar '"'  = "\\\""
   encodeChar '\\' = "\\\\"
   encodeChar c = T.singleton $ c
+stringLiteral _ = "\"\\uFFFD\""
 
 unbox :: Text -> AST -> Text
 unbox _ v@(NumericLiteral{}) = prettyPrintCpp1 v
