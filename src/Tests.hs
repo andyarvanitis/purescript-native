@@ -125,11 +125,9 @@ skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
   [ 
-    "EffFn.purs" -- ps-side foreign issue
-  , "FunWithFunDeps.purs" -- requires FFI
+    "EffFn.purs" -- ps-side foreign needed (test manually)
   , "MultiArgFunctions.purs" -- not supported (needed?) right now
-  , "NegativeIntInRange.purs" -- C++ literal restriction
-  , "NumberLiterals.purs" -- unreliable float comparison, test manually
+  , "NumberLiterals.purs" -- unreliable float string comparison, test manually
   , "PolyLabels.purs" -- ps-side foreign issue
   , "RowUnion.purs" -- ps-side foreign issue
   , "ShadowedModuleName.purs" -- ?
