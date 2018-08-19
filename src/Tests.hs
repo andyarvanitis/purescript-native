@@ -124,15 +124,15 @@ fetchPackages = do
 skipped :: [String]
 -------------------------------------------------------------------------------
 skipped =
-  [ 
-    "EffFn.purs" -- ps-side foreign needed (test manually)
-  , "MultiArgFunctions.purs" -- not supported (needed?) right now
-  , "NumberLiterals.purs" -- unreliable float string comparison, test manually
-  , "PolyLabels.purs" -- ps-side foreign issue
-  , "RowUnion.purs" -- ps-side foreign issue
+  [ "2172.purs" -- foreign in Main needed (test manually)
+  , "EffFn.purs" -- foreign in Main needed (test manually)
+  , "FunWithFunDeps.purs" -- foreign in Main needed (test manually)
+  , "NumberLiterals.purs" -- unreliable float string comparison (test manually)
+  , "PolyLabels.purs" -- foreign in Main needed (test manually)
+  , "RowUnion.purs" -- foreign in Main needed (test manually)
   , "ShadowedModuleName.purs" -- ?
-  , "StringEdgeCases.purs" -- ?
-  , "StringEscapes.purs" -- TODO: UTF16-specific?
+  , "StringEdgeCases.purs" -- javascript char encoding specific
+  , "StringEscapes.purs" -- Partially javascript-char-encoding-specific (test manually)
   ]
 
 logpath :: FilePath
