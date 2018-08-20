@@ -20,8 +20,7 @@
 #include <deque>
 #include <map>
 #include <string>
-
-#include <iostream>
+#include <limits>
 
 namespace purescript {
 
@@ -37,6 +36,12 @@ namespace purescript {
 
     public:
         using std::shared_ptr<void>::shared_ptr;
+
+        boxed() noexcept : std::shared_ptr<void>() {
+        }
+
+        boxed(const std::nullptr_t) noexcept : std::shared_ptr<void>() {
+        }
 
         boxed(const int n) : std::shared_ptr<void>(std::make_shared<int>(n)) {
         }
@@ -59,9 +64,6 @@ namespace purescript {
         }
 
         boxed(string&& s) : std::shared_ptr<void>(std::make_shared<string>(std::move(s))) {
-        }
-
-        boxed(const std::nullptr_t) : std::shared_ptr<void>() {
         }
 
         boxed(array_t&& l) : std::shared_ptr<void>(std::make_shared<array_t>(std::move(l))) {
