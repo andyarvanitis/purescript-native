@@ -509,7 +509,7 @@ string :: Text
 string = "string"
 
 foreignDict :: Text
-foreignDict = "＿foreign＿"
+foreignDict = "foreign"
 
 dispatchOnceBegin :: Text
 dispatchOnceBegin = "static const boxed ＿value＿ = "
