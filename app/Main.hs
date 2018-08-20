@@ -9,7 +9,7 @@ import Data.Aeson
 import Data.Aeson.Types
 import Data.Char
 import Data.FileEmbed (embedFile)
-import Data.List (delete)
+import Data.List (delete, isPrefixOf, partition)
 import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Version
@@ -55,14 +55,16 @@ main = do
   if null args
     then return ()
     else do
-      if head args == "tests"
+      let (opts, files) = partition (isPrefixOf "--") args
+          opts' = (map . map) toLower opts
+      if "--tests" `elem` opts'
         then runTests
         else do
-          mapM (generateCode False) args
+          mapM (generateCode opts') files
           return ()
 
-generateCode :: Bool -> FilePath -> IO ()
-generateCode someOpt jsonFile = do
+generateCode :: [String] -> FilePath -> IO ()
+generateCode opts jsonFile = do
   jsonModTime <- getModificationTime jsonFile
   let filepath = takeDirectory jsonFile
       dirparts = splitDirectories $ filepath
@@ -74,11 +76,11 @@ generateCode someOpt jsonFile = do
     then do
       modTime <- getModificationTime possInterfaceFilename
       when (modTime < jsonModTime) $
-        transpile someOpt jsonFile
-    else transpile someOpt jsonFile
+        transpile opts jsonFile
+    else transpile opts jsonFile
 
-transpile :: Bool -> FilePath -> IO ()
-transpile _ jsonFile = do
+transpile :: [String] -> FilePath -> IO ()
+transpile opts jsonFile = do
   jsonText <- T.readFile jsonFile
   let module' = jsonToModule $ parseJson jsonText
   ((interface, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToCpp module' Nothing)
@@ -91,13 +93,18 @@ transpile _ jsonFile = do
       implPath = outpath </> implFileName mn
   putStrLn interfacePath
   createDirectoryIfMissing True outpath
-  T.writeFile interfacePath interface
+  T.writeFile interfacePath $ conv interface
   putStrLn implPath
-  T.writeFile implPath (implHeader <> implementation <> implFooter)
+  T.writeFile implPath $ conv (implHeader <> implementation <> implFooter)
   let runtime = baseOutpath </> "purescript.h"
   runtimeExists <- doesFileExist runtime
   when (not runtimeExists) $ do
-    T.writeFile runtime $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
+    T.writeFile runtime . conv $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
+  where
+  conv :: Text -> Text
+  conv
+    | "--ucns" `elem` opts = toUCNs . toDollars
+    | otherwise = id
 
 outdir :: FilePath
 outdir = "src"
@@ -114,3 +121,17 @@ escape = T.concatMap go
   go :: Char -> Text
   go c = T.pack $ printf "0x%04x," (ord c)
 
+
+toUCNs :: Text -> Text
+toUCNs = T.pack . concatMap toUCN . T.unpack
+
+toUCN :: Char -> String
+toUCN c | isAscii c = [c]
+toUCN c = printf "\\U%08x" $ ord c
+
+toDollars :: Text -> Text
+toDollars = T.map toDollar
+
+toDollar :: Char -> Char
+toDollar '＿' = '$'
+toDollar c = c
