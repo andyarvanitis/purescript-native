@@ -87,7 +87,7 @@ literals = mkPattern' match'
     , prettyPrintCpp' target
     , return $ emit "]"
     , return $ emit "("
-    , return $ emit $ intercalate ", " (("const boxed& " <>) <$> args)
+    , return $ emit $ intercalate ", " (renderArg <$> args)
     , return $ emit ") -> boxed "
     , prettyPrintCpp' body
     ]
@@ -169,7 +169,7 @@ literals = mkPattern' match'
   match (Function _ name args ret) = mconcat <$> sequence
     [ return $ emit $ if name == (Just tcoLoop) then "[&]" else "[=]"
     , return $ emit "("
-    , return $ emit $ intercalate ", " (("const boxed& " <>) <$> args)
+    , return $ emit $ intercalate ", " (renderArg <$> args)
     , return $ emit ") -> boxed "
     , prettyPrintCpp' ret
     ]
@@ -454,7 +454,7 @@ interfaceSource mn exports foreigns =
   (if null foreigns then "" else ("// Foreign values\n\nauto " <> foreignDict <> "() -> " <> dictType <> "&;\n\n")) <>
   (T.concat $ (\foreign' -> "inline auto " <>
                             identToCpp foreign' <>
-                            "() -> const boxed& { " <>
+                            "() -> " <> varDecl <> " { " <>
                             dispatchOnceBegin <>
                             foreignDict <> "().at(" <>
                                 (stringLiteral . mkString $ runIdent foreign') <> "); " <>
@@ -475,8 +475,8 @@ implFooterSource :: Text -> [Ident] -> Text
 implFooterSource mn foreigns =
   "\n\n" <>
   (if null foreigns then "" else ("auto " <> foreignDict <> "() -> " <> dictType <> "& {\n" <>
-                                  "    static " <> dictType <> " ＿dict＿;\n" <>
-                                  "    return ＿dict＿;\n" <>
+                                  "    static " <> dictType <> " $dict$;\n" <>
+                                  "    return $dict$;\n" <>
                                   "}\n\n")) <>
   "} // end namespace " <> mn <>
   "\n\n" <>
@@ -485,7 +485,7 @@ implFooterSource mn foreigns =
   mainSource :: Text
   mainSource = "\
     \int main(int argc, const char * argv[]) {\n\
-    \    Main::main()(nullptr);\n\
+    \    Main::main()();\n\
     \    return 0;\n\
     \}\n\n\
     \"
@@ -508,11 +508,19 @@ bool = "bool"
 string :: Text
 string = "string"
 
+varDecl :: Text
+varDecl = "const boxed&"
+
+renderArg :: Text -> Text
+renderArg arg
+  | arg == unusedName = varDecl
+  | otherwise = varDecl <> " " <> arg
+
 foreignDict :: Text
 foreignDict = "foreign"
 
 dispatchOnceBegin :: Text
-dispatchOnceBegin = "static const boxed ＿value＿ = "
+dispatchOnceBegin = "static const boxed $value$ = "
 
 dispatchOnceEnd :: Text
-dispatchOnceEnd = "return ＿value＿;"
+dispatchOnceEnd = "return $value$;"

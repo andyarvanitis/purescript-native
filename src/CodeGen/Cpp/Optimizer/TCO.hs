@@ -15,16 +15,16 @@ import qualified Language.PureScript.Constants as C
 tco :: AST -> AST
 tco = everywhere convert where
   tcoVar :: Text -> Text
-  tcoVar arg = "＿TCO＿" <> arg <> "＿"
+  tcoVar arg = "$TCO_" <> arg <> "$"
 
   copyVar :: Text -> Text
-  copyVar arg = "＿TCO_copy＿" <> arg <> "＿"
+  copyVar arg = "$TCO_copy_" <> arg <> "$"
 
   tcoDone :: Text
-  tcoDone = "＿TCO_done＿"
+  tcoDone = "$TCO_done$"
   
   tcoResult :: Text
-  tcoResult = "＿TCO_result＿"
+  tcoResult = "$TCO_result$"
 
   convert :: AST -> AST
   convert fn@(Function ss (Just name) args _)

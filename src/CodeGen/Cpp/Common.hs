@@ -14,7 +14,7 @@ import Language.PureScript.Names
 moduleNameToCpp :: ModuleName -> Text
 moduleNameToCpp (ModuleName pns) =
   let name = T.intercalate "_" (runProperName `map` pns)
-  in if nameIsCppBuiltIn name then "＿" <> name else name
+  in if nameIsCppBuiltIn name then ("$" <> name <> "$") else name
 
 -- | Convert an 'Ident' into a valid C++ identifier:
 --
@@ -30,7 +30,7 @@ identToCpp (Ident name) = properToCpp name
 identToCpp (GenIdent _ _) = internalError "GenIdent in identToCpp"
 
 unusedName :: Text
-unusedName = "__unused＿"
+unusedName = "$unused$"
 
 properToCpp :: Text -> Text
 properToCpp name
@@ -192,8 +192,5 @@ cppLiterals =
   , "unbox"
   ]
 
-unretainedSuffix :: Text
-unretainedSuffix = "＿unretained"
-
 tcoLoop :: Text
-tcoLoop = "＿TCO_loop＿"
+tcoLoop = "$TCO_loop$"

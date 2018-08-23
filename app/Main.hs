@@ -103,7 +103,7 @@ transpile opts jsonFile = do
   where
   conv :: Text -> Text
   conv
-    | "--ucns" `elem` opts = toUCNs . toDollars
+    | "--ucns" `elem` opts = toUCNs
     | otherwise = id
 
 outdir :: FilePath
@@ -128,10 +128,3 @@ toUCNs = T.pack . concatMap toUCN . T.unpack
 toUCN :: Char -> String
 toUCN c | isAscii c = [c]
 toUCN c = printf "\\U%08x" $ ord c
-
-toDollars :: Text -> Text
-toDollars = T.map toDollar
-
-toDollar :: Char -> Char
-toDollar '＿' = '$'
-toDollar c = c
