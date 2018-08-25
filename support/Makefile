@@ -26,6 +26,11 @@ BIN         := main
 override PURSFLAGS += compile --codegen corefn
 override CXXFLAGS += --std=c++11
 
+CXXVERSION = $(shell $(CXX) --version)
+ifneq (,$(findstring g++,$(CXXVERSION)))
+  PSCPPFLAGS += "--ucns"
+endif
+
 DEBUG := "-DDEBUG -g"
 RELEASE := "-DNDEBUG -O3"
 
@@ -53,7 +58,7 @@ corefn: $(PURESCRIPT_PKGS)
 .PHONY: codegen
 codegen: COREFN_SRCS=$(call rwildcard,$(OUTPUT)/,corefn.json)
 codegen: corefn
-	@$(PSCPP) $(COREFN_SRCS)
+	@$(PSCPP) $(PSCPPFLAGS) $(COREFN_SRCS)
 
 $(PURESCRIPT_PKGS):
 	@echo "Getting packages using" $(PSC_PACKAGE) "..."
