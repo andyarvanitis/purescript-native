@@ -159,6 +159,13 @@ namespace purescript {
         return value;
     }
 
+    template <typename T,
+        typename = typename std::enable_if<!std::is_same<T, const boxed&>::value &&
+                                            std::is_same<T, int>::value>::type>
+    constexpr auto unbox(const std::size_t value) -> long long {
+        return value;
+    }
+
     template <typename T>
     inline auto peek(boxed& b) -> T& {
         auto& unboxed = *static_cast<T*>(b.get());
