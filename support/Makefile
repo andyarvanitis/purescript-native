@@ -10,7 +10,7 @@
 # command itself. For example: 'make BIN=myutil'
 #
 # Flags can be added to either the codegen or native build phases.
-# For example: 'make PURSFLAGS=--codegen,js CFLAGS=-DDEBUG LDFLAGS=lgmp'
+# For example: 'make PURSFLAGS=--codegen,js CXXFLAGS=-DDEBUG LDFLAGS=lgmp'
 #
 # You can also edit the generated version of this file directly.
 #
@@ -24,7 +24,7 @@ FFI_SRC     := ffi
 BIN         := main
 
 override PURSFLAGS += compile --codegen corefn
-override CFLAGS += --std=c++11
+override CXXFLAGS += --std=c++11
 
 DEBUG := "-DDEBUG -g"
 RELEASE := "-DNDEBUG -O3"
@@ -39,10 +39,10 @@ PURESCRIPT_PKGS := $(firstword $(subst /, ,$(PACKAGE_SOURCES)))
 rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 
 release: codegen
-	@$(MAKE) $(BIN) CFLAGS+=$(RELEASE)
+	@$(MAKE) $(BIN) CFLAGS+=$(RELEASE) CXXFLAGS+=$(RELEASE)
 
 debug: codegen
-	@$(MAKE) $(BIN) CFLAGS+=$(DEBUG)
+	@$(MAKE) $(BIN) CFLAGS+=$(DEBUG) CXXFLAGS+=$(DEBUG)
 
 .PHONY: corefn
 corefn: PURESCRIPT_PKG_SRCS=$(foreach d,$(PACKAGE_SOURCES),$(call rwildcard,$(firstword $(subst *, ,$(d))),*.purs))
@@ -61,10 +61,14 @@ $(PURESCRIPT_PKGS):
 
 SRCS := $(call rwildcard,$(CC_SRC)/,*.cpp)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.cpp)
+SRCS += $(call rwildcard,$(FFI_SRC)/,*.mm)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.c)
+SRCS += $(call rwildcard,$(FFI_SRC)/,*.m)
 
 OBJS1 = $(SRCS:.cpp=.o)
-OBJS  = $(OBJS1:.c=.o)
+OBJS2  = $(OBJS1:.mm=.o)
+OBJS3  = $(OBJS2:.c=.o)
+OBJS  = $(OBJS3:.m=.o)
 DEPS  = $(OBJS:.o=.d)
 
 $(BIN): $(OBJS)
@@ -76,9 +80,17 @@ $(BIN): $(OBJS)
 
 %.o: %.cpp
 	@echo "Creating" $@
-	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
+	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
+
+%.o: %.mm
+	@echo "Creating" $@
+	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
 %.o: %.c
+	@echo "Creating" $@
+	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
+
+%.o: %.m
 	@echo "Creating" $@
 	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
