@@ -38,19 +38,19 @@ This is an experimental C++(11+)/native compiler backend for [PureScript](https:
 
 * A recent version (0.12+) of [purescript](https://github.com/purescript/purescript/releases).
 
-* A C++11-capable toolchain, e.g. recent versions of clang, gcc, Microsoft Visual Studio 2015
+* A C++11-capable toolchain, e.g. recent versions of clang, gcc, Microsoft Visual Studio 2015+
 * GNU Make is the default supported build tool, but you should be able to use your favorite C++ build system, tools, debuggers, etc.
 
 #### Getting Started
-This assumes you are running OS X or a Unix-like system (Linux, *BSD, etc.).
+This assumes you are running macOS (OS X) or a Unix-like system (Linux, *BSD, etc.).
 
-1. Make sure you have developer tools for your system installed. For OS X, you'll need a recent version of Xcode. For Linux, etc., you need gcc 4.9.2 or later, including g++ support. You can also use clang 3.5 or later, but it still requires gcc for its C++ standard libraries.
+1. Make sure you have developer tools for your system installed. For macOS, you'll need a recent version of Xcode. For Linux, etc., you need gcc 4.9.2 or later, including g++ support. You can also use clang 3.5 or later, but it still requires gcc for its C++ standard libraries.
 
 2. Create a working directory wherever you like, and a `src` subdirectory under it, which will be where you will place your own PureScript source files.
 
 3. Under your working directory, also create an `ffi` subdirectory, which will be where you will place C/C++ FFI source files.
 
-4. Copy this [`Makefile`](https://github.com/andyarvanitis/purescript-native/blob/native-dump-corefn/support/Makefile) into your working directory.
+4. Generate the default GNU `Makefile` in your working directory by running `pscpp --makefile`.
 
 5. Use PureScript's standard [`psc-package`](https://psc-package.readthedocs.io/en/latest/) utility to add and manage package dependencies.
 
