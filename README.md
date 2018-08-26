@@ -1,6 +1,6 @@
 [![PureScript](https://raw.githubusercontent.com/purescript/purescript/master/logo.png)](http://purescript.org)
 
-This is an experimental C++(11+)/native compiler backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane", debuggable, and portable C++ code as an intermediate language, which is then compiled to a native executable binary. This enables easy interoperability with existing C/C++ frameworks and libraries on a number of platforms.
+This is an experimental C++11 (or later) compiler backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane", debuggable, and portable C++ code as an intermediate language, which is then compiled to a native executable binary. This enables easy interoperability with existing C/C++ frameworks and libraries on a number of platforms.
 
 ---
 
@@ -12,25 +12,24 @@ This is an experimental C++(11+)/native compiler backend for [PureScript](https:
 
 #### Performance
 
-* No runtime system (beyond some support classes and the standard C++(11+) runtime library)
-* For automatic memory management, uses native C++(11+) reference counting (`std::shared_ptr`)
+* No runtime system beyond some support classes and the standard C++11 (or later) runtime library
+* For automatic memory management, uses native C++11 reference counting (`std::shared_ptr`)
 * Uses PureScript's normal tail call optimization techniques for generated C++ code
 
 #### Differences from PureScript:
 
-* Foreign imports are C++(11+) (or C) instead of JavaScript ([FFI examples](https://github.com/andyarvanitis/purescript-cpp-ffi))
+* Foreign imports are C++ instead of JavaScript ([FFI examples](https://github.com/andyarvanitis/purescript-cpp-ffi))
 * No C++-specific REPL
 
 #### Other notes:
 
 * PureScript arrays are implemented using [`std::deque`](http://en.cppreference.com/w/cpp/container/deque) (random access *O(1)*)
-* `String` types are implemented using either C-strings (for literals) or `std::string`
+* `String` types are implemented with C++11 `u8` literals (UTF-8) and `std::string`
 * `Number` is C++ `double`, `Int` is C++ `int`, `Char` is `std::string` (single UTF-8 entity), `Boolean` is `bool`
 
 #### Future ideas:
 
 * Nice facilities (modules) for concurrency/parallelism, using `std::thread`, `std::async`, etc. under the hood (output is already generally thread-safe for immutable values, thanks to `std::shared_ptr`)
-* `BigInt` via GNU GMP (or an alternative)
 
 #### Requirements for building the compiler itself
 
