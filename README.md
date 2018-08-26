@@ -38,7 +38,7 @@ This is an experimental C++(11+)/native compiler backend for [PureScript](https:
 
 * A recent version (0.12+) of [purescript](https://github.com/purescript/purescript/releases).
 
-* A C++11-capable toolchain, e.g. recent versions of clang, gcc, Microsoft Visual Studio 2015+
+* A C++11-capable toolchain, e.g. recent versions of clang, gcc, Microsoft Visual Studio
 * GNU Make is the default supported build tool, but you should be able to use your favorite C++ build system, tools, debuggers, etc.
 
 #### Getting Started
