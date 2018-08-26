@@ -60,6 +60,10 @@ main = do
       if "--tests" `elem` opts'
         then runTests
         else do
+          when ("--makefile" `elem` opts') $
+            T.writeFile "Makefile" $ T.decodeUtf8 $(embedFile "support/Makefile")
+          when ("--help" `elem` opts') $
+            putStrLn help
           mapM (generateCode opts') files
           return ()
 
@@ -128,3 +132,18 @@ toUCNs = T.pack . concatMap toUCN . T.unpack
 toUCN :: Char -> String
 toUCN c | isAscii c = [c]
 toUCN c = printf "\\U%08x" $ ord c
+
+help :: String
+help = "Usage: pscpp OPTIONS COREFN-FILES\n\
+       \  PureScript-to-C++ compiler\n\n\
+       \Available options:\n\
+       \  --help                  Show this help text\n\n\
+       \  --makefile              Generate a GNU Makefile which can be used for compiling\n\
+       \                          a PureScript program and libraries to a native binary via\n\
+       \                          purs corefn output and C++\n\n\
+       \  --ucns                  Use UCN encoding of unicode characters in literals and\n\
+       \                          strings in generated C++ code (for compilers that do not\n\
+       \                          support unicode literals, such as gcc)\n\n\
+       \  --tests                 Run test cases (under construction)\n\n\
+       \See also:\n\
+       \  purs compile --help\n"
