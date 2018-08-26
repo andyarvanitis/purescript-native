@@ -6,6 +6,8 @@ This is an experimental C++(11+)/native compiler backend for [PureScript](https:
 
 ### **Please note that this project supersedes [pure11](https://github.com/pure11/pure11) (they are no longer the same)**
 
+#### Please see [changes](https://github.com/andyarvanitis/purescript-native/wiki/changes) for more details.
+
 ---
 
 #### Performance
