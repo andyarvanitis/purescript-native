@@ -56,7 +56,7 @@ This assumes you are running macOS (OS X) or a Unix-like system (Linux, *BSD, et
 
 5. Use PureScript's standard [`psc-package`](https://psc-package.readthedocs.io/en/latest/) utility to add and manage package dependencies.
 
-6. You should now be ready to build a PureScript program.
+6. You should now be ready to build a PureScript program:
   * As stated above, place your source file(s) in the working directory's `src` subdirectory and execute `make`. If your machine has multiple cores, you might want to use `make -jN`, where `N` is the number of cores.
 
   * This will generate the C++ source tree for your program and then build an executable binary. The resulting executable will be in the `bin` subdirectory under the output directory and called `main` (so `output/bin/main`, by default). Source files will be under `src` (`output/src/` by default).
