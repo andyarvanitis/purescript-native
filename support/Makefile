@@ -72,9 +72,9 @@ SRCS += $(call rwildcard,$(FFI_SRC)/,*.c)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.m)
 
 OBJS1 = $(SRCS:.cpp=.o)
-OBJS2  = $(OBJS1:.cc=.o)
-OBJS3  = $(OBJS2:.mm=.o)
-OBJS4  = $(OBJS3:.c=.o)
+OBJS2 = $(OBJS1:.cc=.o)
+OBJS3 = $(OBJS2:.mm=.o)
+OBJS4 = $(OBJS3:.c=.o)
 OBJS  = $(OBJS4:.m=.o)
 DEPS  = $(OBJS:.o=.d)
 
