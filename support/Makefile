@@ -66,14 +66,16 @@ $(PURESCRIPT_PKGS):
 
 SRCS := $(call rwildcard,$(CC_SRC)/,*.cpp)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.cpp)
+SRCS += $(call rwildcard,$(FFI_SRC)/,*.cc)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.mm)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.c)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.m)
 
 OBJS1 = $(SRCS:.cpp=.o)
-OBJS2  = $(OBJS1:.mm=.o)
-OBJS3  = $(OBJS2:.c=.o)
-OBJS  = $(OBJS3:.m=.o)
+OBJS2  = $(OBJS1:.cc=.o)
+OBJS3  = $(OBJS2:.mm=.o)
+OBJS4  = $(OBJS3:.c=.o)
+OBJS  = $(OBJS4:.m=.o)
 DEPS  = $(OBJS:.o=.d)
 
 $(BIN): $(OBJS)
@@ -84,19 +86,23 @@ $(BIN): $(OBJS)
 -include $(DEPS)
 
 %.o: %.cpp
-	@echo "Creating" $@
+	@echo "Creating" $@ "(C++)"
+	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
+
+%.o: %.cc
+	@echo "Creating" $@ "(C++)"
 	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
 %.o: %.mm
-	@echo "Creating" $@
+	@echo "Creating" $@ "(Objective-C++)"
 	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
 %.o: %.c
-	@echo "Creating" $@
+	@echo "Creating" $@ "(C)"
 	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
 %.o: %.m
-	@echo "Creating" $@
+	@echo "Creating" $@ "(Objective-C)"
 	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
 .PHONY: all
