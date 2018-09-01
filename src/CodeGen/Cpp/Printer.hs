@@ -199,9 +199,9 @@ literals = mkPattern' match'
     ]
   match (InstanceOf _ val ty) = mconcat <$> sequence
     [ return . emit $ unbox dictType val
-    , return $ emit ".count("
+    , return $ emit ".contains("
     , prettyPrintCpp' ty
-    , return $ emit ") == 1"
+    , return $ emit ")"
     ]
   match (While _ cond sts) = mconcat <$> sequence
     [ return $ emit "while ("
@@ -456,8 +456,8 @@ interfaceSource mn exports foreigns =
                             identToCpp foreign' <>
                             "() -> " <> varDecl <> " { " <>
                             dispatchOnceBegin <>
-                            foreignDict <> "().at(" <>
-                                (stringLiteral . mkString $ runIdent foreign') <> "); " <>
+                            foreignDict <> "()[" <>
+                                (stringLiteral . mkString $ runIdent foreign') <> "]; " <>
                             dispatchOnceEnd <>
                             " };\n") <$> foreigns) <>
   "\n" <>

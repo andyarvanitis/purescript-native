@@ -101,9 +101,11 @@ transpile opts jsonFile = do
   putStrLn implPath
   T.writeFile implPath $ conv (implHeader <> implementation <> implFooter)
   let runtime = baseOutpath </> "purescript.h"
+      dep = baseOutpath </> "string_literal_dict.h"
   runtimeExists <- doesFileExist runtime
   when (not runtimeExists) $ do
     T.writeFile runtime . conv $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
+    T.writeFile dep . conv $ T.decodeUtf8 $(embedFile "runtime/string_literal_dict.h")
   where
   conv :: Text -> Text
   conv

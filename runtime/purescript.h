@@ -18,9 +18,10 @@
 #include <memory>
 #include <functional>
 #include <deque>
-#include <map>
 #include <string>
 #include <limits>
+#include "string_literal_dict.h"
+
 
 namespace purescript {
 
@@ -31,7 +32,7 @@ namespace purescript {
     public:
         using fn_t = std::function<boxed(const boxed&)>;
         using eff_fn_t = std::function<boxed(void)>;
-        using dict_t = std::map<const string, boxed>;
+        using dict_t = string_literal_dict_t<boxed>;
         using array_t = std::deque<boxed>;
 
     public:
@@ -107,12 +108,12 @@ namespace purescript {
             return f();
         }
 
-        auto operator[](const string& key) const -> const boxed& {
+        auto operator[](const char key[]) const -> const boxed& {
           const auto& dict = *static_cast<const dict_t*>(get());
-          return dict.at(key);
+          return dict[key];
         }
 
-        auto operator[](const string& key) -> boxed& {
+        auto operator[](const char key[]) -> boxed& {
           auto& dict = *static_cast<dict_t*>(get());
           return dict[key];
         }
@@ -137,7 +138,6 @@ namespace purescript {
           auto& array = *static_cast<array_t*>(get());
           return array.at(index);
         }
-
 #endif // NDEBUG
 
     }; // class boxed
