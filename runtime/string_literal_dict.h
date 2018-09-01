@@ -1,11 +1,35 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// Module      :  string_literal_dict.h
+// Copyright   :  (c) Andy Arvanitis 2018
+// License     :  BSD
+//
+// Maintainer  :  Andy Arvanitis
+// Stability   :  experimental
+// Portability :
+//
+// A simple dictionary optimized for this runtime's particular use –
+// *not* intended for general use or as a replacement for containers
+// such as std::map or std::unordered_map. It relies on the following
+// assumptions:
+//
+//    1) Keys are C-type string literals. No copying or (memory management)
+//       of the keys occurs
+//    2) The number of elements in the container is generally small – say,
+//       under 20. There is no sorting and a linear search is used to
+//       locate elements
+//
+///////////////////////////////////////////////////////////////////////////////
+//
 #ifndef string_literal_dict_H
 #define string_literal_dict_H
 
 #include <cstring>
-#include <string>
 #include <vector>
 #include <utility>
-
+#if !defined(NDEBUG)
+#include <string>
+#endif
 
 template <typename T>
 class string_literal_dict_t : private std::vector<std::pair<const char *, T>> {
@@ -25,8 +49,8 @@ class string_literal_dict_t : private std::vector<std::pair<const char *, T>> {
         return it->second;
       }
     }
-#ifndef NDEBUG
-      throw std::runtime_error("dictionary key \"" + std::string(key) + "\" not found");
+#if !defined(NDEBUG) // if debug build
+    throw std::runtime_error("dictionary key \"" + std::string(key) + "\" not found");
 #endif
     return null();
   }
