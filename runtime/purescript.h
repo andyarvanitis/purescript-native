@@ -54,8 +54,11 @@ namespace purescript {
         boxed(const bool b) : std::shared_ptr<void>(std::make_shared<bool>(b)) {}
         boxed(const char s[]) : std::shared_ptr<void>(std::make_shared<string>(s)) {}
         boxed(string&& s) : std::shared_ptr<void>(std::make_shared<string>(std::move(s))) {}
+        boxed(const string& s) : std::shared_ptr<void>(std::make_shared<string>(s)) {}
         boxed(array_t&& l) : std::shared_ptr<void>(std::make_shared<array_t>(std::move(l))) {}
+        boxed(const array_t& l) : std::shared_ptr<void>(std::make_shared<array_t>(l)) {}
         boxed(dict_t&& m) : std::shared_ptr<void>(std::make_shared<dict_t>(std::move(m))) {}
+        boxed(const dict_t& m) : std::shared_ptr<void>(std::make_shared<dict_t>(m)) {}
 
         template <typename T,
                   typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
@@ -128,7 +131,7 @@ namespace purescript {
     }
 
     template <typename T>
-    constexpr inline auto unbox(const boxed& b) -> const T& {
+    constexpr auto unbox(const boxed& b) -> const T& {
         return *static_cast<const T*>(b.get());
     }
 
@@ -146,13 +149,12 @@ namespace purescript {
     }
 
     template <typename T>
-    constexpr inline auto peek(boxed& b) -> T& {
+    constexpr auto peek(boxed& b) -> T& {
         return *static_cast<T*>(b.get());
     }
 
-    template <typename T>
-    inline auto copy(const boxed& b) -> boxed {
-        return box<T>(unbox<T>(b));
+    inline auto array_length(const boxed& a) -> boxed::array_t::size_type {
+        return unbox<boxed::array_t>(a).size();
     }
 
     using fn_t = boxed::fn_t;

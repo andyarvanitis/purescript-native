@@ -106,9 +106,9 @@ literals = mkPattern' match'
     , Just op <- renderOp fn
     , Just t <- unboxType dict
     = mconcat <$> sequence
-    [ return $ emit $ unbox t x
+    [ return $ emit $ unbox' t x
     , return $ emit op
-    , return $ emit $ unbox t y
+    , return $ emit $ unbox' t y
     ]
   match (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [n])
     | fnMod == dictMod
@@ -117,7 +117,7 @@ literals = mkPattern' match'
     , Just t <- unboxType dict
     = mconcat <$> sequence
     [ return $ emit "-"
-    , return $ emit $ unbox t n
+    , return $ emit $ unbox' t n
     ]
   match (App _ val args) = mconcat <$> sequence
     [ prettyPrintCpp' val
@@ -179,18 +179,6 @@ literals = mkPattern' match'
     , prettyPrintCpp' prop
     , return $ emit "()"
     ]
-  match (Indexer _ (ArrayLiteral _ [name]) val) = mconcat <$> sequence
-    [ prettyPrintCpp' val
-    , return $ emit "."
-    , prettyPrintCpp' name
-    , return $ emit "()"
-    ]
-  match (Indexer _ (NumericLiteral _ (Left index)) val) = mconcat <$> sequence
-    [ prettyPrintCpp' val
-    , return $ emit "["
-    , return . emit . T.pack $ show index
-    , return $ emit "]"
-    ]
   match (Indexer _ prop val) = mconcat <$> sequence
     [ prettyPrintCpp' val
     , return $ emit "["
@@ -198,7 +186,7 @@ literals = mkPattern' match'
     , return $ emit "]"
     ]
   match (InstanceOf _ val ty) = mconcat <$> sequence
-    [ return . emit $ unbox dictType val
+    [ return . emit $ unbox' dictType val
     , return $ emit ".contains("
     , prettyPrintCpp' ty
     , return $ emit ")"
@@ -225,21 +213,21 @@ literals = mkPattern' match'
     ]
   match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing True)) thens elses) = mconcat <$> sequence
     [ return $ emit "if ("
-    , return $ emit $ unbox "bool" cond
+    , return $ emit $ unbox' "bool" cond
     , return $ emit ") "
     , prettyPrintCpp' thens
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintCpp') elses
     ]
   match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing False)) thens elses) = mconcat <$> sequence
     [ return $ emit "if (!("
-    , return $ emit $ unbox "bool" cond
+    , return $ emit $ unbox' "bool" cond
     , return $ emit ")) "
     , prettyPrintCpp' thens
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintCpp') elses
     ]
   match (IfElse _ (Binary _ EqualTo x y@(NumericLiteral _ n)) thens elses) = mconcat <$> sequence
     [ return $ emit "if ("
-    , return $ emit $ unbox t x
+    , return $ emit $ unbox' t x
     , return $ emit $ " == "
     , prettyPrintCpp' y
     , return $ emit ") "
@@ -251,7 +239,7 @@ literals = mkPattern' match'
       | Right _ <- n = float
   match (IfElse _ (Binary _ EqualTo a b@StringLiteral{}) thens elses) = mconcat <$> sequence
     [ return $ emit "if ("
-    , return $ emit $ unbox string a
+    , return $ emit $ unbox' string a
     , return $ emit $ " == "
     , prettyPrintCpp' b
     , return $ emit ") "
@@ -412,11 +400,11 @@ stringLiteral pss | Just s <- decodeString pss =
   encodeChar c = T.singleton $ c
 stringLiteral _ = "\"\\uFFFD\""
 
-unbox :: Text -> AST -> Text
-unbox _ v@(NumericLiteral{}) = prettyPrintCpp1 v
-unbox _ v@(BooleanLiteral{}) = prettyPrintCpp1 v
-unbox _ v@(StringLiteral{}) = prettyPrintCpp1 v
-unbox t v = "unbox<" <> t <> ">(" <> prettyPrintCpp1 v <> ")"
+unbox' :: Text -> AST -> Text
+unbox' _ v@(NumericLiteral{}) = prettyPrintCpp1 v
+unbox' _ v@(BooleanLiteral{}) = prettyPrintCpp1 v
+unbox' _ v@(StringLiteral{}) = prettyPrintCpp1 v
+unbox' t v = unbox t <> "(" <> prettyPrintCpp1 v <> ")"
 
 unboxType :: Text -> Maybe Text
 unboxType t
@@ -489,24 +477,6 @@ implFooterSource mn foreigns =
     \    return 0;\n\
     \}\n\n\
     \"
-
-dictType :: Text
-dictType = "dict_t"
-
-arrayType :: Text
-arrayType = "array_t"
-
-int :: Text
-int = "int"
-
-float :: Text
-float = "double"
-
-bool :: Text
-bool = "bool"
-
-string :: Text
-string = "string"
 
 varDecl :: Text
 varDecl = "const boxed&"

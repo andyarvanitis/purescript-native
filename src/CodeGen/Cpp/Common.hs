@@ -192,5 +192,29 @@ cppLiterals =
   , "unbox"
   ]
 
+dictType :: Text
+dictType = "dict_t"
+
+arrayType :: Text
+arrayType = "array_t"
+
+int :: Text
+int = "int"
+
+float :: Text
+float = "double"
+
+bool :: Text
+bool = "bool"
+
+string :: Text
+string = "string"
+
+unbox :: Text -> Text
+unbox t = "unbox<" <> t <> ">"
+
+arrayLengthFn :: Text
+arrayLengthFn = "array_length"
+
 tcoLoop :: Text
 tcoLoop = "$TCO_loop$"

@@ -193,9 +193,9 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
     updates <- mapM (sndM valueToCpp) ps
     obj' <- freshName
     let objVar = AST.Var Nothing obj'
-        copy = AST.VariableIntroduction Nothing obj' (Just $ makeCopy obj)
+        copy = AST.VariableIntroduction Nothing obj' (Just $ AST.App Nothing (AST.Var Nothing (unbox dictType)) [obj])
         assign (k, v) = AST.Assignment Nothing (accessorString k objVar) v
-        sts = copy : (assign <$> updates) ++ [AST.Return Nothing $ makeCopy objVar]
+        sts = copy : (assign <$> updates) ++ [AST.Return Nothing objVar]
     return $ AST.App Nothing (AST.Function Nothing Nothing [] (AST.Block Nothing sts)) []
   valueToCpp (Abs _ arg val) = do
     ret <- valueToCpp val
@@ -387,11 +387,5 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
 emptyAnn :: Ann
 emptyAnn = (SourceSpan "" (SourcePos 0 0) (SourcePos 0 0), [], Nothing, Nothing)
 
-makeCopy :: AST -> AST
-makeCopy obj = AST.App Nothing (AST.Var Nothing "copy<dict_t>") [obj]
-
 arrayLength :: AST -> AST
-arrayLength array = applyMethod (AST.App Nothing (AST.Var Nothing "unbox<array_t>") [array]) "size"
-
-applyMethod :: AST -> Text -> AST
-applyMethod obj method = (AST.Indexer Nothing (AST.ArrayLiteral Nothing [AST.Var Nothing method]) obj)
+arrayLength a = AST.App Nothing (AST.Var Nothing arrayLengthFn) [a]
