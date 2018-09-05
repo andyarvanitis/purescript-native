@@ -135,22 +135,20 @@ namespace purescript {
         return *static_cast<const T*>(b.get());
     }
 
-    template <typename T,
-              typename = typename std::enable_if<!std::is_same<T, const boxed&>::value>::type>
+    template <typename T>
+    constexpr auto unbox(boxed& b) -> T& {
+        return *static_cast<T*>(b.get());
+    }
+
+    template <typename T>
     constexpr auto unbox(const T value) -> T {
         return value;
     }
 
     template <typename T,
-        typename = typename std::enable_if<!std::is_same<T, const boxed&>::value &&
-                                            std::is_same<T, int>::value>::type>
+              typename = typename std::enable_if<std::is_same<T, int>::value>::type>
     constexpr auto unbox(const std::size_t value) -> long long {
         return value;
-    }
-
-    template <typename T>
-    constexpr auto peek(boxed& b) -> T& {
-        return *static_cast<T*>(b.get());
     }
 
     inline auto array_length(const boxed& a) -> boxed::array_t::size_type {
