@@ -52,7 +52,7 @@ This is an experimental C++11 (or later) compiler backend for [PureScript](https
 #### Getting Started
 This assumes you are running macOS (OS X) or a Unix-like system (Linux, *BSD, etc.).
 
-1. Make sure you have developer tools for your system installed. For macOS, you'll need a recent version of Xcode. For Linux, etc., you need gcc 4.9.2 or later, including g++ support. You can also use clang 3.5 or later, but it still requires gcc for its C++ standard libraries.
+1. Make sure you have developer tools for your system installed. For macOS, you'll need a recent version of Xcode. For Linux, etc., you can use clang 3.5 or later, or gcc/g++ 4.9.2 or later.
 
 2. Create a working directory wherever you like, and a `src` subdirectory under it, which will be where you will place your own PureScript source files.
 
