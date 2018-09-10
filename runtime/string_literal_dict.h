@@ -32,7 +32,7 @@
 #endif
 
 template <typename T>
-class string_literal_dict_t : private std::vector<std::pair<const char *, T>> {
+class string_literal_dict_t : public std::vector<std::pair<const char *, T>> {
 
   static auto null() -> const T& {
     static const T value;
