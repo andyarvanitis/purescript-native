@@ -50,6 +50,14 @@ namespace purescript {
 #endif // !defined(NDEBUG)
         }
 
+        boxed(const unsigned long n) : std::shared_ptr<void>(std::make_shared<int>(static_cast<int>(n))) {
+#if !defined(NDEBUG) // if debug build
+            if (n > std::numeric_limits<int>::max()) {
+                throw std::runtime_error("integer out of range");
+            }
+#endif // !defined(NDEBUG)
+        }
+
         boxed(const double n) : std::shared_ptr<void>(std::make_shared<double>(n)) {}
         boxed(const bool b) : std::shared_ptr<void>(std::make_shared<bool>(b)) {}
         boxed(const char s[]) : std::shared_ptr<void>(std::make_shared<string>(s)) {}
