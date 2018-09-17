@@ -31,12 +31,12 @@ runTests = do
   let srcDir = outputDir </> "src"
   createDirectory srcDir
 
-  let passingDir = baseDir </> "tests" </> "purs" </> "passing"
+  callProcess "git" ["clone", "https://github.com/purescript/purescript.git"]
+  let passingDir = baseDir </> "purescript" </> "tests" </> "purs" </> "passing"
   passingTestCases <- sort . filter (".purs" `isSuffixOf`) <$> getDirectoryContents passingDir
 
-  -- Auto-generate Makefile
   setCurrentDirectory outputDir
-  callProcess "cp" ["../Makefile", "."]
+  callProcess "pscpp" ["--makefile"]
 
   fetchPackages
   callProcess "git" ["clone", "https://github.com/andyarvanitis/purescript-cpp-ffi.git", "ffi"]
@@ -66,7 +66,7 @@ runTests = do
     when testCaseDirExists $ callProcess "cp" ["-R", testCaseDir, srcDir]
 
     callProcess "make" ["clean"]
-    callProcess "make" ["debug", "-j12"]
+    callProcess "make" ["debug", "-j8"]
     --
     -- Run C++ files
     --
