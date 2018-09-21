@@ -444,8 +444,8 @@ interfaceSource mn exports foreigns =
                             identToCpp foreign' <>
                             "() -> " <> varDecl <> " { " <>
                             dispatchOnceBegin <>
-                            foreignDict <> "()[" <>
-                                (stringLiteral . mkString $ runIdent foreign') <> "]; " <>
+                            foreignDict <> "().at(" <>
+                                (stringLiteral . mkString $ runIdent foreign') <> "); " <>
                             dispatchOnceEnd <>
                             " };\n") <$> foreigns) <>
   "\n" <>

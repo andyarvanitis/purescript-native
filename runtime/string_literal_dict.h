@@ -55,6 +55,10 @@ class string_literal_dict_t : public std::vector<std::pair<const char *, T>> {
     return null();
   }
 
+  auto at(const char key[]) const -> const T& {
+    return (*this)[key];
+  }
+
   auto operator[](const char key[]) -> T& {
     const auto end = this->end();
     for (auto it = this->begin(); it != end; it++) {
