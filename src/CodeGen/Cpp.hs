@@ -16,7 +16,7 @@ import Control.Monad.Supply.Class
 import Data.List ((\\), delete, intersect)
 import qualified Data.Foldable as F
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, isNothing)
+import Data.Maybe (fromMaybe, isNothing, mapMaybe)
 import Data.Monoid ((<>))
 import Data.String (fromString)
 import Data.Text (Text)
@@ -59,13 +59,22 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
     let decls' = renameModules mnLookup decls
     cppDecls <- mapM (bindToCpp ModuleDecl) decls'
     optimized <- traverse (traverse optimize) cppDecls
-    let interface = interfaceSource modName exports foreigns
+    let optimized' = concat optimized
+        exports' = mapMaybe (export $ identToCpp <$> exports) optimized'
         foreigns' = identToCpp <$> foreigns
+        interface = interfaceSource modName exports' foreigns
         implHeader = implHeaderSource modName cppImports interfaceImport
         implFooter = implFooterSource modName foreigns
-    return $ (interface, foreigns', concat optimized, implHeader, implFooter)
+    return $ (interface, foreigns', optimized', implHeader, implFooter)
   where
   modName = moduleNameToCpp mn
+
+  export :: [Text] -> AST -> Maybe (Text, Bool)
+  export names (AST.Function _ (Just name) [] (AST.Block _ [AST.Return _ ret]))
+    | name `elem` names && isLiteral ret = Just (name, True)
+  export names (AST.Function _ (Just name) [] _)
+    | name `elem` names = Just (name, False)
+  export _ _ = Nothing
 
   -- | Extracts all declaration names from a binding group.
   getNames :: Bind Ann -> [Ident]
