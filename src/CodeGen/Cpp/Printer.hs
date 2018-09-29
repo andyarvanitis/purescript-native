@@ -49,9 +49,9 @@ literals = mkPattern' match'
   match (BooleanLiteral _ True) = return $ emit "true"
   match (BooleanLiteral _ False) = return $ emit "false"
   match (ArrayLiteral _ xs) = mconcat <$> sequence
-    [ return . emit $ arrayType <> "{"
+    [ return . emit $ arrayType <> "{ "
     , intercalate (emit ", ") <$> forM xs prettyPrintCpp'
-    , return $ emit "}"
+    , return $ emit " }"
     ]
   -- match (ObjectLiteral _ []) = return $ emit "std::initializer_list<std::pair<const string, boxed>>{}"
   match (ObjectLiteral _ ps) = mconcat <$> sequence
