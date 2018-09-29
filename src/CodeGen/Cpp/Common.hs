@@ -14,7 +14,7 @@ import Language.PureScript.Names
 moduleNameToCpp :: ModuleName -> Text
 moduleNameToCpp (ModuleName pns) =
   let name = T.intercalate "_" (runProperName `map` pns)
-  in if nameIsCppBuiltIn name then ("$" <> name <> "$") else name
+  in if nameIsCppBuiltIn name then "$$" <> name else name
 
 -- | Convert an 'Ident' into a valid C++ identifier:
 --
@@ -34,7 +34,7 @@ unusedName = "$unused$"
 
 properToCpp :: Text -> Text
 properToCpp name
-  | nameIsCppReserved name || nameIsCppBuiltIn name || prefixIsReserved name = name <> "_"
+  | nameIsCppReserved name || nameIsCppBuiltIn name || prefixIsReserved name = "$$" <> name
   | otherwise = T.concatMap identCharToText name
 
 -- | Test if a string is a valid AST identifier without escaping.
