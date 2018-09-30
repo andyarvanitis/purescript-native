@@ -25,7 +25,7 @@ This is an experimental C++11 (or later) compiler backend for [PureScript](https
 
 #### Differences from PureScript:
 
-* Foreign imports/exports are C++ instead of JavaScript – see [FFI notes](https://github.com/andyarvanitis/purescript-native/wiki/FFI) and [FFI standard library examples](https://github.com/andyarvanitis/purescript-cpp-ffi)
+* Foreign imports/exports are C++ instead of JavaScript – see [FFI notes](https://github.com/andyarvanitis/purescript-native/wiki/FFI) and [FFI standard library examples](https://github.com/andyarvanitis/purescript-native-ffi)
 * No C++-specific REPL
 
 #### Other notes:
@@ -56,7 +56,7 @@ This assumes you are running macOS (OS X) or a Unix-like system (Linux, *BSD, et
 
 2. Create a working directory wherever you like, and a `src` subdirectory under it, which will be where you will place your own PureScript source files.
 
-3. Under your working directory, also create an `ffi` subdirectory, which will be where you will place C/C++ FFI source files.
+3. Under your working directory, also create an `ffi` subdirectory, which will be where you will place C/C++ FFI source files. You should at least add the contents of [purescript-native-ffi](https://github.com/andyarvanitis/purescript-native-ffi) into this directory, in addition to any of your own foreign implementations.
 
 4. Generate the default GNU `Makefile` in your working directory by running `pscpp --makefile`.
 
