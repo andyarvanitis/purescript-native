@@ -25,7 +25,7 @@ This is an experimental C++11 (or later) compiler backend for [PureScript](https
 
 #### Differences from PureScript:
 
-* Foreign imports/exports are C++ instead of JavaScript – see [FFI notes](https://github.com/andyarvanitis/purescript-native/wiki/FFI) and [FFI standard library examples](https://github.com/andyarvanitis/purescript-native-ffi)
+* Foreign imports/exports are C++ instead of JavaScript – see [FFI notes](https://github.com/andyarvanitis/purescript-native/wiki/FFI) and [FFI standard library implementations](https://github.com/andyarvanitis/purescript-native-ffi)
 * No C++-specific REPL
 
 #### Other notes:
