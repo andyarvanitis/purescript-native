@@ -459,10 +459,7 @@ implFooterSource mn foreigns =
   (if null foreigns
     then ""
     else ("// Foreign values\n\n" <>
-          "auto " <> foreignDict <> "() -> " <> dictType <> "& {\n" <>
-          "    static " <> dictType <> " $dict$;\n" <>
-          "    return $dict$;\n" <>
-          "}\n\n" <>
+          "DEFINE_FOREIGN_DICTIONARY_AND_ACCESSOR()\n\n" <>
           (T.concat $ (\foreign' -> "auto " <>
                                     identToCpp foreign' <>
                                     "() -> const boxed& { " <>
