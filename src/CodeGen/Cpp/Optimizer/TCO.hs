@@ -7,13 +7,12 @@ import Data.Monoid ((<>))
 import Language.PureScript.CoreImp.AST
 import Language.PureScript.AST.SourcePos (SourceSpan)
 import Safe (headDef, tailSafe)
-
 import CodeGen.Cpp.Common
 
 import qualified Language.PureScript.Constants as C
 
-tco :: AST -> AST
-tco = everywhere convert where
+tco :: AST -> AST -> AST
+tco mn = everywhere convert where
   tcoVar :: Text -> Text
   tcoVar arg = "$TCO_" <> arg <> "$"
 
@@ -139,6 +138,6 @@ tco = everywhere convert where
 
   isSelfCall :: Text -> AST -> Bool
   isSelfCall ident (App _ (Var _ ident') _) = ident == ident'
-  isSelfCall ident (App _ (Indexer _ (Var _ ident') _) _) = ident == ident'
+  isSelfCall ident (App _ (Indexer _ (Var _ ident') mn') _) = mn' == mn && ident == ident'
   isSelfCall ident (App _ fn _) = isSelfCall ident fn
   isSelfCall _ _ = False

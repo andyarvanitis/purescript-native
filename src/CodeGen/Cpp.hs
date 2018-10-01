@@ -58,7 +58,7 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
     interfaceImport <- importToCpp (renameImports [] [(emptyAnn, mn)]) mn
     let decls' = renameModules mnLookup decls
     cppDecls <- mapM (bindToCpp ModuleDecl) decls'
-    optimized <- traverse (traverse optimize) cppDecls
+    optimized <- traverse (traverse (optimize modName')) cppDecls
     let optimized' = concat optimized
         exports' = mapMaybe (export $ identToCpp <$> exports) optimized'
         foreigns' = identToCpp <$> foreigns
@@ -68,6 +68,7 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
     return $ (interface, foreigns', optimized', implHeader, implFooter)
   where
   modName = moduleNameToCpp mn
+  modName' = AST.Var Nothing modName
 
   export :: [Text] -> AST -> Maybe (Text, Bool)
   export names (AST.Function _ (Just name) [] (AST.Block _ [AST.Return _ ret]))

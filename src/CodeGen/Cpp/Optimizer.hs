@@ -19,11 +19,11 @@ import qualified Language.PureScript.Constants as C
 
 
 -- | Apply a series of optimizer passes to simplified Objective-C code
-optimize :: MonadSupply m => AST -> m AST
+optimize :: MonadSupply m => AST -> AST -> m AST
 -- optimize = untilFixedPoint $ return . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp . tco
-optimize cpp = do
-    cpp' <- untilFixedPoint (return . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp) cpp
-    untilFixedPoint (return . tidyUp) . tco
+optimize mn cpp = do
+    cpp' <- untilFixedPoint (return . inlineApply . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp) cpp
+    untilFixedPoint (return . tidyUp) . tco mn
       =<< untilFixedPoint (return . magicDo')
       =<< untilFixedPoint (return . magicDo) cpp'
 
@@ -64,6 +64,16 @@ inlineUnsafeCoerce = everywhereTopDown convert where
   convert (App _ (Indexer _ (Var _ unsafeCoerceFn) (Var _ unsafeCoerce)) [ comp ])
     | unsafeCoerceFn == C.unsafeCoerceFn && unsafeCoerce == C.unsafeCoerce
     = comp
+  convert other = other
+
+inlineApply :: AST -> AST
+inlineApply = everywhereTopDown convert where
+  convert (App ss (App _ (Indexer _ (Var _ apply) (Var _ dataFunction)) [ f ]) [ arg ])
+    | apply == C.apply && dataFunction == C.dataFunction
+    = App ss f [ arg ]
+  convert (App ss (App _ (Indexer _ (Var _ applyFlipped) (Var _ dataFunction)) [ arg ]) [ f ])
+    | applyFlipped == C.applyFlipped && dataFunction == C.dataFunction
+    = App ss f [ arg ]
   convert other = other
 
 collapseIfChecks :: AST -> AST
