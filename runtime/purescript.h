@@ -181,8 +181,8 @@ namespace purescript {
 #define FOREIGN_BEGIN(NS) namespace NS {\
     using namespace purescript;\
     DEFINE_FOREIGN_DICTIONARY_AND_ACCESSOR()\
-    static const auto& NS ## $foreign_init = []() {\
+    static const auto $foreign_exports_init$ = ([]() -> char {\
         dict_t& exports = foreign();
-#define FOREIGN_END return exports; }(); }
+#define FOREIGN_END return 0; }()); }
 
 #endif // purescript_H
