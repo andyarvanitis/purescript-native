@@ -50,7 +50,7 @@ moduleToCpp
   => Module Ann
   -> Maybe AST
   -> m (Text, [Text], [AST], Text, Text)
-moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
+moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
   do
     let usedNames = concatMap getNames decls
     let mnLookup = renameImports usedNames imps
@@ -60,9 +60,9 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
     cppDecls <- mapM (bindToCpp ModuleDecl) decls'
     optimized <- traverse (traverse (optimize modName')) cppDecls
     let optimized' = concat optimized
-        exports' = mapMaybe (export $ identToCpp <$> exports) optimized'
+        values = annotValue <$> optimized'
         foreigns' = identToCpp <$> foreigns
-        interface = interfaceSource modName exports' foreigns
+        interface = interfaceSource modName values foreigns
         implHeader = implHeaderSource modName cppImports interfaceImport
         implFooter = implFooterSource modName foreigns
     return $ (interface, foreigns', optimized', implHeader, implFooter)
@@ -70,12 +70,11 @@ moduleToCpp (Module _ coms mn _ imps exports foreigns decls) _ =
   modName = moduleNameToCpp mn
   modName' = AST.Var Nothing modName
 
-  export :: [Text] -> AST -> Maybe (Text, Bool)
-  export names (AST.Function _ (Just name) [] (AST.Block _ [AST.Return _ ret]))
-    | name `elem` names && isLiteral ret = Just (name, True)
-  export names (AST.Function _ (Just name) [] _)
-    | name `elem` names = Just (name, False)
-  export _ _ = Nothing
+  annotValue :: AST -> (Text, Bool)
+  annotValue (AST.Function _ (Just name) [] (AST.Block _ [AST.Return _ ret]))
+    | isLiteral ret = (name, True)
+  annotValue (AST.Function _ (Just name) [] _) = (name, False)
+  annotValue _ = error "Unexpected top-level value form"
 
   -- | Extracts all declaration names from a binding group.
   getNames :: Bind Ann -> [Ident]
