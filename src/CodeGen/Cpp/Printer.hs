@@ -158,12 +158,16 @@ literals = mkPattern' match'
     , prettyPrintCpp' ret
     ]
   match (Function _ name args ret) = mconcat <$> sequence
-    [ return $ emit $ if name == (Just tcoLoop) then "[&]" else "[=]"
+    [ return $ emit captures
     , return $ emit "("
-    , return $ emit $ intercalate ", " (renderArg <$> args)
+    , return $ emit $ intercalate ", " (render <$> args)
     , return $ emit ") -> boxed "
     , prettyPrintCpp' ret
     ]
+    where
+    (captures, render)
+      | name == Just tcoLoop = ("[&]", renderArgByVal)
+      | otherwise = ("[=]", renderArg)
   match (Indexer _ prop@(Var _ name) val) = mconcat <$> sequence
     [ prettyPrintCpp' val
     , return $ emit "::"
@@ -482,12 +486,21 @@ implFooterSource mn foreigns =
     \"
 
 varDecl :: Text
-varDecl = "const boxed&"
+varDecl = "const boxed"
+
+varRefDecl :: Text
+varRefDecl = varDecl <> "&"
+
+renderArg' :: Text -> Text -> Text
+renderArg' decl arg
+  | arg == unusedName = decl
+  | otherwise = decl <> " " <> arg
 
 renderArg :: Text -> Text
-renderArg arg
-  | arg == unusedName = varDecl
-  | otherwise = varDecl <> " " <> arg
+renderArg = renderArg' varRefDecl
+
+renderArgByVal :: Text -> Text
+renderArgByVal = renderArg' varDecl
 
 foreignDict :: Text
 foreignDict = "foreign"
