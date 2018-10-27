@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e5a3087784164da529b9f673d964db77b198c936e428ed7c2fe54b479a06d0c7
+-- hash: 359fb647874c687db6015861dc97b20ba11f47258cc05324f1d925d939cb6024
 
 name:           pscpp
 version:        0.1.0.0
@@ -45,6 +45,7 @@ library
     , directory
     , file-embed
     , filepath
+    , monad-parallel >=0.7.2.2 && <0.8
     , mtl >=2.1.0 && <2.3.0
     , pattern-arrows >=0.0.2 && <0.1
     , process
@@ -70,6 +71,7 @@ executable pscpp
     , directory
     , file-embed
     , filepath
+    , monad-parallel >=0.7.2.2 && <0.8
     , mtl >=2.1.0 && <2.3.0
     , pattern-arrows >=0.0.2 && <0.1
     , process
@@ -97,6 +99,7 @@ test-suite pscpp-test
     , directory
     , file-embed
     , filepath
+    , monad-parallel >=0.7.2.2 && <0.8
     , mtl >=2.1.0 && <2.3.0
     , pattern-arrows >=0.0.2 && <0.1
     , process

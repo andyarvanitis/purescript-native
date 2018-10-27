@@ -5,6 +5,7 @@
 module Main where
 
 import Control.Monad (when)
+import qualified Control.Monad.Parallel as Par
 import Data.Aeson
 import Data.Aeson.Types
 import Data.Char
@@ -64,11 +65,16 @@ main = do
             T.writeFile "Makefile" $ T.decodeUtf8 $(embedFile "support/Makefile")
           when ("--help" `elem` opts') $
             putStrLn help
-          mapM (generateCode opts') files
+          when (not $ null files) $ do
+            let filepath = takeDirectory (head files)
+                baseOutpath = joinPath $ (init $ splitDirectories filepath) ++ [outdir]
+            writeRuntimeFiles baseOutpath
+            Par.mapM (generateCode opts' baseOutpath) files
+            return ()
           return ()
 
-generateCode :: [String] -> FilePath -> IO ()
-generateCode opts jsonFile = do
+generateCode :: [String] -> FilePath -> FilePath -> IO ()
+generateCode opts baseOutpath jsonFile = do
   jsonModTime <- getModificationTime jsonFile
   let filepath = takeDirectory jsonFile
       dirparts = splitDirectories $ filepath
@@ -80,18 +86,16 @@ generateCode opts jsonFile = do
     then do
       modTime <- getModificationTime possInterfaceFilename
       when (modTime < jsonModTime) $
-        transpile opts jsonFile
-    else transpile opts jsonFile
+        transpile opts baseOutpath jsonFile
+    else transpile opts baseOutpath jsonFile
 
-transpile :: [String] -> FilePath -> IO ()
-transpile opts jsonFile = do
+transpile :: [String] -> FilePath -> FilePath -> IO ()
+transpile opts baseOutpath jsonFile = do
   jsonText <- T.readFile jsonFile
   let module' = jsonToModule $ parseJson jsonText
   ((interface, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToCpp module' Nothing)
   let mn = moduleNameToCpp $ moduleName module'
       implementation = prettyPrintCpp asts
-      filepath = takeDirectory jsonFile
-  let baseOutpath = joinPath $ (init $ splitDirectories filepath) ++ [outdir]
       outpath = joinPath [baseOutpath, T.unpack mn]
       interfacePath = outpath </> interfaceFileName (T.unpack mn)
       implPath = outpath </> implFileName mn
@@ -100,17 +104,21 @@ transpile opts jsonFile = do
   T.writeFile interfacePath $ conv interface
   putStrLn implPath
   T.writeFile implPath $ conv (implHeader <> implementation <> implFooter)
-  let runtime = baseOutpath </> "purescript.h"
-      dep = baseOutpath </> "string_literal_dict.h"
-  runtimeExists <- doesFileExist runtime
-  when (not runtimeExists) $ do
-    T.writeFile runtime . conv $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
-    T.writeFile dep . conv $ T.decodeUtf8 $(embedFile "runtime/string_literal_dict.h")
   where
   conv :: Text -> Text
   conv
     | "--ucns" `elem` opts = toUCNs
     | otherwise = id
+
+writeRuntimeFiles :: FilePath -> IO ()
+writeRuntimeFiles baseOutpath = do
+  createDirectoryIfMissing True baseOutpath
+  let runtime = baseOutpath </> "purescript.h"
+      dep = baseOutpath </> "string_literal_dict.h"
+  runtimeExists <- doesFileExist runtime
+  when (not runtimeExists) $ do
+    T.writeFile runtime $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
+    T.writeFile dep $ T.decodeUtf8 $(embedFile "runtime/string_literal_dict.h")
 
 outdir :: FilePath
 outdir = "src"
