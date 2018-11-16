@@ -82,19 +82,6 @@ namespace purescript {
               : std::shared_ptr<void>(std::make_shared<eff_fn_t>(f)) {
         }
 
-        template <typename T,
-        typename = typename std::enable_if<!std::is_same<boxed,T>::value &&
-                                            std::is_convertible<T,fn_t>::value>::type>
-        auto operator=(const T& right) -> boxed& {
-            if (std::shared_ptr<void>::operator bool()) {
-                auto& f = *static_cast<fn_t*>(get());
-                f = right;
-            } else {
-                reset(new fn_t(right));
-            }
-            return *this;
-        }
-
         auto operator()(const boxed& arg) const -> boxed {
             auto& f = *static_cast<fn_t*>(get());
             return f(arg);
@@ -133,6 +120,40 @@ namespace purescript {
 
     }; // class boxed
 
+    using fn_t = boxed::fn_t;
+    using eff_fn_t = boxed::eff_fn_t;
+    using dict_t = boxed::dict_t;
+    using array_t = boxed::array_t;
+
+    class boxed_r : private std::shared_ptr<void> {
+        public:
+        boxed_r() : std::shared_ptr<void>(std::make_shared<boxed>()) {}
+
+        operator const boxed&() const {
+            return *static_cast<const boxed*>(get());
+        }
+
+        auto operator()(const boxed& arg) const -> boxed {
+            auto& b = *static_cast<boxed*>(get());
+            auto& f = *static_cast<fn_t*>(b.get());
+            return f(arg);
+        }
+
+        auto operator()() const -> boxed {
+            auto& b = *static_cast<boxed*>(get());
+            auto& f = *static_cast<eff_fn_t*>(b.get());
+            return f();
+        }
+
+        template <typename T>
+        auto operator=(T&& right) -> boxed_r& {
+            auto& b = *static_cast<boxed*>(get());
+            b = std::forward<T>(right);
+            return *this;
+        }
+
+    }; // class boxed_r
+
     template <typename T, typename... Args>
     inline auto box(Args&&... args) -> boxed {
         return std::make_shared<T>(std::forward<Args>(args)...);
@@ -162,11 +183,6 @@ namespace purescript {
     inline auto array_length(const boxed& a) -> boxed::array_t::size_type {
         return unbox<boxed::array_t>(a).size();
     }
-
-    using fn_t = boxed::fn_t;
-    using eff_fn_t = boxed::eff_fn_t;
-    using dict_t = boxed::dict_t;
-    using array_t = boxed::array_t;
 
     constexpr auto undefined = nullptr;
 

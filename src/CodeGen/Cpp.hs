@@ -240,8 +240,7 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
     bindersToCpp ss binders vals
   valueToCpp (Let _ ds val) = do
     let recurs = concatMap getNames $ filter isRec ds
-        recurDs = (\v -> AST.VariableIntroduction Nothing (identToCpp v) (Just (AST.Var Nothing "box<fn_t>()"))) <$> recurs
-        -- recurDsWeak = (\v -> AST.VariableIntroduction Nothing ("__unsafe_unretained " <> identToCpp v <> unretainedSuffix) Nothing) <$> recurs
+        recurDs = (\v -> AST.Var Nothing $ "boxed_r " <> identToCpp v) <$> recurs
     ds' <- concat <$> mapM (bindToCpp LetDecl) ds
     ret <- valueToCpp val
     return $
