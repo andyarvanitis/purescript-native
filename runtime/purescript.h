@@ -38,10 +38,7 @@ namespace purescript {
     public:
         using std::shared_ptr<void>::shared_ptr;
 
-        boxed() noexcept : std::shared_ptr<void>() {}
-        boxed(const std::nullptr_t) noexcept : std::shared_ptr<void>() {}
         boxed(const int n) : std::shared_ptr<void>(std::make_shared<int>(n)) {}
-
         boxed(const long n) : std::shared_ptr<void>(std::make_shared<int>(static_cast<int>(n))) {
 #if !defined(NDEBUG) // if debug build
             if (n < std::numeric_limits<int>::min() || n > std::numeric_limits<int>::max()) {

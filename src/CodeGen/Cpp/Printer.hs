@@ -252,7 +252,7 @@ literals = mkPattern' match'
     [ return $ emit "return "
     , prettyPrintCpp' value
     ]
-  match (ReturnNoResult _) = return $ emit "return nullptr"
+  match (ReturnNoResult _) = return $ emit "return undefined"
   -- match (Throw _ _) = return mempty
   match (Throw _ value) = mconcat <$> sequence
     [ return $ emit "throw "

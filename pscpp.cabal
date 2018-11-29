@@ -1,8 +1,10 @@
--- This file has been generated from package.yaml by hpack version 0.28.2.
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 359fb647874c687db6015861dc97b20ba11f47258cc05324f1d925d939cb6024
+-- hash: 21aa75281e615d7fe3001877e6820efd2dd2a33cf67fa7b101603e042139495e
 
 name:           pscpp
 version:        0.1.0.0
@@ -15,10 +17,9 @@ copyright:      2018 Andy Arvanitis
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
-cabal-version:  >= 1.10
 extra-source-files:
-    ChangeLog.md
     README.md
+    ChangeLog.md
 
 source-repository head
   type: git
