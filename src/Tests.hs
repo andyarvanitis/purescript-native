@@ -31,7 +31,7 @@ runTests = do
   let srcDir = outputDir </> "src"
   createDirectory srcDir
 
-  callProcess "git" ["clone", "--branch", "v0.12.0", "--depth", "1", "https://github.com/purescript/purescript.git"]
+  callProcess "git" ["clone", "--branch", "v0.12.1", "--depth", "1", "https://github.com/purescript/purescript.git"]
   let passingDir = baseDir </> "purescript" </> "tests" </> "purs" </> "passing"
   passingTestCases <- sort . filter (".purs" `isSuffixOf`) <$> getDirectoryContents passingDir
 
@@ -41,8 +41,8 @@ runTests = do
   fetchPackages
   callProcess "git" ["clone", "--depth", "1", "https://github.com/andyarvanitis/purescript-cpp-ffi.git", "ffi"]
 
-  callProcess "rm" ["-rf", ".psc-package/psc-0.12.0/prelude/v4.0.0"]
-  callProcess "git" ["clone", "--depth", "1", "https://github.com/andyarvanitis/purescript-prelude.git", ".psc-package/psc-0.12.0/prelude/v4.0.0"]
+  callProcess "rm" ["-rf", ".psc-package/psc-0.12.1/prelude/v4.1.0"]
+  callProcess "git" ["clone", "--depth", "1", "https://github.com/andyarvanitis/purescript-prelude.git", ".psc-package/psc-0.12.1/prelude/v4.1.0"]
 
   let tests = filter (`notElem` skipped) passingTestCases
 
