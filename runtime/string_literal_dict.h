@@ -31,8 +31,8 @@
 #include <string>
 #endif
 
-template <typename T>
-class string_literal_dict_t : public std::vector<std::pair<const char *, T>> {
+template <typename T, typename... U>
+class string_literal_dict_t : public std::vector<std::pair<const char *, T>, U...> {
 
   static auto null() -> const T& {
     static const T value;
@@ -40,7 +40,7 @@ class string_literal_dict_t : public std::vector<std::pair<const char *, T>> {
   }
 
   public:
-  using std::vector<std::pair<const char *, T>>::vector;
+  using std::vector<std::pair<const char *, T>, U...>::vector;
 
   auto operator[](const char key[]) const -> const T& {
     for (auto it = this->cbegin(), end=this->cend(); it != end; it++) {
