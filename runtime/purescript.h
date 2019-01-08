@@ -244,7 +244,10 @@ namespace purescript {
         return *static_cast<const T*>(b.get());
     }
 
-    template <typename T>
+    template <typename T,
+    typename = typename std::enable_if<!std::is_same<T, int>::value &&
+                                       !std::is_same<T, bool>::value &&
+                                       !std::is_same<T, double>::value>::type>
     constexpr auto unbox(boxed& b) -> T& {
         return *static_cast<T*>(b.get());
     }
