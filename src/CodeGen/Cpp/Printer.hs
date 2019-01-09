@@ -480,6 +480,7 @@ implFooterSource mn foreigns =
   mainSource :: Text
   mainSource = "\
     \int main(int argc, const char * argv[]) {\n\
+    \    INITIALIZE_GC();\n\
     \    Main::main()();\n\
     \    return 0;\n\
     \}\n\n\
