@@ -1,19 +1,20 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
-// Module      :  purescript.h
-// Copyright   :  (c) Andy Arvanitis 2018
+// Module      :  purescript-gc.h
+// Copyright   :  (c) Andy Arvanitis 2019
 // License     :  BSD
 //
 // Maintainer  :  Andy Arvanitis
 // Stability   :  experimental
 // Portability :
 //
-// Basic types and functions to support purescript-to-C++ rendering
+// Garbage collecting (bdw-gc) version of basic types and functions to support
+// purescript-to-C++ rendering.
 //
 ///////////////////////////////////////////////////////////////////////////////
 //
-#ifndef purescript_H
-#define purescript_H
+#ifndef purescript_gc_H
+#define purescript_gc_H
 
 #include <functional>
 #include <deque>
@@ -303,4 +304,4 @@ namespace purescript {
 
 #define INITIALIZE_GC() GC_INIT()
 
-#endif // purescript_H
+#endif // purescript_gc_H
