@@ -24,17 +24,7 @@
 #include <gc/gc_allocator.h>
 #include "string_literal_dict.h"
 
-#define INITIALIZE_GC() GC_INIT()
-
 namespace purescript {
-
-    template <typename T>
-    class collected : public T, public gc_cleanup {
-        public:
-        template <typename... Args>
-        inline collected(Args&&... args) : T(std::forward<Args>(args)...), gc_cleanup() {
-        }
-    };
 
     using string = std::string;
 
@@ -49,6 +39,14 @@ namespace purescript {
         };
 
     public:
+        template <typename T>
+        class collected : public T, public gc_cleanup {
+            public:
+            template <typename... Args>
+            inline collected(Args&&... args) : T(std::forward<Args>(args)...), gc_cleanup() {
+            }
+        };
+
         template <typename T>
         class collected_array : public std::deque<T, gc_allocator<T>>, public gc {
             public:
@@ -148,12 +146,12 @@ namespace purescript {
         }
 
         auto operator()(const boxed& arg) const -> boxed {
-            auto& f = *static_cast<collected<fn_t>*>(_ptr_);
+            auto& f = *static_cast<boxed::collected<fn_t>*>(_ptr_);
             return f(arg);
         }
 
         auto operator()() const -> boxed {
-            auto& f = *static_cast<collected<eff_fn_t>*>(_ptr_);
+            auto& f = *static_cast<boxed::collected<eff_fn_t>*>(_ptr_);
             return f();
         }
 
@@ -162,7 +160,7 @@ namespace purescript {
         }
 
         auto operator[](const char key[]) -> boxed& {
-          return (*static_cast<collected_dict_t*>(_ptr_))[key];
+          return (*static_cast<boxed::collected_dict_t*>(_ptr_))[key];
         }
 
 #if !defined(NDEBUG) // if debug build
@@ -171,7 +169,7 @@ namespace purescript {
         }
 
         auto operator[](const int index) -> boxed& {
-            return static_cast<collected_array_t*>(_ptr_)->at(index);
+            return static_cast<boxed::collected_array_t*>(_ptr_)->at(index);
         }
 #else  // not debug build
         auto operator[](const int index) const -> const boxed& {
@@ -179,7 +177,7 @@ namespace purescript {
         }
 
         auto operator[](const int index) -> boxed& {
-            return (*static_cast<collected_array_t*>(_ptr_))[index];
+            return (*static_cast<boxed::collected_array_t*>(_ptr_))[index];
         }
 #endif // !defined(NDEBUG)
 
@@ -202,12 +200,12 @@ namespace purescript {
         }
 
         auto operator()(const boxed& arg) const -> boxed {
-            auto& f = *static_cast<collected<fn_t>*>(_ptr_->get());
+            auto& f = *static_cast<boxed::collected<fn_t>*>(_ptr_->get());
             return f(arg);
         }
 
         auto operator()() const -> boxed {
-            auto& f = *static_cast<collected<eff_fn_t>*>(_ptr_->get());
+            auto& f = *static_cast<boxed::collected<eff_fn_t>*>(_ptr_->get());
             return f();
         }
 
@@ -221,7 +219,7 @@ namespace purescript {
 
     template <typename T, typename... Args>
     inline auto box(Args&&... args) -> boxed {
-        return boxed(static_cast<void*>(new collected<T>(std::forward<Args>(args)...)));
+        return boxed(static_cast<void*>(new boxed::collected<T>(std::forward<Args>(args)...)));
     }
 
     template <typename T>
@@ -257,7 +255,7 @@ namespace purescript {
                                                  !std::is_same<T, array_t>::value
                                                 >::type>
     constexpr auto unbox(const boxed& b) -> const T& {
-        return *static_cast<const collected<T>*>(b.get());
+        return *static_cast<const boxed::collected<T>*>(b.get());
     }
 
     template <typename T,
@@ -268,7 +266,7 @@ namespace purescript {
                                        !std::is_same<T, array_t>::value
                                       >::type>
     constexpr auto unbox(boxed& b) -> T& {
-        return *static_cast<collected<T>*>(b.get());
+        return *static_cast<boxed::collected<T>*>(b.get());
     }
 
     template <typename T>
@@ -302,5 +300,7 @@ namespace purescript {
     static const auto $foreign_exports_init$ = ([]() -> char {\
         dict_t& exports = foreign();
 #define FOREIGN_END return 0; }()); }
+
+#define INITIALIZE_GC() GC_INIT()
 
 #endif // purescript_H
