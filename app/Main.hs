@@ -114,10 +114,14 @@ writeRuntimeFiles :: FilePath -> IO ()
 writeRuntimeFiles baseOutpath = do
   createDirectoryIfMissing True baseOutpath
   let runtime = baseOutpath </> "purescript.h"
+      runtime_rc = baseOutpath </> "purescript_rc.h"
+      runtime_gc = baseOutpath </> "purescript_gc.h"
       dep = baseOutpath </> "string_literal_dict.h"
   runtimeExists <- doesFileExist runtime
   when (not runtimeExists) $ do
     T.writeFile runtime $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
+    T.writeFile runtime_rc $ T.decodeUtf8 $(embedFile "runtime/purescript_rc.h")
+    T.writeFile runtime_gc $ T.decodeUtf8 $(embedFile "runtime/purescript_gc.h")
     T.writeFile dep $ T.decodeUtf8 $(embedFile "runtime/string_literal_dict.h")
 
 outdir :: FilePath
