@@ -29,7 +29,7 @@ namespace purescript {
     using std::string;
 
     class boxed : public std::shared_ptr<void> {
-        
+
     public:
         using fn_t = std::function<boxed(const boxed&)>;
         using eff_fn_t = std::function<boxed(void)>;
