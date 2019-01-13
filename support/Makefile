@@ -31,6 +31,11 @@ ifneq (,$(findstring g++,$(CXXVERSION)))
   PSCPPFLAGS += "--ucns"
 endif
 
+ifeq ($(GC),yes)
+  override CXXFLAGS += -DUSE_GC
+  override LDFLAGS += -lgc -lgccpp
+endif
+
 DEBUG := "-DDEBUG -g"
 RELEASE := "-DNDEBUG -O3"
 
