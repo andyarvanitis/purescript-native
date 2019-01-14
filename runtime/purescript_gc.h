@@ -21,6 +21,7 @@
 #include <string>
 #include <limits>
 #define GC_THREADS
+#define GC_IGNORE_WARN
 #include <gc/gc_cpp.h>
 #include <gc/gc_allocator.h>
 #include "string_literal_dict.h"
@@ -28,6 +29,72 @@
 namespace purescript {
 
     using string = std::string;
+
+    template <typename T>
+    class fn_base {
+        public:
+        virtual auto operator()(const T&) const -> T = 0;
+        virtual ~fn_base() = default;
+    };
+
+    template <typename T, typename F>
+    class collected_fn;
+
+    template <typename T>
+    using fnptr_t = auto (const T&) -> T;
+
+    template <typename T>
+    class collected_fn<T, fnptr_t<T>> : public fn_base<T>, public gc {
+        fnptr_t<T> * fptr;
+    public:
+        collected_fn(fnptr_t<T> * l) noexcept : fptr(l), gc() {}
+        auto operator()(const T& arg) const -> T override {
+            return (*fptr)(arg);
+        }
+    };
+
+    template <typename T, typename F>
+    class collected_fn : public fn_base<T>, public gc_cleanup {
+        const F lambda;
+    public:
+        collected_fn(const F& l) noexcept : lambda(l), gc_cleanup() {}
+        auto operator()(const T& arg) const -> T override {
+            return lambda(arg);
+        }
+    };
+
+    template <typename T>
+    class eff_fn_base {
+        public:
+        virtual auto operator()() const -> T = 0;
+        virtual ~eff_fn_base() = default;
+    };
+
+    template <typename T, typename F>
+    class collected_eff_fn;
+
+    template <typename T>
+    using efnptr_t = auto (*)() -> T;
+
+    template <typename T>
+    class collected_eff_fn<T, efnptr_t<T>> : public eff_fn_base<T>, public gc {
+        efnptr_t<T> * fptr;
+    public:
+        collected_eff_fn(efnptr_t<T> * l) noexcept : fptr(l), gc() {}
+        auto operator()() const -> T override {
+            return (*fptr)();
+        }
+    };
+
+    template <typename T, typename F>
+    class collected_eff_fn : public eff_fn_base<T>, public gc_cleanup {
+        const F lambda;
+    public:
+        collected_eff_fn(const F& l) noexcept : lambda(l), gc_cleanup() {}
+        auto operator()() const -> T override {
+            return lambda();
+        }
+    };
 
     class boxed {
 
@@ -82,13 +149,14 @@ namespace purescript {
         };
 
     public:
-        using fn_t = std::function<boxed(const boxed&)>;
-        using eff_fn_t = std::function<boxed(void)>;
+        using fn_t = fn_base<boxed>;
+        using eff_fn_t = eff_fn_base<boxed>;
         using dict_t = string_literal_dict_t<boxed, gc_allocator<dict_value_t>>;
         using array_t = std::deque<boxed, gc_allocator<boxed>>;
 
     public:
         boxed() noexcept : _ptr_(nullptr) {}
+        ~boxed() noexcept { _ptr_ = nullptr; }
         boxed(const std::nullptr_t) noexcept : _ptr_(nullptr) {}
         explicit boxed(void * p) noexcept : _ptr_(p) {}
         boxed(const int n) : _int_(n) {}
@@ -120,14 +188,14 @@ namespace purescript {
                   typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
         boxed(const T& f,
               typename std::enable_if<std::is_assignable<std::function<boxed(boxed)>,T>::value>::type* = 0)
-              : _ptr_(new collected<fn_t>(f)) {
+              : _ptr_(static_cast<fn_t*>(new collected_fn<boxed, T>(f))) {
         }
 
         template <typename T,
                   typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
         boxed(const T& f,
               typename std::enable_if<std::is_assignable<std::function<boxed(void)>,T>::value>::type* = 0)
-              : _ptr_(new collected<eff_fn_t>(f)) {
+              : _ptr_(static_cast<eff_fn_t*>(new collected_eff_fn<boxed, T>(f))) {
         }
 
         auto get() const noexcept -> void * {
@@ -147,12 +215,12 @@ namespace purescript {
         }
 
         auto operator()(const boxed& arg) const -> boxed {
-            auto& f = *static_cast<boxed::collected<fn_t>*>(_ptr_);
+            auto& f = *static_cast<fn_t*>(_ptr_);
             return f(arg);
         }
 
         auto operator()() const -> boxed {
-            auto& f = *static_cast<boxed::collected<eff_fn_t>*>(_ptr_);
+            auto& f = *static_cast<eff_fn_t*>(_ptr_);
             return f();
         }
 
@@ -194,19 +262,20 @@ namespace purescript {
         boxed * _ptr_;
 
         public:
-        boxed_r() noexcept :  _ptr_(new (UseGC) boxed()) {}
+        boxed_r() noexcept :  _ptr_(new boxed::collected<boxed>()) {}
+        ~boxed_r() noexcept { _ptr_ = nullptr; }
 
         operator const boxed&() const {
             return *static_cast<const boxed*>(_ptr_);
         }
 
         auto operator()(const boxed& arg) const -> boxed {
-            auto& f = *static_cast<boxed::collected<fn_t>*>(_ptr_->get());
+            auto& f = *static_cast<fn_t*>(_ptr_->get());
             return f(arg);
         }
 
         auto operator()() const -> boxed {
-            auto& f = *static_cast<boxed::collected<eff_fn_t>*>(_ptr_->get());
+            auto& f = *static_cast<eff_fn_t*>(_ptr_->get());
             return f();
         }
 
@@ -248,12 +317,24 @@ namespace purescript {
         return *static_cast<boxed::collected_array_t*>(b.get());
     }
 
+    template <typename T>
+    constexpr auto unbox(const boxed& b, typename std::enable_if<std::is_same<T,fn_t>::value>::type* = 0) -> const T& {
+        return *static_cast<boxed::fn_t*>(b.get());
+    }
+
+    template <typename T>
+    constexpr auto unbox(const boxed& b, typename std::enable_if<std::is_same<T,eff_fn_t>::value>::type* = 0) -> const T& {
+        return *static_cast<boxed::eff_fn_t*>(b.get());
+    }
+
     template <typename T,
               typename = typename std::enable_if<!std::is_same<T, int>::value &&
                                                  !std::is_same<T, bool>::value &&
                                                  !std::is_same<T, double>::value &&
                                                  !std::is_same<T, dict_t>::value &&
-                                                 !std::is_same<T, array_t>::value
+                                                 !std::is_same<T, array_t>::value &&
+                                                 !std::is_same<T, fn_t>::value &&
+                                                 !std::is_same<T, eff_fn_t>::value
                                                 >::type>
     constexpr auto unbox(const boxed& b) -> const T& {
         return *static_cast<const boxed::collected<T>*>(b.get());
@@ -264,7 +345,9 @@ namespace purescript {
                                        !std::is_same<T, bool>::value &&
                                        !std::is_same<T, double>::value &&
                                        !std::is_same<T, dict_t>::value &&
-                                       !std::is_same<T, array_t>::value
+                                       !std::is_same<T, array_t>::value &&
+                                       !std::is_same<T, fn_t>::value &&
+                                       !std::is_same<T, eff_fn_t>::value
                                       >::type>
     constexpr auto unbox(boxed& b) -> T& {
         return *static_cast<boxed::collected<T>*>(b.get());

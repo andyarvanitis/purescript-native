@@ -81,17 +81,6 @@ literals = mkPattern' match'
     [ return $ emit $ "boxed " <> ident
     , maybe (return mempty) (fmap (emit " = " <>) . prettyPrintCpp') value
     ]
-  match (Assignment _ target@(Var _ var) value@(Function _ Nothing args body)) = mconcat <$> sequence
-    [ prettyPrintCpp' target
-    , return $ emit " = "
-    , return $ emit "[=, &"
-    , prettyPrintCpp' target
-    , return $ emit "]"
-    , return $ emit "("
-    , return $ emit $ intercalate ", " (renderArg <$> args)
-    , return $ emit ") -> boxed "
-    , prettyPrintCpp' body
-    ]
   match (Assignment _ target value) = mconcat <$> sequence
     [ prettyPrintCpp' target
     , return $ emit " = "
