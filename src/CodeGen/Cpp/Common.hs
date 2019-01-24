@@ -216,5 +216,8 @@ unbox t = "unbox<" <> t <> ">"
 arrayLengthFn :: Text
 arrayLengthFn = "array_length"
 
+unretainedSuffix :: Text
+unretainedSuffix = "$weak"
+
 tcoLoop :: Text
 tcoLoop = "$TCO_loop$"

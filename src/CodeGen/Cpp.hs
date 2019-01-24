@@ -13,7 +13,7 @@ import Control.Arrow ((&&&))
 import Control.Monad (forM, liftM, replicateM, void)
 import Control.Monad.Supply.Class
 
-import Data.List ((\\), delete, intersect)
+import Data.List ((\\), delete, intersect, nub)
 import qualified Data.Foldable as F
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isNothing, mapMaybe)
@@ -157,20 +157,35 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
     pure $
       let retainedName = identToCpp ident
           retained = AST.Var Nothing $ retainedName
-          -- unretained = AST.Var Nothing $ retainedName <> unretainedSuffix
-          -- alias = AST.Var Nothing . -- Note: prevents optimizer from eliminating this
-          --             prettyPrintCpp1 $
-          --               AST.VariableIntroduction Nothing retainedName (Just unretained)
+          unretainedName = retainedName <> unretainedSuffix
+          unretained = AST.Var Nothing $ unretainedName
+          boxed = AST.Var Nothing . -- Note: prevents optimizer from eliminating this
+                      prettyPrintCpp1 $
+                        AST.VariableIntroduction
+                            Nothing
+                            retainedName
+                            (Just unretained)
+          alias = AST.Var Nothing $ "auto& " <> retainedName <> " = " <> unretainedName
       in
       case cpp of
         AST.Function _ name args (AST.Block Nothing cpps) ->
           AST.Assignment Nothing
-              (retained)
+              retained
               (AST.Function Nothing
                    name
                    args 
-                   (AST.Block Nothing cpps))
-        _ -> AST.Assignment Nothing retained cpp
+                   (AST.Block Nothing (boxed : cpps)))
+        _ ->
+          AST.Assignment Nothing
+              retained
+              (AST.App Nothing
+                  (AST.Function Nothing
+                      Nothing
+                      []
+                      (AST.Block Nothing ([ alias
+                                          , AST.Return Nothing cpp
+                                          ])))
+               [])
   nonRecToCpp _ (ss, _, _, _) ident val = do
     cpp <- valueToCpp val
     pure $ AST.VariableIntroduction Nothing (identToCpp ident) (Just cpp)
@@ -241,6 +256,13 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
   valueToCpp (Let _ ds val) = do
     let recurs = concatMap getNames $ filter isRec ds
         recurDs = (\v -> AST.Var Nothing $ "boxed_r " <> identToCpp v) <$> recurs
+        recurDsWeak = (\v -> AST.Var
+                             Nothing
+                             ("boxed_weak_r " <> identToCpp v <> unretainedSuffix <> "(" <> identToCpp v <> ")")
+                       ) <$> recurs
+        mutualRecurWarning = if any isMutRec $ filter isRec ds
+                               then [AST.Var Nothing "#pragma message(\"Mutually recursive lets will cause retain cycles (memory leaks)\") //"]
+                               else []
     ds' <- concat <$> mapM (bindToCpp LetDecl) ds
     ret <- valueToCpp val
     return $
@@ -248,12 +270,15 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
           (AST.Function Nothing
                Nothing
                []
-               (AST.Block Nothing (recurDs ++ ds' ++ [AST.Return Nothing ret])))
+               (AST.Block Nothing (recurDs ++ recurDsWeak ++ mutualRecurWarning ++ ds' ++ [AST.Return Nothing ret])))
           []
     where
     isRec :: Bind Ann -> Bool
     isRec (Rec _) = True
-    isRec _ = False      
+    isRec _ = False
+    isMutRec :: Bind Ann -> Bool
+    isMutRec b | (length . nub $ getNames b) > 1 = True
+               | otherwise = False
   valueToCpp (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) = error "IsNewtype"
   valueToCpp (Constructor _ _ (ProperName ctor) fields) =
     let body = AST.ObjectLiteral Nothing $ (mkString ctor, AST.BooleanLiteral Nothing True) :

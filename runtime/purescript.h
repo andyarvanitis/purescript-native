@@ -40,6 +40,7 @@ namespace purescript {
 
         boxed() noexcept : std::shared_ptr<void>() {}
         boxed(const std::nullptr_t) noexcept : std::shared_ptr<void>() {}
+        boxed(const std::shared_ptr<void>& p) : std::shared_ptr<void>::shared_ptr(p) {}
         boxed(const int n) : std::shared_ptr<void>(std::make_shared<int>(n)) {}
         boxed(const long n) : std::shared_ptr<void>(std::make_shared<int>(static_cast<int>(n))) {
 #if !defined(NDEBUG) // if debug build
@@ -115,41 +116,29 @@ namespace purescript {
         }
 #endif // !defined(NDEBUG)
 
+        class weak {
+            std::weak_ptr<void> ptr;
+
+            public:
+            weak() = delete;
+            weak(boxed& b) : ptr(b) {}
+
+            operator boxed() const {
+#if defined(NDEBUG)
+                return ptr.lock();
+#else
+                return static_cast<std::shared_ptr<void>>(ptr);
+#endif
+            }
+
+        }; // class weak
+
     }; // class boxed
 
     using fn_t = boxed::fn_t;
     using eff_fn_t = boxed::eff_fn_t;
     using dict_t = boxed::dict_t;
     using array_t = boxed::array_t;
-
-    class boxed_r : private std::shared_ptr<void> {
-        public:
-        boxed_r() : std::shared_ptr<void>(std::make_shared<boxed>()) {}
-
-        operator const boxed&() const {
-            return *static_cast<const boxed*>(get());
-        }
-
-        auto operator()(const boxed& arg) const -> boxed {
-            auto& b = *static_cast<boxed*>(get());
-            auto& f = *static_cast<fn_t*>(b.get());
-            return f(arg);
-        }
-
-        auto operator()() const -> boxed {
-            auto& b = *static_cast<boxed*>(get());
-            auto& f = *static_cast<eff_fn_t*>(b.get());
-            return f();
-        }
-
-        template <typename T>
-        auto operator=(T&& right) -> boxed_r& {
-            auto& b = *static_cast<boxed*>(get());
-            b = std::forward<T>(right);
-            return *this;
-        }
-
-    }; // class boxed_r
 
     template <typename T, typename... Args>
     inline auto box(Args&&... args) -> boxed {
@@ -176,6 +165,60 @@ namespace purescript {
     constexpr auto unbox(const std::size_t value) -> long long {
         return value;
     }
+
+    class boxed_r {
+        friend class boxed_weak_r;
+        std::shared_ptr<boxed> ptr;
+        std::shared_ptr<boxed::weak> wptr;
+
+        public:
+        boxed_r() : ptr(std::make_shared<boxed>())
+                  , wptr(std::make_shared<boxed::weak>(*ptr)) {}
+
+        operator const boxed&() const {
+            return *ptr;
+        }
+
+        operator boxed&() {
+            return *ptr;
+        }
+
+        auto operator()() const -> boxed {
+            return (*ptr)();
+        }
+
+        auto operator()(const boxed& arg) const -> boxed {
+            return (*ptr)(arg);
+        }
+
+        template <typename T>
+        auto operator=(T&& right) -> boxed_r& {
+            *ptr = std::forward<T>(right);
+            *wptr = *ptr;
+            return *this;
+        }
+
+    }; // class boxed_r
+
+    class boxed_weak_r {
+        std::shared_ptr<boxed::weak> wptr;
+
+    public:
+        boxed_weak_r(const boxed_r& r) : wptr(r.wptr) {}
+
+        operator boxed() const {
+            return *wptr;
+        }
+
+        auto operator()() const -> boxed {
+            return static_cast<boxed>(*wptr)();
+        }
+
+        auto operator()(const boxed& arg) const -> boxed {
+            return static_cast<boxed>(*wptr)(arg);
+        }
+
+    }; // class boxed_weak_r
 
     inline auto array_length(const boxed& a) -> boxed::array_t::size_type {
         return unbox<boxed::array_t>(a).size();
