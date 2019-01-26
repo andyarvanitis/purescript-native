@@ -255,10 +255,10 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
     bindersToCpp ss binders vals
   valueToCpp (Let _ ds val) = do
     let recurs = concatMap getNames $ filter isRec ds
-        recurDs = (\v -> AST.Var Nothing $ "boxed_r " <> identToCpp v) <$> recurs
+        recurDs = (\v -> AST.Var Nothing $ "boxed::ref " <> identToCpp v) <$> recurs
         recurDsWeak = (\v -> AST.Var
                              Nothing
-                             ("boxed_weak_r " <> identToCpp v <> unretainedSuffix <> "(" <> identToCpp v <> ")")
+                             ("boxed::ref::weak " <> identToCpp v <> unretainedSuffix <> "(" <> identToCpp v <> ")")
                        ) <$> recurs
         mutualRecurWarning = if any isMutRec $ filter isRec ds
                                then [AST.Var Nothing "#pragma message(\"Mutually recursive lets will cause retain cycles (memory leaks)\") //"]

@@ -27,8 +27,8 @@ namespace purescript {
 
     using std::string;
 
-    class boxed : public std::shared_ptr<void> {
-        
+    class boxed {
+        std::shared_ptr<void> shared;
     public:
         using fn_t = std::function<boxed(const boxed&)>;
         using eff_fn_t = std::function<boxed(void)>;
@@ -36,102 +36,163 @@ namespace purescript {
         using array_t = std::deque<boxed>;
 
     public:
-        using std::shared_ptr<void>::shared_ptr;
+        boxed() noexcept : shared() {}
+        boxed(const std::nullptr_t) noexcept : shared() {}
 
-        boxed() noexcept : std::shared_ptr<void>() {}
-        boxed(const std::nullptr_t) noexcept : std::shared_ptr<void>() {}
-        boxed(const std::shared_ptr<void>& p) : std::shared_ptr<void>::shared_ptr(p) {}
-        boxed(const int n) : std::shared_ptr<void>(std::make_shared<int>(n)) {}
-        boxed(const long n) : std::shared_ptr<void>(std::make_shared<int>(static_cast<int>(n))) {
+        template <typename T>
+        boxed(std::shared_ptr<T>&& other) : shared(std::move(other)) {}
+
+        template <typename T>
+        boxed(const std::shared_ptr<T>& other) : shared(other) {}
+
+        boxed(const int n) : shared(std::make_shared<int>(n)) {}
+
+        boxed(const long n) : shared(std::make_shared<int>(static_cast<int>(n))) {
 #if !defined(NDEBUG) // if debug build
             if (n < std::numeric_limits<int>::min() || n > std::numeric_limits<int>::max()) {
                 throw std::runtime_error("integer out of range");
             }
 #endif // !defined(NDEBUG)
         }
-        boxed(const unsigned long n) : std::shared_ptr<void>(std::make_shared<int>(static_cast<int>(n))) {
+
+        boxed(const unsigned long n) : shared(std::make_shared<int>(static_cast<int>(n))) {
 #if !defined(NDEBUG) // if debug build
             if (n > std::numeric_limits<int>::max()) {
                 throw std::runtime_error("integer out of range");
             }
 #endif // !defined(NDEBUG)
         }
-        boxed(const double n) : std::shared_ptr<void>(std::make_shared<double>(n)) {}
-        boxed(const bool b) : std::shared_ptr<void>(std::make_shared<bool>(b)) {}
-        boxed(const char s[]) : std::shared_ptr<void>(std::make_shared<string>(s)) {}
-        boxed(string&& s) : std::shared_ptr<void>(std::make_shared<string>(std::move(s))) {}
-        boxed(const string& s) : std::shared_ptr<void>(std::make_shared<string>(s)) {}
-        boxed(array_t&& l) : std::shared_ptr<void>(std::make_shared<array_t>(std::move(l))) {}
-        boxed(const array_t& l) : std::shared_ptr<void>(std::make_shared<array_t>(l)) {}
-        boxed(dict_t&& m) : std::shared_ptr<void>(std::make_shared<dict_t>(std::move(m))) {}
-        boxed(const dict_t& m) : std::shared_ptr<void>(std::make_shared<dict_t>(m)) {}
+
+        boxed(const double n) : shared(std::make_shared<double>(n)) {}
+        boxed(const bool b) : shared(std::make_shared<bool>(b)) {}
+        boxed(const char s[]) : shared(std::make_shared<string>(s)) {}
+        boxed(string&& s) : shared(std::make_shared<string>(std::move(s))) {}
+        boxed(const string& s) : shared(std::make_shared<string>(s)) {}
+        boxed(array_t&& l) : shared(std::make_shared<array_t>(std::move(l))) {}
+        boxed(const array_t& l) : shared(std::make_shared<array_t>(l)) {}
+        boxed(dict_t&& m) : shared(std::make_shared<dict_t>(std::move(m))) {}
+        boxed(const dict_t& m) : shared(std::make_shared<dict_t>(m)) {}
 
         template <typename T,
                   typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
         boxed(const T& f,
               typename std::enable_if<std::is_assignable<std::function<boxed(boxed)>,T>::value>::type* = 0)
-              : std::shared_ptr<void>(std::make_shared<fn_t>(f)) {
+              : shared(std::make_shared<fn_t>(f)) {
         }
 
         template <typename T,
                   typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
         boxed(const T& f,
               typename std::enable_if<std::is_assignable<std::function<boxed(void)>,T>::value>::type* = 0)
-              : std::shared_ptr<void>(std::make_shared<eff_fn_t>(f)) {
+              : shared(std::make_shared<eff_fn_t>(f)) {
+        }
+
+        inline auto get() const noexcept -> void * {
+            return shared.get();
         }
 
         auto operator()(const boxed& arg) const -> boxed {
-            auto& f = *static_cast<fn_t*>(get());
+            auto& f = *static_cast<fn_t*>(shared.get());
             return f(arg);
         }
 
         auto operator()() const -> boxed {
-            auto& f = *static_cast<eff_fn_t*>(get());
+            auto& f = *static_cast<eff_fn_t*>(shared.get());
             return f();
         }
 
         auto operator[](const char key[]) const -> const boxed& {
-          return (*static_cast<const dict_t*>(get()))[key];
+          return (*static_cast<const dict_t*>(shared.get()))[key];
         }
 
         auto operator[](const char key[]) -> boxed& {
-          return (*static_cast<dict_t*>(get()))[key];
+          return (*static_cast<dict_t*>(shared.get()))[key];
         }
 
 #if !defined(NDEBUG) // if debug build
         auto operator[](const int index) const -> const boxed& {
-            return static_cast<const array_t*>(get())->at(index);
+            return static_cast<const array_t*>(shared.get())->at(index);
         }
 
         auto operator[](const int index) -> boxed& {
-            return static_cast<array_t*>(get())->at(index);
+            return static_cast<array_t*>(shared.get())->at(index);
         }
 #else  // not debug build
         auto operator[](const int index) const -> const boxed& {
-            return (*static_cast<const array_t*>(get()))[index];
+            return (*static_cast<const array_t*>(shared.get()))[index];
         }
 
         auto operator[](const int index) -> boxed& {
-            return (*static_cast<array_t*>(get()))[index];
+            return (*static_cast<array_t*>(shared.get()))[index];
         }
 #endif // !defined(NDEBUG)
 
         class weak {
-            std::weak_ptr<void> ptr;
+            std::weak_ptr<void> wptr;
 
             public:
             weak() = delete;
-            weak(boxed& b) : ptr(b) {}
+            weak(boxed& b) : wptr(b.shared) {}
 
             operator boxed() const {
 #if defined(NDEBUG)
-                return ptr.lock();
+                return wptr.lock();
 #else
-                return static_cast<std::shared_ptr<void>>(ptr);
+                return static_cast<std::shared_ptr<void>>(wptr);
 #endif
             }
 
-        }; // class weak
+        }; // class boxed::weak
+
+        class ref {
+            std::shared_ptr<boxed> sptr;
+            std::shared_ptr<boxed::weak> wptr;
+
+            public:
+            ref() : sptr(std::make_shared<boxed>())
+                  , wptr(std::make_shared<boxed::weak>(*sptr)) {}
+
+            operator const boxed&() const {
+                return *sptr;
+            }
+
+            operator boxed&() {
+                return *sptr;
+            }
+
+            auto operator()() const -> boxed {
+                return (*sptr)();
+            }
+
+            auto operator()(const boxed& arg) const -> boxed {
+                return (*sptr)(arg);
+            }
+
+            template <typename T>
+            auto operator=(T&& right) -> ref& {
+                *sptr = std::forward<T>(right);
+                *wptr = *sptr;
+                return *this;
+            }
+
+            class weak {
+                std::shared_ptr<boxed::weak> wptr;
+            public:
+                weak(const ref& r) : wptr(r.wptr) {}
+
+                operator boxed() const {
+                    return *wptr;
+                }
+
+                auto operator()() const -> boxed {
+                    return static_cast<boxed>(*wptr)();
+                }
+
+                auto operator()(const boxed& arg) const -> boxed {
+                    return static_cast<boxed>(*wptr)(arg);
+                }
+            }; // class ref::weak
+        }; // class boxed::ref
 
     }; // class boxed
 
@@ -165,60 +226,6 @@ namespace purescript {
     constexpr auto unbox(const std::size_t value) -> long long {
         return value;
     }
-
-    class boxed_r {
-        friend class boxed_weak_r;
-        std::shared_ptr<boxed> ptr;
-        std::shared_ptr<boxed::weak> wptr;
-
-        public:
-        boxed_r() : ptr(std::make_shared<boxed>())
-                  , wptr(std::make_shared<boxed::weak>(*ptr)) {}
-
-        operator const boxed&() const {
-            return *ptr;
-        }
-
-        operator boxed&() {
-            return *ptr;
-        }
-
-        auto operator()() const -> boxed {
-            return (*ptr)();
-        }
-
-        auto operator()(const boxed& arg) const -> boxed {
-            return (*ptr)(arg);
-        }
-
-        template <typename T>
-        auto operator=(T&& right) -> boxed_r& {
-            *ptr = std::forward<T>(right);
-            *wptr = *ptr;
-            return *this;
-        }
-
-    }; // class boxed_r
-
-    class boxed_weak_r {
-        std::shared_ptr<boxed::weak> wptr;
-
-    public:
-        boxed_weak_r(const boxed_r& r) : wptr(r.wptr) {}
-
-        operator boxed() const {
-            return *wptr;
-        }
-
-        auto operator()() const -> boxed {
-            return static_cast<boxed>(*wptr)();
-        }
-
-        auto operator()(const boxed& arg) const -> boxed {
-            return static_cast<boxed>(*wptr)(arg);
-        }
-
-    }; // class boxed_weak_r
 
     inline auto array_length(const boxed& a) -> boxed::array_t::size_type {
         return unbox<boxed::array_t>(a).size();
