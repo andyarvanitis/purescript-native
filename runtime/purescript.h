@@ -144,12 +144,12 @@ namespace purescript {
 
         }; // class boxed::weak
 
-        class ref {
+        class recur {
             std::shared_ptr<boxed> sptr;
             std::shared_ptr<boxed::weak> wptr;
 
             public:
-            ref() : sptr(std::make_shared<boxed>())
+            recur() : sptr(std::make_shared<boxed>())
                   , wptr(std::make_shared<boxed::weak>(*sptr)) {}
 
             operator const boxed&() const {
@@ -169,7 +169,7 @@ namespace purescript {
             }
 
             template <typename T>
-            auto operator=(T&& right) -> ref& {
+            auto operator=(T&& right) -> recur& {
                 *sptr = std::forward<T>(right);
                 *wptr = *sptr;
                 return *this;
@@ -178,7 +178,7 @@ namespace purescript {
             class weak {
                 std::shared_ptr<boxed::weak> wptr;
             public:
-                weak(const ref& r) : wptr(r.wptr) {}
+                weak(const recur& r) : wptr(r.wptr) {}
 
                 operator boxed() const {
                     return *wptr;
@@ -191,8 +191,8 @@ namespace purescript {
                 auto operator()(const boxed& arg) const -> boxed {
                     return static_cast<boxed>(*wptr)(arg);
                 }
-            }; // class ref::weak
-        }; // class boxed::ref
+            }; // class recur::weak
+        }; // class boxed::recur
 
     }; // class boxed
 
