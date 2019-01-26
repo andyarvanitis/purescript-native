@@ -30,6 +30,12 @@ namespace purescript {
     class boxed {
         std::shared_ptr<void> shared;
     public:
+        union {
+            int _int_;
+            double _double_;
+            bool _bool_;
+        };
+
         using fn_t = std::function<boxed(const boxed&)>;
         using eff_fn_t = std::function<boxed(void)>;
         using dict_t = string_literal_dict_t<boxed>;
@@ -45,9 +51,9 @@ namespace purescript {
         template <typename T>
         boxed(const std::shared_ptr<T>& other) : shared(other) {}
 
-        boxed(const int n) : shared(std::make_shared<int>(n)) {}
+        boxed(const int n) noexcept : _int_(n) {}
 
-        boxed(const long n) : shared(std::make_shared<int>(static_cast<int>(n))) {
+        boxed(const long n) : _int_(static_cast<int>(n)) {
 #if !defined(NDEBUG) // if debug build
             if (n < std::numeric_limits<int>::min() || n > std::numeric_limits<int>::max()) {
                 throw std::runtime_error("integer out of range");
@@ -55,7 +61,7 @@ namespace purescript {
 #endif // !defined(NDEBUG)
         }
 
-        boxed(const unsigned long n) : shared(std::make_shared<int>(static_cast<int>(n))) {
+        boxed(const unsigned long n) : _int_(static_cast<int>(n)) {
 #if !defined(NDEBUG) // if debug build
             if (n > std::numeric_limits<int>::max()) {
                 throw std::runtime_error("integer out of range");
@@ -63,8 +69,8 @@ namespace purescript {
 #endif // !defined(NDEBUG)
         }
 
-        boxed(const double n) : shared(std::make_shared<double>(n)) {}
-        boxed(const bool b) : shared(std::make_shared<bool>(b)) {}
+        boxed(const double n) noexcept : _double_(n) {}
+        boxed(const bool b) noexcept : _bool_(b) {}
         boxed(const char s[]) : shared(std::make_shared<string>(s)) {}
         boxed(string&& s) : shared(std::make_shared<string>(std::move(s))) {}
         boxed(const string& s) : shared(std::make_shared<string>(s)) {}
@@ -201,29 +207,77 @@ namespace purescript {
     using dict_t = boxed::dict_t;
     using array_t = boxed::array_t;
 
-    template <typename T, typename... Args>
+    template <typename T, typename... Args,
+              typename = typename std::enable_if<!std::is_same<T, int>::value &&
+                                                 !std::is_same<T, double>::value &&
+                                                 !std::is_same<T, bool>::value
+                                                >::type>
     inline auto box(Args&&... args) -> boxed {
         return std::make_shared<T>(std::forward<Args>(args)...);
     }
 
-    template <typename T>
+    template <typename T,
+              typename std::enable_if<std::is_same<T, int>::value, T>::type* = nullptr>
+    inline auto box(T arg) noexcept -> boxed {
+        return boxed(arg);
+    }
+
+    template <typename T,
+              typename std::enable_if<std::is_same<T, double>::value, T>::type* = nullptr>
+    inline auto box(T arg) noexcept -> boxed {
+        return boxed(arg);
+    }
+
+    template <typename T,
+              typename std::enable_if<std::is_same<T, bool>::value, T>::type* = nullptr>
+    inline auto box(T arg) noexcept -> boxed {
+        return boxed(arg);
+    }
+
+    template <typename T,
+              typename = typename std::enable_if<!std::is_same<T, int>::value &&
+                                                 !std::is_same<T, double>::value &&
+                                                 !std::is_same<T, bool>::value
+                                                >::type>
     constexpr auto unbox(const boxed& b) -> const T& {
         return *static_cast<const T*>(b.get());
     }
 
-    template <typename T>
+    template <typename T,
+              typename std::enable_if<std::is_same<T, int>::value, T>::type* = nullptr>
+    constexpr auto unbox(const boxed& b) noexcept -> T {
+        return b._int_;
+    }
+
+    template <typename T,
+              typename std::enable_if<std::is_same<T, double>::value, T>::type* = nullptr>
+    constexpr auto unbox(const boxed& b) noexcept -> T {
+        return b._double_;
+    }
+
+    template <typename T,
+              typename std::enable_if<std::is_same<T, bool>::value, T>::type* = nullptr>
+    constexpr auto unbox(const boxed& b) noexcept -> T {
+        return b._bool_;
+    }
+
+    template <typename T,
+              typename = typename std::enable_if<!std::is_same<T, int>::value &&
+                                                 !std::is_same<T, double>::value &&
+                                                 !std::is_same<T, bool>::value
+                                                >::type>
     constexpr auto unbox(boxed& b) -> T& {
         return *static_cast<T*>(b.get());
     }
 
     template <typename T>
-    constexpr auto unbox(const T value) -> T {
+    constexpr auto unbox(const T value) noexcept -> T {
         return value;
     }
 
     template <typename T,
               typename = typename std::enable_if<std::is_same<T, int>::value>::type>
-    constexpr auto unbox(const std::size_t value) -> long long {
+    constexpr auto unbox(const std::size_t value) noexcept -> long long {
         return value;
     }
 
