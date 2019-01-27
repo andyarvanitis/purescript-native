@@ -18,7 +18,7 @@ import CodeGen.Cpp.Optimizer.TCO
 import qualified Language.PureScript.Constants as C
 
 
--- | Apply a series of optimizer passes to simplified Objective-C code
+-- | Apply a series of optimizer passes to simplified C++ code
 optimize :: MonadSupply m => AST -> AST -> m AST
 -- optimize = untilFixedPoint $ return . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp . tco
 optimize mn cpp = do

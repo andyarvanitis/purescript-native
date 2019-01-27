@@ -92,7 +92,8 @@ literals = mkPattern' match'
     ]
   match (App ss (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y])
     | fnMod == dictMod
-    , dictMod == C.dataEq || dictMod == C.dataSemiring || dictMod == C.dataRing || dictMod == C.dataEuclideanRing
+    , dictMod == C.dataEq || dictMod == C.dataSemiring || dictMod == C.dataRing ||
+      dictMod == C.dataEuclideanRing || dictMod == C.dataHeytingAlgebra
     , Just op <- renderOp fn
     , Just t <- unboxType dict
     = mconcat <$> sequence
@@ -107,6 +108,15 @@ literals = mkPattern' match'
     , Just t <- unboxType dict
     = mconcat <$> sequence
     [ return $ emit "-"
+    , return $ emit $ unbox' t n
+    ]
+  match (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [n])
+    | fnMod == dictMod
+    , dictMod == C.dataHeytingAlgebra
+    , fn == properToCpp C.not
+    , Just t <- unboxType dict
+    = mconcat <$> sequence
+    [ return $ emit "!"
     , return $ emit $ unbox' t n
     ]
   match (App _ val args) = mconcat <$> sequence
@@ -326,7 +336,7 @@ prettyStatements sts = do
   indentString <- currentIndent
   return $ intercalate (emit "\n") $ map ((<> emit ";") . (indentString <>)) cpps
 
--- | Generate a pretty-printed string representing a collection of Objective-C expressions at the same indentation level
+-- | Generate a pretty-printed string representing a collection of C++ expressions at the same indentation level
 prettyPrintCppWithSourceMaps :: [AST] -> (Text, [SMap])
 prettyPrintCppWithSourceMaps cpp =
   let StrPos (_, s, mp) = (fromMaybe (internalError "Incomplete pattern") . flip evalStateT (PrinterState 0) . prettyStatements) cpp
@@ -335,7 +345,7 @@ prettyPrintCppWithSourceMaps cpp =
 prettyPrintCpp :: [AST] -> Text
 prettyPrintCpp = maybe (internalError "Incomplete pattern") runPlainString . flip evalStateT (PrinterState 0) . prettyStatements
 
--- | Generate an indented, pretty-printed string representing a Objective-C expression
+-- | Generate an indented, pretty-printed string representing a C++ expression
 prettyPrintCpp' :: (Emit gen) => AST -> StateT PrinterState Maybe gen
 prettyPrintCpp' = A.runKleisli $ runPattern matchValue
   where
@@ -409,6 +419,8 @@ unboxType t
     t == C.ringNumber ||
     t == C.euclideanRingNumber
     = Just float
+  | t == C.heytingAlgebraBoolean
+    = Just bool
   | otherwise = Nothing
 
 renderOp :: Text -> Maybe Text
@@ -419,6 +431,8 @@ renderOp op
   | op == C.sub = Just " - "
   | op == C.mul = Just " * "
   | op == C.div = Just " / "
+  | op == C.conj = Just " && "
+  | op == C.disj = Just "|| "
   | otherwise = Nothing
 
 interfaceSource :: Text -> [(Text,Bool)] -> [Ident] -> Text
