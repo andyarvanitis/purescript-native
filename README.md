@@ -12,7 +12,7 @@ This is an experimental C++11 (or later) compiler backend for [PureScript](https
 
 #### Platforms
 * Generated C++ code and resulting binary executables tested (to at least some extent) on:
-  * macOS High Sierra, Xcode 9.4.1's clang (full test suite)
+  * macOS Mojave, Xcode 10.1's clang (full test suite)
   * Windows 10 x64 and x86, Visual Studio 2017
   * Linux Debian 9.5 amd64, default versions of clang and gcc/g++ (full test suite)
   * Raspberry Pi 3 B+ Raspbian official build (ARM), default versions of clang and gcc/g++
