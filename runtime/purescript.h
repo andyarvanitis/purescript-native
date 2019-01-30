@@ -16,7 +16,6 @@
 #define purescript_H
 
 #include <memory>
-#include <functional>
 #include <deque>
 #include <string>
 #include <limits>
@@ -29,6 +28,7 @@ namespace purescript {
 
     class boxed {
         std::shared_ptr<void> shared;
+
     public:
         union {
             int _int_;
@@ -36,8 +36,38 @@ namespace purescript {
             bool _bool_;
         };
 
-        using fn_t = std::function<boxed(const boxed&)>;
-        using eff_fn_t = std::function<boxed(void)>;
+        class fn_t {
+        public:
+            virtual ~fn_t() {}
+            virtual auto operator ()(const boxed&) const -> boxed = 0;
+        };
+
+        template <typename T>
+        class fn_template_t : public fn_t {
+            T fn;
+        public:
+            fn_template_t(T f) : fn(std::move(f)) {}
+            auto operator ()(const boxed& arg) const -> boxed override {
+                return fn(arg);
+            }
+        };
+
+        class eff_fn_t {
+        public:
+            virtual ~eff_fn_t() {}
+            virtual auto operator ()() const -> boxed = 0;
+        };
+
+        template <typename T>
+        class eff_fn_template_t : public eff_fn_t {
+            T fn;
+        public:
+            eff_fn_template_t(T f) : fn(std::move(f)) {}
+            auto operator ()() const -> boxed override {
+                return fn();
+            }
+        };
+
         using dict_t = string_literal_dict_t<boxed>;
         using array_t = std::deque<boxed>;
 
@@ -81,16 +111,18 @@ namespace purescript {
 
         template <typename T,
                   typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
-        boxed(const T& f,
-              typename std::enable_if<std::is_assignable<std::function<boxed(boxed)>,T>::value>::type* = 0)
-              : shared(std::make_shared<fn_t>(f)) {
+        boxed(T f,
+              typename std::enable_if<std::is_same<decltype(std::declval<T>()(std::declval<boxed>())),
+                                                   boxed>::value>::type* = 0)
+              : shared(std::make_shared<fn_template_t<T>>(std::move(f))) {
         }
 
         template <typename T,
                   typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
-        boxed(const T& f,
-              typename std::enable_if<std::is_assignable<std::function<boxed(void)>,T>::value>::type* = 0)
-              : shared(std::make_shared<eff_fn_t>(f)) {
+        boxed(T f,
+              typename std::enable_if<std::is_same<decltype(std::declval<T>()()),
+                                                   boxed>::value>::type* = 0)
+              : shared(std::make_shared<eff_fn_template_t<T>>(std::move(f))) {
         }
 
         inline auto get() const noexcept -> void * {
