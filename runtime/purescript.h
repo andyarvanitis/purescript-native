@@ -46,7 +46,7 @@ namespace purescript {
         class fn_template_t : public fn_t {
             T fn;
         public:
-            fn_template_t(T f) : fn(std::move(f)) {}
+            fn_template_t(T f) noexcept : fn(std::move(f)) {}
             auto operator ()(const boxed& arg) const -> boxed override {
                 return fn(arg);
             }
@@ -62,7 +62,7 @@ namespace purescript {
         class eff_fn_template_t : public eff_fn_t {
             T fn;
         public:
-            eff_fn_template_t(T f) : fn(std::move(f)) {}
+            eff_fn_template_t(T f) noexcept : fn(std::move(f)) {}
             auto operator ()() const -> boxed override {
                 return fn();
             }
@@ -76,7 +76,7 @@ namespace purescript {
         boxed(const std::nullptr_t) noexcept : shared() {}
 
         template <typename T>
-        boxed(std::shared_ptr<T>&& other) : shared(std::move(other)) {}
+        boxed(std::shared_ptr<T>&& other) noexcept : shared(std::move(other)) {}
 
         template <typename T>
         boxed(const std::shared_ptr<T>& other) : shared(other) {}
