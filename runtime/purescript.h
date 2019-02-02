@@ -16,7 +16,7 @@
 #define purescript_H
 
 #include <memory>
-#include <deque>
+#include <vector>
 #include <string>
 #include <limits>
 #include "string_literal_dict.h"
@@ -69,7 +69,7 @@ namespace purescript {
         };
 
         using dict_t = string_literal_dict_t<boxed>;
-        using array_t = std::deque<boxed>;
+        using array_t = std::vector<boxed>;
 
     public:
         boxed() noexcept : shared() {}
