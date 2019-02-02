@@ -30,7 +30,7 @@ This is an experimental C++11 (or later) compiler backend for [PureScript](https
 
 #### Other notes:
 
-* PureScript arrays are implemented using ~~`std::deque`~~ [`std::vector`](http://en.cppreference.com/w/cpp/container/vector)
+* PureScript arrays are implemented using [`std::vector`](http://en.cppreference.com/w/cpp/container/vector)
 * `String` types are implemented with C++11 `u8` literals (UTF-8) and `std::string`
 * `Number` is C++ `double`, `Int` is C++ `int`, `Char` is `std::string` (single UTF-8 entity), `Boolean` is `bool`
 
