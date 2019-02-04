@@ -31,6 +31,8 @@
 #include <string>
 #endif
 
+namespace purescript {
+
 template <typename T>
 class string_literal_dict_t : public std::vector<std::pair<const char *, T>> {
 
@@ -82,5 +84,6 @@ class string_literal_dict_t : public std::vector<std::pair<const char *, T>> {
 
 };
 
+} // namespace purescript
 
 #endif // string_literal_dict_H
