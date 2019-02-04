@@ -195,14 +195,6 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
   var :: Ident -> AST
   var = AST.Var Nothing . identToCpp
 
-  -- | Generate code in the simplified intermediate representation for an accessor based on
-  -- a PureScript identifier. If the name is not valid in C++ (symbol based, reserved name) an
-  -- indexer is returned.
-  accessor :: Ident -> AST -> AST
-  accessor (Ident prop) = accessorString $ mkString prop
-  accessor (GenIdent _ _) = internalError "GenIdent in accessor"
-  accessor UnusedIdent = internalError "UnusedIdent in accessor"
-
   accessorString :: PSString -> AST -> AST
   accessorString prop = AST.Indexer Nothing (AST.StringLiteral Nothing prop)
 
