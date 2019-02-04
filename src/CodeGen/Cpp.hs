@@ -10,10 +10,10 @@ import Prelude.Compat
 import Protolude (ordNub)
 
 import Control.Arrow ((&&&))
-import Control.Monad (forM, liftM, replicateM, void)
+import Control.Monad (forM, replicateM, void)
 import Control.Monad.Supply.Class
 
-import Data.List ((\\), delete, intersect, nub)
+import Data.List ((\\), delete, findIndices, intersect, nub)
 import qualified Data.Foldable as F
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isNothing, mapMaybe)
@@ -195,14 +195,6 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
   var :: Ident -> AST
   var = AST.Var Nothing . identToCpp
 
-  -- | Generate code in the simplified intermediate representation for an accessor based on
-  -- a PureScript identifier. If the name is not valid in C++ (symbol based, reserved name) an
-  -- indexer is returned.
-  accessor :: Ident -> AST -> AST
-  accessor (Ident prop) = accessorString $ mkString prop
-  accessor (GenIdent _ _) = internalError "GenIdent in accessor"
-  accessor UnusedIdent = internalError "UnusedIdent in accessor"
-
   accessorString :: PSString -> AST -> AST
   accessorString prop = AST.Indexer Nothing (AST.StringLiteral Nothing prop)
 
@@ -255,10 +247,10 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
     bindersToCpp ss binders vals
   valueToCpp (Let _ ds val) = do
     let recurs = concatMap getNames $ filter isRec ds
-        recurDs = (\v -> AST.Var Nothing $ "boxed::recur " <> identToCpp v) <$> recurs
+        recurDs = (\v -> AST.Var Nothing $ boxedType <> "::recur " <> identToCpp v) <$> recurs
         recurDsWeak = (\v -> AST.Var
                              Nothing
-                             ("boxed::recur::weak " <> identToCpp v <> unretainedSuffix <> "(" <> identToCpp v <> ")")
+                             (boxedType <> "::recur::weak " <> identToCpp v <> unretainedSuffix <> "(" <> identToCpp v <> ")")
                        ) <$> recurs
         mutualRecurWarning = if any isMutRec $ filter isRec ds
                                then [AST.Var Nothing "#pragma message(\"Mutually recursive lets will cause retain cycles (memory leaks)\") //"]
@@ -281,7 +273,7 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
                | otherwise = False
   valueToCpp (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) = error "IsNewtype"
   valueToCpp (Constructor _ _ (ProperName ctor) fields) =
-    let body = AST.ObjectLiteral Nothing $ (mkString ctor, AST.BooleanLiteral Nothing True) :
+    let body = AST.ObjectLiteral Nothing $ (mkString ctor, AST.App Nothing (AST.Var Nothing boxedType) []) :
                                            ((\field -> (mkString (identToCpp field), var field)) `map` fields)
         fn = foldr (\f inner -> AST.Function Nothing Nothing [identToCpp f] (AST.Block Nothing [AST.Return Nothing inner])) body fields
     in return fn
@@ -359,21 +351,30 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
   binderToCpp varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
     binderToCpp varName done b
   binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields)) _ (Qualified _ (ProperName ctor)) bs) = do
-    cpp <- go (zip fields bs) done
+    cpp <- go (zip (findIndices (const True) fields) bs) done
     return $ case ctorType of
       ProductType -> cpp
       SumType ->
-        [AST.IfElse Nothing (AST.InstanceOf Nothing (AST.Var Nothing varName) (AST.StringLiteral Nothing (mkString ctor)))
-                  (AST.Block Nothing cpp)
-                  Nothing]
+        [AST.IfElse Nothing (AST.InstanceOf Nothing
+                                (AST.Var Nothing varName)
+                                (AST.StringLiteral Nothing (mkString ctor)))
+             (AST.Block Nothing cpp)
+             Nothing]
     where
-    go :: [(Ident, Binder Ann)] -> [AST] -> m [AST]
+    go :: [(Int, Binder Ann)] -> [AST] -> m [AST]
     go [] done' = return done'
-    go ((field, binder) : remain) done' = do
+    go ((index, binder) : remain) done' = do
+      let index' = toInteger index + 1
       argVar <- freshName
       done'' <- go remain done'
       cpp <- binderToCpp argVar done'' binder
-      return (AST.VariableIntroduction Nothing argVar (Just $ accessorString (mkString $ identToCpp field) $ AST.Var Nothing varName) : cpp)
+      return (AST.VariableIntroduction Nothing argVar
+                  (Just $ AST.Indexer Nothing
+                              (AST.Indexer Nothing
+                                  (AST.Var Nothing $ "val_t<" <> T.pack (show index') <> ">")
+                                  (AST.Var Nothing dictType))
+                              (AST.Var Nothing varName))
+             : cpp)
 
   binderToCpp _ _ ConstructorBinder{} =
     internalError "binderToCpp: Invalid ConstructorBinder in binderToCpp"

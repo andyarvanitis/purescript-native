@@ -165,6 +165,11 @@ namespace purescript {
         }
 #endif // !defined(NDEBUG)
 
+        template <int N>
+        auto operator[](const dict_t::val_t<N>) const -> const boxed& {
+            return ((*static_cast<const dict_t*>(shared.get()))[N]).second;
+        }
+
         class weak {
             std::weak_ptr<void> wptr;
 

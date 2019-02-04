@@ -31,6 +31,8 @@
 #include <string>
 #endif
 
+namespace purescript {
+
 template <typename T>
 class string_literal_dict_t : public std::vector<std::pair<const char *, T>> {
 
@@ -41,6 +43,10 @@ class string_literal_dict_t : public std::vector<std::pair<const char *, T>> {
 
   public:
   using std::vector<std::pair<const char *, T>>::vector;
+  using std::vector<std::pair<const char *, T>>::operator[];
+
+  template <int N>
+  class val_t {};
 
   auto operator[](const char key[]) const -> const T& {
     for (auto it = this->cbegin(), end=this->cend(); it != end; it++) {
@@ -82,5 +88,6 @@ class string_literal_dict_t : public std::vector<std::pair<const char *, T>> {
 
 };
 
+} // namespace purescript
 
 #endif // string_literal_dict_H

@@ -198,6 +198,9 @@ dictType = "dict_t"
 arrayType :: Text
 arrayType = "array_t"
 
+boxedType :: Text
+boxedType = "boxed"
+
 int :: Text
 int = "int"
 
