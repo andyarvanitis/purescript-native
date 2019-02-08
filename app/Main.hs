@@ -113,12 +113,18 @@ transpile opts baseOutpath jsonFile = do
 writeRuntimeFiles :: FilePath -> IO ()
 writeRuntimeFiles baseOutpath = do
   createDirectoryIfMissing True baseOutpath
-  let runtime = baseOutpath </> "purescript.h"
-      dep = baseOutpath </> "string_literal_dict.h"
-  runtimeExists <- doesFileExist runtime
+  let runtimeHeader = baseOutpath </> "purescript.h"
+      runtimeSource = baseOutpath </> "purescript.cpp"
+      fn = baseOutpath </> "functions.h"
+      dict = baseOutpath </> "dictionary.h"
+      recur = baseOutpath </> "recursion.h"
+  runtimeExists <- doesFileExist runtimeHeader
   when (not runtimeExists) $ do
-    T.writeFile runtime $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
-    T.writeFile dep $ T.decodeUtf8 $(embedFile "runtime/string_literal_dict.h")
+    T.writeFile runtimeHeader $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
+    T.writeFile runtimeSource $ T.decodeUtf8 $(embedFile "runtime/purescript.cpp")
+    T.writeFile fn $ T.decodeUtf8 $(embedFile "runtime/functions.h")
+    T.writeFile dict $ T.decodeUtf8 $(embedFile "runtime/dictionary.h")
+    T.writeFile recur $ T.decodeUtf8 $(embedFile "runtime/recursion.h")
 
 outdir :: FilePath
 outdir = "src"
