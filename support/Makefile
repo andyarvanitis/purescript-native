@@ -43,6 +43,17 @@ PURESCRIPT_PKGS := $(firstword $(subst /, ,$(PACKAGE_SOURCES)))
 ## Not all environments support globstar (** dir pattern)
 rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 
+unspecified:
+	@echo
+	@echo "Please specify the type of build you want: 'debug' or 'release'"
+	@echo
+	@echo "  debug   => not optimized (your app will run slower), good for"
+	@echo "             running in a source-level debugger, more (descriptive)"
+	@echo "             runtime exceptions"
+	@echo
+	@echo "  release => optimized (your app will run faster), less helpful when debugging"
+	@echo
+
 debug: codegen
 	@$(MAKE) $(BIN) CFLAGS+=$(DEBUG) CXXFLAGS+=$(DEBUG)
 
