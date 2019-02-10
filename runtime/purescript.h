@@ -18,62 +18,51 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <utility>
+#if !defined(NDEBUG)
 #include <limits>
-#include "string_literal_dict.h"
-
+#endif
+#include "functions.h"
+#include "dictionary.h"
+#include "recursion.h"
 
 namespace purescript {
 
     using std::string;
 
     class boxed {
-        std::shared_ptr<void> shared;
-
     public:
+        std::shared_ptr<void> shared;
         union {
             int _int_;
             double _double_;
             bool _bool_;
         };
 
-        class fn_t {
-        public:
-            virtual ~fn_t() {}
-            virtual auto operator ()(const boxed&) const -> boxed = 0;
-        };
+    public:
+        using fn_t = _template_::fn_t<boxed>;
+        using eff_fn_t = _template_::eff_fn_t<boxed>;
 
-        template <typename T>
-        class fn_template_t : public fn_t {
-            T fn;
-        public:
-            fn_template_t(T f) noexcept : fn(std::move(f)) {}
-            auto operator ()(const boxed& arg) const -> boxed override {
-                return fn(arg);
-            }
-        };
-
-        class eff_fn_t {
-        public:
-            virtual ~eff_fn_t() {}
-            virtual auto operator ()() const -> boxed = 0;
-        };
-
-        template <typename T>
-        class eff_fn_template_t : public eff_fn_t {
-            T fn;
-        public:
-            eff_fn_template_t(T f) noexcept : fn(std::move(f)) {}
-            auto operator ()() const -> boxed override {
-                return fn();
-            }
-        };
-
-        using dict_t = string_literal_dict_t<boxed>;
+        using dict_t = _template_::dict_t<boxed>;
         using array_t = std::vector<boxed>;
+
+        using weak = _template_::weak<boxed>;
+        using recur = _template_::recur<boxed>;
+
+    private:
+        template <typename T>
+        using fn_T = _template_::fn_T<boxed, T>;
+
+        template <typename T>
+        using eff_fn_T = _template_::eff_fn_T<boxed, T>;
 
     public:
         boxed() noexcept : shared() {}
         boxed(const std::nullptr_t) noexcept : shared() {}
+
+        boxed(const weak& w) : shared(w.shared()) {}
+        boxed(const recur& r) : shared(r.shared()) {}
+        boxed(const recur::weak& w) : shared(w.shared()) {}
 
         template <typename T>
         boxed(std::shared_ptr<T>&& other) noexcept : shared(std::move(other)) {}
@@ -82,23 +71,8 @@ namespace purescript {
         boxed(const std::shared_ptr<T>& other) : shared(other) {}
 
         boxed(const int n) noexcept : _int_(n) {}
-
-        boxed(const long n) : _int_(static_cast<int>(n)) {
-#if !defined(NDEBUG) // if debug build
-            if (n < std::numeric_limits<int>::min() || n > std::numeric_limits<int>::max()) {
-                throw std::runtime_error("integer out of range");
-            }
-#endif // !defined(NDEBUG)
-        }
-
-        boxed(const unsigned long n) : _int_(static_cast<int>(n)) {
-#if !defined(NDEBUG) // if debug build
-            if (n > std::numeric_limits<int>::max()) {
-                throw std::runtime_error("integer out of range");
-            }
-#endif // !defined(NDEBUG)
-        }
-
+        boxed(const long n);
+        boxed(const unsigned long n);
         boxed(const double n) noexcept : _double_(n) {}
         boxed(const bool b) noexcept : _bool_(b) {}
         boxed(const char s[]) : shared(std::make_shared<string>(s)) {}
@@ -114,7 +88,7 @@ namespace purescript {
         boxed(T f,
               typename std::enable_if<std::is_same<decltype(std::declval<T>()(std::declval<boxed>())),
                                                    boxed>::value>::type* = 0)
-              : shared(std::make_shared<fn_template_t<T>>(std::move(f))) {
+              : shared(std::make_shared<fn_T<T>>(std::move(f))) {
         }
 
         template <typename T,
@@ -122,21 +96,19 @@ namespace purescript {
         boxed(T f,
               typename std::enable_if<std::is_same<decltype(std::declval<T>()()),
                                                    boxed>::value>::type* = 0)
-              : shared(std::make_shared<eff_fn_template_t<T>>(std::move(f))) {
+              : shared(std::make_shared<eff_fn_T<T>>(std::move(f))) {
         }
 
-        inline auto get() const noexcept -> void * {
+        auto get() const noexcept -> void * {
             return shared.get();
         }
 
         auto operator()(const boxed& arg) const -> boxed {
-            auto& f = *static_cast<fn_t*>(shared.get());
-            return f(arg);
+            return (*static_cast<fn_t*>(shared.get()))(arg);
         }
 
         auto operator()() const -> boxed {
-            auto& f = *static_cast<eff_fn_t*>(shared.get());
-            return f();
+            return (*static_cast<eff_fn_t*>(shared.get()))();
         }
 
         auto operator[](const char key[]) const -> const boxed& {
@@ -147,92 +119,18 @@ namespace purescript {
           return (*static_cast<dict_t*>(shared.get()))[key];
         }
 
-#if !defined(NDEBUG) // if debug build
-        auto operator[](const int index) const -> const boxed& {
-            return static_cast<const array_t*>(shared.get())->at(index);
-        }
-
-        auto operator[](const int index) -> boxed& {
-            return static_cast<array_t*>(shared.get())->at(index);
-        }
-#else  // not debug build
-        auto operator[](const int index) const -> const boxed& {
-            return (*static_cast<const array_t*>(shared.get()))[index];
-        }
-
-        auto operator[](const int index) -> boxed& {
-            return (*static_cast<array_t*>(shared.get()))[index];
-        }
-#endif // !defined(NDEBUG)
-
-        class weak {
-            std::weak_ptr<void> wptr;
-
-            public:
-            weak() = delete;
-            weak(boxed& b) : wptr(b.shared) {}
-
-            operator boxed() const {
-#if defined(NDEBUG)
-                return wptr.lock();
-#else
-                return static_cast<std::shared_ptr<void>>(wptr);
-#endif
-            }
-
-        }; // class boxed::weak
-
-        class recur {
-            std::shared_ptr<boxed> sptr;
-            std::shared_ptr<boxed::weak> wptr;
-
-            public:
-            recur() : sptr(std::make_shared<boxed>())
-                  , wptr(std::make_shared<boxed::weak>(*sptr)) {}
-
-            operator const boxed&() const {
-                return *sptr;
-            }
-
-            operator boxed&() {
-                return *sptr;
-            }
-
-            auto operator()() const -> boxed {
-                return (*sptr)();
-            }
-
-            auto operator()(const boxed& arg) const -> boxed {
-                return (*sptr)(arg);
-            }
-
-            template <typename T>
-            auto operator=(T&& right) -> recur& {
-                *sptr = std::forward<T>(right);
-                *wptr = *sptr;
-                return *this;
-            }
-
-            class weak {
-                std::shared_ptr<boxed::weak> wptr;
-            public:
-                weak(const recur& r) : wptr(r.wptr) {}
-
-                operator boxed() const {
-                    return *wptr;
-                }
-
-                auto operator()() const -> boxed {
-                    return static_cast<boxed>(*wptr)();
-                }
-
-                auto operator()(const boxed& arg) const -> boxed {
-                    return static_cast<boxed>(*wptr)(arg);
-                }
-            }; // class recur::weak
-        }; // class boxed::recur
+        auto operator[](const int index) const -> const boxed&;
+        auto operator[](const int index) -> boxed&;
 
     }; // class boxed
+
+    extern template class _template_::fn_t<boxed>;
+    extern template class _template_::eff_fn_t<boxed>;
+    extern template class _template_::dict_t<boxed>;
+    extern template class _template_::weak<boxed>;
+    extern template class _template_::recur<boxed>;
+
+    extern const boxed undefined;
 
     using fn_t = boxed::fn_t;
     using eff_fn_t = boxed::eff_fn_t;
@@ -316,8 +214,6 @@ namespace purescript {
     inline auto array_length(const boxed& a) -> boxed::array_t::size_type {
         return unbox<boxed::array_t>(a).size();
     }
-
-    constexpr auto undefined = nullptr;
 
 } // namespace purescript
 
