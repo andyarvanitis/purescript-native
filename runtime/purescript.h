@@ -88,7 +88,7 @@ namespace purescript {
         boxed(T f,
               typename std::enable_if<std::is_same<decltype(std::declval<T>()(std::declval<boxed>())),
                                                    boxed>::value>::type* = 0)
-              : shared(std::make_shared<fn_T<T>>(std::move(f))) {
+              : shared(std::shared_ptr<fn_t>(std::make_shared<fn_T<T>>(std::move(f)))) {
         }
 
         template <typename T,
@@ -96,7 +96,7 @@ namespace purescript {
         boxed(T f,
               typename std::enable_if<std::is_same<decltype(std::declval<T>()()),
                                                    boxed>::value>::type* = 0)
-              : shared(std::make_shared<eff_fn_T<T>>(std::move(f))) {
+              : shared(std::shared_ptr<eff_fn_t>(std::make_shared<eff_fn_T<T>>(std::move(f)))) {
         }
 
         auto get() const noexcept -> void * {
