@@ -21,6 +21,7 @@
 #include <utility>
 #if !defined(NDEBUG)
 #include <limits>
+#include <stdexcept>
 #endif
 #include "functions.h"
 #include "dictionary.h"
