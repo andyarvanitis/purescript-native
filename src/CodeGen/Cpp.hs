@@ -207,7 +207,7 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
   valueToCpp (ObjectUpdate _ o ps) = do
     obj <- valueToCpp o
     updates <- mapM (sndM valueToCpp) ps
-    obj' <- freshName
+    obj' <- freshName'
     let objVar = AST.Var Nothing obj'
         copy = AST.VariableIntroduction Nothing obj' (Just $ AST.App Nothing (AST.Var Nothing (unbox dictType)) [obj])
         assign (k, v) = AST.Assignment Nothing (accessorString k objVar) v
@@ -311,7 +311,7 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
   -- and guards.
   bindersToCpp :: SourceSpan -> [CaseAlternative Ann] -> [AST] -> m AST
   bindersToCpp ss binders vals = do
-    valNames <- replicateM (length vals) freshName
+    valNames <- replicateM (length vals) freshName'
     let assignments = zipWith (AST.VariableIntroduction Nothing) valNames (map Just vals)
     cpps <- forM binders $ \(CaseAlternative bs result) -> do
       ret <- guardsToCpp result
@@ -362,7 +362,7 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
     go :: [(Ident, Binder Ann)] -> [AST] -> m [AST]
     go [] done' = return done'
     go ((field, binder) : remain) done' = do
-      argVar <- freshName
+      argVar <- freshName'
       done'' <- go remain done'
       cpp <- binderToCpp argVar done'' binder
       return (AST.VariableIntroduction Nothing argVar (Just $ accessorString (mkString $ identToCpp field) $ AST.Var Nothing varName) : cpp)
@@ -390,7 +390,7 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
     go :: [AST] -> [(PSString, Binder Ann)] -> m [AST]
     go done' [] = return done'
     go done' ((prop, binder):bs') = do
-      propVar <- freshName
+      propVar <- freshName'
       done'' <- go done' bs'
       cpp <- binderToCpp propVar done'' binder
       return (AST.VariableIntroduction Nothing propVar (Just (accessorString prop (AST.Var Nothing varName))) : cpp)
@@ -404,7 +404,7 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
     go :: [AST] -> Integer -> [Binder Ann] -> m [AST]
     go done' _ [] = return done'
     go done' index (binder:bs') = do
-      elVar <- freshName
+      elVar <- freshName'
       done'' <- go done' (index + 1) bs'
       cpp <- binderToCpp elVar done'' binder
       return (AST.VariableIntroduction Nothing elVar (Just (AST.Indexer Nothing (AST.NumericLiteral Nothing (Left index)) (AST.Var Nothing varName))) : cpp)
@@ -414,3 +414,8 @@ emptyAnn = (SourceSpan "" (SourcePos 0 0) (SourcePos 0 0), [], Nothing, Nothing)
 
 arrayLength :: AST -> AST
 arrayLength a = AST.App Nothing (AST.Var Nothing arrayLengthFn) [a]
+
+freshName' :: MonadSupply m => m Text
+freshName' = do
+    name <- freshName
+    return $ T.replace "$" "_Local_" name

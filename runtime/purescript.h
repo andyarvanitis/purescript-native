@@ -219,14 +219,14 @@ namespace purescript {
 
 #define DEFINE_FOREIGN_DICTIONARY_AND_ACCESSOR() \
     inline auto foreign() -> dict_t& {\
-        static dict_t $dict$;\
-        return $dict$;\
+        static dict_t _;\
+        return _;\
     }
 
 #define FOREIGN_BEGIN(NS) namespace NS {\
     using namespace purescript;\
     DEFINE_FOREIGN_DICTIONARY_AND_ACCESSOR()\
-    static const auto $foreign_exports_init$ = ([]() -> char {\
+    static const auto data = ([]() -> char {\
         dict_t& exports = foreign();
 #define FOREIGN_END return 0; }()); }
 

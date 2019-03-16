@@ -14,15 +14,14 @@ import Language.PureScript.Names
 moduleNameToCpp :: ModuleName -> Text
 moduleNameToCpp (ModuleName pns) =
   let name = T.intercalate "_" (runProperName `map` pns)
-  in if nameIsCppBuiltIn name then "$$" <> name else name
+  in if nameIsCppBuiltIn name then ("_" <> name <> "_") else name
 
 -- | Convert an 'Ident' into a valid C++ identifier:
 --
 --  * Alphanumeric characters are kept unmodified.
 --
---  * Reserved C++ identifiers are prefixed with '$$'.
+--  * Reserved C++ identifiers are wrapped with '_'.
 --
---  * Symbols are prefixed with '$' followed by a symbol name or their ordinal value.
 identToCpp :: Ident -> Text
 identToCpp UnusedIdent = unusedName
 identToCpp (Ident "$__unused") = unusedName
@@ -30,11 +29,11 @@ identToCpp (Ident name) = properToCpp name
 identToCpp (GenIdent _ _) = internalError "GenIdent in identToCpp"
 
 unusedName :: Text
-unusedName = "$unused$"
+unusedName = "_Unused_"
 
 properToCpp :: Text -> Text
 properToCpp name
-  | nameIsCppReserved name || nameIsCppBuiltIn name || prefixIsReserved name = "$$" <> name
+  | nameIsCppReserved name || nameIsCppBuiltIn name || prefixIsReserved name = "_" <> name <> "_"
   | otherwise = T.concatMap identCharToText name
 
 -- | Test if a string is a valid AST identifier without escaping.
@@ -46,9 +45,9 @@ identNeedsEscaping s = s /= properToCpp s || T.null s
 identCharToText :: Char -> Text
 identCharToText c | isAlphaNum c = T.singleton c
 identCharToText '_' = "_"
-identCharToText '\'' = "$prime"
+identCharToText '\'' = "_Prime_"
 identCharToText '$' = "$"
-identCharToText c = '$' `T.cons` T.pack (show (ord c))
+identCharToText c = "_Code_Point_" <> T.pack (show (ord c))
 
 -- | Checks whether an identifier name is reserved in C++.
 nameIsCppReserved :: Text -> Bool
@@ -217,7 +216,7 @@ arrayLengthFn :: Text
 arrayLengthFn = "array_length"
 
 unretainedSuffix :: Text
-unretainedSuffix = "$weak"
+unretainedSuffix = "_Weak_"
 
 tcoLoop :: Text
-tcoLoop = "$TCO_loop$"
+tcoLoop = "_TCO_Loop_"
