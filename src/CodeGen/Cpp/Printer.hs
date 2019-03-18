@@ -254,8 +254,8 @@ literals = mkPattern' match'
   match (ReturnNoResult _) = return $ emit "return undefined"
   -- match (Throw _ _) = return mempty
   match (Throw _ value) = mconcat <$> sequence
-    [ return $ emit "throw "
-    , return $ emit "std::runtime_error(\"PatternMatchFailure: \""
+    [ return $ emit "THROW_("
+    , return $ emit "\"PatternMatchFailure: \""
     , prettyPrintCpp' value
     , return $ emit ")"
     ]

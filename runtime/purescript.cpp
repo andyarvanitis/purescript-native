@@ -23,7 +23,7 @@ template class _template_::weak<boxed>;
 template class _template_::recur<boxed>;
 
 boxed::boxed(const long n) : _int_(static_cast<int>(n)) {
-#if !defined(NDEBUG)
+#if !defined(NDEBUG) && !defined(PURESCRIPT_DISABLE_EXCEPTIONS)
     if (n < std::numeric_limits<int>::min() || n > std::numeric_limits<int>::max()) {
         throw std::runtime_error("integer out of range");
     }
@@ -31,7 +31,7 @@ boxed::boxed(const long n) : _int_(static_cast<int>(n)) {
 }
 
 boxed::boxed(const unsigned long n) : _int_(static_cast<int>(n)) {
-#if !defined(NDEBUG)
+#if !defined(NDEBUG) && !defined(PURESCRIPT_DISABLE_EXCEPTIONS)
     if (n > std::numeric_limits<int>::max()) {
         throw std::runtime_error("integer out of range");
     }

@@ -21,6 +21,8 @@
 #include <utility>
 #if !defined(NDEBUG)
 #include <limits>
+#endif
+#if !defined(PURESCRIPT_DISABLE_EXCEPTIONS)
 #include <stdexcept>
 #endif
 #include "functions.h"
@@ -217,6 +219,12 @@ namespace purescript {
     }
 
 } // namespace purescript
+
+#if !defined(PURESCRIPT_DISABLE_EXCEPTIONS)
+#define THROW_(e) throw std::runtime_error(s)
+#else
+#define THROW_(e) return undefined
+#endif
 
 #define DEFINE_FOREIGN_DICTIONARY_AND_ACCESSOR() \
     inline auto foreign() -> dict_t& {\

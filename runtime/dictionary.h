@@ -52,7 +52,7 @@ namespace purescript {
             return it->second;
           }
         }
-#if !defined(NDEBUG) // if debug build
+#if !defined(NDEBUG) && !defined(PURESCRIPT_DISABLE_EXCEPTIONS)
         throw std::runtime_error("dictionary key \"" + std::string(key) + "\" not found");
 #endif
         return null();
