@@ -221,9 +221,9 @@ namespace purescript {
 } // namespace purescript
 
 #if !defined(PURESCRIPT_DISABLE_EXCEPTIONS)
-#define THROW_(e) throw std::runtime_error(s)
+#define THROW_(s) throw std::runtime_error(s)
 #else
-#define THROW_(e) return undefined
+#define THROW_(_) return undefined
 #endif
 
 #define DEFINE_FOREIGN_DICTIONARY_AND_ACCESSOR() \
