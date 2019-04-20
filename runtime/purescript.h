@@ -15,7 +15,6 @@
 #ifndef purescript_H
 #define purescript_H
 
-#include <memory>
 #include <vector>
 #include <string>
 #include <utility>
@@ -25,6 +24,7 @@
 #if !defined(PURESCRIPT_DISABLE_EXCEPTIONS)
 #include <stdexcept>
 #endif
+#include "memlib.h"
 #include "functions.h"
 #include "dictionary.h"
 #include "recursion.h"
@@ -35,7 +35,7 @@ namespace purescript {
 
     class boxed {
     public:
-        std::shared_ptr<void> shared;
+        memlib::shared_ptr<void> shared;
         union {
             int _int_;
             double _double_;
@@ -68,30 +68,30 @@ namespace purescript {
         boxed(const recur::weak& w) : shared(w.shared()) {}
 
         template <typename T>
-        boxed(std::shared_ptr<T>&& other) noexcept : shared(std::move(other)) {}
+        boxed(memlib::shared_ptr<T>&& other) noexcept : shared(std::move(other)) {}
 
         template <typename T>
-        boxed(const std::shared_ptr<T>& other) : shared(other) {}
+        boxed(const memlib::shared_ptr<T>& other) : shared(other) {}
 
         boxed(const int n) noexcept : _int_(n) {}
         boxed(const long n);
         boxed(const unsigned long n);
         boxed(const double n) noexcept : _double_(n) {}
         boxed(const bool b) noexcept : _bool_(b) {}
-        boxed(const char s[]) : shared(std::make_shared<string>(s)) {}
-        boxed(string&& s) : shared(std::make_shared<string>(std::move(s))) {}
-        boxed(const string& s) : shared(std::make_shared<string>(s)) {}
-        boxed(array_t&& l) : shared(std::make_shared<array_t>(std::move(l))) {}
-        boxed(const array_t& l) : shared(std::make_shared<array_t>(l)) {}
-        boxed(dict_t&& m) : shared(std::make_shared<dict_t>(std::move(m))) {}
-        boxed(const dict_t& m) : shared(std::make_shared<dict_t>(m)) {}
+        boxed(const char s[]) : shared(memlib::make_shared<string>(s)) {}
+        boxed(string&& s) : shared(memlib::make_shared<string>(std::move(s))) {}
+        boxed(const string& s) : shared(memlib::make_shared<string>(s)) {}
+        boxed(array_t&& l) : shared(memlib::make_shared<array_t>(std::move(l))) {}
+        boxed(const array_t& l) : shared(memlib::make_shared<array_t>(l)) {}
+        boxed(dict_t&& m) : shared(memlib::make_shared<dict_t>(std::move(m))) {}
+        boxed(const dict_t& m) : shared(memlib::make_shared<dict_t>(m)) {}
 
         template <typename T,
                   typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
         boxed(T f,
               typename std::enable_if<std::is_same<decltype(std::declval<T>()(std::declval<boxed>())),
                                                    boxed>::value>::type* = 0)
-              : shared(std::shared_ptr<fn_t>(std::make_shared<fn_T<T>>(std::move(f)))) {
+              : shared(memlib::shared_ptr<fn_t>(memlib::make_shared<fn_T<T>>(std::move(f)))) {
         }
 
         template <typename T,
@@ -99,7 +99,7 @@ namespace purescript {
         boxed(T f,
               typename std::enable_if<std::is_same<decltype(std::declval<T>()()),
                                                    boxed>::value>::type* = 0)
-              : shared(std::shared_ptr<eff_fn_t>(std::make_shared<eff_fn_T<T>>(std::move(f)))) {
+              : shared(memlib::shared_ptr<eff_fn_t>(memlib::make_shared<eff_fn_T<T>>(std::move(f)))) {
         }
 
         auto get() const noexcept -> void * {
@@ -146,7 +146,7 @@ namespace purescript {
                                                  !std::is_same<T, bool>::value
                                                 >::type>
     inline auto box(Args&&... args) -> boxed {
-        return std::make_shared<T>(std::forward<Args>(args)...);
+        return memlib::make_shared<T>(std::forward<Args>(args)...);
     }
 
     template <typename T,

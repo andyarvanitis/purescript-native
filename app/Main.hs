@@ -115,6 +115,7 @@ writeRuntimeFiles baseOutpath = do
   createDirectoryIfMissing True baseOutpath
   let runtimeHeader = baseOutpath </> "purescript.h"
       runtimeSource = baseOutpath </> "purescript.cpp"
+      mem = baseOutpath </> "memlib.h"
       fn = baseOutpath </> "functions.h"
       dict = baseOutpath </> "dictionary.h"
       recur = baseOutpath </> "recursion.h"
@@ -122,6 +123,7 @@ writeRuntimeFiles baseOutpath = do
   when (not runtimeExists) $ do
     T.writeFile runtimeHeader $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
     T.writeFile runtimeSource $ T.decodeUtf8 $(embedFile "runtime/purescript.cpp")
+    T.writeFile mem $ T.decodeUtf8 $(embedFile "runtime/memlib.h")
     T.writeFile fn $ T.decodeUtf8 $(embedFile "runtime/functions.h")
     T.writeFile dict $ T.decodeUtf8 $(embedFile "runtime/dictionary.h")
     T.writeFile recur $ T.decodeUtf8 $(embedFile "runtime/recursion.h")

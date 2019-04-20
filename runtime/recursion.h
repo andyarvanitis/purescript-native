@@ -15,7 +15,7 @@
 #ifndef purescript_recursion_H
 #define purescript_recursion_H
 
-#include <memory>
+#include "memlib.h"
 
 namespace purescript {
 
@@ -23,17 +23,17 @@ namespace purescript {
 
     template <typename T>
     class weak {
-        std::weak_ptr<void> wptr;
+        memlib::weak_ptr<void> wptr;
 
         public:
         weak() = delete;
         weak(T& b) : wptr(b.shared) {}
 
-        auto shared() const -> std::shared_ptr<void> {
+        auto shared() const -> memlib::shared_ptr<void> {
 #if defined(NDEBUG)
             return wptr.lock();
 #else
-            return static_cast<std::shared_ptr<void>>(wptr);
+            return static_cast<memlib::shared_ptr<void>>(wptr);
 #endif
         }
 
@@ -41,14 +41,14 @@ namespace purescript {
 
     template <typename T>
     class recur {
-        std::shared_ptr<T> sptr;
-        std::shared_ptr<typename T::weak> wptr;
+        memlib::shared_ptr<T> sptr;
+        memlib::shared_ptr<typename T::weak> wptr;
 
         public:
-        recur() : sptr(std::make_shared<T>())
-              , wptr(std::make_shared<typename T::weak>(*sptr)) {}
+        recur() : sptr(memlib::make_shared<T>())
+              , wptr(memlib::make_shared<typename T::weak>(*sptr)) {}
 
-        auto shared() const -> std::shared_ptr<void> {
+        auto shared() const -> memlib::shared_ptr<void> {
             return sptr->shared;
         }
 
@@ -68,11 +68,11 @@ namespace purescript {
         }
 
         class weak {
-            std::shared_ptr<typename T::weak> wptr;
+            memlib::shared_ptr<typename T::weak> wptr;
         public:
             weak(const recur& r) : wptr(r.wptr) {}
 
-            auto shared() const -> std::shared_ptr<void> {
+            auto shared() const -> memlib::shared_ptr<void> {
                 return wptr->shared();
             }
 
