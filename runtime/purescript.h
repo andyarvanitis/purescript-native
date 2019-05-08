@@ -87,19 +87,21 @@ namespace purescript {
         boxed(const dict_t& m) : shared(std::make_shared<dict_t>(m)) {}
 
         template <typename T,
-                  typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
-        boxed(T f,
-              typename std::enable_if<std::is_same<decltype(std::declval<T>()(std::declval<boxed>())),
-                                                   boxed>::value>::type* = 0)
-              : shared(std::shared_ptr<fn_t>(std::make_shared<fn_T<T>>(std::move(f)))) {
+                  typename U = typename std::remove_reference<T>::type,
+                  typename V = typename std::remove_const<U>::type,
+                  typename = typename std::enable_if<!std::is_same<boxed,V>::value && !std::is_same<recur,V>::value>::type>
+        boxed(T&& f,
+              typename std::enable_if<std::is_same<decltype(std::declval<U>()(std::declval<boxed>())), boxed>::value>::type* = 0)
+              : shared(std::shared_ptr<fn_t>(std::make_shared<fn_T<T>>(std::forward<T>(f)))) {
         }
 
         template <typename T,
-                  typename = typename std::enable_if<!std::is_same<boxed,T>::value>::type>
-        boxed(T f,
-              typename std::enable_if<std::is_same<decltype(std::declval<T>()()),
-                                                   boxed>::value>::type* = 0)
-              : shared(std::shared_ptr<eff_fn_t>(std::make_shared<eff_fn_T<T>>(std::move(f)))) {
+                  typename U = typename std::remove_reference<T>::type,
+                  typename V = typename std::remove_const<U>::type,
+                  typename = typename std::enable_if<!std::is_same<boxed,V>::value && !std::is_same<recur,V>::value>::type>
+        boxed(T&& f,
+              typename std::enable_if<std::is_same<decltype(std::declval<U>()()), boxed>::value>::type* = 0)
+              : shared(std::shared_ptr<eff_fn_t>(std::make_shared<eff_fn_T<T>>(std::forward<T>(f)))) {
         }
 
         auto get() const noexcept -> void * {

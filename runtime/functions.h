@@ -29,7 +29,7 @@ namespace purescript {
     class fn_T : public fn_t<T> {
         U fn;
     public:
-        fn_T(U f) noexcept : fn(std::move(f)) {}
+        fn_T(U&& f) noexcept : fn(std::move(f)) {}
         auto operator ()(const T& arg) const -> T override {
             return fn(arg);
         }
@@ -46,7 +46,7 @@ namespace purescript {
     class eff_fn_T : public eff_fn_t<T> {
         U fn;
     public:
-        eff_fn_T(U f) noexcept : fn(std::move(f)) {}
+        eff_fn_T(U&& f) noexcept : fn(std::move(f)) {}
         auto operator ()() const -> T override {
             return fn();
         }
