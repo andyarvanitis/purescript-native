@@ -41,8 +41,8 @@ runTests = do
   fetchPackages
   callProcess "git" ["clone", "--depth", "1", "https://github.com/andyarvanitis/purescript-cpp-ffi.git", "ffi"]
 
-  callProcess "rm" ["-rf", ".psc-package/psc-0.12.4/prelude/v4.1.0"]
-  callProcess "git" ["clone", "--branch", "v4.1.1", "--depth", "1", "https://github.com/purescript/purescript-prelude.git", ".psc-package/psc-0.12.4/prelude/v4.1.0"]
+  callProcess "rm" ["-rf", ".psc-package/psc-0.12.5/prelude/v4.1.0"]
+  callProcess "git" ["clone", "--branch", "v4.1.1", "--depth", "1", "https://github.com/purescript/purescript-prelude.git", ".psc-package/psc-0.12.5/prelude/v4.1.0"]
 
   let tests = filter (`notElem` skipped) passingTestCases
 
