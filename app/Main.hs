@@ -25,9 +25,9 @@ import System.FilePath ((</>), joinPath, splitDirectories, takeDirectory)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import qualified Data.Text.IO as T
 import qualified Data.Text.Lazy as L
 import qualified Data.Text.Lazy.Encoding as L
+import qualified Data.ByteString as B
 
 import Language.PureScript.AST.Literals
 import Language.PureScript.CoreFn
@@ -62,7 +62,7 @@ main = do
         then runTests
         else do
           when ("--makefile" `elem` opts') $
-            T.writeFile "Makefile" $ T.decodeUtf8 $(embedFile "support/Makefile")
+            B.writeFile "Makefile" $(embedFile "support/Makefile")
           when ("--help" `elem` opts') $
             putStrLn help
           when (not $ null files) $ do
@@ -91,7 +91,7 @@ generateCode opts baseOutpath jsonFile = do
 
 transpile :: [String] -> FilePath -> FilePath -> IO ()
 transpile opts baseOutpath jsonFile = do
-  jsonText <- T.readFile jsonFile
+  jsonText <- T.decodeUtf8 <$> B.readFile jsonFile
   let module' = jsonToModule $ parseJson jsonText
   ((interface, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToCpp module' Nothing)
   let mn = moduleNameToCpp $ moduleName module'
@@ -101,9 +101,9 @@ transpile opts baseOutpath jsonFile = do
       implPath = outpath </> implFileName mn
   putStrLn interfacePath
   createDirectoryIfMissing True outpath
-  T.writeFile interfacePath $ conv interface
+  B.writeFile interfacePath $ T.encodeUtf8 $ conv interface
   putStrLn implPath
-  T.writeFile implPath $ conv (implHeader <> implementation <> implFooter)
+  B.writeFile implPath $ T.encodeUtf8 $ conv (implHeader <> implementation <> implFooter)
   where
   conv :: Text -> Text
   conv
@@ -120,11 +120,11 @@ writeRuntimeFiles baseOutpath = do
       recur = baseOutpath </> "recursion.h"
   runtimeExists <- doesFileExist runtimeHeader
   when (not runtimeExists) $ do
-    T.writeFile runtimeHeader $ T.decodeUtf8 $(embedFile "runtime/purescript.h")
-    T.writeFile runtimeSource $ T.decodeUtf8 $(embedFile "runtime/purescript.cpp")
-    T.writeFile fn $ T.decodeUtf8 $(embedFile "runtime/functions.h")
-    T.writeFile dict $ T.decodeUtf8 $(embedFile "runtime/dictionary.h")
-    T.writeFile recur $ T.decodeUtf8 $(embedFile "runtime/recursion.h")
+    B.writeFile runtimeHeader $(embedFile "runtime/purescript.h")
+    B.writeFile runtimeSource $(embedFile "runtime/purescript.cpp")
+    B.writeFile fn  $(embedFile "runtime/functions.h")
+    B.writeFile dict $(embedFile "runtime/dictionary.h")
+    B.writeFile recur $(embedFile "runtime/recursion.h")
 
 outdir :: FilePath
 outdir = "src"
