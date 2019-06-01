@@ -41,7 +41,7 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
 -  git: https://github.com/purescript/purescript
-   commit: v0.12.3
+   commit: b35412a9ea49a46d315a0214cd2c3908442ab7a7
 - pipes-http-1.0.5
 
 # Override default flag values for local packages and extra-deps
