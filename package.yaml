@@ -1,6 +1,6 @@
-name:                pscpp
+name:                psgo
 version:             0.1.0.0
-github:              "andyarvanitis/purescript-cpp"
+github:              "andyarvanitis/purescript-native"
 license:             BSD3
 author:              "Andy Arvanitis"
 maintainer:          "example@example.com"
@@ -9,8 +9,7 @@ copyright:           "2018 Andy Arvanitis"
 extra-source-files:
 - README.md
 - ChangeLog.md
-- runtime/*.h
-- runtime/*.cpp
+- runtime/*.go
 
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
@@ -19,7 +18,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on Github at <https://github.com/andyarvanitis/purescript-cpp#readme>
+description:         Please see the README on Github at <https://github.com/andyarvanitis/purescript-native#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -62,7 +61,7 @@ library:
     - ViewPatterns
 
 executables:
-  pscpp:
+  psgo:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -70,10 +69,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - pscpp
+    - psgo
 
 tests:
-  pscpp-test:
+  psgo-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -81,4 +80,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - pscpp
+    - psgo

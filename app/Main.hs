@@ -101,65 +101,35 @@ transpile opts baseOutpath jsonFile = do
       implPath = outpath </> implFileName mn
   putStrLn interfacePath
   createDirectoryIfMissing True outpath
-  B.writeFile interfacePath $ T.encodeUtf8 $ conv interface
+  B.writeFile interfacePath $ T.encodeUtf8 interface
   putStrLn implPath
-  B.writeFile implPath $ T.encodeUtf8 $ conv (implHeader <> implementation <> implFooter)
-  where
-  conv :: Text -> Text
-  conv
-    | "--ucns" `elem` opts = toUCNs
-    | otherwise = id
+  B.writeFile implPath $ T.encodeUtf8 (implHeader <> implementation <> implFooter)
 
 writeRuntimeFiles :: FilePath -> IO ()
 writeRuntimeFiles baseOutpath = do
   createDirectoryIfMissing True baseOutpath
-  let runtimeHeader = baseOutpath </> "purescript.h"
-      runtimeSource = baseOutpath </> "purescript.cpp"
-      fn = baseOutpath </> "functions.h"
-      dict = baseOutpath </> "dictionary.h"
-      recur = baseOutpath </> "recursion.h"
-  runtimeExists <- doesFileExist runtimeHeader
+  let runtimeSource = baseOutpath </> "purescript.go"
+  runtimeExists <- doesFileExist runtimeSource
   when (not runtimeExists) $ do
-    B.writeFile runtimeHeader $(embedFile "runtime/purescript.h")
-    B.writeFile runtimeSource $(embedFile "runtime/purescript.cpp")
-    B.writeFile fn  $(embedFile "runtime/functions.h")
-    B.writeFile dict $(embedFile "runtime/dictionary.h")
-    B.writeFile recur $(embedFile "runtime/recursion.h")
+    B.writeFile runtimeSource $(embedFile "runtime/purescript.go")
 
 outdir :: FilePath
 outdir = "src"
 
 interfaceFileName :: String -> FilePath
-interfaceFileName mn = mn <> ".h"
+interfaceFileName mn = mn <> ".go"
 
 implFileName :: Text -> FilePath
-implFileName mn = T.unpack $ mn <> ".cpp"
-
-escape :: Text -> Text
-escape = T.concatMap go
-  where
-  go :: Char -> Text
-  go c = T.pack $ printf "0x%04x," (ord c)
-
-
-toUCNs :: Text -> Text
-toUCNs = T.pack . concatMap toUCN . T.unpack
-
-toUCN :: Char -> String
-toUCN c | isAscii c = [c]
-toUCN c = printf "\\U%08x" $ ord c
+implFileName mn = T.unpack $ mn <> ".go"
 
 help :: String
-help = "Usage: pscpp OPTIONS COREFN-FILES\n\
-       \  PureScript-to-C++ compiler\n\n\
+help = "Usage: psgo OPTIONS COREFN-FILES\n\
+       \  PureScript-to-go compiler\n\n\
        \Available options:\n\
        \  --help                  Show this help text\n\n\
        \  --makefile              Generate a GNU Makefile which can be used for compiling\n\
        \                          a PureScript program and libraries to a native binary via\n\
        \                          purs corefn output and C++\n\n\
-       \  --ucns                  Use UCN encoding of unicode characters in literals and\n\
-       \                          strings in generated C++ code (for compilers that do not\n\
-       \                          support unicode literals, such as gcc)\n\n\
        \  --tests                 Run test cases (under construction)\n\n\
        \See also:\n\
        \  purs compile --help\n"
