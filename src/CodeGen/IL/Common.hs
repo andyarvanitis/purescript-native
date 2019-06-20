@@ -1,5 +1,5 @@
 -- | Common code generation utility functions
-module CodeGen.Cpp.Common where
+module CodeGen.IL.Common where
 
 import Prelude.Compat
 
@@ -11,10 +11,10 @@ import qualified Data.Text as T
 import Language.PureScript.Crash
 import Language.PureScript.Names
 
-moduleNameToCpp :: ModuleName -> Text
-moduleNameToCpp (ModuleName pns) =
+moduleNameToIL :: ModuleName -> Text
+moduleNameToIL (ModuleName pns) =
   let name = T.intercalate "_" (runProperName `map` pns)
-  in if nameIsCppBuiltIn name then ("_" <> name <> "_") else name
+  in if nameIsILBuiltIn name then ("_" <> name <> "_") else name
 
 -- | Convert an 'Ident' into a valid C++ identifier:
 --
@@ -22,23 +22,23 @@ moduleNameToCpp (ModuleName pns) =
 --
 --  * Reserved C++ identifiers are wrapped with '_'.
 --
-identToCpp :: Ident -> Text
-identToCpp UnusedIdent = unusedName
-identToCpp (Ident "$__unused") = unusedName
-identToCpp (Ident name) = properToCpp name
-identToCpp (GenIdent _ _) = internalError "GenIdent in identToCpp"
+identToIL :: Ident -> Text
+identToIL UnusedIdent = unusedName
+identToIL (Ident "$__unused") = unusedName
+identToIL (Ident name) = properToIL name
+identToIL (GenIdent _ _) = internalError "GenIdent in identToIL"
 
 unusedName :: Text
 unusedName = "_Unused_"
 
-properToCpp :: Text -> Text
-properToCpp name
-  | nameIsCppReserved name || nameIsCppBuiltIn name || prefixIsReserved name = "_" <> name <> "_"
+properToIL :: Text -> Text
+properToIL name
+  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = "_" <> name <> "_"
   | otherwise = T.concatMap identCharToText name
 
 -- | Test if a string is a valid AST identifier without escaping.
 identNeedsEscaping :: Text -> Bool
-identNeedsEscaping s = s /= properToCpp s || T.null s
+identNeedsEscaping s = s /= properToIL s || T.null s
 
 -- | Attempts to find a human-readable name for a symbol, if none has been specified returns the
 -- ordinal value.
@@ -50,13 +50,13 @@ identCharToText '$' = "$"
 identCharToText c = "_Code_Point_" <> T.pack (show (ord c))
 
 -- | Checks whether an identifier name is reserved in C++.
-nameIsCppReserved :: Text -> Bool
-nameIsCppReserved name =
-  name `elem` cppAnyReserved
+nameIsILReserved :: Text -> Bool
+nameIsILReserved name =
+  name `elem` ilAnyReserved
 
 -- | Checks whether a name matches a built-in value in C++.
-nameIsCppBuiltIn :: Text -> Bool
-nameIsCppBuiltIn name =
+nameIsILBuiltIn :: Text -> Bool
+nameIsILBuiltIn name =
   name `elem`
     [ "final"
     , "override"
@@ -64,15 +64,15 @@ nameIsCppBuiltIn name =
     , "std"
     ]
 
-cppAnyReserved :: [Text]
-cppAnyReserved =
+ilAnyReserved :: [Text]
+ilAnyReserved =
   concat
-    [ cppKeywords
-    , cppLiterals
+    [ ilKeywords
+    , ilLiterals
     ]
 
-cppKeywords :: [Text]
-cppKeywords =
+ilKeywords :: [Text]
+ilKeywords =
   [ "alignas"
   , "alignof"
   , "and"
@@ -177,8 +177,8 @@ prefixIsReserved name =
     [ "__"
     ]
 
-cppLiterals :: [Text]
-cppLiterals =
+ilLiterals :: [Text]
+ilLiterals =
   [ "box"
   , "boxed"
   , "copy"

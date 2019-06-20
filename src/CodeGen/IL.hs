@@ -1,9 +1,9 @@
 -- | This module generates code in the core imperative representation from
 -- elaborated PureScript code.
-module CodeGen.Cpp
+module CodeGen.IL
   ( module AST
   , module Common
-  , moduleToCpp
+  , moduleToIL
   ) where
 
 import Prelude.Compat
@@ -35,39 +35,39 @@ import qualified Language.PureScript.Constants as C
 
 import System.FilePath.Posix ((</>))
 
-import CodeGen.Cpp.Common as Common
-import CodeGen.Cpp.Optimizer
-import CodeGen.Cpp.Printer
+import CodeGen.IL.Common as Common
+import CodeGen.IL.Optimizer
+import CodeGen.IL.Printer
 
 data DeclType = ModuleDecl | LetDecl | RecLetDecl deriving (Eq)
 
 -- | Generate code in the simplified intermediate representation for all declarations in a
 -- module.
-moduleToCpp
+moduleToIL
   :: forall m
    -- . (Monad m, MonadReader Options m, MonadSupply m, MonadError MultipleErrors m)
    . (Monad m, MonadSupply m)
   => Module Ann
   -> Maybe AST
   -> m (Text, [Text], [AST], Text, Text)
-moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
+moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
   do
     let usedNames = concatMap getNames decls
     let mnLookup = renameImports usedNames imps
-    cppImports <- traverse (importToCpp mnLookup) . (\\ (mn : C.primModules)) . (\\ [mn]) $ ordNub $ map snd imps
-    interfaceImport <- importToCpp (renameImports [] [(emptyAnn, mn)]) mn
+    ilImports <- traverse (importToIL mnLookup) . (\\ (mn : C.primModules)) . (\\ [mn]) $ ordNub $ map snd imps
+    interfaceImport <- importToIL (renameImports [] [(emptyAnn, mn)]) mn
     let decls' = renameModules mnLookup decls
-    cppDecls <- mapM (bindToCpp ModuleDecl) decls'
-    optimized <- traverse (traverse (optimize modName')) cppDecls
+    ilDecls <- mapM (bindToIL ModuleDecl) decls'
+    optimized <- traverse (traverse (optimize modName')) ilDecls
     let optimized' = concat optimized
         values = annotValue <$> optimized'
-        foreigns' = identToCpp <$> foreigns
+        foreigns' = identToIL <$> foreigns
         interface = interfaceSource modName values foreigns
-        implHeader = implHeaderSource modName cppImports interfaceImport
+        implHeader = implHeaderSource modName ilImports interfaceImport
         implFooter = implFooterSource modName foreigns
     return $ (interface, foreigns', optimized', implHeader, implFooter)
   where
-  modName = moduleNameToCpp mn
+  modName = moduleNameToIL mn
   modName' = AST.Var Nothing modName
 
   annotValue :: AST -> (Text, Bool)
@@ -104,10 +104,10 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
 
   -- | Generates C++ code for a module import, binding the required module
   -- to the alternative
-  importToCpp :: M.Map ModuleName (Ann, ModuleName) -> ModuleName -> m Text
-  importToCpp mnLookup mn' = do
+  importToIL :: M.Map ModuleName (Ann, ModuleName) -> ModuleName -> m Text
+  importToIL mnLookup mn' = do
     let ((_, _, _, _), mnSafe) = fromMaybe (internalError "Missing value in mnLookup") $ M.lookup mn' mnLookup
-        mname = moduleNameToCpp mnSafe
+        mname = moduleNameToIL mnSafe
     pure $ "#include \"" <> mname <> "/" <> mname <> ".h\"\n"
 
   -- | Replaces the `ModuleName`s in the AST so that the generated code refers to
@@ -132,9 +132,9 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
   -- |
   -- Generate code in the simplified intermediate representation for a declaration
   --
-  bindToCpp :: DeclType -> Bind Ann -> m [AST]
-  bindToCpp dt (NonRec ann ident val) = return <$> nonRecToCpp dt ann ident val
-  bindToCpp dt (Rec vals) = forM vals (uncurry . uncurry $ nonRecToCpp dt')
+  bindToIL :: DeclType -> Bind Ann -> m [AST]
+  bindToIL dt (NonRec ann ident val) = return <$> nonRecToIL dt ann ident val
+  bindToIL dt (Rec vals) = forM vals (uncurry . uncurry $ nonRecToIL dt')
     where
     dt' = if dt == LetDecl then RecLetDecl else dt
 
@@ -142,39 +142,39 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
   -- declaration.
   --
   -- The main purpose of this function is to handle code generation for comments.
-  nonRecToCpp :: DeclType -> Ann -> Ident -> Expr Ann -> m AST
-  nonRecToCpp dt a i e@(extractAnn -> (_, com, _, _)) | not (null com) = do
+  nonRecToIL :: DeclType -> Ann -> Ident -> Expr Ann -> m AST
+  nonRecToIL dt a i e@(extractAnn -> (_, com, _, _)) | not (null com) = do
     -- withoutComment <- asks optionsNoComments
     let withoutComment = False
     if withoutComment
-       then nonRecToCpp dt a i (modifyAnn removeComments e)
-       else AST.Comment Nothing com <$> nonRecToCpp dt a i (modifyAnn removeComments e)
-  nonRecToCpp ModuleDecl (ss, _, _, _) ident val = do
-    cpp <- valueToCpp val
-    pure $ AST.Function Nothing (Just $ identToCpp ident) [] (AST.Block Nothing [AST.Return Nothing cpp])
-  nonRecToCpp RecLetDecl (ss, _, _, _) ident val = do
-    cpp <- valueToCpp val
+       then nonRecToIL dt a i (modifyAnn removeComments e)
+       else AST.Comment Nothing com <$> nonRecToIL dt a i (modifyAnn removeComments e)
+  nonRecToIL ModuleDecl (ss, _, _, _) ident val = do
+    il <- valueToIL val
+    pure $ AST.Function Nothing (Just $ identToIL ident) [] (AST.Block Nothing [AST.Return Nothing il])
+  nonRecToIL RecLetDecl (ss, _, _, _) ident val = do
+    il <- valueToIL val
     pure $
-      let retainedName = identToCpp ident
+      let retainedName = identToIL ident
           retained = AST.Var Nothing $ retainedName
           unretainedName = retainedName <> unretainedSuffix
           unretained = AST.Var Nothing $ unretainedName
           boxed = AST.Var Nothing . -- Note: prevents optimizer from eliminating this
-                      prettyPrintCpp1 $
+                      prettyPrintIL1 $
                         AST.VariableIntroduction
                             Nothing
                             retainedName
                             (Just unretained)
           alias = AST.Var Nothing $ "auto& " <> retainedName <> " = " <> unretainedName
       in
-      case cpp of
-        AST.Function _ name args (AST.Block Nothing cpps) ->
+      case il of
+        AST.Function _ name args (AST.Block Nothing ils) ->
           AST.Assignment Nothing
               retained
               (AST.Function Nothing
                    name
                    args 
-                   (AST.Block Nothing (boxed : cpps)))
+                   (AST.Block Nothing (boxed : ils)))
         _ ->
           AST.Assignment Nothing
               retained
@@ -183,80 +183,80 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
                       Nothing
                       []
                       (AST.Block Nothing ([ alias
-                                          , AST.Return Nothing cpp
+                                          , AST.Return Nothing il
                                           ])))
                [])
-  nonRecToCpp _ (ss, _, _, _) ident val = do
-    cpp <- valueToCpp val
-    pure $ AST.VariableIntroduction Nothing (identToCpp ident) (Just cpp)
+  nonRecToIL _ (ss, _, _, _) ident val = do
+    il <- valueToIL val
+    pure $ AST.VariableIntroduction Nothing (identToIL ident) (Just il)
 
   -- | Generate code in the simplified intermediate representation for a variable based on a
   -- PureScript identifier.
   var :: Ident -> AST
-  var = AST.Var Nothing . identToCpp
+  var = AST.Var Nothing . identToIL
 
   accessorString :: PSString -> AST -> AST
   accessorString prop = AST.Indexer Nothing (AST.StringLiteral Nothing prop)
 
   -- | Generate code in the simplified intermediate representation for a value or expression.
 
-  valueToCpp :: Expr Ann -> m AST
-  valueToCpp (Literal (pos, _, _, _) l) = literalToValueCpp pos l
-  valueToCpp (Accessor _ prop val) =
-    accessorString prop <$> valueToCpp val
-  valueToCpp (ObjectUpdate _ o ps) = do
-    obj <- valueToCpp o
-    updates <- mapM (sndM valueToCpp) ps
+  valueToIL :: Expr Ann -> m AST
+  valueToIL (Literal (pos, _, _, _) l) = literalToValueIL pos l
+  valueToIL (Accessor _ prop val) =
+    accessorString prop <$> valueToIL val
+  valueToIL (ObjectUpdate _ o ps) = do
+    obj <- valueToIL o
+    updates <- mapM (sndM valueToIL) ps
     obj' <- freshName'
     let objVar = AST.Var Nothing obj'
         copy = AST.VariableIntroduction Nothing obj' (Just $ AST.App Nothing (AST.Var Nothing (unbox dictType)) [obj])
         assign (k, v) = AST.Assignment Nothing (accessorString k objVar) v
         sts = copy : (assign <$> updates) ++ [AST.Return Nothing objVar]
     return $ AST.App Nothing (AST.Function Nothing Nothing [] (AST.Block Nothing sts)) []
-  valueToCpp (Abs _ arg val) = do
-    ret <- valueToCpp val
-    let cppArg = case arg of
+  valueToIL (Abs _ arg val) = do
+    ret <- valueToIL val
+    let ilArg = case arg of
                   UnusedIdent -> []
-                  _           -> [identToCpp arg]
-    return $ AST.Function Nothing Nothing cppArg (AST.Block Nothing [AST.Return Nothing ret])
-  valueToCpp e@App{} = do
+                  _           -> [identToIL arg]
+    return $ AST.Function Nothing Nothing ilArg (AST.Block Nothing [AST.Return Nothing ret])
+  valueToIL e@App{} = do
     let (f, args) = unApp e []
-    args' <- mapM valueToCpp args
+    args' <- mapM valueToIL args
     case f of
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
-      _ -> flip (foldl (\fn a -> AST.App Nothing fn [a])) args' <$> valueToCpp f
+      _ -> flip (foldl (\fn a -> AST.App Nothing fn [a])) args' <$> valueToIL f
     where
     unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
     unApp (App _ val arg) args = unApp val (arg : args)
     unApp other args = (other, args)
-  -- valueToCpp (Var (_, _, _, Just IsForeign) qi@(Qualified (Just mn') ident)) =
+  -- valueToIL (Var (_, _, _, Just IsForeign) qi@(Qualified (Just mn') ident)) =
   --   return $ if mn' == mn
-  --            then AST.Var Nothing (moduleNameToCpp mn' <> "::" <> identToCpp ident)
-  --            else varToCpp qi
-  -- valueToCpp (Var (_, _, _, Just IsForeign) (Qualified (Just mn') ident)) =
-  --   return $ AST.Var Nothing (moduleNameToCpp mn' <> "::" <> identToCpp ident)
-  -- valueToCpp (Var (_, _, _, Just IsForeign) qi@(Qualified (Just mn') ident)) =
+  --            then AST.Var Nothing (moduleNameToIL mn' <> "::" <> identToIL ident)
+  --            else varToIL qi
+  -- valueToIL (Var (_, _, _, Just IsForeign) (Qualified (Just mn') ident)) =
+  --   return $ AST.Var Nothing (moduleNameToIL mn' <> "::" <> identToIL ident)
+  -- valueToIL (Var (_, _, _, Just IsForeign) qi@(Qualified (Just mn') ident)) =
   --   return $ if mn' == mn
   --            then foreignIdent ident
-  --            else varToCpp qi
-  -- valueToCpp (Var (_, _, _, Just IsForeign) ident) =
+  --            else varToIL qi
+  -- valueToIL (Var (_, _, _, Just IsForeign) ident) =
   --   internalError $ "Encountered an unqualified reference to a foreign ident " ++ T.unpack (showQualified showIdent ident)
-  valueToCpp (Var _ ident) = return $ varToCpp ident
-  valueToCpp (Case (ss, _, _, _) values binders) = do
-    vals <- mapM valueToCpp values
-    bindersToCpp ss binders vals
-  valueToCpp (Let _ ds val) = do
+  valueToIL (Var _ ident) = return $ varToIL ident
+  valueToIL (Case (ss, _, _, _) values binders) = do
+    vals <- mapM valueToIL values
+    bindersToIL ss binders vals
+  valueToIL (Let _ ds val) = do
     let recurs = concatMap getNames $ filter isRec ds
-        recurDs = (\v -> AST.Var Nothing $ "boxed::recur " <> identToCpp v) <$> recurs
+        recurDs = (\v -> AST.Var Nothing $ "boxed::recur " <> identToIL v) <$> recurs
         recurDsWeak = (\v -> AST.Var
                              Nothing
-                             ("boxed::recur::weak " <> identToCpp v <> unretainedSuffix <> "(" <> identToCpp v <> ")")
+                             ("boxed::recur::weak " <> identToIL v <> unretainedSuffix <> "(" <> identToIL v <> ")")
                        ) <$> recurs
         mutualRecurWarning = if any isMutRec $ filter isRec ds
                                then [AST.Var Nothing "#pragma message(\"Mutually recursive lets will cause retain cycles (memory leaks)\") //"]
                                else []
-    ds' <- concat <$> mapM (bindToCpp LetDecl) ds
-    ret <- valueToCpp val
+    ds' <- concat <$> mapM (bindToIL LetDecl) ds
+    ret <- valueToIL val
     return $
       AST.App Nothing
           (AST.Function Nothing
@@ -271,92 +271,92 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
     isMutRec :: Bind Ann -> Bool
     isMutRec b | (length . nub $ getNames b) > 1 = True
                | otherwise = False
-  valueToCpp (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) = error "IsNewtype"
-  valueToCpp (Constructor _ _ (ProperName ctor) fields) =
+  valueToIL (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) = error "IsNewtype"
+  valueToIL (Constructor _ _ (ProperName ctor) fields) =
     let body = AST.ObjectLiteral Nothing $ (mkString ctor, AST.BooleanLiteral Nothing True) :
-                                           ((\field -> (mkString (identToCpp field), var field)) `map` fields)
-        fn = foldr (\f inner -> AST.Function Nothing Nothing [identToCpp f] (AST.Block Nothing [AST.Return Nothing inner])) body fields
+                                           ((\field -> (mkString (identToIL field), var field)) `map` fields)
+        fn = foldr (\f inner -> AST.Function Nothing Nothing [identToIL f] (AST.Block Nothing [AST.Return Nothing inner])) body fields
     in return fn
 
 
   iife :: Text -> [AST] -> AST
   iife v exprs = AST.App Nothing (AST.Function Nothing Nothing [] (AST.Block Nothing $ exprs ++ [AST.Return Nothing $ AST.Var Nothing v])) []
 
-  literalToValueCpp :: SourceSpan -> Literal (Expr Ann) -> m AST
-  literalToValueCpp ss (NumericLiteral (Left i)) = return $ AST.NumericLiteral (Just ss) (Left i)
-  literalToValueCpp ss (NumericLiteral (Right n)) = return $ AST.NumericLiteral (Just ss) (Right n)
-  literalToValueCpp ss (StringLiteral s) = return $ AST.StringLiteral (Just ss) s
-  literalToValueCpp ss (CharLiteral c) = return $ AST.StringLiteral (Just ss) (fromString [c])
-  literalToValueCpp ss (BooleanLiteral b) = return $ AST.BooleanLiteral (Just ss) b
-  literalToValueCpp ss (ArrayLiteral xs) = AST.ArrayLiteral (Just ss) <$> mapM valueToCpp xs
-  literalToValueCpp ss (ObjectLiteral ps) = AST.ObjectLiteral (Just ss) <$> mapM (sndM valueToCpp) ps
+  literalToValueIL :: SourceSpan -> Literal (Expr Ann) -> m AST
+  literalToValueIL ss (NumericLiteral (Left i)) = return $ AST.NumericLiteral (Just ss) (Left i)
+  literalToValueIL ss (NumericLiteral (Right n)) = return $ AST.NumericLiteral (Just ss) (Right n)
+  literalToValueIL ss (StringLiteral s) = return $ AST.StringLiteral (Just ss) s
+  literalToValueIL ss (CharLiteral c) = return $ AST.StringLiteral (Just ss) (fromString [c])
+  literalToValueIL ss (BooleanLiteral b) = return $ AST.BooleanLiteral (Just ss) b
+  literalToValueIL ss (ArrayLiteral xs) = AST.ArrayLiteral (Just ss) <$> mapM valueToIL xs
+  literalToValueIL ss (ObjectLiteral ps) = AST.ObjectLiteral (Just ss) <$> mapM (sndM valueToIL) ps
 
   -- | Generate code in the simplified intermediate representation for a reference to a
   -- variable.
-  varToCpp :: Qualified Ident -> AST
-  varToCpp (Qualified Nothing ident) = var ident
-  varToCpp qual = qualifiedToCpp id qual
+  varToIL :: Qualified Ident -> AST
+  varToIL (Qualified Nothing ident) = var ident
+  varToIL qual = qualifiedToIL id qual
 
   -- | Generate code in the simplified intermediate representation for a reference to a
   -- variable that may have a qualified name.
-  qualifiedToCpp :: (a -> Ident) -> Qualified a -> AST
-  qualifiedToCpp f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . runIdent $ f a
-  qualifiedToCpp f (Qualified (Just mn') a) = AST.Indexer Nothing (AST.Var Nothing . identToCpp $ f a) (AST.Var Nothing (moduleNameToCpp mn'))
-  qualifiedToCpp f (Qualified _ a) = AST.Var Nothing $ identToCpp (f a)
+  qualifiedToIL :: (a -> Ident) -> Qualified a -> AST
+  qualifiedToIL f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . runIdent $ f a
+  qualifiedToIL f (Qualified (Just mn') a) = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing (moduleNameToIL mn'))
+  qualifiedToIL f (Qualified _ a) = AST.Var Nothing $ identToIL (f a)
 
   -- foreignIdent :: Ident -> AST
   -- foreignIdent ident = accessorString (mkString $ runIdent ident) (AST.Var Nothing "$foreign")
 
   -- | Generate code in the simplified intermediate representation for pattern match binders
   -- and guards.
-  bindersToCpp :: SourceSpan -> [CaseAlternative Ann] -> [AST] -> m AST
-  bindersToCpp ss binders vals = do
+  bindersToIL :: SourceSpan -> [CaseAlternative Ann] -> [AST] -> m AST
+  bindersToIL ss binders vals = do
     valNames <- replicateM (length vals) freshName'
     let assignments = zipWith (AST.VariableIntroduction Nothing) valNames (map Just vals)
-    cpps <- forM binders $ \(CaseAlternative bs result) -> do
-      ret <- guardsToCpp result
+    ils <- forM binders $ \(CaseAlternative bs result) -> do
+      ret <- guardsToIL result
       go valNames ret bs
-    return $ AST.App Nothing (AST.Function Nothing Nothing [] (AST.Block Nothing (assignments ++ concat cpps ++ [AST.Throw Nothing (AST.StringLiteral Nothing $ mkString failedPatternMessage)])))
+    return $ AST.App Nothing (AST.Function Nothing Nothing [] (AST.Block Nothing (assignments ++ concat ils ++ [AST.Throw Nothing (AST.StringLiteral Nothing $ mkString failedPatternMessage)])))
                    []
     where
       go :: [Text] -> [AST] -> [Binder Ann] -> m [AST]
       go _ done [] = return done
       go (v:vs) done' (b:bs) = do
         done'' <- go vs done' bs
-        binderToCpp v done'' b
-      go _ _ _ = internalError "Invalid arguments to bindersToCpp"
+        binderToIL v done'' b
+      go _ _ _ = internalError "Invalid arguments to bindersToIL"
 
       failedPatternMessage :: Text
       failedPatternMessage = "Failed pattern match at " <> runModuleName mn <> " " <> displayStartEndPos ss <> ": "
 
-      guardsToCpp :: Either [(Guard Ann, Expr Ann)] (Expr Ann) -> m [AST]
-      guardsToCpp (Left gs) = traverse genGuard gs where
+      guardsToIL :: Either [(Guard Ann, Expr Ann)] (Expr Ann) -> m [AST]
+      guardsToIL (Left gs) = traverse genGuard gs where
         genGuard (cond, val) = do
-          cond' <- valueToCpp cond
-          val'   <- valueToCpp val
+          cond' <- valueToIL cond
+          val'   <- valueToIL val
           return
             (AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo cond' (AST.BooleanLiteral Nothing True))
               (AST.Block Nothing [AST.Return Nothing val']) Nothing)
 
-      guardsToCpp (Right v) = return . AST.Return Nothing <$> valueToCpp v
+      guardsToIL (Right v) = return . AST.Return Nothing <$> valueToIL v
 
   -- | Generate code in the simplified intermediate representation for a pattern match
   -- binder.
-  binderToCpp :: Text -> [AST] -> Binder Ann -> m [AST]
-  binderToCpp _ done NullBinder{} = return done
-  binderToCpp varName done (LiteralBinder _ l) =
-    literalToBinderCpp varName done l
-  binderToCpp varName done (VarBinder _ ident) =
-    return (AST.VariableIntroduction Nothing (identToCpp ident) (Just (AST.Var Nothing varName)) : done)
-  binderToCpp varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
-    binderToCpp varName done b
-  binderToCpp varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields)) _ (Qualified _ (ProperName ctor)) bs) = do
-    cpp <- go (zip fields bs) done
+  binderToIL :: Text -> [AST] -> Binder Ann -> m [AST]
+  binderToIL _ done NullBinder{} = return done
+  binderToIL varName done (LiteralBinder _ l) =
+    literalToBinderIL varName done l
+  binderToIL varName done (VarBinder _ ident) =
+    return (AST.VariableIntroduction Nothing (identToIL ident) (Just (AST.Var Nothing varName)) : done)
+  binderToIL varName done (ConstructorBinder (_, _, _, Just IsNewtype) _ _ [b]) =
+    binderToIL varName done b
+  binderToIL varName done (ConstructorBinder (_, _, _, Just (IsConstructor ctorType fields)) _ (Qualified _ (ProperName ctor)) bs) = do
+    il <- go (zip fields bs) done
     return $ case ctorType of
-      ProductType -> cpp
+      ProductType -> il
       SumType ->
         [AST.IfElse Nothing (AST.InstanceOf Nothing (AST.Var Nothing varName) (AST.StringLiteral Nothing (mkString ctor)))
-                  (AST.Block Nothing cpp)
+                  (AST.Block Nothing il)
                   Nothing]
     where
     go :: [(Ident, Binder Ann)] -> [AST] -> m [AST]
@@ -364,50 +364,50 @@ moduleToCpp (Module _ coms mn _ imps _ foreigns decls) _ =
     go ((field, binder) : remain) done' = do
       argVar <- freshName'
       done'' <- go remain done'
-      cpp <- binderToCpp argVar done'' binder
-      return (AST.VariableIntroduction Nothing argVar (Just $ accessorString (mkString $ identToCpp field) $ AST.Var Nothing varName) : cpp)
+      il <- binderToIL argVar done'' binder
+      return (AST.VariableIntroduction Nothing argVar (Just $ accessorString (mkString $ identToIL field) $ AST.Var Nothing varName) : il)
 
-  binderToCpp _ _ ConstructorBinder{} =
-    internalError "binderToCpp: Invalid ConstructorBinder in binderToCpp"
-  binderToCpp varName done (NamedBinder _ ident binder) = do
-    cpp <- binderToCpp varName done binder
-    return (AST.VariableIntroduction Nothing (identToCpp ident) (Just (AST.Var Nothing varName)) : cpp)
+  binderToIL _ _ ConstructorBinder{} =
+    internalError "binderToIL: Invalid ConstructorBinder in binderToIL"
+  binderToIL varName done (NamedBinder _ ident binder) = do
+    il <- binderToIL varName done binder
+    return (AST.VariableIntroduction Nothing (identToIL ident) (Just (AST.Var Nothing varName)) : il)
 
-  literalToBinderCpp :: Text -> [AST] -> Literal (Binder Ann) -> m [AST]
-  literalToBinderCpp varName done (NumericLiteral num) =
+  literalToBinderIL :: Text -> [AST] -> Literal (Binder Ann) -> m [AST]
+  literalToBinderIL varName done (NumericLiteral num) =
     return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.NumericLiteral Nothing num)) (AST.Block Nothing done) Nothing]
-  literalToBinderCpp varName done (CharLiteral c) =
+  literalToBinderIL varName done (CharLiteral c) =
     return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.StringLiteral Nothing (fromString [c]))) (AST.Block Nothing done) Nothing]
-  literalToBinderCpp varName done (StringLiteral str) =
+  literalToBinderIL varName done (StringLiteral str) =
     return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.StringLiteral Nothing str)) (AST.Block Nothing done) Nothing]
-  literalToBinderCpp varName done (BooleanLiteral True) =
+  literalToBinderIL varName done (BooleanLiteral True) =
     return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.BooleanLiteral Nothing True)) (AST.Block Nothing done) Nothing]
-  literalToBinderCpp varName done (BooleanLiteral False) =
+  literalToBinderIL varName done (BooleanLiteral False) =
     return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.BooleanLiteral Nothing False)) (AST.Block Nothing done) Nothing]
     -- return [AST.IfElse Nothing (AST.Unary Nothing AST.Not (AST.Var Nothing varName)) (AST.Block Nothing done) Nothing]
-  literalToBinderCpp varName done (ObjectLiteral bs) = go done bs
+  literalToBinderIL varName done (ObjectLiteral bs) = go done bs
     where
     go :: [AST] -> [(PSString, Binder Ann)] -> m [AST]
     go done' [] = return done'
     go done' ((prop, binder):bs') = do
       propVar <- freshName'
       done'' <- go done' bs'
-      cpp <- binderToCpp propVar done'' binder
-      return (AST.VariableIntroduction Nothing propVar (Just (accessorString prop (AST.Var Nothing varName))) : cpp)
-  literalToBinderCpp varName done (ArrayLiteral bs) = do
-    cpp <- go done 0 bs
+      il <- binderToIL propVar done'' binder
+      return (AST.VariableIntroduction Nothing propVar (Just (accessorString prop (AST.Var Nothing varName))) : il)
+  literalToBinderIL varName done (ArrayLiteral bs) = do
+    il <- go done 0 bs
     return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo
                                    (arrayLength $ AST.Var Nothing varName)
                                    (AST.NumericLiteral Nothing (Left (fromIntegral $ length bs))))
-               (AST.Block Nothing cpp) Nothing]
+               (AST.Block Nothing il) Nothing]
     where
     go :: [AST] -> Integer -> [Binder Ann] -> m [AST]
     go done' _ [] = return done'
     go done' index (binder:bs') = do
       elVar <- freshName'
       done'' <- go done' (index + 1) bs'
-      cpp <- binderToCpp elVar done'' binder
-      return (AST.VariableIntroduction Nothing elVar (Just (AST.Indexer Nothing (AST.NumericLiteral Nothing (Left index)) (AST.Var Nothing varName))) : cpp)
+      il <- binderToIL elVar done'' binder
+      return (AST.VariableIntroduction Nothing elVar (Just (AST.Indexer Nothing (AST.NumericLiteral Nothing (Left index)) (AST.Var Nothing varName))) : il)
 
 emptyAnn :: Ann
 emptyAnn = (SourceSpan "" (SourcePos 0 0) (SourcePos 0 0), [], Nothing, Nothing)

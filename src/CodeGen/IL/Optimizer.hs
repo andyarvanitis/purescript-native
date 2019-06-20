@@ -1,5 +1,5 @@
 -- | This module optimizes code in the intermediate representation.
-module CodeGen.Cpp.Optimizer (optimize) where
+module CodeGen.IL.Optimizer (optimize) where
 
 import Prelude.Compat
 
@@ -12,8 +12,8 @@ import Language.PureScript.CoreImp.Optimizer.Inliner hiding (inlineUnsafeCoerce,
 import Language.PureScript.CoreImp.Optimizer.Unused
 import Language.PureScript.PSString (PSString, decodeString)
 
-import CodeGen.Cpp.Common (unusedName)
-import CodeGen.Cpp.Optimizer.TCO
+import CodeGen.IL.Common (unusedName)
+import CodeGen.IL.Optimizer.TCO
 
 import qualified Language.PureScript.Constants as C
 
@@ -21,11 +21,11 @@ import qualified Language.PureScript.Constants as C
 -- | Apply a series of optimizer passes to simplified C++ code
 optimize :: MonadSupply m => AST -> AST -> m AST
 -- optimize = untilFixedPoint $ return . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp . tco
-optimize mn cpp = do
-    cpp' <- untilFixedPoint (return . inlineApply . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp) cpp
+optimize mn il = do
+    il' <- untilFixedPoint (return . inlineApply . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp) il
     untilFixedPoint (return . tidyUp) . tco mn
       =<< untilFixedPoint (return . magicDo')
-      =<< untilFixedPoint (return . magicDo) cpp'
+      =<< untilFixedPoint (return . magicDo) il'
 
 
   where
@@ -98,11 +98,11 @@ magicDo'' effectModule C.EffectDictionaries{..} = everywhereTopDown convert
   -- Desugar pure
   convert (App _ (App _ pure' [val]) []) | isPure pure' = val
   -- Desugar discard
-  convert (App _ (App _ bind [m]) [Function s1 Nothing [unused] (Block s2 cpp)]) | isDiscard bind && unused == unusedName =
-    Function s1 Nothing [] $ Block s2 (App s2 m [] : map applyReturns cpp )
+  convert (App _ (App _ bind [m]) [Function s1 Nothing [unused] (Block s2 il)]) | isDiscard bind && unused == unusedName =
+    Function s1 Nothing [] $ Block s2 (App s2 m [] : map applyReturns il )
   -- Desugar bind
-  convert (App _ (App _ bind [m]) [Function s1 Nothing [arg] (Block s2 cpp)]) | isBind bind =
-    Function s1 Nothing [] $ Block s2 (VariableIntroduction s2 arg (Just (App s2 m [])) : map applyReturns cpp)
+  convert (App _ (App _ bind [m]) [Function s1 Nothing [arg] (Block s2 il)]) | isBind bind =
+    Function s1 Nothing [] $ Block s2 (VariableIntroduction s2 arg (Just (App s2 m [])) : map applyReturns il)
   -- Inline double applications
   convert (App _ (App s1 (Function s2 Nothing [] (Block ss body)) []) []) =
     App s1 (Function s2 Nothing [] (Block ss (applyReturns `fmap` body))) []
@@ -130,7 +130,7 @@ magicDo'' effectModule C.EffectDictionaries{..} = everywhereTopDown convert
 
   applyReturns :: AST -> AST
   applyReturns (Return ss ret) = Return ss (App ss ret [])
-  applyReturns (Block ss cpps) = Block ss (map applyReturns cpps)
+  applyReturns (Block ss ils) = Block ss (map applyReturns ils)
   applyReturns (IfElse ss cond t f) = IfElse ss cond (applyReturns t) (applyReturns `fmap` f)
   applyReturns other = other
 

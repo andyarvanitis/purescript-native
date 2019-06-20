@@ -33,9 +33,9 @@ import Language.PureScript.AST.Literals
 import Language.PureScript.CoreFn
 import Language.PureScript.CoreFn.FromJSON
 
-import CodeGen.Cpp
-import CodeGen.Cpp.Common
-import CodeGen.Cpp.Printer
+import CodeGen.IL
+import CodeGen.IL.Common
+import CodeGen.IL.Printer
 
 import Tests
 
@@ -93,9 +93,9 @@ transpile :: [String] -> FilePath -> FilePath -> IO ()
 transpile opts baseOutpath jsonFile = do
   jsonText <- T.decodeUtf8 <$> B.readFile jsonFile
   let module' = jsonToModule $ parseJson jsonText
-  ((interface, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToCpp module' Nothing)
-  let mn = moduleNameToCpp $ moduleName module'
-      implementation = prettyPrintCpp asts
+  ((interface, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToIL module' Nothing)
+  let mn = moduleNameToIL $ moduleName module'
+      implementation = prettyPrintIL asts
       outpath = joinPath [baseOutpath, T.unpack mn]
       interfacePath = outpath </> interfaceFileName (T.unpack mn)
       implPath = outpath </> implFileName mn
