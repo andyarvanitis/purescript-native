@@ -12,7 +12,7 @@ import Language.PureScript.CoreImp.Optimizer.Inliner hiding (inlineUnsafeCoerce,
 import Language.PureScript.CoreImp.Optimizer.Unused
 import Language.PureScript.PSString (PSString, decodeString)
 
-import CodeGen.IL.Common (unusedName)
+import CodeGen.IL.Common (undefinedName, unusedName)
 import CodeGen.IL.Optimizer.TCO
 
 import qualified Language.PureScript.Constants as C
@@ -56,7 +56,7 @@ inlineUnsafePartial = everywhereTopDown convert where
     | unsafePartial == C.unsafePartial && partialUnsafe == C.partialUnsafe
     -- Apply to undefined here, the application should be optimized away
     -- if it is safe to do so
-    = App ss comp [ Var ss C.undefined ]
+    = App ss comp [ Var ss undefinedName ]
   convert other = other
 
 inlineUnsafeCoerce :: AST -> AST

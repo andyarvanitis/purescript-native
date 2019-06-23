@@ -107,8 +107,8 @@ transpile opts baseOutpath jsonFile = do
 
 writeRuntimeFiles :: FilePath -> IO ()
 writeRuntimeFiles baseOutpath = do
-  createDirectoryIfMissing True baseOutpath
-  let runtimeSource = baseOutpath </> "purescript.go"
+  createDirectoryIfMissing True $ baseOutpath </> "purescript"
+  let runtimeSource = baseOutpath </> "purescript" </> "purescript.go"
   runtimeExists <- doesFileExist runtimeSource
   when (not runtimeExists) $ do
     B.writeFile runtimeSource $(embedFile "runtime/purescript.go")

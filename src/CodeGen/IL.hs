@@ -40,6 +40,7 @@ import CodeGen.IL.Optimizer
 import CodeGen.IL.Printer
 
 data DeclType = ModuleDecl | LetDecl | RecLetDecl deriving (Eq)
+data ImportType = Imported | Ignored
 
 -- | Generate code in the simplified intermediate representation for all declarations in a
 -- module.
@@ -54,8 +55,9 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
   do
     let usedNames = concatMap getNames decls
     let mnLookup = renameImports usedNames imps
-    ilImports <- traverse (importToIL mnLookup) . (\\ (mn : C.primModules)) . (\\ [mn]) $ ordNub $ map snd imps
-    interfaceImport <- importToIL (renameImports [] [(emptyAnn, mn)]) mn
+    imports <- traverse (importToIL Imported mnLookup) . (\\ (mn : C.primModules)) . (\\ [mn]) $ ordNub $ map snd imps
+    ignoredImports <- traverse (importToIL Ignored mnLookup) . delete (ModuleName [ProperName C.prim]) . (\\ (mn : C.primModules)) $ ordNub $ map snd imps
+    interfaceImport <- importToIL Imported (renameImports [] [(emptyAnn, mn)]) mn
     let decls' = renameModules mnLookup decls
     ilDecls <- mapM (bindToIL ModuleDecl) decls'
     optimized <- traverse (traverse (optimize modName')) ilDecls
@@ -63,7 +65,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
         values = annotValue <$> optimized'
         foreigns' = identToIL <$> foreigns
         interface = interfaceSource modName values foreigns
-        implHeader = implHeaderSource modName ilImports interfaceImport
+        implHeader = implHeaderSource modName (imports ++ ignoredImports) interfaceImport
         implFooter = implFooterSource modName foreigns
     return $ (interface, foreigns', optimized', implHeader, implFooter)
   where
@@ -102,24 +104,26 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
          then freshModuleName (i + 1) mn' used
          else newName
 
-  -- | Generates C++ code for a module import, binding the required module
+  -- | Generates IL code for a module import, binding the required module
   -- to the alternative
-  importToIL :: M.Map ModuleName (Ann, ModuleName) -> ModuleName -> m Text
-  importToIL mnLookup mn' = do
+  importToIL :: ImportType -> M.Map ModuleName (Ann, ModuleName) -> ModuleName -> m Text
+  importToIL t mnLookup mn' = do
     let ((_, _, _, _), mnSafe) = fromMaybe (internalError "Missing value in mnLookup") $ M.lookup mn' mnLookup
         mname = moduleNameToIL mnSafe
-    pure $ "#include \"" <> mname <> "/" <> mname <> ".h\"\n"
+    pure $ case t of
+              Imported -> "import \"" <> mname <> "\"\n"
+              Ignored -> "type _ = "  <> mname <> ".IGNORE_UNUSED_IMPORTS\n"
 
   -- | Replaces the `ModuleName`s in the AST so that the generated code refers to
   -- the collision-avoiding renamed module imports.
   renameModules :: M.Map ModuleName (Ann, ModuleName) -> [Bind Ann] -> [Bind Ann]
   renameModules mnLookup binds =
-    let (f, _, _) = everywhereOnValues id goExpr goBinder
+    let (f, _, _) = everywhereOnValues id ilExpr goBinder
     in map f binds
     where
-    goExpr :: Expr a -> Expr a
-    goExpr (Var ann q) = Var ann (renameQual q)
-    goExpr e = e
+    ilExpr :: Expr a -> Expr a
+    ilExpr (Var ann q) = Var ann (renameQual q)
+    ilExpr e = e
     goBinder :: Binder a -> Binder a
     goBinder (ConstructorBinder ann q1 q2 bs) = ConstructorBinder ann (renameQual q1) (renameQual q2) bs
     goBinder b = b
@@ -153,39 +157,8 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
     il <- valueToIL val
     pure $ AST.Function Nothing (Just $ identToIL ident) [] (AST.Block Nothing [AST.Return Nothing il])
   nonRecToIL RecLetDecl (ss, _, _, _) ident val = do
-    il <- valueToIL val
-    pure $
-      let retainedName = identToIL ident
-          retained = AST.Var Nothing $ retainedName
-          unretainedName = retainedName <> unretainedSuffix
-          unretained = AST.Var Nothing $ unretainedName
-          boxed = AST.Var Nothing . -- Note: prevents optimizer from eliminating this
-                      prettyPrintIL1 $
-                        AST.VariableIntroduction
-                            Nothing
-                            retainedName
-                            (Just unretained)
-          alias = AST.Var Nothing $ "auto& " <> retainedName <> " = " <> unretainedName
-      in
-      case il of
-        AST.Function _ name args (AST.Block Nothing ils) ->
-          AST.Assignment Nothing
-              retained
-              (AST.Function Nothing
-                   name
-                   args 
-                   (AST.Block Nothing (boxed : ils)))
-        _ ->
-          AST.Assignment Nothing
-              retained
-              (AST.App Nothing
-                  (AST.Function Nothing
-                      Nothing
-                      []
-                      (AST.Block Nothing ([ alias
-                                          , AST.Return Nothing il
-                                          ])))
-               [])
+    ilExpr <- valueToIL val
+    pure $ AST.Assignment Nothing (AST.Var Nothing $ identToIL ident) ilExpr
   nonRecToIL _ (ss, _, _, _) ident val = do
     il <- valueToIL val
     pure $ AST.VariableIntroduction Nothing (identToIL ident) (Just il)
@@ -222,9 +195,11 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
   valueToIL e@App{} = do
     let (f, args) = unApp e []
     args' <- mapM valueToIL args
+    fn <- valueToIL f
     case f of
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
-      _ -> flip (foldl (\fn a -> AST.App Nothing fn [a])) args' <$> valueToIL f
+      _ -> return $ AST.App Nothing fn args'
+      -- _ -> flip (foldl (\fn a -> AST.App Nothing fn [a])) args' <$> valueToIL f
     where
     unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
     unApp (App _ val arg) args = unApp val (arg : args)
@@ -247,30 +222,14 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
     bindersToIL ss binders vals
   valueToIL (Let _ ds val) = do
     let recurs = concatMap getNames $ filter isRec ds
-        recurDs = (\v -> AST.Var Nothing $ "boxed::recur " <> identToIL v) <$> recurs
-        recurDsWeak = (\v -> AST.Var
-                             Nothing
-                             ("boxed::recur::weak " <> identToIL v <> unretainedSuffix <> "(" <> identToIL v <> ")")
-                       ) <$> recurs
-        mutualRecurWarning = if any isMutRec $ filter isRec ds
-                               then [AST.Var Nothing "#pragma message(\"Mutually recursive lets will cause retain cycles (memory leaks)\") //"]
-                               else []
+        recurDs = (\v -> AST.VariableIntroduction Nothing (identToIL v) Nothing) <$> recurs
     ds' <- concat <$> mapM (bindToIL LetDecl) ds
     ret <- valueToIL val
-    return $
-      AST.App Nothing
-          (AST.Function Nothing
-               Nothing
-               []
-               (AST.Block Nothing (recurDs ++ recurDsWeak ++ mutualRecurWarning ++ ds' ++ [AST.Return Nothing ret])))
-          []
+    return $ AST.App Nothing (AST.Function Nothing Nothing [] (AST.Block Nothing (recurDs ++ ds' ++ [AST.Return Nothing ret]))) []
     where
     isRec :: Bind Ann -> Bool
     isRec (Rec _) = True
-    isRec _ = False
-    isMutRec :: Bind Ann -> Bool
-    isMutRec b | (length . nub $ getNames b) > 1 = True
-               | otherwise = False
+    isRec _ = False      
   valueToIL (Constructor (_, _, _, Just IsNewtype) _ (ProperName ctor) _) = error "IsNewtype"
   valueToIL (Constructor _ _ (ProperName ctor) fields) =
     let body = AST.ObjectLiteral Nothing $ (mkString ctor, AST.BooleanLiteral Nothing True) :
@@ -300,9 +259,9 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
   -- | Generate code in the simplified intermediate representation for a reference to a
   -- variable that may have a qualified name.
   qualifiedToIL :: (a -> Ident) -> Qualified a -> AST
-  qualifiedToIL f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . runIdent $ f a
-  qualifiedToIL f (Qualified (Just mn') a) = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing (moduleNameToIL mn'))
-  qualifiedToIL f (Qualified _ a) = AST.Var Nothing $ identToIL (f a)
+  qualifiedToIL f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . identToIL $ f a
+  qualifiedToIL f (Qualified (Just mn') a) | mn /= mn' = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing (moduleNameToIL mn'))
+  qualifiedToIL f (Qualified _ a) = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing "")
 
   -- foreignIdent :: Ident -> AST
   -- foreignIdent ident = accessorString (mkString $ runIdent ident) (AST.Var Nothing "$foreign")
@@ -414,8 +373,9 @@ emptyAnn = (SourceSpan "" (SourcePos 0 0) (SourcePos 0 0), [], Nothing, Nothing)
 
 arrayLength :: AST -> AST
 arrayLength a = AST.App Nothing (AST.Var Nothing arrayLengthFn) [a]
+-- arrayLength a = AST.Var Nothing (arrayLengthFn <> "(" <> prettyPrintIL1 a <> ")")
 
 freshName' :: MonadSupply m => m Text
 freshName' = do
     name <- freshName
-    return $ T.replace "$" "_Local_" name
+    return $ T.replace "$" "𝕡" name

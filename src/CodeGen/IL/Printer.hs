@@ -15,7 +15,6 @@ import Control.Arrow ((<+>))
 import Control.Monad (forM, mzero)
 import Control.Monad.State (StateT, evalStateT)
 import Control.PatternArrows
-import Data.Char (isAscii)
 import Data.List (filter, (\\))
 import qualified Control.Arrow as A
 
@@ -49,26 +48,23 @@ literals = mkPattern' match'
   match (BooleanLiteral _ True) = return $ emit "true"
   match (BooleanLiteral _ False) = return $ emit "false"
   match (ArrayLiteral _ xs) = mconcat <$> sequence
-    [ return . emit $ arrayType <> "{ "
+    [ return . emit $ arrayType <> "{"
     , intercalate (emit ", ") <$> forM xs prettyPrintIL'
-    , return $ emit " }"
+    , return $ emit "}"
     ]
   -- match (ObjectLiteral _ []) = return $ emit "std::initializer_list<std::pair<const string, boxed>>{}"
   match (ObjectLiteral _ ps) = mconcat <$> sequence
-    [ return . emit $ dictType <> "{\n"
+    [ return . emit $ dictType <> "{"
     , withIndent $ do
         ils <- forM ps $ \(key, value) -> do
                   value' <- prettyPrintIL' value
-                  return $ emit "{ " <> objectPropertyToString key <> value' <> emit " }"
-        indentString <- currentIndent
-        return $ intercalate (emit ",\n") $ map (indentString <>) ils
-    , return $ emit "\n"
-    , currentIndent
+                  return $ objectPropertyToString key <> value'
+        return $ intercalate (emit " ") $ map (<> emit ",") ils
     , return $ emit "}"
     ]
     where
     objectPropertyToString :: (Emit gen) => PSString -> gen
-    objectPropertyToString s = emit $ stringLiteral s <> ", "
+    objectPropertyToString s = emit $ stringLiteral s <> ": "
   match (Block _ sts) = mconcat <$> sequence
     [ return $ emit "{\n"
     , withIndent $ prettyStatements sts
@@ -78,7 +74,7 @@ literals = mkPattern' match'
     ]
   match (Var _ ident) = return $ emit ident
   match (VariableIntroduction _ ident value) = mconcat <$> sequence
-    [ return $ emit $ "boxed " <> ident
+    [ return . emit $ varDecl <> " " <> ident <> " " <> anyType
     , maybe (return mempty) (fmap (emit " = " <>) . prettyPrintIL') value
     ]
   match (Assignment _ target value) = mconcat <$> sequence
@@ -87,13 +83,20 @@ literals = mkPattern' match'
     , prettyPrintIL' value
     ]
   match (App _ val []) = mconcat <$> sequence
-    [ prettyPrintIL' val
-    , return $ emit "()"
+    [ return $ emit "EffApply("
+    , prettyPrintIL' val
+    , return $ emit ")"
     ]
-  match (App ss (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y])
+  match (App _ (Var _ fn) [arg]) | fn == arrayLengthFn = mconcat <$> sequence
+    [ return $ emit arrayLengthFn
+    , return $ emit "("
+    , prettyPrintIL' arg
+    , return $ emit ")"
+    ]
+  match (App ss (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod), x, y])
     | fnMod == dictMod
     , dictMod == C.dataEq || dictMod == C.dataSemiring || dictMod == C.dataRing ||
-      dictMod == C.dataEuclideanRing || dictMod == C.dataHeytingAlgebra
+      dictMod == C.dataEuclideanRing || dictMod == C.dataHeytingAlgebra || dictMod == C.dataOrd
     , Just op <- renderOp fn
     , Just t <- unboxType dict
     = mconcat <$> sequence
@@ -101,130 +104,151 @@ literals = mkPattern' match'
     , return $ emit op
     , return $ emit $ unbox' t y
     ]
-  match (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [n])
+  match (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod), n])
     | fnMod == dictMod
     , dictMod == C.dataRing
     , fn == C.negate
     , Just t <- unboxType dict
     = mconcat <$> sequence
-    [ return $ emit "-"
+    [ return $ emit "-("
     , return $ emit $ unbox' t n
+    , return $ emit ")"
     ]
-  match (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [n])
+  match (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod), n])
     | fnMod == dictMod
     , dictMod == C.dataHeytingAlgebra
     , fn == properToIL C.not
     , Just t <- unboxType dict
     = mconcat <$> sequence
-    [ return $ emit "!"
+    [ return $ emit "!("
     , return $ emit $ unbox' t n
+    , return $ emit ")"
     ]
   match (App _ val args) = mconcat <$> sequence
-    [ prettyPrintIL' val
-    , return $ emit "("
+    [ return $ emit "Apply("
+    , prettyPrintIL' val
+    , return $ emit ", "
     , intercalate (emit ", ") <$> forM args prettyPrintIL'
     , return $ emit ")"
     ]
   match (Function _ (Just name) [] (Block _ [Return _ ret]))
-    | isLiteral ret = mconcat <$> sequence
-    [ return $ emit "auto "
-    , return $ emit name
-    , return $ emit "() -> const boxed& "
+    | isComplexLiteral ret = mconcat <$> sequence
+    [ return $ emit "\n"
+    , return . emit $ varDecl <> " " <> initName name <> " Once\n"
+    , prettyPrintIL' $ VariableIntroduction Nothing (valueName name) Nothing
+    , return $ emit "\n\n"
+    , return $ emit "func "
+    , return . emit $ withPrefix name
+    , return . emit $ "() " <> anyType <> " "
     , return $ emit "{\n"
     , withIndent $ do
-          indentString <- currentIndent
-          return $ indentString <> emit staticValueBegin
+        indentString <- currentIndent
+        return $ indentString <> (emit $ initName name <> ".Do(func() {\n") <>
+                 indentString <> indentString <> (emit $ valueName name <> " = ")
     , withIndent $ do
         case ret of
           Function _ Nothing args body -> mconcat <$> sequence
-            [ return $ emit "[]("
-            , return $ emit $ intercalate ", " (renderArg <$> args)
-            , return $ emit ") -> boxed "
+            [ return $ emit "func("
+            , return . emit $ intercalate ", " (renderArg anyType <$> args)
+            , return . emit $ ") " <> anyType <> " "
             , prettyPrintIL' body
             ]
           _ -> do
             prettyPrintIL' ret
-    , return $ emit ";\n"
+    , return $ emit "\n"
     , withIndent $ do
-          indentString <- currentIndent
-          return $ indentString <> emit staticValueEnd
-    , return $ emit "\n}"
+        indentString <- currentIndent
+        return $ indentString <> (emit $ "})\n" <> "return " <> valueName name <>"\n")
+    , return $ emit "}\n\n"
     ]
   match (Function _ (Just name) [] ret) = mconcat <$> sequence
-    [ return $ emit "auto "
-    , return $ emit name
-    , return $ emit "() -> boxed "
+    [ return $ emit "func "
+    , return . emit $ withPrefix name
+    , return . emit $ "() " <> anyType <> " "
     , prettyPrintIL' ret
     ]
-  match (Function _ name args ret) = mconcat <$> sequence
-    [ return $ emit captures
-    , return $ emit "("
-    , return $ emit $ intercalate ", " (render <$> args)
-    , return $ emit ") -> boxed "
+  match (Function _ _ args ret) = mconcat <$> sequence
+    [ return $ emit "func("
+    , return . emit $ intercalate ", " (renderArg anyType <$> args)
+    , return . emit $ ") " <> anyType <> " "
     , prettyPrintIL' ret
     ]
-    where
-    (captures, render)
-      | name == Just tcoLoop = ("[&]", renderArgByVal)
-      | otherwise = ("[=]", renderArg)
-  match (Indexer _ prop@(Var _ name) val) = mconcat <$> sequence
+  match (Indexer _ (Var _ name) (Var _ "")) = mconcat <$> sequence
+    [ prettyPrintIL' (Var Nothing $ withPrefix name)
+    , return $ emit "()"
+    ]
+  match (Indexer _ (Var _ name) val) = mconcat <$> sequence
     [ prettyPrintIL' val
-    , return $ emit "::"
-    , prettyPrintIL' prop
+    , return $ emit "."
+    , prettyPrintIL' (Var Nothing $ withPrefix name)
     , return $ emit "()"
     ]
   match (Indexer _ prop val) = mconcat <$> sequence
-    [ prettyPrintIL' val
-    , return $ emit "["
+    [ return $ emit "Get("
+    , prettyPrintIL' val
+    , return $ emit ", "
     , prettyPrintIL' prop
-    , return $ emit "]"
+    , return $ emit ")"
     ]
   match (InstanceOf _ val ty) = mconcat <$> sequence
-    [ return . emit $ unbox' dictType val
-    , return $ emit ".contains("
+    [ return $ emit "Contains("
+    , prettyPrintIL' val
+    , return $ emit ", "
     , prettyPrintIL' ty
     , return $ emit ")"
     ]
   match (While _ cond sts) = mconcat <$> sequence
-    [ return $ emit "while ("
+    [ return $ emit "for "
     , prettyPrintIL' cond
-    , return $ emit ") "
+    , return $ emit " "
     , prettyPrintIL' sts
     ]
   match (For _ ident start end sts) = mconcat <$> sequence
-    [ return $ emit $ "for (boxed " <> ident <> " = "
+    [ return $ emit $ "for var " <> ident <> " = "
     , prettyPrintIL' start
     , return $ emit $ "; " <> ident <> " < "
     , prettyPrintIL' end
-    , return $ emit $ "; " <> ident <> "++) "
+    , return $ emit $ "; " <> ident <> "++ "
     , prettyPrintIL' sts
     ]
   match (ForIn _ ident obj sts) = mconcat <$> sequence
-    [ return $ emit $ "for (boxed " <> ident <> " in "
+    [ return $ emit $ "for var " <> ident <> " in "
     , prettyPrintIL' obj
-    , return $ emit ") "
+    , return $ emit " "
     , prettyPrintIL' sts
     ]
+  match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing True)) thens elses) 
+    | (App ss (Indexer _ (Var _ _) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod), x, y]) <- cond
+    , fnMod == dictMod
+    , dictMod == C.dataEq || dictMod == C.dataOrd
+    , Just _ <- unboxTypeInt dict
+    = mconcat <$> sequence
+    [ return $ emit "if "
+    , prettyPrintIL' cond
+    , return $ emit " "
+    , prettyPrintIL' thens
+    , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
+    ]
   match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing True)) thens elses) = mconcat <$> sequence
-    [ return $ emit "if ("
+    [ return $ emit "if "
     , return $ emit $ unbox' "bool" cond
-    , return $ emit ") "
+    , return $ emit " "
     , prettyPrintIL' thens
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
     ]
   match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing False)) thens elses) = mconcat <$> sequence
-    [ return $ emit "if (!("
+    [ return $ emit "if !("
     , return $ emit $ unbox' "bool" cond
-    , return $ emit ")) "
+    , return $ emit ") "
     , prettyPrintIL' thens
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
     ]
   match (IfElse _ (Binary _ EqualTo x y@(NumericLiteral _ n)) thens elses) = mconcat <$> sequence
-    [ return $ emit "if ("
+    [ return $ emit "if "
     , return $ emit $ unbox' t x
     , return $ emit $ " == "
     , prettyPrintIL' y
-    , return $ emit ") "
+    , return $ emit " "
     , prettyPrintIL' thens
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
     ]
@@ -232,18 +256,18 @@ literals = mkPattern' match'
     t | Left _ <- n  = int
       | Right _ <- n = float
   match (IfElse _ (Binary _ EqualTo a b@StringLiteral{}) thens elses) = mconcat <$> sequence
-    [ return $ emit "if ("
+    [ return $ emit "if "
     , return $ emit $ unbox' string a
     , return $ emit $ " == "
     , prettyPrintIL' b
-    , return $ emit ") "
+    , return $ emit " "
     , prettyPrintIL' thens
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
     ]
   match (IfElse _ cond thens elses) = mconcat <$> sequence
-    [ return $ emit "if ("
+    [ return $ emit "if "
     , prettyPrintIL' cond
-    , return $ emit ") "
+    , return $ emit " "
     , prettyPrintIL' thens
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
     ]
@@ -251,11 +275,12 @@ literals = mkPattern' match'
     [ return $ emit "return "
     , prettyPrintIL' value
     ]
-  match (ReturnNoResult _) = return $ emit "return undefined"
+  match (ReturnNoResult _) = return . emit $ "return " <> undefinedName
   -- match (Throw _ _) = return mempty
   match (Throw _ value) = mconcat <$> sequence
-    [ return $ emit "THROW_("
+    [ return $ emit "panic("
     , return $ emit "\"PatternMatchFailure: \""
+    , return $ emit " + "
     , prettyPrintIL' value
     , return $ emit ")"
     ]
@@ -330,11 +355,17 @@ isLiteral ObjectLiteral{} = True
 isLiteral ArrayLiteral{} = True
 isLiteral _ = False
 
+isComplexLiteral :: AST -> Bool
+-- isComplexLiteral Function{} = True
+isComplexLiteral ObjectLiteral{} = True
+isComplexLiteral ArrayLiteral{} = True
+isComplexLiteral _ = False
+
 prettyStatements :: (Emit gen) => [AST] -> StateT PrinterState Maybe gen
 prettyStatements sts = do
   ils <- forM sts prettyPrintIL'
   indentString <- currentIndent
-  return $ intercalate (emit "\n") $ map ((<> emit ";") . (indentString <>)) ils
+  return $ intercalate (emit "\n") $ map (indentString <>) ils
 
 -- | Generate a pretty-printed string representing a collection of C++ expressions at the same indentation level
 prettyPrintILWithSourceMaps :: [AST] -> (Text, [SMap])
@@ -383,15 +414,12 @@ prettyPrintIL1 :: AST -> Text
 prettyPrintIL1 = maybe (internalError "Incomplete pattern") runPlainString . flip evalStateT (PrinterState 0) . prettyPrintIL'
 
 stringLiteral :: PSString -> Text
-stringLiteral pss | Just s <- decodeString pss =
-  (if T.all isAscii s
-     then ""
-     else ("u8")) <> stringLiteral' s
+stringLiteral pss | Just s <- decodeString pss = stringLiteral' s
   where
   stringLiteral' :: Text -> Text
   stringLiteral' s = "\"" <> T.concatMap encodeChar s <> "\""
   encodeChar :: Char -> Text
-  encodeChar '\0' = "\\0"
+  encodeChar '\0' = "\\x00"
   encodeChar '\b' = "\\b"
   encodeChar '\t' = "\\t"
   encodeChar '\n' = "\\n"
@@ -407,13 +435,14 @@ unbox' :: Text -> AST -> Text
 unbox' _ v@(NumericLiteral{}) = prettyPrintIL1 v
 unbox' _ v@(BooleanLiteral{}) = prettyPrintIL1 v
 unbox' _ v@(StringLiteral{}) = prettyPrintIL1 v
-unbox' t v = unbox t <> "(" <> prettyPrintIL1 v <> ")"
+unbox' t v = "(" <> prettyPrintIL1 v <> ")" <> unbox t -- unbox t <> "(" <> prettyPrintIL1 v <> ")"
 
 unboxType :: Text -> Maybe Text
 unboxType t
   | t == C.eqInt ||
     t == C.semiringInt ||
-    t == C.ringInt
+    t == C.ringInt ||
+    t == C.ordInt
     = Just int
   | t == C.semiringNumber ||
     t == C.ringNumber ||
@@ -423,10 +452,23 @@ unboxType t
     = Just bool
   | otherwise = Nothing
 
+unboxTypeInt :: Text -> Maybe Text
+unboxTypeInt t
+  | t == C.eqInt ||
+    t == C.semiringInt ||
+    t == C.ringInt ||
+    t == C.ordInt
+    = Just int
+  | otherwise = Nothing
+
 renderOp :: Text -> Maybe Text
 renderOp op
   | op == C.eq = Just " == "
   | op == C.notEq = Just " != "
+  | op == C.lessThan = Just " < "
+  | op == C.lessThanOrEq = Just " <= "
+  | op == C.greaterThan = Just " > "
+  | op == C.greaterThanOrEq = Just " >= "
   | op == C.add = Just " + "
   | op == C.sub = Just " - "
   | op == C.mul = Just " * "
@@ -436,29 +478,22 @@ renderOp op
   | otherwise = Nothing
 
 interfaceSource :: Text -> [(Text,Bool)] -> [Ident] -> Text
-interfaceSource mn values foreigns =
-  let foreigns' = identToIL <$> foreigns
-      valueNames = fst <$> values
-      values' = filter ((`notElem` foreigns') . fst) values ++
-                zip (foreigns' \\ valueNames) (repeat True)
-  in
-  "// Generated by psil compiler\n\n" <>
-  "#ifndef " <> mn <> "_H\n" <>
-  "#define " <> mn <> "_H\n\n" <>
-  "#include \"purescript.h\"\n\n" <>
-  "namespace " <> mn <> " {\n\n" <>
-  "using namespace purescript;\n\n" <>
-  (T.concat $ (\(export, static) ->
-                let rty = if static then "const boxed&" else "boxed" in
-                "auto " <> export <> "() -> " <> rty <> ";\n") <$> values') <> "\n" <>
-  "} // end namespace " <> mn <> "\n\n" <>
-  "#endif // " <> mn <> "_H\n\n"
+interfaceSource _ _ _ = ""
 
 implHeaderSource :: Text -> [Text] -> Text -> Text
-implHeaderSource mn imports interfaceImport =
-  T.concat imports <> "\n"<>
-  interfaceImport <> "\n\n" <>
-  "namespace " <> mn <> " {\n\n"
+implHeaderSource mn imports _ =
+  "// Code generated by psgo. DO NOT EDIT.\n\n" <>
+  "package " <> (if mn == "Main" then "main" else mn) <> "\n\n" <>
+  "import . \"purescript\"\n" <>
+  (if mn == "Main"
+      then "import \"purescript_ffi\"\n"
+      else "") <>
+  T.concat imports <> "\n" <>
+  "type IGNORE_UNUSED_IMPORTS = bool\n" <>
+  "type _ = IGNORE_UNUSED_RUNTIME\n" <>
+  (if mn == "Main"
+      then "\nconst _ = purescript_ffi.Loader\n\n"
+      else "\n")
 
 implFooterSource :: Text -> [Ident] -> Text
 implFooterSource mn foreigns =
@@ -466,50 +501,41 @@ implFooterSource mn foreigns =
   (if null foreigns
     then ""
     else ("// Foreign values\n\n" <>
-          "DEFINE_FOREIGN_DICTIONARY_AND_ACCESSOR()\n\n" <>
-          (T.concat $ (\foreign' -> "auto " <>
-                                    identToIL foreign' <>
-                                    "() -> const boxed& { " <>
-                                    staticValueBegin <>
-                                    foreignDict <> "().at(" <>
-                                        (stringLiteral . mkString $ runIdent foreign') <> "); " <>
-                                    staticValueEnd <>
-                                    " };\n") <$> foreigns) <>
-          "\n")) <>
-  "} // end namespace " <> mn <>
-  "\n\n" <>
+          "var " <> foreignDict <> " = " <> dictType <> "{}\n\n" <>
+          (T.concat $ (\foreign' ->
+                        let name = identToIL foreign' in
+                        varDecl <> " " <> initName name <> " Once\n" <>     
+                        varDecl <> " " <> valueName name <> " " <> anyType <> "\n\n" <>
+                        "func " <>
+                        withPrefix name <>
+                        "() Any { \n" <>
+                        "    " <> initName name <> ".Do(func() {\n" <>
+                        "        " <> valueName name <> " = " <>
+                                        "SafeGet(" <> foreignDict <> ", " <>
+                                            (stringLiteral $ mkString name) <> ")\n" <>
+                        "    })\n" <>
+                        "    return " <> valueName name <> "\n" <> 
+                        "}\n\n") <$> foreigns))) <>
   if mn == "Main" then mainSource else "\n"
   where
   mainSource :: Text
   mainSource = "\
-    \int main(int argc, const char * argv[]) {\n\
-    \    Main::main()();\n\
-    \    return 0;\n\
+    \func main() {\n\
+    \    EffApply(PS__main())\n\
     \}\n\n\
     \"
 
 varDecl :: Text
-varDecl = "const boxed"
+varDecl = "var"
 
-varRefDecl :: Text
-varRefDecl = varDecl <> "&"
-
-renderArg' :: Text -> Text -> Text
-renderArg' decl arg
-  | arg == unusedName = decl
-  | otherwise = decl <> " " <> arg
-
-renderArg :: Text -> Text
-renderArg = renderArg' varRefDecl
-
-renderArgByVal :: Text -> Text
-renderArgByVal = renderArg' varDecl
+renderArg :: Text -> Text -> Text
+renderArg decl arg = arg <> " " <> decl
 
 foreignDict :: Text
-foreignDict = "foreign"
+foreignDict = "Foreign"
 
-staticValueBegin :: Text
-staticValueBegin = "static const boxed _ = "
+initName :: Text -> Text
+initName s = "_" <> s <> "_init_"
 
-staticValueEnd :: Text
-staticValueEnd = "return _;"
+valueName :: Text -> Text
+valueName s = "_" <> s <> "_value_"
