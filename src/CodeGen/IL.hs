@@ -378,4 +378,4 @@ arrayLength a = AST.App Nothing (AST.Var Nothing arrayLengthFn) [a]
 freshName' :: MonadSupply m => m Text
 freshName' = do
     name <- freshName
-    return $ T.replace "$" "𝕡" name
+    return $ T.replace "$" "ᵗ" name

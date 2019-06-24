@@ -13,6 +13,7 @@ cabal.sandbox.config
 bower_components/
 node_modules
 pscpp.cabal
+psgo.cabal
 tmp/
 .stack-work/
 output

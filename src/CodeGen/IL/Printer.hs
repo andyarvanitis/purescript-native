@@ -535,7 +535,7 @@ foreignDict :: Text
 foreignDict = "Foreign"
 
 initName :: Text -> Text
-initName s = "_" <> s <> "_init_"
+initName s = "ᵢ" <> s
 
 valueName :: Text -> Text
-valueName s = "_" <> s <> "_value_"
+valueName s = "ᵥ" <> s

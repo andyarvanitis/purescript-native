@@ -13,7 +13,7 @@ type Once = sync.Once
 
 type IGNORE_UNUSED_RUNTIME = bool
 
-const Undefined = false
+const Undefined = "undefined"
 
 func Apply(f Any, args ...Any) Any {
 	result := f

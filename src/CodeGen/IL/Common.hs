@@ -16,7 +16,7 @@ import qualified Language.PureScript.Constants as C
 moduleNameToIL :: ModuleName -> Text
 moduleNameToIL (ModuleName pns) =
   let name = T.intercalate "_" (runProperName `map` pns)
-  in if nameIsILBuiltIn name then ("_" <> name <> "_") else name
+  in if moduleIsReserved name then (name <> "_") else name
 
 -- | Convert an 'Ident' into a valid IL identifier:
 --
@@ -39,7 +39,7 @@ unusedName = "_"
 
 properToIL :: Text -> Text
 properToIL name
-  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = "_" <> name <> "_"
+  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = name <> "_"
   | otherwise = T.concatMap identCharToText name
 
 -- | Attempts to find a human-readable name for a symbol, if none has been specified returns the
@@ -47,9 +47,9 @@ properToIL name
 identCharToText :: Char -> Text
 identCharToText c | isAlphaNum c = T.singleton c
 identCharToText '_' = "_"
-identCharToText '\'' = "_Prime_"
+identCharToText '\'' = "ʹ"
 -- identCharToText '$' = "𝕤"
-identCharToText c = "𝕦" <> T.pack (show (ord c))
+identCharToText c = "ᵤ" <> T.pack (show (ord c))
 
 -- | Checks whether an identifier name is reserved in IL.
 nameIsILReserved :: Text -> Bool
@@ -98,6 +98,10 @@ ilKeywords =
   , "type"
   , "var"
   ]
+
+moduleIsReserved :: Text -> Bool
+moduleIsReserved "Main" = False
+moduleIsReserved name = not $ T.isInfixOf "_" name
 
 prefixIsReserved :: Text -> Bool
 prefixIsReserved name =
@@ -160,4 +164,4 @@ arrayLengthFn :: Text
 arrayLengthFn = "Length"
 
 tcoLoop :: Text
-tcoLoop = "_TCO_Loop_"
+tcoLoop = "ᵗLoop"
