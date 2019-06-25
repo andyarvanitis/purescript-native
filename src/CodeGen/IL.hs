@@ -155,7 +155,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
        else AST.Comment Nothing com <$> nonRecToIL dt a i (modifyAnn removeComments e)
   nonRecToIL ModuleDecl (ss, _, _, _) ident val = do
     il <- valueToIL val
-    pure $ AST.Function Nothing (Just $ identToIL ident) [] (AST.Block Nothing [AST.Return Nothing il])
+    pure $ AST.Function Nothing (Just $ moduleIdentToIL ident) [] (AST.Block Nothing [AST.Return Nothing il])
   nonRecToIL RecLetDecl (ss, _, _, _) ident val = do
     ilExpr <- valueToIL val
     pure $ AST.Assignment Nothing (AST.Var Nothing $ identToIL ident) ilExpr
@@ -259,9 +259,9 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
   -- | Generate code in the simplified intermediate representation for a reference to a
   -- variable that may have a qualified name.
   qualifiedToIL :: (a -> Ident) -> Qualified a -> AST
-  qualifiedToIL f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . identToIL $ f a
-  qualifiedToIL f (Qualified (Just mn') a) | mn /= mn' = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing (moduleNameToIL mn'))
-  qualifiedToIL f (Qualified _ a) = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing "")
+  qualifiedToIL f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . moduleIdentToIL $ f a
+  qualifiedToIL f (Qualified (Just mn') a) | mn /= mn' = AST.Indexer Nothing (AST.Var Nothing . moduleIdentToIL $ f a) (AST.Var Nothing (moduleNameToIL mn'))
+  qualifiedToIL f (Qualified _ a) = AST.Indexer Nothing (AST.Var Nothing . moduleIdentToIL $ f a) (AST.Var Nothing "")
 
   -- foreignIdent :: Ident -> AST
   -- foreignIdent ident = accessorString (mkString $ runIdent ident) (AST.Var Nothing "$foreign")
