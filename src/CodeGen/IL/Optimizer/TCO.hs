@@ -20,10 +20,10 @@ tco mn = everywhere convert where
   copyVar arg = "ᶜ" <> arg
 
   tcoDone :: Text
-  tcoDone = "ᵗDone"
+  tcoDone = "ᵗᶜdone"
   
   tcoResult :: Text
-  tcoResult = "ᵗResult"
+  tcoResult = "ᵗᶜresult"
 
   convert :: AST -> AST
   convert fn@(Function ss (Just name) args _)

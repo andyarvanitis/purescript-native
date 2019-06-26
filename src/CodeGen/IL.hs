@@ -63,7 +63,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
     optimized <- traverse (traverse (optimize modName')) ilDecls
     let optimized' = concat optimized
         values = annotValue <$> optimized'
-        foreigns' = identToIL <$> foreigns
+        foreigns' = moduleIdentToIL <$> foreigns
         interface = interfaceSource modName values foreigns
         implHeader = implHeaderSource modName (imports ++ ignoredImports) interfaceImport
         implFooter = implFooterSource modName foreigns
@@ -204,18 +204,6 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
     unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
     unApp (App _ val arg) args = unApp val (arg : args)
     unApp other args = (other, args)
-  -- valueToIL (Var (_, _, _, Just IsForeign) qi@(Qualified (Just mn') ident)) =
-  --   return $ if mn' == mn
-  --            then AST.Var Nothing (moduleNameToIL mn' <> "::" <> identToIL ident)
-  --            else varToIL qi
-  -- valueToIL (Var (_, _, _, Just IsForeign) (Qualified (Just mn') ident)) =
-  --   return $ AST.Var Nothing (moduleNameToIL mn' <> "::" <> identToIL ident)
-  -- valueToIL (Var (_, _, _, Just IsForeign) qi@(Qualified (Just mn') ident)) =
-  --   return $ if mn' == mn
-  --            then foreignIdent ident
-  --            else varToIL qi
-  -- valueToIL (Var (_, _, _, Just IsForeign) ident) =
-  --   internalError $ "Encountered an unqualified reference to a foreign ident " ++ T.unpack (showQualified showIdent ident)
   valueToIL (Var _ ident) = return $ varToIL ident
   valueToIL (Case (ss, _, _, _) values binders) = do
     vals <- mapM valueToIL values

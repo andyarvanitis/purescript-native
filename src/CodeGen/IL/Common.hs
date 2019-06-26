@@ -32,9 +32,10 @@ identToIL (Ident name) = properToIL name
 identToIL (GenIdent _ _) = internalError "GenIdent in identToIL"
 
 moduleIdentToIL :: Ident -> Text
+moduleIdentToIL UnusedIdent = unusedName
+moduleIdentToIL (Ident name) | name == C.undefined = undefinedName
 moduleIdentToIL (Ident name) = moduleProperToIL name
 moduleIdentToIL (GenIdent _ _) = internalError "GenIdent in identToIL"
-moduleIdentToIL _ = internalError "in moduleIdentToIL"
 
 undefinedName :: Text
 undefinedName = "Undefined"
@@ -44,7 +45,7 @@ unusedName = "_"
 
 properToIL :: Text -> Text
 properToIL name
-  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = name <> "ᵒ"
+  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = name <> "ˉ"
   | otherwise = T.concatMap identCharToText name
 
 -- | Attempts to find a human-readable name for a symbol, if none has been specified returns the
@@ -171,4 +172,4 @@ arrayLengthFn :: Text
 arrayLengthFn = "Length"
 
 tcoLoop :: Text
-tcoLoop = "ᵗLoop"
+tcoLoop = "ᵗᶜloop"

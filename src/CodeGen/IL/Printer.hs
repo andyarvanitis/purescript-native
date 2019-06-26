@@ -503,7 +503,7 @@ implFooterSource mn foreigns =
     else ("// Foreign values\n\n" <>
           "var " <> foreignDict <> " = " <> dictType <> "{}\n\n" <>
           (T.concat $ (\foreign' ->
-                        let name = identToIL foreign' in
+                        let name = moduleIdentToIL foreign' in
                         varDecl <> " " <> initName name <> " Once\n" <>     
                         varDecl <> " " <> valueName name <> " " <> anyType <> "\n\n" <>
                         "func " <>
@@ -535,7 +535,7 @@ foreignDict :: Text
 foreignDict = "Foreign"
 
 initName :: Text -> Text
-initName s = "ᵢ" <> s
+initName s = "ₒ" <> s
 
 valueName :: Text -> Text
-valueName s = "ᵥ" <> s
+valueName s = "ₐ" <> s
