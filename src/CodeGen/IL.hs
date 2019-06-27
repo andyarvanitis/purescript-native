@@ -198,8 +198,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
     fn <- valueToIL f
     case f of
       Var (_, _, _, Just IsNewtype) _ -> return (head args')
-      _ -> return $ AST.App Nothing fn args'
-      -- _ -> flip (foldl (\fn a -> AST.App Nothing fn [a])) args' <$> valueToIL f
+      _ -> flip (foldl (\fn a -> AST.App Nothing fn [a])) args' <$> valueToIL f
     where
     unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
     unApp (App _ val arg) args = unApp val (arg : args)

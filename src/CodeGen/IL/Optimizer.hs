@@ -12,7 +12,7 @@ import Language.PureScript.CoreImp.Optimizer.Inliner hiding (inlineUnsafeCoerce,
 import Language.PureScript.CoreImp.Optimizer.Unused
 import Language.PureScript.PSString (PSString, decodeString)
 
-import CodeGen.IL.Common (undefinedName, unusedName)
+import CodeGen.IL.Common (moduleNameToIL', undefinedName, unusedName)
 import CodeGen.IL.Optimizer.TCO
 
 import qualified Language.PureScript.Constants as C
@@ -136,5 +136,5 @@ magicDo'' effectModule C.EffectDictionaries{..} = everywhereTopDown convert
 
   isDict :: (Text, PSString) -> AST -> Bool
   isDict (moduleName, dictName) (Indexer _ (Var _ x) (Var _ y)) =
-    Just x == decodeString dictName && y == moduleName
+    Just x == decodeString dictName && y == moduleNameToIL' moduleName
   isDict _ _ = False

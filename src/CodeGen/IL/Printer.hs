@@ -83,7 +83,7 @@ literals = mkPattern' match'
     , prettyPrintIL' value
     ]
   match (App _ val []) = mconcat <$> sequence
-    [ return $ emit "EffApply("
+    [ return $ emit "Run("
     , prettyPrintIL' val
     , return $ emit ")"
     ]
@@ -93,7 +93,7 @@ literals = mkPattern' match'
     , prettyPrintIL' arg
     , return $ emit ")"
     ]
-  match (App ss (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod), x, y])
+  match (App _ (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y])
     | fnMod == dictMod
     , dictMod == C.dataEq || dictMod == C.dataSemiring || dictMod == C.dataRing ||
       dictMod == C.dataEuclideanRing || dictMod == C.dataHeytingAlgebra || dictMod == C.dataOrd
@@ -104,7 +104,7 @@ literals = mkPattern' match'
     , return $ emit op
     , return $ emit $ unbox' t y
     ]
-  match (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod), n])
+  match (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [n])
     | fnMod == dictMod
     , dictMod == C.dataRing
     , fn == C.negate
@@ -114,7 +114,7 @@ literals = mkPattern' match'
     , return $ emit $ unbox' t n
     , return $ emit ")"
     ]
-  match (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod), n])
+  match (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [n])
     | fnMod == dictMod
     , dictMod == C.dataHeytingAlgebra
     , fn == properToIL C.not
@@ -122,6 +122,16 @@ literals = mkPattern' match'
     = mconcat <$> sequence
     [ return $ emit "!("
     , return $ emit $ unbox' t n
+    , return $ emit ")"
+    ]
+  match app@(App{})
+    | (val, args) <- unApp app []
+    , length args > 1
+    = mconcat <$> sequence
+    [ return $ emit "Apply("
+    , prettyPrintIL' val
+    , return $ emit ", "
+    , intercalate (emit ", ") <$> forM args prettyPrintIL'
     , return $ emit ")"
     ]
   match (App _ val args) = mconcat <$> sequence
@@ -217,8 +227,8 @@ literals = mkPattern' match'
     , return $ emit " "
     , prettyPrintIL' sts
     ]
-  match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing True)) thens elses) 
-    | (App ss (Indexer _ (Var _ _) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod), x, y]) <- cond
+  match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing True)) thens elses)
+    | (App _ (App _ (App _ (Indexer _ (Var _ _) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y]) <- cond
     , fnMod == dictMod
     , dictMod == C.dataEq || dictMod == C.dataOrd
     , Just _ <- unboxTypeInt dict
@@ -360,6 +370,10 @@ isComplexLiteral :: AST -> Bool
 isComplexLiteral ObjectLiteral{} = True
 isComplexLiteral ArrayLiteral{} = True
 isComplexLiteral _ = False
+
+unApp :: AST -> [AST] -> (AST, [AST])
+unApp (App _ val [arg]) args = unApp val (arg : args)
+unApp other args = (other, args)
 
 prettyStatements :: (Emit gen) => [AST] -> StateT PrinterState Maybe gen
 prettyStatements sts = do
@@ -521,7 +535,7 @@ implFooterSource mn foreigns =
   mainSource :: Text
   mainSource = "\
     \func main() {\n\
-    \    EffApply(PS__main())\n\
+    \    Run(PS__main())\n\
     \}\n\n\
     \"
 

@@ -16,7 +16,11 @@ import qualified Language.PureScript.Constants as C
 moduleNameToIL :: ModuleName -> Text
 moduleNameToIL (ModuleName pns) =
   let name = T.intercalate "_" (runProperName `map` pns)
-  in if moduleIsReserved name then (name <> "_") else name
+  in moduleNameToIL' name
+
+moduleNameToIL' :: Text -> Text
+moduleNameToIL' name =
+  if moduleIsReserved name then (name <> "_") else name
 
 -- | Convert an 'Ident' into a valid IL identifier:
 --

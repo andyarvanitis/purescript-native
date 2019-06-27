@@ -24,7 +24,7 @@ func Apply(f Any, args ...Any) Any {
 	return result
 }
 
-func EffApply(f Any, args ...Any) Any {
+func Run(f Any, args ...Any) Any {
 	fn, _ := f.(EffFn)
 	return fn()
 }
