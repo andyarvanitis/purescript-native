@@ -95,8 +95,19 @@ literals = mkPattern' match'
     ]
   match (App _ (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y])
     | fnMod == dictMod
-    , dictMod == C.dataEq || dictMod == C.dataSemiring || dictMod == C.dataRing ||
-      dictMod == C.dataEuclideanRing || dictMod == C.dataHeytingAlgebra || dictMod == C.dataOrd
+    , dictMod == C.dataEq || dictMod == C.dataOrd
+    , Just op <- renderOp fn
+    , Just t <- unboxType dict
+    = mconcat <$> sequence
+    [ return $ emit $ unbox' t x
+    , return $ emit op
+    , return $ emit $ unbox' t y
+    ]
+  match (App _ (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y])
+    | not (isLiteral x) && not (isLiteral y)
+    , fnMod == dictMod
+    , dictMod == C.dataSemiring || dictMod == C.dataRing ||
+      dictMod == C.dataEuclideanRing || dictMod == C.dataHeytingAlgebra
     , Just op <- renderOp fn
     , Just t <- unboxType dict
     = mconcat <$> sequence
@@ -500,13 +511,13 @@ implHeaderSource mn imports _ =
   "package " <> (if mn == "Main" then "main" else mn) <> "\n\n" <>
   "import . \"purescript\"\n" <>
   (if mn == "Main"
-      then "import \"purescript_ffi\"\n"
+      then "import \"ffi\"\n"
       else "") <>
   T.concat imports <> "\n" <>
   "type IGNORE_UNUSED_IMPORTS = bool\n" <>
   "type _ = IGNORE_UNUSED_RUNTIME\n" <>
   (if mn == "Main"
-      then "\nconst _ = purescript_ffi.Loader\n\n"
+      then "\nconst _ = ffi.Loader\n\n"
       else "\n")
 
 implFooterSource :: Text -> [Ident] -> Text

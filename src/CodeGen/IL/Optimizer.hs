@@ -31,7 +31,8 @@ optimize mn il = do
   where
     tidyUp :: AST -> AST
     tidyUp = applyAll
-      [ collapseNestedBlocks
+      [ ignoreUnusedResults
+      , collapseNestedBlocks
       -- , collapseNestedIfs
       , collapseIfChecks
       , removeCodeAfterReturnStatements
@@ -83,6 +84,16 @@ collapseIfChecks = everywhere collapse where
   collapse (IfElse _ (Binary _ EqualTo (Indexer _ (Var _ prop) (Var _ val)) (BooleanLiteral _ True)) (Block _ [exprs]) _)
     | prop == "otherwise" && val == "Data_Boolean" = exprs
   collapse exprs = exprs
+
+
+ignoreUnusedResults :: AST -> AST
+ignoreUnusedResults = everywhere $ removeFromBlock go
+  where
+  go :: [AST] -> [AST]
+  go [] = []
+  go (VariableIntroduction ss var s'@(Just s) : sts)
+    | not $ any (everything (||) (isUsed var)) (s : sts) = (VariableIntroduction ss unusedName s') : sts
+  go (s:sts) = s : go sts
 
 magicDo :: AST -> AST
 magicDo = magicDo'' C.eff C.effDictionaries
