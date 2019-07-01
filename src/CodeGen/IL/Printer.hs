@@ -94,70 +94,12 @@ literals = mkPattern' match'
     , return $ emit ty
     , return $ emit ")"
     ]
-  -- match (App _ (StringLiteral _ u) [arg@Var{}])
-  --   | Just ty <- decodeString u = mconcat <$> sequence
-  --   [ prettyPrintIL' arg
-  --   , return $ emit ".("
-  --   , return $ emit ty
-  --   , return $ emit ")"
-  --   ]
-  -- match (App _ (StringLiteral _ u) [arg])
-  --   | Just ty <- decodeString u = mconcat <$> sequence
-  --   [ return $ emit "("
-  --   , prettyPrintIL' arg
-  --   , return $ emit ")"
-  --   , return $ emit ".("
-  --   , return $ emit ty
-  --   , return $ emit ")"
-  --   ]
   match (App _ (Var _ fn) [arg]) | fn == arrayLengthFn = mconcat <$> sequence
     [ return $ emit arrayLengthFn
     , return $ emit "("
     , prettyPrintIL' arg
     , return $ emit ")"
     ]
-  -- match (App _ (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y])
-  --   | fnMod == dictMod
-  --   , dictMod == C.dataEq || dictMod == C.dataOrd
-  --   , Just op <- renderOp fn
-  --   , Just t <- unboxType dict
-  --   = mconcat <$> sequence
-  --   [ return $ emit $ unbox' t x
-  --   , return $ emit op
-  --   , return $ emit $ unbox' t y
-  --   ]
-  -- match (App _ (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y])
-  --   | not (isLiteral x) && not (isLiteral y)
-  --   , fnMod == dictMod
-  --   , dictMod == C.dataSemiring || dictMod == C.dataRing ||
-  --     dictMod == C.dataEuclideanRing || dictMod == C.dataHeytingAlgebra
-  --   , Just op <- renderOp fn
-  --   , Just t <- unboxType dict
-  --   = mconcat <$> sequence
-  --   [ return $ emit $ unbox' t x
-  --   , return $ emit op
-  --   , return $ emit $ unbox' t y
-  --   ]
-  -- match (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [n])
-  --   | fnMod == dictMod
-  --   , dictMod == C.dataRing
-  --   , fn == C.negate
-  --   , Just t <- unboxType dict
-  --   = mconcat <$> sequence
-  --   [ return $ emit "-("
-  --   , return $ emit $ unbox' t n
-  --   , return $ emit ")"
-  --   ]
-  -- match (App _ (App _ (Indexer _ (Var _ fn) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [n])
-  --   | fnMod == dictMod
-  --   , dictMod == C.dataHeytingAlgebra
-  --   , fn == properToIL C.not
-  --   , Just t <- unboxType dict
-  --   = mconcat <$> sequence
-  --   [ return $ emit "!("
-  --   , return $ emit $ unbox' t n
-  --   , return $ emit ")"
-  --   ]
   match app@(App{})
     | (val, args) <- unApp app []
     , length args > 1
@@ -275,55 +217,6 @@ literals = mkPattern' match'
     , prettyPrintIL' thens
     , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
     ]
-
-
-  -- match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing True)) thens elses)
-  --   | (App _ (App _ (App _ (Indexer _ (Var _ _) (Var _ fnMod)) [Indexer _ (Var _ dict) (Var _ dictMod)]) [x]) [y]) <- cond
-  --   , fnMod == dictMod
-  --   , dictMod == C.dataEq || dictMod == C.dataOrd
-  --   , Just _ <- unboxTypeInt dict
-  --   = mconcat <$> sequence
-  --   [ return $ emit "if "
-  --   , prettyPrintIL' cond
-  --   , return $ emit " "
-  --   , prettyPrintIL' thens
-  --   , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
-  --   ]
-  -- match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing True)) thens elses) = mconcat <$> sequence
-  --   [ return $ emit "if "
-  --   , prettyPrintIL' (tyAssert cond C.heytingAlgebraBoolean)
-  --   , return $ emit " "
-  --   , prettyPrintIL' thens
-  --   , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
-  --   ]
-  -- match (IfElse _ (Binary _ EqualTo cond (BooleanLiteral Nothing False)) thens elses) = mconcat <$> sequence
-  --   [ return $ emit "if !("
-  --   , prettyPrintIL'  (tyAssert cond C.heytingAlgebraBoolean)
-  --   , return $ emit ") "
-  --   , prettyPrintIL' thens
-  --   , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
-  --   ]
-  -- match (IfElse _ (Binary _ EqualTo x y@(NumericLiteral _ n)) thens elses) = mconcat <$> sequence
-  --   [ return $ emit "if "
-  --   , return $ emit $ unbox' t x
-  --   , return $ emit $ " == "
-  --   , prettyPrintIL' y
-  --   , return $ emit " "
-  --   , prettyPrintIL' thens
-  --   , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
-  --   ]
-  --   where
-  --   t | Left _ <- n  = int
-  --     | Right _ <- n = float
-  -- match (IfElse _ (Binary _ EqualTo a b@StringLiteral{}) thens elses) = mconcat <$> sequence
-  --   [ return $ emit "if "
-  --   , return $ emit $ unbox' string a
-  --   , return $ emit $ " == "
-  --   , prettyPrintIL' b
-  --   , return $ emit " "
-  --   , prettyPrintIL' thens
-  --   , maybe (return mempty) (fmap (emit " else " <>) . prettyPrintIL') elses
-  --   ]
   match (IfElse _ cond thens elses) = mconcat <$> sequence
     [ return $ emit "if "
     , prettyPrintIL' cond
