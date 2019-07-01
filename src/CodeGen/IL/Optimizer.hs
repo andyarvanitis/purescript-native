@@ -8,7 +8,7 @@ import Data.Text (Text)
 import Language.PureScript.CoreImp.AST
 import Language.PureScript.CoreImp.Optimizer.Blocks
 import Language.PureScript.CoreImp.Optimizer.Common hiding (isDict)
-import Language.PureScript.CoreImp.Optimizer.Inliner hiding (inlineCommonOperators, inlineCommonValues, inlineUnsafeCoerce, inlineUnsafePartial)
+import Language.PureScript.CoreImp.Optimizer.Inliner (etaConvert, evaluateIifes, inlineVariables, unThunk)
 import Language.PureScript.CoreImp.Optimizer.Unused
 
 import CodeGen.IL.Common (moduleNameToIL', undefinedName, unusedName)

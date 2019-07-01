@@ -2,7 +2,7 @@
 module CodeGen.IL.Optimizer.Inliner
   ( inlineCommonValues
   , inlineCommonOperators
-  -- , inlineFnComposition
+  , inlineFnComposition
   , inlineUnsafeCoerce
   , inlineUnsafePartial
   ) where
