@@ -37,7 +37,6 @@ tco mn = everywhere convert where
       | isTailRecursive name body'
       = Assignment ss (Var ss name) (replace (toLoop name outerArgs innerArgs body'))
     where
-      -- fn = Function ss' Nothing args (Block ss' stmts)
       innerArgs = headDef [] argss
       outerArgs = concat . reverse $ tailSafe argss
       (argss, body', replace) = collectAllFunctionArgs [] id fn
@@ -92,13 +91,9 @@ tco mn = everywhere convert where
       Block rootSS $
         concatMap (\arg -> [ VariableIntroduction rootSS (tcoVar arg) Nothing
                            , Assignment rootSS (Var rootSS (tcoVar arg)) (Var rootSS (copyVar arg)) ]) (outerArgs ++ innerArgs) ++
-        -- [ VariableIntroduction rootSS (blockDecl <> tcoDone) Nothing
         [ Var rootSS (tcoDone <> " := false")
-        -- , Assignment rootSS (Var rootSS tcoDone) (BooleanLiteral rootSS False)
-        -- , Assignment rootSS (Var rootSS tcoDone) (Var rootSS "NO")
         , VariableIntroduction rootSS tcoResult Nothing
         , Assignment rootSS (Var rootSS ("var " <> tcoLoop)) (Function rootSS (Just tcoLoop) (outerArgs ++ innerArgs) (Block rootSS [loopify js]))
-        -- , While rootSS (Binary Nothing EqualTo (Var rootSS tcoDone) (BooleanLiteral Nothing False))
         , While rootSS (Unary Nothing Not (Var rootSS tcoDone))
             (Block rootSS
               [(Assignment rootSS (Var rootSS tcoResult) (App rootSS (Var rootSS tcoLoop) ((map (Var rootSS . tcoVar) outerArgs) ++ (map (Var rootSS . tcoVar) innerArgs))))])
@@ -130,7 +125,6 @@ tco mn = everywhere convert where
 
     markDone :: Maybe SourceSpan -> AST
     markDone ss = Assignment ss (Var ss tcoDone) (BooleanLiteral ss True)
-    -- markDone ss = Assignment ss (Var ss tcoDone) (Var ss "YES")
 
     collectArgs :: [[AST]] -> AST -> [[AST]]
     collectArgs acc (App _ fn args') = collectArgs (args' : acc) fn

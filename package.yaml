@@ -9,7 +9,9 @@ copyright:           "2018 Andy Arvanitis"
 extra-source-files:
 - README.md
 - ChangeLog.md
-- runtime/*.go
+- stack.yaml
+- runtime/*
+- support/*
 
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
@@ -34,7 +36,7 @@ dependencies:
 - safe >=0.3.9 && <0.4
 - transformers >=0.3.0 && <0.6
 - mtl >=2.1.0 && <2.3.0
-- aeson >=1.0 && <1.4
+- aeson >=1.0 && <1.5
 - directory -any
 - process -any
 - file-embed -any

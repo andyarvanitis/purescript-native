@@ -16,7 +16,7 @@
 #
 PURS        := purs
 PSC_PACKAGE := psc-package
-PSCPP       := pscpp
+PSGO        := psgo
 SRC         := src
 OUTPUT      := output
 CC_SRC      := $(OUTPUT)/src
@@ -25,11 +25,6 @@ BIN         := main
 
 override PURSFLAGS += compile --codegen corefn
 override CXXFLAGS += --std=c++11
-
-CXXVERSION = $(shell $(CXX) --version)
-ifneq (,$(findstring g++,$(CXXVERSION)))
-  PSCPPFLAGS += "--ucns"
-endif
 
 DEBUG := "-DDEBUG -g"
 RELEASE := "-DNDEBUG -O3"
@@ -55,10 +50,10 @@ unspecified:
 	@echo
 
 debug: codegen
-	@$(MAKE) $(BIN) CFLAGS+=$(DEBUG) CXXFLAGS+=$(DEBUG)
+	go build -o $(BIN_DIR)/$(BIN) $(BIN)
 
 release: codegen
-	@$(MAKE) $(BIN) CFLAGS+=$(RELEASE) CXXFLAGS+=$(RELEASE)
+	go build -o $(BIN_DIR)/$(BIN) $(BIN)
 
 .PHONY: corefn
 corefn: PURESCRIPT_PKG_SRCS=$(foreach d,$(PACKAGE_SOURCES),$(call rwildcard,$(firstword $(subst *, ,$(d))),*.purs))
@@ -69,7 +64,7 @@ corefn: $(PURESCRIPT_PKGS)
 .PHONY: codegen
 codegen: COREFN_SRCS=$(call rwildcard,$(OUTPUT)/,corefn.json)
 codegen: corefn
-	@$(PSCPP) $(PSCPPFLAGS) $(COREFN_SRCS)
+	@$(PSGO) $(PSGOFLAGS) $(COREFN_SRCS)
 
 $(PURESCRIPT_PKGS):
 	@echo "Getting packages using" $(PSC_PACKAGE) "..."
