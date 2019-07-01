@@ -177,7 +177,7 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
     collectArgs _ _   _ = Nothing
 
   isNFn :: Text -> Text -> Int -> AST -> Bool
-  isNFn expectMod prefix n (Indexer _ (StringLiteral _ name) (Var _ modName)) | modName == expectMod =
+  isNFn expectMod prefix n (Indexer _ (Var _ name) (Var _ modName)) | modName == expectMod =
     name == fromString (T.unpack prefix <> show n)
   isNFn _ _ _ _ = False
 
@@ -206,13 +206,13 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
     convert other = other
 
   isModFn :: (Text, PSString) -> AST -> Bool
-  isModFn (m, op) (Indexer _ (StringLiteral _ op') (Var _ m')) =
-    m == m' && op == op'
+  isModFn (m, op) (Indexer _ (Var _ op') (Var _ m')) =
+    m == m' && decodeString op == Just op'
   isModFn _ _ = False
 
   isModFnWithDict :: (Text, PSString) -> AST -> Bool
-  isModFnWithDict (m, op) (App _ (Indexer _ (StringLiteral _ op') (Var _ m')) [Var _ _]) =
-    m == m' && op == op'
+  isModFnWithDict (m, op) (App _ (Indexer _ (Var _ op') (Var _ m')) [Var _ _]) =
+    m == m' && decodeString op == Just op'
   isModFnWithDict _ _ = False
 
 -- (f <<< g $ x) = f (g x)

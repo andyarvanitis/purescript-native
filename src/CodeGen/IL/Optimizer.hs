@@ -51,18 +51,6 @@ untilFixedPoint f = go
    a' <- f a
    if a' == a then return a' else go a'
 
--- | Overridden from CoreImp
-
--- inlineApply :: AST -> AST
--- inlineApply = everywhereTopDown convert where
---   convert (App ss (App _ (Indexer _ (Var _ apply) (Var _ dataFunction)) [ f ]) [ arg ])
---     | apply == C.apply && dataFunction == C.dataFunction
---     = App ss f [ arg ]
---   convert (App ss (App _ (Indexer _ (Var _ applyFlipped) (Var _ dataFunction)) [ arg ]) [ f ])
---     | applyFlipped == C.applyFlipped && dataFunction == C.dataFunction
---     = App ss f [ arg ]
---   convert other = other
-
 collapseIfChecks :: AST -> AST
 collapseIfChecks = everywhere collapse where
   collapse :: AST -> AST
