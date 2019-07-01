@@ -3,7 +3,9 @@ module CodeGen.IL.Common where
 
 import Prelude.Compat
 
+import Control.Monad.Supply.Class (MonadSupply, freshName)
 import Data.Char
+import Data.Maybe (maybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -169,11 +171,13 @@ bool = "bool"
 string :: Text
 string = "string"
 
-unbox :: Text -> Text
-unbox t = ".(" <> t <> ")"
-
 arrayLengthFn :: Text
 arrayLengthFn = "Length"
 
 tcoLoop :: Text
 tcoLoop = "ᵗᶜloop"
+
+freshName' :: MonadSupply m => m Text
+freshName' = do
+    name <- freshName
+    return $ T.replace "$" "ᵗ" name

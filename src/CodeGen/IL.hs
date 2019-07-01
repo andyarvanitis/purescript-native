@@ -182,7 +182,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
     updates <- mapM (sndM valueToIL) ps
     obj' <- freshName'
     let objVar = AST.Var Nothing obj'
-        copy = AST.VariableIntroduction Nothing obj' (Just $ AST.App Nothing (AST.Var Nothing (unbox dictType)) [obj])
+        copy = AST.VariableIntroduction Nothing obj' (Just $ AST.App Nothing (AST.StringLiteral Nothing (mkString dictType)) [obj])
         assign (k, v) = AST.Assignment Nothing (accessorString k objVar) v
         sts = copy : (assign <$> updates) ++ [AST.Return Nothing objVar]
     return $ AST.App Nothing (AST.Function Nothing Nothing [] (AST.Block Nothing sts)) []
@@ -361,8 +361,3 @@ emptyAnn = (SourceSpan "" (SourcePos 0 0) (SourcePos 0 0), [], Nothing, Nothing)
 arrayLength :: AST -> AST
 arrayLength a = AST.App Nothing (AST.Var Nothing arrayLengthFn) [a]
 -- arrayLength a = AST.Var Nothing (arrayLengthFn <> "(" <> prettyPrintIL1 a <> ")")
-
-freshName' :: MonadSupply m => m Text
-freshName' = do
-    name <- freshName
-    return $ T.replace "$" "ᵗ" name
