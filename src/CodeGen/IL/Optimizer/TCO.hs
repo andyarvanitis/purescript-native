@@ -89,14 +89,14 @@ tco mn = everywhere convert where
   toLoop :: Text -> [Text] -> [Text] -> AST -> AST
   toLoop ident outerArgs innerArgs js =
       Block rootSS $
-        concatMap (\arg -> [ VariableIntroduction rootSS (tcoVar arg) Nothing
-                           , Assignment rootSS (Var rootSS (tcoVar arg)) (Var rootSS (copyVar arg)) ]) (outerArgs ++ innerArgs) ++
+        concatMap (\arg -> [ VariableIntroduction rootSS (tcoVar arg) . Just $
+                             Var rootSS (copyVar arg) ]) (outerArgs ++ innerArgs) ++
         [ Var rootSS (tcoDone <> " := false")
         , VariableIntroduction rootSS tcoResult Nothing
         , Assignment rootSS (Var rootSS ("var " <> tcoLoop)) (Function rootSS (Just tcoLoop) (outerArgs ++ innerArgs) (Block rootSS [loopify js]))
         , While rootSS (Unary Nothing Not (Var rootSS tcoDone))
             (Block rootSS
-              [(Assignment rootSS (Var rootSS tcoResult) (App rootSS (Var rootSS tcoLoop) ((map (Var rootSS . tcoVar) outerArgs) ++ (map (Var rootSS . tcoVar) innerArgs))))])
+              [(Assignment rootSS (Var rootSS tcoResult) (App rootSS (Var rootSS tcoLoop) ((map (Var rootSS . tcoVar) outerArgs) ++ (map (Var rootSS . copyVar) innerArgs))))])
         , Return rootSS (Var rootSS tcoResult)
         ]
     where
@@ -112,7 +112,7 @@ tco mn = everywhere convert where
             zipWith (\val arg ->
               Assignment ss (Var ss (tcoVar arg)) val) allArgumentValues outerArgs
             ++ zipWith (\val arg ->
-              Assignment ss (Var ss (tcoVar arg)) val) (drop (length outerArgs) allArgumentValues) innerArgs
+              Assignment ss (Var ss (copyVar arg)) val) (drop (length outerArgs) allArgumentValues) innerArgs
             ++ [ ReturnNoResult ss ]
       | otherwise = Block ss [ markDone ss, Return ss ret ]
     loopify (ReturnNoResult ss) = Block ss [ markDone ss, ReturnNoResult ss ]
