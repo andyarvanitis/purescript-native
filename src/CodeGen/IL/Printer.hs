@@ -95,9 +95,15 @@ literals = mkPattern' match'
     , return $ emit ")"
     ]
   match (App _ (Var _ fn) [arg]) | fn == arrayLengthFn = mconcat <$> sequence
-    [ return $ emit arrayLengthFn
+    [ return $ emit fn
     , return $ emit "("
     , prettyPrintIL' arg
+    , return $ emit ")"
+    ]
+  match (App _ (Var _ fn) args) | fn == tcoLoop = mconcat <$> sequence
+    [ return $ emit fn
+    , return $ emit "("
+    , intercalate (emit ", ") <$> forM args prettyPrintIL'
     , return $ emit ")"
     ]
   match app@(App{})

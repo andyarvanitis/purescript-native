@@ -91,9 +91,9 @@ tco mn = everywhere convert where
       Block rootSS $
         concatMap (\arg -> [ VariableIntroduction rootSS (tcoVar arg) . Just $
                              Var rootSS (copyVar arg) ]) (outerArgs ++ innerArgs) ++
-        [ Var rootSS (tcoDone <> " := false")
+        [ Assignment rootSS (Var rootSS $ "var " <> tcoDone) $ BooleanLiteral Nothing False
         , VariableIntroduction rootSS tcoResult Nothing
-        , Assignment rootSS (Var rootSS ("var " <> tcoLoop)) (Function rootSS (Just tcoLoop) (outerArgs ++ innerArgs) (Block rootSS [loopify js]))
+        , Assignment rootSS (Var rootSS $ "var " <> tcoLoop) (Function rootSS (Just tcoLoop) (outerArgs ++ innerArgs) (Block rootSS [loopify js]))
         , While rootSS (Unary Nothing Not (Var rootSS tcoDone))
             (Block rootSS
               [(Assignment rootSS (Var rootSS tcoResult) (App rootSS (Var rootSS tcoLoop) ((map (Var rootSS . tcoVar) outerArgs) ++ (map (Var rootSS . copyVar) innerArgs))))])
