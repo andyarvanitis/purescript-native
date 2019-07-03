@@ -409,7 +409,7 @@ implHeaderSource mn imports _ =
   "type IGNORE_UNUSED_IMPORTS = bool\n" <>
   "type _ = IGNORE_UNUSED_RUNTIME\n" <>
   (if mn == "Main"
-      then "\nconst _ = ffi.Loader\n\n"
+      then "\ntype _ = ffi.Loader\n\n"
       else "\n")
 
 implFooterSource :: Text -> [Ident] -> Text

@@ -1,4 +1,4 @@
-# PureScript to native binary (via C++) Makefile
+# PureScript to native binary (via Go) Makefile
 #
 # Run 'make' or 'make release' to build an optimized release build
 # Run 'make debug' to build a non-optimized build suitable for debugging
@@ -20,14 +20,16 @@ PSGO        := psgo
 SRC         := src
 OUTPUT      := output
 CC_SRC      := $(OUTPUT)/src
-FFI_SRC     := ffi
-BIN         := main
+FFI_SRC     := purescript-go-ffi
+BIN         := Main
 
 override PURSFLAGS += compile --codegen corefn
 override CXXFLAGS += --std=c++11
 
 DEBUG := "-DDEBUG -g"
 RELEASE := "-DNDEBUG -O3"
+
+GOPATH := $(GOPATH):$(CURDIR)/$(OUTPUT):$(CURDIR)/$(FFI_SRC)
 
 INCLUDES := -I $(CC_SRC)
 BIN_DIR := $(OUTPUT)/bin
@@ -73,15 +75,11 @@ $(PURESCRIPT_PKGS):
 SRCS := $(call rwildcard,$(CC_SRC)/,*.cpp)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.cpp)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.cc)
-SRCS += $(call rwildcard,$(FFI_SRC)/,*.mm)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.c)
-SRCS += $(call rwildcard,$(FFI_SRC)/,*.m)
 
 OBJS1 = $(SRCS:.cpp=.o)
 OBJS2 = $(OBJS1:.cc=.o)
-OBJS3 = $(OBJS2:.mm=.o)
-OBJS4 = $(OBJS3:.c=.o)
-OBJS  = $(OBJS4:.m=.o)
+OBJS  = $(OBJS2:.c=.o)
 DEPS  = $(OBJS:.o=.d)
 
 $(BIN): $(OBJS)
@@ -99,16 +97,8 @@ $(BIN): $(OBJS)
 	@echo "Creating" $@ "(C++)"
 	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
-%.o: %.mm
-	@echo "Creating" $@ "(Objective-C++)"
-	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
-
 %.o: %.c
 	@echo "Creating" $@ "(C)"
-	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
-
-%.o: %.m
-	@echo "Creating" $@ "(Objective-C)"
 	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
 .PHONY: all
