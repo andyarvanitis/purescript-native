@@ -80,11 +80,12 @@ generateCode opts baseOutpath jsonFile = do
       dirparts = splitDirectories $ filepath
       mname = (\c -> if c == '.' then '_' else c) <$> last dirparts
       basedir = joinPath $ init dirparts
-      possInterfaceFilename = basedir </> outdir </> mname </> interfaceFileName mname
-  exists <- doesFileExist possInterfaceFilename
+      mname' = moduleNameToIL' $ T.pack mname
+      possibleFileName = basedir </> outdir </> (T.unpack mname') </> implFileName mname'
+  exists <- doesFileExist possibleFileName
   if exists
     then do
-      modTime <- getModificationTime possInterfaceFilename
+      modTime <- getModificationTime possibleFileName
       when (modTime < jsonModTime) $
         transpile opts baseOutpath jsonFile
     else transpile opts baseOutpath jsonFile
@@ -93,15 +94,12 @@ transpile :: [String] -> FilePath -> FilePath -> IO ()
 transpile opts baseOutpath jsonFile = do
   jsonText <- T.decodeUtf8 <$> B.readFile jsonFile
   let module' = jsonToModule $ parseJson jsonText
-  ((interface, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToIL module' Nothing)
+  ((_, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToIL module' Nothing)
   let mn = moduleNameToIL $ moduleName module'
       implementation = prettyPrintIL asts
       outpath = joinPath [baseOutpath, T.unpack mn]
-      interfacePath = outpath </> interfaceFileName (T.unpack mn)
       implPath = outpath </> implFileName mn
-  putStrLn interfacePath
   createDirectoryIfMissing True outpath
-  B.writeFile interfacePath $ T.encodeUtf8 interface
   putStrLn implPath
   B.writeFile implPath $ T.encodeUtf8 (implHeader <> implementation <> implFooter)
 
@@ -115,9 +113,6 @@ writeRuntimeFiles baseOutpath = do
 
 outdir :: FilePath
 outdir = "src"
-
-interfaceFileName :: String -> FilePath
-interfaceFileName mn = mn <> ".go"
 
 implFileName :: Text -> FilePath
 implFileName mn = T.unpack $ mn <> ".go"
