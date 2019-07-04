@@ -19,8 +19,9 @@ import Control.Monad.Supply.Class
 import Text.Printf
 
 import System.Environment
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getModificationTime)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getCurrentDirectory, getModificationTime)
 import System.FilePath ((</>), joinPath, splitDirectories, takeDirectory)
+import System.FilePath.Find
 
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -53,25 +54,48 @@ jsonToModule value =
 main :: IO ()
 main = do
   args <- getArgs
-  if null args
-    then return ()
+  let (opts, files) = partition (isPrefixOf "--") args
+      opts' = (map . map) toLower opts
+  if "--tests" `elem` opts'
+    then runTests
     else do
-      let (opts, files) = partition (isPrefixOf "--") args
-          opts' = (map . map) toLower opts
-      if "--tests" `elem` opts'
-        then runTests
-        else do
-          when ("--makefile" `elem` opts') $
-            B.writeFile "Makefile" $(embedFile "support/Makefile")
-          when ("--help" `elem` opts') $
-            putStrLn help
-          when (not $ null files) $ do
-            let filepath = takeDirectory (head files)
-                baseOutpath = joinPath $ (init $ splitDirectories filepath) ++ [outdir]
-            writeRuntimeFiles baseOutpath
-            Par.mapM (generateCode opts' baseOutpath) files
-            return ()
-          return ()
+      when ("--makefile" `elem` opts') $
+        B.writeFile "Makefile" $(embedFile "support/Makefile")
+      when ("--help" `elem` opts') $
+        putStrLn help
+      if null files then do
+        currentDir <- getCurrentDirectory
+        processFiles opts' [currentDir]
+      else do
+        processFiles opts' files
+      return ()
+  where
+  processFiles :: [String] -> [FilePath] -> IO ()
+  processFiles opts [file] = do
+    isDir <- doesDirectoryExist file
+    if isDir then do
+      files <- find always (fileName ==? corefn) file
+      if null files then do
+        noneFound
+      else do
+        generateFiles opts files
+    else do
+      generateFiles opts [file]
+  processFiles opts files = do
+    let baseOutpath = basePath files
+    writeRuntimeFiles baseOutpath
+    Par.mapM (generateCode opts baseOutpath) files
+    return ()
+  basePath :: [FilePath] -> FilePath
+  basePath files =
+    let filepath = takeDirectory (head files) in
+    joinPath $ (init $ splitDirectories filepath) ++ [outdir]
+  generateFiles :: [String] -> [FilePath] -> IO ()
+  generateFiles opts files = do
+    let baseOutpath = basePath files
+    writeRuntimeFiles baseOutpath
+    Par.mapM (generateCode opts baseOutpath) files
+    return ()
 
 generateCode :: [String] -> FilePath -> FilePath -> IO ()
 generateCode opts baseOutpath jsonFile = do
@@ -128,3 +152,10 @@ help = "Usage: psgo OPTIONS COREFN-FILES\n\
        \  --tests                 Run test cases (under construction)\n\n\
        \See also:\n\
        \  purs compile --help\n"
+
+corefn :: String
+corefn = "corefn.json"
+
+noneFound :: IO ()
+noneFound = do
+    putStrLn $ "No compiled purescript files (" <> corefn <> ") found"

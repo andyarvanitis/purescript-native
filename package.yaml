@@ -40,6 +40,7 @@ dependencies:
 - directory -any
 - process -any
 - file-embed -any
+- filemanip -any
 
 library:
   source-dirs: src
