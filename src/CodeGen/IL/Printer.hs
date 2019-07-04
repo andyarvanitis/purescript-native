@@ -405,12 +405,15 @@ implHeaderSource mn imports _ =
   (if mn == "Main"
       then "import \"ffi\"\n"
       else "") <>
-  T.concat imports <> "\n" <>
-  "type IGNORE_UNUSED_IMPORTS = bool\n" <>
+  "import (\n" <>
+  (T.concat $ formatImport <$> imports) <> ")\n" <>
   "type _ = IGNORE_UNUSED_RUNTIME\n" <>
   (if mn == "Main"
       then "\ntype _ = ffi.Loader\n\n"
       else "\n")
+  where
+  formatImport :: Text -> Text
+  formatImport s = "    \"" <> s <> "\"\n"
 
 implFooterSource :: Text -> [Ident] -> Text
 implFooterSource mn foreigns =

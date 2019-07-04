@@ -40,7 +40,6 @@ import CodeGen.IL.Optimizer
 import CodeGen.IL.Printer
 
 data DeclType = ModuleDecl | LetDecl | RecLetDecl deriving (Eq)
-data ImportType = Imported | Ignored
 
 -- | Generate code in the simplified intermediate representation for all declarations in a
 -- module.
@@ -55,9 +54,6 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
   do
     let usedNames = concatMap getNames decls
     let mnLookup = renameImports usedNames imps
-    imports <- traverse (importToIL Imported mnLookup) . (\\ (mn : C.primModules)) . (\\ [mn]) $ ordNub $ map snd imps
-    ignoredImports <- traverse (importToIL Ignored mnLookup) . delete (ModuleName [ProperName C.prim]) . (\\ (mn : C.primModules)) $ ordNub $ map snd imps
-    interfaceImport <- importToIL Imported (renameImports [] [(emptyAnn, mn)]) mn
     let decls' = renameModules mnLookup decls
     ilDecls <- mapM (bindToIL ModuleDecl) decls'
     optimized <- traverse (traverse (optimize modName')) ilDecls
@@ -65,7 +61,8 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
         values = annotValue <$> optimized'
         foreigns' = moduleIdentToIL <$> foreigns
         interface = interfaceSource modName values foreigns
-        implHeader = implHeaderSource modName (imports ++ ignoredImports) interfaceImport
+        imports = nub . concat $ importToIL <$> optimized'
+        implHeader = implHeaderSource modName imports ""
         implFooter = implFooterSource modName foreigns
     return $ (interface, foreigns', optimized', implHeader, implFooter)
   where
@@ -104,15 +101,14 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
          then freshModuleName (i + 1) mn' used
          else newName
 
-  -- | Generates IL code for a module import, binding the required module
-  -- to the alternative
-  importToIL :: ImportType -> M.Map ModuleName (Ann, ModuleName) -> ModuleName -> m Text
-  importToIL t mnLookup mn' = do
-    let ((_, _, _, _), mnSafe) = fromMaybe (internalError "Missing value in mnLookup") $ M.lookup mn' mnLookup
-        mname = moduleNameToIL mnSafe
-    pure $ case t of
-              Imported -> "import \"" <> mname <> "\"\n"
-              Ignored -> "type _ = "  <> mname <> ".IGNORE_UNUSED_IMPORTS\n"
+  -- | Generates IL code for a module import
+  --
+  importToIL :: AST -> [Text]
+  importToIL = AST.everything (++) modRef
+    where
+    modRef (AST.Indexer _ (AST.Var _ _) (AST.Var _ mname))
+      | not $ T.null mname = [mname]
+    modRef _ = []
 
   -- | Replaces the `ModuleName`s in the AST so that the generated code refers to
   -- the collision-avoiding renamed module imports.
