@@ -42,6 +42,11 @@ func SafeGet(dict map[string]Any, key string) Any {
 	return value
 }
 
+func At(arr Any, index int) Any {
+	a, _ := arr.([]Any)
+	return a[index]
+}
+
 func Contains(dict Any, key string) bool {
 	d, _ := dict.(map[string]Any)
 	_, found := d[key]
