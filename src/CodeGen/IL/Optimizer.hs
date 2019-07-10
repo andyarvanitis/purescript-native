@@ -66,5 +66,5 @@ ignoreUnusedResults = everywhere $ removeFromBlock go
   go :: [AST] -> [AST]
   go [] = []
   go (VariableIntroduction ss var s@(Just _) : sts)
-    | not $ any (everything (||) (isUsed var)) sts = (VariableIntroduction ss unusedName s) : sts
+    | not $ any (everything (||) (isUsed var)) sts = (VariableIntroduction ss unusedName s) : (go sts)
   go (s:sts) = s : go sts
