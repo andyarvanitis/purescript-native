@@ -63,10 +63,11 @@ main = do
         B.writeFile "Makefile" $(embedFile "support/Makefile")
       when ("--help" `elem` opts') $
         putStrLn help
-      if null files then do
-        currentDir <- getCurrentDirectory
-        processFiles opts' [currentDir]
-      else do
+      if null files then
+        when (null opts) $ do
+          currentDir <- getCurrentDirectory
+          processFiles opts' [currentDir]
+      else
         processFiles opts' files
       return ()
   where

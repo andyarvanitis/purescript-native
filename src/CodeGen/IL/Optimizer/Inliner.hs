@@ -48,7 +48,7 @@ inlineCommonValues = everywhere convert
     | isDict boundedBoolean dict && isDict fnBottom fn = BooleanLiteral ss False
     | isDict boundedBoolean dict && isDict fnTop fn = BooleanLiteral ss True
   convert (App ss (App _ fn [dict]) [x])
-    | isDict ringInt dict && isDict fnNegate fn = Unary ss Negate x -- (unbox x $ snd ringInt)
+    | isDict ringInt dict && isDict fnNegate fn = Unary ss Negate (unbox x $ snd ringInt)
   convert (App ss (App _ (App _ fn [dict]) [x]) [y])
     | isDict semiringInt dict && isDict fnAdd fn = intOp ss Add semiringInt x y
     | isDict semiringInt dict && isDict fnMultiply fn = intOp ss Multiply semiringInt x y

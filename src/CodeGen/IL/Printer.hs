@@ -175,6 +175,13 @@ literals = mkPattern' match'
     , prettyPrintIL' (Var Nothing $ withPrefix name)
     , return $ emit "()"
     ]
+  match (Indexer _ index@NumericLiteral{} val) = mconcat <$> sequence
+    [ return $ emit "At("
+    , prettyPrintIL' val
+    , return $ emit ", "
+    , prettyPrintIL' index
+    , return $ emit ")"
+    ]
   match (Indexer _ prop val) = mconcat <$> sequence
     [ return $ emit "Get("
     , prettyPrintIL' val
