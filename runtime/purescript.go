@@ -8,6 +8,8 @@ type Any interface{}
 
 type Fn = func(Any) Any
 type EffFn = func() Any
+type Map = map[string]Any
+type Array = []Any
 
 type Once = sync.Once
 
@@ -29,22 +31,12 @@ func Run(f Any, args ...Any) Any {
 	return fn()
 }
 
-func Get(dict Any, key string) Any {
-	d, _ := dict.(map[string]Any)
-	return d[key]
-}
-
 func SafeGet(dict map[string]Any, key string) Any {
 	value, ok := dict[key]
 	if !ok {
 		panic("Foreign value '" + key + "' not defined")
 	}
 	return value
-}
-
-func At(arr Any, index int) Any {
-	a, _ := arr.([]Any)
-	return a[index]
 }
 
 func Contains(dict Any, key string) bool {

@@ -175,19 +175,33 @@ literals = mkPattern' match'
     , prettyPrintIL' (Var Nothing $ withPrefix name)
     , return $ emit "()"
     ]
-  match (Indexer _ index@NumericLiteral{} val) = mconcat <$> sequence
-    [ return $ emit "At("
-    , prettyPrintIL' val
-    , return $ emit ", "
-    , prettyPrintIL' index
-    , return $ emit ")"
-    ]
-  match (Indexer _ prop val) = mconcat <$> sequence
-    [ return $ emit "Get("
-    , prettyPrintIL' val
-    , return $ emit ", "
+  match (Indexer _ prop@StringLiteral{} val@ObjectLiteral{}) = mconcat <$> sequence
+    [ prettyPrintIL' val
+    , return $ emit "["
     , prettyPrintIL' prop
-    , return $ emit ")"
+    , return $ emit "]"
+    ]
+  match (Indexer _ prop@StringLiteral{} val) = mconcat <$> sequence
+    [ prettyPrintIL' val
+    , return $ emit ".("
+    , return $ emit dictType
+    , return $ emit ")["
+    , prettyPrintIL' prop
+    , return $ emit "]"
+    ]
+  match (Indexer _ index val@ArrayLiteral{}) = mconcat <$> sequence
+    [ prettyPrintIL' val
+    , return $ emit "["
+    , prettyPrintIL' index
+    , return $ emit "]"
+    ]
+  match (Indexer _ index val) = mconcat <$> sequence
+    [ prettyPrintIL' val
+    , return $ emit ".("
+    , return $ emit arrayType
+    , return $ emit ")["
+    , prettyPrintIL' index
+    , return $ emit "]"
     ]
   match (InstanceOf _ val ty) = mconcat <$> sequence
     [ return $ emit "Contains("

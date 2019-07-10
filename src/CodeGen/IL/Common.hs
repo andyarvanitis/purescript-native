@@ -154,10 +154,10 @@ anyType :: Text
 anyType = "Any"
 
 dictType :: Text
-dictType = "map[string]Any"
+dictType = "Map"
 
 arrayType :: Text
-arrayType = "[]Any"
+arrayType = "Array"
 
 int :: Text
 int = "int"
