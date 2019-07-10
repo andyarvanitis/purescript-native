@@ -36,13 +36,9 @@ runTests = do
   passingTestCases <- sort . filter (".purs" `isSuffixOf`) <$> getDirectoryContents passingDir
 
   setCurrentDirectory outputDir
-  callProcess "pscpp" ["--makefile"]
 
   fetchPackages
-  callProcess "git" ["clone", "--depth", "1", "https://github.com/andyarvanitis/purescript-cpp-ffi.git", "ffi"]
-
-  callProcess "rm" ["-rf", ".psc-package/psc-0.13.0/prelude/v4.1.0"]
-  callProcess "git" ["clone", "--branch", "v4.1.1", "--depth", "1", "https://github.com/purescript/purescript-prelude.git", ".psc-package/psc-0.13.0/prelude/v4.1.0"]
+  callProcess "git" ["clone", "--depth", "1", "https://github.com/andyarvanitis/purescript-go-ffi.git"]
 
   let tests = filter (`notElem` skipped) passingTestCases
 
@@ -65,14 +61,17 @@ runTests = do
     testCaseDirExists <- doesDirectoryExist testCaseDir
     when testCaseDirExists $ callProcess "cp" ["-R", testCaseDir, srcDir]
 
-    callProcess "make" ["clean"]
-    callProcess "make" ["debug", "-j8"]
+    callProcess "rm" ["-rf", "output"]
+    callProcess "rm" ["-rf", "Main"]
+    callProcess "spago" ["build", "--", "--codegen", "corefn"]
+    callProcess "psgo" []
+    callProcess "go" ["build", "Main"]
     --
     -- Run C++ files
     --
     outputFile <- openFile (tmp </> logpath </> logfile) AppendMode
     hPutStrLn outputFile ("\n" ++ inputFile ++ ":")
-    proc <- runProcess ("output" </> "bin" </> "main") [] Nothing Nothing Nothing (Just outputFile) Nothing
+    proc <- runProcess ("./" </> "Main") [] Nothing Nothing Nothing (Just outputFile) Nothing
 
     removeFile (srcDir </> inputFile)
     when testCaseDirExists $ callProcess "rm" ["-rf", srcDir </> (takeWhile (/='.') inputFile)]
@@ -116,8 +115,8 @@ packages =
 fetchPackages :: IO ()
 -------------------------------------------------------------------------------
 fetchPackages = do
-  callProcess "psc-package" ["init"]
-  mapM (callProcess "psc-package" . (\p -> ["install", p])) packages
+  callProcess "spago" ["init"]
+  mapM (callProcess "spago" . (\p -> ["install", p])) packages
   return ()
 
 -------------------------------------------------------------------------------
