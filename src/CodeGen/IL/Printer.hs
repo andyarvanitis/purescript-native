@@ -106,6 +106,24 @@ literals = mkPattern' match'
     , intercalate (emit ", ") <$> forM args prettyPrintIL'
     , return $ emit ")"
     ]
+  match (App _ (App Nothing (StringLiteral Nothing fnx) [fn@Function{}]) args)
+    | Just ftype <- decodeString fnx
+    , "Fn" `T.isPrefixOf` ftype = mconcat <$> sequence
+    [ prettyPrintIL' fn
+    , return $ emit "("
+    , intercalate (emit ", ") <$> forM args prettyPrintIL'
+    , return $ emit ")"
+    ]
+  match (App _ (App Nothing (StringLiteral Nothing fnx) [fn]) args)
+    | Just ftype <- decodeString fnx
+    , "Fn" `T.isPrefixOf` ftype = mconcat <$> sequence
+    [ prettyPrintIL' fn
+    , return $ emit ".("
+    , return $ emit ftype
+    , return $ emit ")("
+    , intercalate (emit ", ") <$> forM args prettyPrintIL'
+    , return $ emit ")"
+    ]
   match app@(App{})
     | (val, args) <- unApp app []
     , length args > 1
@@ -368,7 +386,7 @@ prettyPrintIL' = A.runKleisli $ runPattern matchValue
   matchValue = buildPrettyPrinter operators (literals <+> fmap parensPos matchValue)
   operators :: (Emit gen) => OperatorTable PrinterState AST gen
   operators =
-    OperatorTable [ [ unary New "box" ]
+    OperatorTable [ [ unary New "?" ]
                   , [ unary     Not                  "!"
                     , unary     BitwiseNot           "~"
                     , unary     Positive             "+"

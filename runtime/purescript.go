@@ -13,6 +13,17 @@ type Array = []Any
 
 type Once = sync.Once
 
+type Fn1 = func(Any) Any
+type Fn2 = func(Any, Any) Any
+type Fn3 = func(Any, Any, Any) Any
+type Fn4 = func(Any, Any, Any, Any) Any
+type Fn5 = func(Any, Any, Any, Any, Any) Any
+type Fn6 = func(Any, Any, Any, Any, Any, Any) Any
+type Fn7 = func(Any, Any, Any, Any, Any, Any, Any) Any
+type Fn8 = func(Any, Any, Any, Any, Any, Any, Any, Any) Any
+type Fn9 = func(Any, Any, Any, Any, Any, Any, Any, Any, Any) Any
+type Fn10 = func(Any, Any, Any, Any, Any, Any, Any, Any, Any, Any) Any
+
 type IGNORE_UNUSED_RUNTIME = bool
 
 const Undefined = "undefined"
