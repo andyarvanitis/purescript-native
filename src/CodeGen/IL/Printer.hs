@@ -468,7 +468,7 @@ implFooterSource mn foreigns =
                         "    " <> initName name <> ".Do(func() {\n" <>
                         "        " <> valueName name <> " = " <>
                                         "SafeGet(" <> foreignDict <> ", " <>
-                                            (stringLiteral $ mkString name) <> ")\n" <>
+                                            (stringLiteral . mkString $ runIdent foreign') <> ")\n" <>
                         "    })\n" <>
                         "    return " <> valueName name <> "\n" <> 
                         "}\n\n") <$> foreigns))) <>
