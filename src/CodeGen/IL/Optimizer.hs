@@ -21,11 +21,8 @@ import qualified Language.PureScript.Constants as C
 -- | Apply a series of optimizer passes to simplified IL code
 optimize :: MonadSupply m => AST -> AST -> m AST
 optimize mn il = do
-    il' <- untilFixedPoint (inlineFnComposition . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp . applyAll
-      [ inlineCommonValues
-      , inlineCommonOperators
-      ]) il
-    untilFixedPoint (return . tidyUp) . tco mn . inlineST
+    il' <- untilFixedPoint (inlineFnComposition . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp) il
+    untilFixedPoint (return . inlineCommonValues . inlineCommonOperators . tidyUp) . tco mn . inlineST
       =<< untilFixedPoint (return . magicDoST)
       =<< untilFixedPoint (return . magicDoEff)
       =<< untilFixedPoint (return . magicDoEffect) il'
