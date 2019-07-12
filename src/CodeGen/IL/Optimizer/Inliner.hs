@@ -263,17 +263,18 @@ inlineFnComposition = everywhereTopDownM convert where
 inlineUnsafeCoerce :: AST -> AST
 inlineUnsafeCoerce = everywhereTopDown convert where
   convert (App _ (Indexer _ (Var _ unsafeCoerceFn) (Var _ unsafeCoerce)) [ comp ])
-    | unsafeCoerceFn == C.unsafeCoerceFn && unsafeCoerce == C.unsafeCoerce
+    | unsafeCoerceFn == C.unsafeCoerceFn && unsafeCoerce == moduleNameToIL' C.unsafeCoerce
     = comp
   convert other = other
 
 inlineUnsafePartial :: AST -> AST
 inlineUnsafePartial = everywhereTopDown convert where
-  convert (App ss (Indexer _ (Var _ unsafePartial) (Var _ partialUnsafe)) [ comp ])
-    | unsafePartial == C.unsafePartial && partialUnsafe == C.partialUnsafe
-    -- Apply to undefined here, the application should be optimized away
-    -- if it is safe to do so
-    = App ss comp [ Var ss undefinedName ]
+  convert (App ss fn [ (Function _ Nothing _ (Block _ [Return _ (App _ f' [_])])) ])
+    | isDict fnUnsafePartial fn
+    = App ss f' [ Var ss undefinedName ]
+    where
+      fnUnsafePartial :: forall a b. (IsString a, IsString b) => (a, b)
+      fnUnsafePartial = (C.partialUnsafe, C.unsafePartial)
   convert other = other
 
 semiringNumber :: forall a b. (IsString a, IsString b) => (a, b)

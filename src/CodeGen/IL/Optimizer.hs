@@ -11,7 +11,7 @@ import Language.PureScript.CoreImp.Optimizer.Common hiding (isDict)
 import Language.PureScript.CoreImp.Optimizer.Inliner (etaConvert, evaluateIifes, inlineVariables, unThunk)
 import Language.PureScript.CoreImp.Optimizer.Unused
 
-import CodeGen.IL.Common (moduleNameToIL', undefinedName, unusedName)
+import CodeGen.IL.Common (unusedName)
 import CodeGen.IL.Optimizer.Inliner
 import CodeGen.IL.Optimizer.MagicDo
 import CodeGen.IL.Optimizer.TCO
