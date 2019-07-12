@@ -278,8 +278,6 @@ literals = mkPattern' match'
   -- match (Throw _ _) = return mempty
   match (Throw _ value) = mconcat <$> sequence
     [ return $ emit "panic("
-    , return $ emit "\"PatternMatchFailure: \""
-    , return $ emit " + "
     , prettyPrintIL' value
     , return $ emit ")"
     ]

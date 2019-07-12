@@ -269,7 +269,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
       go _ _ _ = internalError "Invalid arguments to bindersToIL"
 
       failedPatternMessage :: Text
-      failedPatternMessage = "Failed pattern match at " <> runModuleName mn <> " " <> displayStartEndPos ss <> ": "
+      failedPatternMessage = "Failed pattern match at " <> runModuleName mn <> " " <> displayStartEndPos ss
 
       guardsToIL :: Either [(Guard Ann, Expr Ann)] (Expr Ann) -> m [AST]
       guardsToIL (Left gs) = traverse genGuard gs where
