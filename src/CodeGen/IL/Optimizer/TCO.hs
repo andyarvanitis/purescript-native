@@ -132,6 +132,7 @@ tco mn = everywhere convert where
 
   isSelfCall :: Text -> AST -> Bool
   isSelfCall ident (App _ (Var _ ident') _) = ident == ident'
+  isSelfCall ident (App _ (Indexer _ (Var _ ident') (Var _ mn')) _) = mn' == "" && ident == ident'
   isSelfCall ident (App _ (Indexer _ (Var _ ident') mn') _) = mn' == mn && ident == ident'
   isSelfCall ident (App _ fn _) = isSelfCall ident fn
   isSelfCall _ _ = False
