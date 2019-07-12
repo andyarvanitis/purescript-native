@@ -72,6 +72,7 @@ literals = mkPattern' match'
     , currentIndent
     , return $ emit "}"
     ]
+  match (Var _ ident) | ident == C.undefined = return $ emit undefinedName
   match (Var _ ident) = return $ emit ident
   match (VariableIntroduction _ ident value) = mconcat <$> sequence
     [ return . emit $ varDecl <> " " <> ident <> " " <> anyType

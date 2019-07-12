@@ -269,9 +269,9 @@ inlineUnsafeCoerce = everywhereTopDown convert where
 
 inlineUnsafePartial :: AST -> AST
 inlineUnsafePartial = everywhereTopDown convert where
-  convert (App ss fn [ (Function _ Nothing _ (Block _ [Return _ (App _ f' [_])])) ])
+  convert (App ss fn [ comp ])
     | isDict fnUnsafePartial fn
-    = App ss f' [ Var ss undefinedName ]
+    = App ss comp []
     where
       fnUnsafePartial :: forall a b. (IsString a, IsString b) => (a, b)
       fnUnsafePartial = (C.partialUnsafe, C.unsafePartial)

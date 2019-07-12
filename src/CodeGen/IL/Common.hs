@@ -33,7 +33,7 @@ moduleNameToIL' name =
 identToIL :: Ident -> Text
 identToIL UnusedIdent = unusedName
 identToIL (Ident "$__unused") = unusedName
-identToIL (Ident name) | name == C.undefined = undefinedName
+identToIL (Ident name) | name == C.undefined = undefinedName -- Note: done in Printer.hs too
 identToIL (Ident name) = properToIL name
 identToIL (GenIdent _ _) = internalError "GenIdent in identToIL"
 
