@@ -22,7 +22,17 @@ This is an experimental [Go](https://golang.org) compiler backend for [PureScrip
 #### Other notes:
 
 * The provided `Any` type is just an alias for `interface{}`
-* PureScript arrays are represented in Go with `[]Any`, the `String` types is `string`, `Number` is `float64`, `Int` is `int`, `Char` is `string` (single UTF-8 entity), `Boolean` is `bool`. PureScript records are rendered as `map[string]Any`.
+* PureScript types are represented in Go with:
+
+  | PureScript | Go |
+  |------------|----|
+  |`Array` | `[]Any`|
+  |`String` | `string`|
+  |`Number` | `float64`|
+  |`Int` | `int`|
+  |`Char` | `string` (single UTF-8 entity)|
+  |`Boolean` | `bool`|
+  |Records | `map[string]Any`|
 
 #### Future ideas:
 
@@ -45,7 +55,7 @@ This assumes you are running macOS (OS X) or a Unix-like system (Linux, *BSD, et
 
 1. Create a working directory wherever you like, and a `src` subdirectory under it, which will be where you will place your own PureScript source files.
 
-2. Under your working directory, clone or copy [purescript-go-ffi](https://github.com/andyarvanitis/purescript-go-ffi). Place any of your own foreign implementations into subdirectorys of your working directory, make sure your Go packages are all under a `src` directory (standard Go practice).
+2. Under your working directory, clone or copy [purescript-go-ffi](https://github.com/andyarvanitis/purescript-go-ffi). Place any of your own foreign implementations into subdirectories of your working directory, make sure your Go packages are all under a `src` directory (standard Go practice).
 
 3. Initialize your project with `spago init`, and install any dependencies with `spago install` (please see their instructions if you haven't used it before).
 
