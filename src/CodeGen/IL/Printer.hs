@@ -445,7 +445,7 @@ implHeaderSource mn imports _ =
       else "\n") <>
   "import (\n" <>
   (T.concat $ formatImport <$> imports) <> ")\n\n" <>
-  "type _ = IGNORE_UNUSED_RUNTIME\n\n"
+  "type _ = Any\n\n"
   where
   formatImport :: Text -> Text
   formatImport s = "    \"" <> s <> "\"\n"

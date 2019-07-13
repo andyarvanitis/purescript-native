@@ -24,8 +24,6 @@ type Fn8 = func(Any, Any, Any, Any, Any, Any, Any, Any) Any
 type Fn9 = func(Any, Any, Any, Any, Any, Any, Any, Any, Any) Any
 type Fn10 = func(Any, Any, Any, Any, Any, Any, Any, Any, Any, Any) Any
 
-type IGNORE_UNUSED_RUNTIME = bool
-
 const Undefined = "undefined"
 
 func Apply(f Any, args ...Any) Any {
