@@ -1,42 +1,32 @@
 [![PureScript](https://raw.githubusercontent.com/purescript/purescript/master/logo.png)](http://purescript.org)
 
-This is an experimental C++11 (or later) compiler backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane", debuggable, and portable C++ code as an intermediate language, which is then compiled to a native executable binary. This enables easy interoperability with existing C/C++ frameworks and libraries on a number of platforms.
-
----
-
-### **Please note that this project supersedes [pure11](https://github.com/pure11/pure11)**
-
-#### Please see [changes](https://github.com/andyarvanitis/purescript-native/wiki/changes) for more details.
-
----
+This is an experimental [Go](https://golang.org) compiler backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane", debuggable, and portable Go code as an intermediate language, which is then compiled to a native executable binary. This enables easy interoperability with existing Go frameworks and libraries on a number of platforms.
 
 #### Platforms
-* Generated C++ code and resulting binary executables tested (to at least some extent) on:
-  * macOS Mojave, Xcode 10.1's clang (full test suite)
-  * Windows 10 x64 and x86, Visual Studio 2017
-  * Linux Debian 9.5 amd64, default versions of clang and gcc/g++ (full test suite)
-  * Raspberry Pi 3 B+ Raspbian official build (ARM), default versions of clang and gcc/g++
+* Generated Go code and resulting binary executables tested (to at least some extent) on:
+  * macOS Mojave (full test suite)
+  * ~~Windows 10 x64 and x86, Visual Studio 2017~~ (pending)
+  * ~~Linux Debian X.X amd64, (full test suite)~~ (pending)
+  * ~~Raspberry Pi 3 B+ Raspbian official build (ARM)~~ (pending)
 
 #### Performance
 
-* No runtime system beyond some support classes and the standard C++11 (or later) runtime library
-* For automatic memory management, uses native C++11 reference counting (`std::shared_ptr`)
-* Uses PureScript's normal tail call optimization techniques for generated C++ code
+* No runtime system beyond some support types and functions
+* Uses PureScript's normal tail call optimization techniques for generated Go code
 
 #### Differences from PureScript:
 
-* Foreign imports/exports are C++ instead of JavaScript – see [FFI notes](https://github.com/andyarvanitis/purescript-native/wiki/FFI) and [standard library foreign implementations](https://github.com/andyarvanitis/purescript-native-ffi)
-* No C++-specific REPL
+* Foreign imports/exports are Go instead of JavaScript – see [standard library foreign implementations](https://github.com/andyarvanitis/purescript-go-ffi)
+* No Go-specific REPL
 
 #### Other notes:
 
-* PureScript arrays are implemented using [`std::vector`](http://en.cppreference.com/w/cpp/container/vector)
-* `String` types are implemented with C++11 `u8` literals (UTF-8) and `std::string`
-* `Number` is C++ `double`, `Int` is C++ `int`, `Char` is `std::string` (single UTF-8 entity), `Boolean` is `bool`
+* The provided `Any` type is just an alias for `interface{}`
+* PureScript arrays are represented in Go with `[]Any`, the `String` types is `string`, `Number` is `float64`, `Int` is `int`, `Char` is `string` (single UTF-8 entity), `Boolean` is `bool`. PureScript records are rendered as `map[string]Any`.
 
 #### Future ideas:
 
-* Nice facilities (modules) for concurrency/parallelism, using `std::thread`, `std::async`, etc. under the hood (output is already generally thread-safe for immutable values, thanks to `std::shared_ptr`)
+* Nice facilities (modules) for concurrency/parallelism, using goroutines
 
 #### Requirements for building the compiler itself
 
@@ -46,25 +36,22 @@ This is an experimental C++11 (or later) compiler backend for [PureScript](https
 
 * A recent version (0.13+) of [purescript](https://github.com/purescript/purescript/releases).
 
-* A C++11-capable toolchain, e.g. recent versions of clang, gcc, Microsoft Visual Studio
-* GNU Make is the default supported build tool, but you should be able to use your favorite C++ build system, tools, debuggers, etc.
+* The [Go toolchain](https://golang.org) for your system.
+
+* Your favorite PureScript package manager and build tools – but for simplicity these instructions will use [`spago`](https://github.com/spacchetti/spago).
 
 #### Getting Started
 This assumes you are running macOS (OS X) or a Unix-like system (Linux, *BSD, etc.).
 
-1. Make sure you have developer tools for your system installed. For macOS, you'll need a recent version of Xcode. For Linux, etc., you can use clang 3.5 or later, or gcc/g++ 4.9.2 or later.
+1. Create a working directory wherever you like, and a `src` subdirectory under it, which will be where you will place your own PureScript source files.
 
-2. Create a working directory wherever you like, and a `src` subdirectory under it, which will be where you will place your own PureScript source files.
+2. Under your working directory, clone or copy [purescript-go-ffi](https://github.com/andyarvanitis/purescript-go-ffi). Place any of your own foreign implementations into subdirectorys of your working directory, make sure your Go packages are all under a `src` directory (standard Go practice).
 
-3. Under your working directory, also create an `ffi` subdirectory, which will be where you will place C/C++ FFI source files. You should at least add the contents of [purescript-native-ffi](https://github.com/andyarvanitis/purescript-native-ffi) into this directory, in addition to any of your own foreign implementations.
+3. Initialize your project with `spago init`, and install any dependencies with `spago install` (please see their instructions if you haven't used it before).
 
-4. Generate the default GNU `Makefile` in your working directory by running `pscpp --makefile`.
+4. You should now be ready to build a PureScript program:
+  * As stated above, place your source file(s) in the working directory's `src` subdirectory and execute `spago build -- -g corefn && psgo`.
 
-5. Use PureScript's standard [`psc-package`](https://psc-package.readthedocs.io/en/latest/) utility to add and manage package dependencies.
-
-6. You should now be ready to build a PureScript program:
-  * As stated above, place your source file(s) in the working directory's `src` subdirectory and execute `make debug` or `make release`. If your build machine has multiple cores, you might want to append `-jN` to your *make* command, where `N` is the number of cores.
-
-  * This will generate the C++ source tree for your program and then build an executable binary. The resulting executable will be in the `bin` subdirectory under the output directory and called `main` (so `output/bin/main`, by default). Source files will be under `src` (`output/src/` by default).
+  * This will generate the Go source tree for your program and then build an executable binary. The resulting executable will be in your working directory and will be named `Main`. The generated source files will be under `output/src/`.
 
 ---
