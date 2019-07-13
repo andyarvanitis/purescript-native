@@ -1,6 +1,8 @@
 [![PureScript](https://raw.githubusercontent.com/purescript/purescript/master/logo.png)](http://purescript.org)
 
-This is an experimental C++11 (or later) compiler backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane", debuggable, and portable C++ code as an intermediate language, which is then compiled to a native executable binary. This enables easy interoperability with existing C/C++ frameworks and libraries on a number of platforms.
+This is a C++11 (or later) compiler backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane", debuggable, and portable C++ code as an intermediate language, which is then compiled to a native executable binary. This enables easy interoperability with existing C/C++ frameworks and libraries on a number of platforms.
+
+There is also a (WIP) option to use [Go](https://golang.org) as the backend/interemediate language in the [golang branch](https://github.com/andyarvanitis/purescript-native/tree/golang). It is not intended to replace the C++ backend, but to be part of the purescript-native "suite."
 
 ---
 
