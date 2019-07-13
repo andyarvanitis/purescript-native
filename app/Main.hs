@@ -10,7 +10,7 @@ import Data.Aeson
 import Data.Aeson.Types
 import Data.Char
 import Data.FileEmbed (embedFile)
-import Data.List (delete, isPrefixOf, partition)
+import Data.List (delete, intercalate, isPrefixOf, nub, partition)
 import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Version
@@ -20,8 +20,9 @@ import Text.Printf
 
 import System.Environment
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getCurrentDirectory, getModificationTime)
-import System.FilePath ((</>), joinPath, splitDirectories, takeDirectory)
+import System.FilePath ((</>), joinPath, searchPathSeparator, splitDirectories, takeDirectory)
 import System.FilePath.Find
+import System.Process
 
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -39,6 +40,8 @@ import CodeGen.IL.Common
 import CodeGen.IL.Printer
 
 import Tests
+
+data Command = Build | Run
 
 parseJson :: Text -> Value
 parseJson text
@@ -59,34 +62,32 @@ main = do
   if "--tests" `elem` opts'
     then runTests
     else do
-      when ("--makefile" `elem` opts') $
-        B.writeFile "Makefile" $(embedFile "support/Makefile")
-      when ("--help" `elem` opts') $
-        putStrLn help
-      if null files then
-        when (null opts) $ do
-          currentDir <- getCurrentDirectory
-          processFiles opts' [currentDir]
-      else
-        processFiles opts' files
-      return ()
+      if "--help" `elem` opts'
+        then putStrLn help
+        else do
+          if null files
+            then do
+              currentDir <- getCurrentDirectory
+              processFiles opts' [currentDir]
+            else
+              processFiles opts' files
+          if "--run" `elem` opts
+            then runBuildTool Run
+            else when ("--no-build" `notElem` opts) $
+                 runBuildTool Build
+  return ()
   where
   processFiles :: [String] -> [FilePath] -> IO ()
   processFiles opts [file] = do
     isDir <- doesDirectoryExist file
     if isDir then do
       files <- find always (fileName ==? corefn) file
-      if null files then do
-        noneFound
-      else do
-        generateFiles opts files
-    else do
-      generateFiles opts [file]
+      if null files
+        then errorNoCorefnFiles
+        else generateFiles opts files
+    else generateFiles opts [file]
   processFiles opts files = do
-    let baseOutpath = basePath files
-    writeRuntimeFiles baseOutpath
-    Par.mapM (generateCode opts baseOutpath) files
-    return ()
+    generateFiles opts files
   basePath :: [FilePath] -> FilePath
   basePath files =
     let filepath = takeDirectory (head files) in
@@ -97,6 +98,27 @@ main = do
     writeRuntimeFiles baseOutpath
     Par.mapM (generateCode opts baseOutpath) files
     return ()
+  runBuildTool :: Command -> IO ()
+  runBuildTool cmd = do
+    let command = case cmd of
+                    Build -> "build"
+                    Run -> "run"
+    currentDir <- getCurrentDirectory
+    files <- find always (extension ==? goSrc) currentDir
+    let fileDirs = nub $ joinPath . init <$> filter isSrc (getDir <$> files)
+    currentEnv <- getEnvironment
+    let searchPath = intercalate [searchPathSeparator] fileDirs
+        env = ("GOPATH", searchPath) : currentEnv
+    (_, _, _, p) <- createProcess (proc "go" [command, "Main"]){ env = Just env }
+    waitForProcess p
+    return ()
+    where
+    getDir :: FilePath -> [FilePath]
+    getDir file =
+      let filepath = takeDirectory file in
+      init $ splitDirectories filepath
+    isSrc :: [FilePath] -> Bool
+    isSrc components = (last components) == "src"
 
 generateCode :: [String] -> FilePath -> FilePath -> IO ()
 generateCode opts baseOutpath jsonFile = do
@@ -144,12 +166,12 @@ implFileName mn = T.unpack $ mn <> ".go"
 
 help :: String
 help = "Usage: psgo OPTIONS COREFN-FILES\n\
-       \  PureScript-to-go compiler\n\n\
+       \  PureScript to native (via go) compiler\n\n\
        \Available options:\n\
        \  --help                  Show this help text\n\n\
-       \  --makefile              Generate a GNU Makefile which can be used for compiling\n\
-       \                          a PureScript program and libraries to a native binary via\n\
-       \                          purs corefn output and C++\n\n\
+       \  --run                   Run the generated go code directly, without building an\n\
+       \                          executable\n\
+       \  --no-build              Generate go source files, but do not build an executable\n\
        \  --tests                 Run test cases (under construction)\n\n\
        \See also:\n\
        \  purs compile --help\n"
@@ -157,6 +179,11 @@ help = "Usage: psgo OPTIONS COREFN-FILES\n\
 corefn :: String
 corefn = "corefn.json"
 
-noneFound :: IO ()
-noneFound = do
-    putStrLn $ "No compiled purescript files (" <> corefn <> ") found"
+goSrc :: String
+goSrc = ".go"
+
+errorNoCorefnFiles :: IO ()
+errorNoCorefnFiles = do
+    ioError . userError $ "no compiled purescript '" <> corefn <> "' files found –\n" <>
+        "                  make sure to use the '--codegen corefn' option with your purs\n" <>
+        "                  project build tool"
