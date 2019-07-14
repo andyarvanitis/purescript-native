@@ -107,7 +107,8 @@ main = do
     files <- find always (extension ==? goSrc) currentDir
     let fileDirs = nub $ joinPath . init <$> filter isSrc (getDir <$> files)
     currentEnv <- getEnvironment
-    let searchPath = intercalate [searchPathSeparator] fileDirs
+    let pathDirs = maybe id (:) (lookup "GOPATH" currentEnv) $ fileDirs
+        searchPath = intercalate [searchPathSeparator] pathDirs
         env = ("GOPATH", searchPath) : currentEnv
     (_, _, _, p) <- createProcess (proc "go" [command, "Main"]){ env = Just env }
     waitForProcess p
