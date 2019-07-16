@@ -26,6 +26,17 @@ type Fn10 = func(Any, Any, Any, Any, Any, Any, Any, Any, Any, Any) Any
 
 const Undefined = "undefined"
 
+var foreign = make(map[string]Map)
+
+func Foreign(key string) Map {
+	value, found := foreign[key]
+	if !found {
+		value = make(Map)
+		foreign[key] = value
+	}
+	return value
+}
+
 func Apply(f Any, args ...Any) Any {
 	result := f
 	for _, arg := range args {
@@ -40,10 +51,10 @@ func Run(f Any, args ...Any) Any {
 	return fn()
 }
 
-func SafeGet(dict map[string]Any, key string) Any {
+func Get(dict map[string]Any, key string) Any {
 	value, ok := dict[key]
 	if !ok {
-		panic("Foreign value '" + key + "' not defined")
+		panic("Foreign value '" + key + "' not found")
 	}
 	return value
 }

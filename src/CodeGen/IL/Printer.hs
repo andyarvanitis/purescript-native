@@ -456,7 +456,7 @@ implFooterSource mn foreigns =
   (if null foreigns
     then ""
     else ("// Foreign values\n\n" <>
-          "var " <> foreignDict <> " = " <> dictType <> "{}\n\n" <>
+          "var " <> foreignDict <> " = "<> foreignMod <> "(\"" <> mn <> "\")\n\n" <>
           (T.concat $ (\foreign' ->
                         let name = moduleIdentToIL foreign' in
                         varDecl <> " " <> initName name <> " Once\n" <>     
@@ -466,7 +466,7 @@ implFooterSource mn foreigns =
                         "() Any { \n" <>
                         "    " <> initName name <> ".Do(func() {\n" <>
                         "        " <> valueName name <> " = " <>
-                                        "SafeGet(" <> foreignDict <> ", " <>
+                                        "Get(" <> foreignDict <> ", " <>
                                             (stringLiteral . mkString $ runIdent foreign') <> ")\n" <>
                         "    })\n" <>
                         "    return " <> valueName name <> "\n" <> 
@@ -486,8 +486,11 @@ varDecl = "var"
 renderArg :: Text -> Text -> Text
 renderArg decl arg = arg <> " " <> decl
 
+foreignMod :: Text
+foreignMod = "Foreign"
+
 foreignDict :: Text
-foreignDict = "Foreign"
+foreignDict = "foreign"
 
 initName :: Text -> Text
 initName s = "ₒ" <> s

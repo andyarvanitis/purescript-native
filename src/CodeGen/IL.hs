@@ -63,7 +63,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
         interface = interfaceSource modName values foreigns
         imports = nub . concat $ importToIL <$> optimized'
         implHeader = implHeaderSource modName imports ""
-        implFooter = implFooterSource modName foreigns
+        implFooter = implFooterSource (runModuleName mn) foreigns
     return $ (interface, foreigns', optimized', implHeader, implFooter)
   where
   modName = moduleNameToIL mn
