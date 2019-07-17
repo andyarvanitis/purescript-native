@@ -65,7 +65,6 @@ runTests = do
     callProcess "rm" ["-rf", "Main"]
     callProcess "spago" ["build", "--", "--codegen", "corefn"]
     callProcess "psgo" []
-    callProcess "go" ["build", "Main"]
     --
     -- Run C++ files
     --
