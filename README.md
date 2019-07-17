@@ -4,9 +4,9 @@ This is an experimental [Go](https://golang.org) compiler backend for [PureScrip
 
 #### Platforms
 * Generated Go code and resulting binary executables tested (to at least some extent) on:
-  * macOS Mojave (full test suite)
-  * ~~Windows 10 x64 and x86, Visual Studio 2017~~ (pending)
-  * ~~Linux Debian X.X amd64, (full test suite)~~ (pending)
+  * macOS Mojave 10.14.5 (full test suite)
+  * Windows 10 x64 (full test suite)
+  * Linux Debian 10 amd64 (full test suite)
   * ~~Raspberry Pi 3 B+ Raspbian official build (ARM)~~ (pending)
 
 #### Performance
@@ -53,9 +53,9 @@ This is an experimental [Go](https://golang.org) compiler backend for [PureScrip
 #### Getting Started
 This assumes you are running macOS (OS X) or a Unix-like system (Linux, *BSD, etc.).
 
-1. Create a working directory wherever you like, and a `src` subdirectory under it, which will be where you will place your own PureScript source files.
+1. Choose a working directory wherever you like. Then create a `src` subdirectory under it, which will be where you will place your own PureScript source files.
 
-2. Under your working directory, clone or copy [purescript-native-go-ffi](https://github.com/andyarvanitis/purescript-native-go-ffi). Place any of your own foreign implementations into subdirectories of your working directory, make sure your Go packages are all under a `src` directory (standard Go practice).
+2. Under your working directory, clone or copy [purescript-native-go-ffi](https://github.com/andyarvanitis/purescript-native-go-ffi). Place any of your own foreign implementations into subdirectories of your working directory. Make sure your Go package directories are all under a `src` directory (standard Go practice).
 
 3. Initialize your project with `spago init`, and install any dependencies with `spago install` (please see their instructions if you haven't used it before).
 
