@@ -8,8 +8,7 @@ type Any interface{}
 
 type Fn = func(Any) Any
 type EffFn = func() Any
-type Map = map[string]Any
-type Array = []Any
+type Dict = map[string]Any
 
 type Once = sync.Once
 
@@ -26,12 +25,12 @@ type Fn10 = func(Any, Any, Any, Any, Any, Any, Any, Any, Any, Any) Any
 
 const Undefined = "undefined"
 
-var foreign = make(map[string]Map)
+var foreign = make(map[string]Dict)
 
-func Foreign(key string) Map {
+func Foreign(key string) Dict {
 	value, found := foreign[key]
 	if !found {
-		value = make(Map)
+		value = make(Dict)
 		foreign[key] = value
 	}
 	return value
