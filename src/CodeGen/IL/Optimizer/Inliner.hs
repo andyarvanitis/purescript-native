@@ -137,8 +137,10 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
   binary' :: Text -> PSString -> BinaryOperator -> AST -> AST
   binary' moduleName opString op = convert where
     convert :: AST -> AST
-    convert (App ss (App _ fn [x]) [y]) | isDict (moduleName, opString) fn = Binary ss op (unbox x opString) (unbox y opString)
+    convert (App ss (App _ fn [x]) [y]) | isDict (moduleName, opString) fn = Binary ss op (unbox x mn) (unbox y mn)
     convert other = other
+    mn :: PSString
+    mn = mkString moduleName
   unary :: (Text, PSString) -> (Text, PSString) -> UnaryOperator -> AST -> AST
   unary dicts@(_, d) fns op = convert where
     convert :: AST -> AST
