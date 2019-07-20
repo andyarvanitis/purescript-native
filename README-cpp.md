@@ -1,5 +1,3 @@
-[![PureScript](https://raw.githubusercontent.com/purescript/purescript/master/logo.png)](http://purescript.org)
-
 ### pscpp
 
 
