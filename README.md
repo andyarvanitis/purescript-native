@@ -2,7 +2,7 @@
 
 This is a platform-native compiler backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane", debuggable, and portable C++11 (or later) or [Go](https://golang.org/) code as an intermediate language, which is then compiled to a native executable binary. This also enables easy interoperability with existing C/C++ or Go frameworks and libraries on a number of platforms.
 
-There are two utilities in the purescript-native "suite": `pscpp` and `psgo`. The source code in this branch is for `pscpp`, the purescript-to-C++ transpiler. For the source code for the `psgo` purescript-to-Go transpiler (and build tool), please see the [golang branch](https://github.com/andyarvanitis/purescript-native/tree/golang).
+There are two utilities in the purescript-native "suite": `pscpp` and `psgo`. The source code in this branch is for `pscpp`, the purescript-to-C++ transpiler. For the source code of the `psgo` purescript-to-Go transpiler / build tool, please see the [golang branch](https://github.com/andyarvanitis/purescript-native/tree/golang).
 
 #### Platforms
 * Although purescript-native should work on any platform supporting PureScript and modern C++ or Go, the generated code and resulting binary executables have been tested on:
@@ -29,7 +29,7 @@ There are two utilities in the purescript-native "suite": `pscpp` and `psgo`. Th
 
 * For `pscpp`, a C++11-capable toolchain, e.g. recent versions of clang, gcc, Microsoft Visual Studio
     * GNU Make + `psc-package` is the default supported build tool, but you should be able to use your favorite package manager, C++ build system, tools, debuggers, etc.
-* For `psgo`, the [Go toolchain](https://golang.org) for your system.
+* For `psgo`, the [Go toolchain](https://golang.org) for your system
     * You can use your favorite PureScript package manager and build tools – but for simplicity, [`spago`](https://github.com/spacchetti/spago) is recommended.
 
 
