@@ -22,7 +22,7 @@ import qualified Language.PureScript.Constants as C
 optimize :: MonadSupply m => AST -> AST -> m AST
 optimize mn il = do
     il' <- untilFixedPoint (inlineFnComposition . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp) il
-    untilFixedPoint (return . inlineCommonValues . inlineCommonOperators . tidyUp) . tco mn . inlineST
+    untilFixedPoint (return . ignoreUnusedResults . inlineCommonValues . inlineCommonOperators . tidyUp) . tco mn . inlineST
       =<< untilFixedPoint (return . magicDoST)
       =<< untilFixedPoint (return . magicDoEff)
       =<< untilFixedPoint (return . magicDoEffect) il'
@@ -32,9 +32,7 @@ optimize mn il = do
       [ collapseNestedBlocks
       , collapseNestedIfs
       , collapseIfChecks
-      , ignoreUnusedResults
       , removeCodeAfterReturnStatements
-      -- , removeUndefinedApp
       , unThunk
       , etaConvert
       , evaluateIifes
@@ -62,6 +60,9 @@ ignoreUnusedResults = everywhere $ removeFromBlock go
   where
   go :: [AST] -> [AST]
   go [] = []
-  go (VariableIntroduction ss var s@(Just _) : sts)
-    | not $ any (everything (||) (isUsed var)) sts = (VariableIntroduction ss unusedName s) : (go sts)
+  go (VariableIntroduction ss var (Just s) : sts)
+    | not $ any (everything (||) (isUsed var)) sts = sts'
+    where
+    sts' | App{} <- s = s : (go sts)
+         | otherwise = go sts
   go (s:sts) = s : go sts
