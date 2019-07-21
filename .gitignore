@@ -12,7 +12,7 @@ cabal.sandbox.config
 .test_modules/
 bower_components/
 node_modules
-pscpp.cabal
+*.cabal
 tmp/
 .stack-work/
 output

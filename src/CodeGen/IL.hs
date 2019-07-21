@@ -54,8 +54,6 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
   do
     let usedNames = concatMap getNames decls
     let mnLookup = renameImports usedNames imps
-    ilImports <- traverse (importToIL mnLookup) . (\\ (mn : C.primModules)) . (\\ [mn]) $ ordNub $ map snd imps
-    interfaceImport <- importToIL (renameImports [] [(emptyAnn, mn)]) mn
     let decls' = renameModules mnLookup decls
     ilDecls <- mapM (bindToIL ModuleDecl) decls'
     optimized <- traverse (traverse (optimize modName')) ilDecls
@@ -63,8 +61,10 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
         values = annotValue <$> optimized'
         foreigns' = identToIL <$> foreigns
         interface = interfaceSource modName values foreigns
-        implHeader = implHeaderSource modName ilImports interfaceImport
-        implFooter = implFooterSource modName foreigns
+        imports = nub . concat $ importToIL <$> optimized'
+        moduleHeader = importToIL' modName
+        implHeader = implHeaderSource modName imports moduleHeader
+        implFooter = implFooterSource (runModuleName mn) foreigns
     return $ (interface, foreigns', optimized', implHeader, implFooter)
   where
   modName = moduleNameToIL mn
@@ -102,24 +102,27 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
          then freshModuleName (i + 1) mn' used
          else newName
 
-  -- | Generates C++ code for a module import, binding the required module
-  -- to the alternative
-  importToIL :: M.Map ModuleName (Ann, ModuleName) -> ModuleName -> m Text
-  importToIL mnLookup mn' = do
-    let ((_, _, _, _), mnSafe) = fromMaybe (internalError "Missing value in mnLookup") $ M.lookup mn' mnLookup
-        mname = moduleNameToIL mnSafe
-    pure $ "#include \"" <> mname <> "/" <> mname <> ".h\"\n"
+  -- | Generates IL code for a module import
+  --
+  importToIL :: AST -> [Text]
+  importToIL = AST.everything (++) modRef
+    where
+    modRef (AST.Indexer _ (AST.Var _ _) (AST.Var _ mname))
+      | not $ T.null mname = [importToIL' mname]
+    modRef _ = []
+  importToIL' :: Text -> Text
+  importToIL' h = "#include \"" <> h <> "/" <> h <> ".h\"\n"
 
   -- | Replaces the `ModuleName`s in the AST so that the generated code refers to
   -- the collision-avoiding renamed module imports.
   renameModules :: M.Map ModuleName (Ann, ModuleName) -> [Bind Ann] -> [Bind Ann]
   renameModules mnLookup binds =
-    let (f, _, _) = everywhereOnValues id goExpr goBinder
+    let (f, _, _) = everywhereOnValues id ilExpr goBinder
     in map f binds
     where
-    goExpr :: Expr a -> Expr a
-    goExpr (Var ann q) = Var ann (renameQual q)
-    goExpr e = e
+    ilExpr :: Expr a -> Expr a
+    ilExpr (Var ann q) = Var ann (renameQual q)
+    ilExpr e = e
     goBinder :: Binder a -> Binder a
     goBinder (ConstructorBinder ann q1 q2 bs) = ConstructorBinder ann (renameQual q1) (renameQual q2) bs
     goBinder b = b
@@ -229,18 +232,6 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
     unApp :: Expr Ann -> [Expr Ann] -> (Expr Ann, [Expr Ann])
     unApp (App _ val arg) args = unApp val (arg : args)
     unApp other args = (other, args)
-  -- valueToIL (Var (_, _, _, Just IsForeign) qi@(Qualified (Just mn') ident)) =
-  --   return $ if mn' == mn
-  --            then AST.Var Nothing (moduleNameToIL mn' <> "::" <> identToIL ident)
-  --            else varToIL qi
-  -- valueToIL (Var (_, _, _, Just IsForeign) (Qualified (Just mn') ident)) =
-  --   return $ AST.Var Nothing (moduleNameToIL mn' <> "::" <> identToIL ident)
-  -- valueToIL (Var (_, _, _, Just IsForeign) qi@(Qualified (Just mn') ident)) =
-  --   return $ if mn' == mn
-  --            then foreignIdent ident
-  --            else varToIL qi
-  -- valueToIL (Var (_, _, _, Just IsForeign) ident) =
-  --   internalError $ "Encountered an unqualified reference to a foreign ident " ++ T.unpack (showQualified showIdent ident)
   valueToIL (Var _ ident) = return $ varToIL ident
   valueToIL (Case (ss, _, _, _) values binders) = do
     vals <- mapM valueToIL values
@@ -300,9 +291,9 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
   -- | Generate code in the simplified intermediate representation for a reference to a
   -- variable that may have a qualified name.
   qualifiedToIL :: (a -> Ident) -> Qualified a -> AST
-  qualifiedToIL f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . runIdent $ f a
-  qualifiedToIL f (Qualified (Just mn') a) = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing (moduleNameToIL mn'))
-  qualifiedToIL f (Qualified _ a) = AST.Var Nothing $ identToIL (f a)
+  qualifiedToIL f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . identToIL $ f a
+  qualifiedToIL f (Qualified (Just mn') a) | mn /= mn' = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing (moduleNameToIL mn'))
+  qualifiedToIL f (Qualified _ a) = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing "")
 
   -- foreignIdent :: Ident -> AST
   -- foreignIdent ident = accessorString (mkString $ runIdent ident) (AST.Var Nothing "$foreign")
@@ -327,7 +318,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
       go _ _ _ = internalError "Invalid arguments to bindersToIL"
 
       failedPatternMessage :: Text
-      failedPatternMessage = "Failed pattern match at " <> runModuleName mn <> " " <> displayStartEndPos ss <> ": "
+      failedPatternMessage = "Failed pattern match at " <> runModuleName mn <> " " <> displayStartEndPos ss
 
       guardsToIL :: Either [(Guard Ann, Expr Ann)] (Expr Ann) -> m [AST]
       guardsToIL (Left gs) = traverse genGuard gs where

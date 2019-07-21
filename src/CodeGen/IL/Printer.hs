@@ -167,6 +167,10 @@ literals = mkPattern' match'
     (captures, render)
       | name == Just tcoLoop = ("[&]", renderArgByVal)
       | otherwise = ("[=]", renderArg)
+  match (Indexer _ (Var _ name) (Var _ "")) = mconcat <$> sequence
+    [ prettyPrintIL' (Var Nothing name)
+    , return $ emit "()"
+    ]
   match (Indexer _ prop@(Var _ name) val) = mconcat <$> sequence
     [ prettyPrintIL' val
     , return $ emit "::"
@@ -255,7 +259,6 @@ literals = mkPattern' match'
   -- match (Throw _ _) = return mempty
   match (Throw _ value) = mconcat <$> sequence
     [ return $ emit "THROW_("
-    , return $ emit "\"PatternMatchFailure: \""
     , prettyPrintIL' value
     , return $ emit ")"
     ]
