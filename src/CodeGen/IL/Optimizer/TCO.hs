@@ -1,4 +1,4 @@
-module CodeGen.IL.Optimizer.TCO (tco) where
+module CodeGen.IL.Optimizer.TCO (tco, tcoLoop) where
 
 import Prelude.Compat
 
@@ -11,19 +11,22 @@ import CodeGen.IL.Common
 
 import qualified Language.PureScript.Constants as C
 
+tcoLoop :: Text
+tcoLoop = "_tco_loop_"  
+
 tco :: AST -> AST -> AST
 tco mn = everywhere convert where
   tcoVar :: Text -> Text
-  tcoVar arg = "_TCO_" <> arg <> "_"
+  tcoVar arg = "_tco_var_" <> arg <> "_"
 
   copyVar :: Text -> Text
-  copyVar arg = "_TCO_Copy_" <> arg <> "_"
+  copyVar arg = "_copy_" <> arg <> "_"
 
   tcoDone :: Text
-  tcoDone = "_TCO_Done_"
-  
+  tcoDone = "_tco_done_"
+
   tcoResult :: Text
-  tcoResult = "_TCO_Result_"
+  tcoResult = "_tco_result_"
 
   convert :: AST -> AST
   convert fn@(Function ss (Just name) args _)
@@ -37,7 +40,6 @@ tco mn = everywhere convert where
       | isTailRecursive name body'
       = Assignment ss (Var ss name) (replace (toLoop name outerArgs innerArgs body'))
     where
-      -- fn = Function ss' Nothing args (Block ss' stmts)
       innerArgs = headDef [] argss
       outerArgs = concat . reverse $ tailSafe argss
       (argss, body', replace) = collectAllFunctionArgs [] id fn
@@ -90,15 +92,10 @@ tco mn = everywhere convert where
   toLoop :: Text -> [Text] -> [Text] -> AST -> AST
   toLoop ident outerArgs innerArgs js =
       Block rootSS $
-        concatMap (\arg -> [ VariableIntroduction rootSS (tcoVar arg) Nothing
-                           , Assignment rootSS (Var rootSS (tcoVar arg)) (Var rootSS (copyVar arg)) ]) (outerArgs ++ innerArgs) ++
-        -- [ VariableIntroduction rootSS (blockDecl <> tcoDone) Nothing
-        [ Var rootSS ("bool " <> tcoDone <> " = false")
-        -- , Assignment rootSS (Var rootSS tcoDone) (BooleanLiteral rootSS False)
-        -- , Assignment rootSS (Var rootSS tcoDone) (Var rootSS "NO")
+        concatMap (\arg -> [ VariableIntroduction rootSS (tcoVar arg) (Just (Var rootSS (copyVar arg))) ]) (outerArgs ++ innerArgs) ++
+        [ Assignment rootSS (Var rootSS $ bool <> " " <> tcoDone) $ BooleanLiteral Nothing False
         , VariableIntroduction rootSS tcoResult Nothing
-        , Assignment rootSS (Var rootSS ("const auto " <> tcoLoop)) (Function rootSS (Just tcoLoop) (outerArgs ++ innerArgs) (Block rootSS [loopify js]))
-        -- , While rootSS (Binary Nothing EqualTo (Var rootSS tcoDone) (BooleanLiteral Nothing False))
+        , Assignment rootSS (Var rootSS $ auto <> " " <> tcoLoop) (Function rootSS (Just tcoLoop) (outerArgs ++ innerArgs) (Block rootSS [loopify js]))
         , While rootSS (Unary Nothing Not (Var rootSS tcoDone))
             (Block rootSS
               [(Assignment rootSS (Var rootSS tcoResult) (App rootSS (Var rootSS tcoLoop) ((map (Var rootSS . tcoVar) outerArgs) ++ (map (Var rootSS . tcoVar) innerArgs))))])
@@ -130,7 +127,6 @@ tco mn = everywhere convert where
 
     markDone :: Maybe SourceSpan -> AST
     markDone ss = Assignment ss (Var ss tcoDone) (BooleanLiteral ss True)
-    -- markDone ss = Assignment ss (Var ss tcoDone) (Var ss "YES")
 
     collectArgs :: [[AST]] -> AST -> [[AST]]
     collectArgs acc (App _ fn args') = collectArgs (args' : acc) fn

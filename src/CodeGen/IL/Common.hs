@@ -3,6 +3,7 @@ module CodeGen.IL.Common where
 
 import Prelude.Compat
 
+import Control.Monad.Supply.Class (MonadSupply, freshName)
 import Data.Char
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -14,7 +15,7 @@ import Language.PureScript.Names
 moduleNameToIL :: ModuleName -> Text
 moduleNameToIL (ModuleName pns) =
   let name = T.intercalate "_" (runProperName `map` pns)
-  in if nameIsILBuiltIn name then ("_" <> name <> "_") else name
+  in if nameIsILBuiltIn name then (name <> "_") else name
 
 -- | Convert an 'Ident' into a valid C++ identifier:
 --
@@ -29,11 +30,11 @@ identToIL (Ident name) = properToIL name
 identToIL (GenIdent _ _) = internalError "GenIdent in identToIL"
 
 unusedName :: Text
-unusedName = "_Unused_"
+unusedName = "_"
 
 properToIL :: Text -> Text
 properToIL name
-  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = "_" <> name <> "_"
+  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = name <> "_"
   | otherwise = T.concatMap identCharToText name
 
 -- | Test if a string is a valid AST identifier without escaping.
@@ -45,9 +46,9 @@ identNeedsEscaping s = s /= properToIL s || T.null s
 identCharToText :: Char -> Text
 identCharToText c | isAlphaNum c = T.singleton c
 identCharToText '_' = "_"
-identCharToText '\'' = "_Prime_"
+identCharToText '\'' = "Prime_"
 identCharToText '$' = "$"
-identCharToText c = "_Code_Point_" <> T.pack (show (ord c))
+identCharToText c = "_code_point_" <> T.pack (show (ord c))
 
 -- | Checks whether an identifier name is reserved in C++.
 nameIsILReserved :: Text -> Bool
@@ -209,6 +210,9 @@ bool = "bool"
 string :: Text
 string = "string"
 
+auto :: Text
+auto = "const auto"
+
 unbox :: Text -> Text
 unbox t = "unbox<" <> t <> ">"
 
@@ -216,7 +220,9 @@ arrayLengthFn :: Text
 arrayLengthFn = "array_length"
 
 unretainedSuffix :: Text
-unretainedSuffix = "_Weak_"
+unretainedSuffix = "_weak_"
 
-tcoLoop :: Text
-tcoLoop = "_TCO_Loop_"
+freshName' :: MonadSupply m => m Text
+freshName' = do
+    name <- freshName
+    return $ T.replace "$" "_" name

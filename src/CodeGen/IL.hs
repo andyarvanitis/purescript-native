@@ -325,9 +325,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
         genGuard (cond, val) = do
           cond' <- valueToIL cond
           val'   <- valueToIL val
-          return
-            (AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo cond' (AST.BooleanLiteral Nothing True))
-              (AST.Block Nothing [AST.Return Nothing val']) Nothing)
+          return $ AST.IfElse Nothing (unbox' bool cond') (AST.Block Nothing [AST.Return Nothing val']) Nothing
 
       guardsToIL (Right v) = return . AST.Return Nothing <$> valueToIL v
 
@@ -366,16 +364,15 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
 
   literalToBinderIL :: Text -> [AST] -> Literal (Binder Ann) -> m [AST]
   literalToBinderIL varName done (NumericLiteral num) =
-    return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.NumericLiteral Nothing num)) (AST.Block Nothing done) Nothing]
+    return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (unbox' int $ AST.Var Nothing varName) (AST.NumericLiteral Nothing num)) (AST.Block Nothing done) Nothing]
   literalToBinderIL varName done (CharLiteral c) =
-    return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.StringLiteral Nothing (fromString [c]))) (AST.Block Nothing done) Nothing]
+    return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (unbox' string $ AST.Var Nothing varName) (AST.StringLiteral Nothing (fromString [c]))) (AST.Block Nothing done) Nothing]
   literalToBinderIL varName done (StringLiteral str) =
-    return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.StringLiteral Nothing str)) (AST.Block Nothing done) Nothing]
+    return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (unbox' string $ AST.Var Nothing varName) (AST.StringLiteral Nothing str)) (AST.Block Nothing done) Nothing]
   literalToBinderIL varName done (BooleanLiteral True) =
-    return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.BooleanLiteral Nothing True)) (AST.Block Nothing done) Nothing]
+    return [AST.IfElse Nothing (unbox' bool $ AST.Var Nothing varName) (AST.Block Nothing done) Nothing]
   literalToBinderIL varName done (BooleanLiteral False) =
-    return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (AST.Var Nothing varName) (AST.BooleanLiteral Nothing False)) (AST.Block Nothing done) Nothing]
-    -- return [AST.IfElse Nothing (AST.Unary Nothing AST.Not (AST.Var Nothing varName)) (AST.Block Nothing done) Nothing]
+    return [AST.IfElse Nothing (AST.Unary Nothing AST.Not (unbox' bool $ AST.Var Nothing varName)) (AST.Block Nothing done) Nothing]
   literalToBinderIL varName done (ObjectLiteral bs) = go done bs
     where
     go :: [AST] -> [(PSString, Binder Ann)] -> m [AST]
@@ -406,7 +403,5 @@ emptyAnn = (SourceSpan "" (SourcePos 0 0) (SourcePos 0 0), [], Nothing, Nothing)
 arrayLength :: AST -> AST
 arrayLength a = AST.App Nothing (AST.Var Nothing arrayLengthFn) [a]
 
-freshName' :: MonadSupply m => m Text
-freshName' = do
-    name <- freshName
-    return $ T.replace "$" "_Local_" name
+unbox' :: Text -> AST -> AST
+unbox' ty e = AST.App Nothing (AST.StringLiteral Nothing $ mkString ty) [e]
