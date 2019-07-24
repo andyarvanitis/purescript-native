@@ -404,4 +404,8 @@ arrayLength :: AST -> AST
 arrayLength a = AST.App Nothing (AST.Var Nothing arrayLengthFn) [a]
 
 unbox' :: Text -> AST -> AST
-unbox' ty e = AST.App Nothing (AST.StringLiteral Nothing $ mkString ty) [e]
+unbox' _ v@AST.NumericLiteral{} = v
+unbox' _ v@AST.BooleanLiteral{} = v
+unbox' _ v@AST.StringLiteral{}  = v
+unbox' _ v@AST.Binary{}         = v
+unbox' t v = AST.App Nothing (AST.StringLiteral Nothing $ mkString t) [v]

@@ -407,7 +407,8 @@ stringLiteral _ = "\"\\uFFFD\""
 unbox' :: Text -> AST -> Text
 unbox' _ v@(NumericLiteral{}) = prettyPrintIL1 v
 unbox' _ v@(BooleanLiteral{}) = prettyPrintIL1 v
-unbox' _ v@(StringLiteral{}) = prettyPrintIL1 v
+unbox' _ v@(StringLiteral{})  = prettyPrintIL1 v
+unbox' _ v@(Binary{})         = prettyPrintIL1 v
 unbox' t v = unbox t <> "(" <> prettyPrintIL1 v <> ")"
 
 interfaceSource :: Text -> [(Text,Bool)] -> [Ident] -> Text

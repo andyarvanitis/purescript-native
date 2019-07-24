@@ -225,4 +225,4 @@ unretainedSuffix = "_weak_"
 freshName' :: MonadSupply m => m Text
 freshName' = do
     name <- freshName
-    return $ T.replace "$" "_" name
+    return $ T.replace "$" "_var" name <> "_"

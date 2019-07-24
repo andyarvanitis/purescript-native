@@ -48,6 +48,9 @@ tco mn = everywhere convert where
   collectAllFunctionArgs :: [[Text]] -> (AST -> AST) -> AST -> ([[Text]], AST, AST -> AST)
   collectAllFunctionArgs allArgs f (Function s1 ident args (Block s2 (body@(Return _ _):_))) =
     collectAllFunctionArgs (args : allArgs) (\b -> f (Function s1 ident (map copyVar args) (Block s2 [b]))) body
+  -- Handle RecLetDecl weak assignment case
+  collectAllFunctionArgs allArgs f (Function s1 ident args (Block s2 (Var{}:body@(Return _ _):_))) =
+    collectAllFunctionArgs (args : allArgs) (\b -> f (Function s1 ident (map copyVar args) (Block s2 [b]))) body
   collectAllFunctionArgs allArgs f (Function ss ident args body@(Block _ _)) =
     (args : allArgs, body, f . Function ss ident (map copyVar args))
   collectAllFunctionArgs allArgs f (Return s1 (Function s2 ident args (Block s3 [body]))) =
