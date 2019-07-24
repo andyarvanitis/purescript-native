@@ -319,6 +319,7 @@ binary op str = AssocL match (\v1 v2 -> v1 <> emit (" " <> str <> " ") <> v2)
   match :: Pattern PrinterState AST (AST, AST)
   match = mkPattern match'
     where
+    match' (Binary _ op' v1@StringLiteral{} v2@StringLiteral{}) | op' == op = Just (App Nothing (Var Nothing string) [v1], v2)
     match' (Binary _ op' v1 v2) | op' == op = Just (v1, v2)
     match' _ = Nothing
 
