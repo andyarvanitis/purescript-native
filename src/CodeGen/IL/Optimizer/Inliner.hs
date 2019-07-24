@@ -75,7 +75,7 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
   , binary euclideanRingNumber opDiv Divide
 
   -- , binary eqNumber opEq EqualTo
-  -- , binary eqNumber opNotEq NotEqualTo
+  , binary eqNumber opNotEq NotEqualTo
   , binary eqInt opEq EqualTo
   , binary eqInt opNotEq NotEqualTo
   , binary eqString opEq EqualTo
@@ -294,8 +294,8 @@ ringInt = (C.dataRing, C.ringInt)
 euclideanRingNumber :: forall a b. (IsString a, IsString b) => (a, b)
 euclideanRingNumber = (C.dataEuclideanRing, C.euclideanRingNumber)
 
--- eqNumber :: forall a b. (IsString a, IsString b) => (a, b)
--- eqNumber = (C.dataEq, C.eqNumber)
+eqNumber :: forall a b. (IsString a, IsString b) => (a, b)
+eqNumber = (C.dataEq, C.eqNumber)
 
 eqInt :: forall a b. (IsString a, IsString b) => (a, b)
 eqInt = (C.dataEq, C.eqInt)
