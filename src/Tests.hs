@@ -31,7 +31,7 @@ runTests = do
   let srcDir = outputDir </> "src"
   createDirectory srcDir
 
-  callProcess "git" ["clone", "--branch", "v0.13.0", "--depth", "1", "https://github.com/purescript/purescript.git"]
+  callProcess "git" ["clone", "--branch", "v0.13.2", "--depth", "1", "https://github.com/purescript/purescript.git"]
   let passingDir = baseDir </> "purescript" </> "tests" </> "purs" </> "passing"
   passingTestCases <- sort . filter (".purs" `isSuffixOf`) <$> getDirectoryContents passingDir
 

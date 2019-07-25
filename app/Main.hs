@@ -29,6 +29,8 @@ import qualified Data.Text.Lazy as L
 import qualified Data.Text.Lazy.Encoding as L
 import qualified Data.ByteString as B
 
+import Development.GitRev
+
 import Language.PureScript.AST.Literals
 import Language.PureScript.CoreFn
 import Language.PureScript.CoreFn.FromJSON
@@ -65,6 +67,11 @@ main = do
             B.writeFile "Makefile" $(embedFile "support/Makefile")
           when ("--help" `elem` opts') $
             putStrLn help
+          when ("--version" `elem` opts') $ do
+            let branch = $(gitBranch)
+                details | branch == "master" = "master, commit: " ++ $(gitHash)
+                        | otherwise = branch
+            putStrLn $ details ++ if $(gitDirty) then " (DIRTY)" else ""
           when (not $ null files) $ do
             let filepath = takeDirectory (head files)
                 baseOutpath = joinPath $ (init $ splitDirectories filepath) ++ [outdir]
@@ -154,6 +161,7 @@ help = "Usage: pscpp OPTIONS COREFN-FILES\n\
        \  PureScript-to-C++ compiler\n\n\
        \Available options:\n\
        \  --help                  Show this help text\n\n\
+       \  --version               Show the version number\n\n\
        \  --makefile              Generate a GNU Makefile which can be used for compiling\n\
        \                          a PureScript program and libraries to a native binary via\n\
        \                          purs corefn output and C++\n\n\

@@ -39,6 +39,7 @@ dependencies:
 - directory -any
 - process -any
 - file-embed -any
+- gitrev -any
 
 library:
   source-dirs: src
