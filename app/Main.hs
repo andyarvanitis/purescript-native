@@ -31,6 +31,8 @@ import qualified Data.Text.Lazy as L
 import qualified Data.Text.Lazy.Encoding as L
 import qualified Data.ByteString as B
 
+import Development.GitRev
+
 import Language.PureScript.AST.Literals
 import Language.PureScript.CoreFn
 import Language.PureScript.CoreFn.FromJSON
@@ -62,8 +64,15 @@ main = do
   if "--tests" `elem` opts'
     then runTests
     else do
-      if "--help" `elem` opts'
-        then putStrLn help
+      if "--help" `elem` opts' || "--version" `elem` opts'
+        then do
+          when ("--help" `elem` opts') $ do
+            putStrLn help
+          when ("--version" `elem` opts') $ do
+            let branch = $(gitBranch)
+                details | branch == "golang" = "master, commit " ++ $(gitHash)
+                        | otherwise = branch
+            putStrLn $ details ++ if $(gitDirty) then " (DIRTY)" else ""
         else do
           if null files
             then do

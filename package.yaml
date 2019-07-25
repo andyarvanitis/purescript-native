@@ -41,6 +41,7 @@ dependencies:
 - process -any
 - file-embed -any
 - filemanip -any
+- gitrev -any
 
 library:
   source-dirs: src
