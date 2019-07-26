@@ -363,8 +363,17 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
     return (AST.VariableIntroduction Nothing (identToIL ident) (Just (AST.Var Nothing varName)) : il)
 
   literalToBinderIL :: Text -> [AST] -> Literal (Binder Ann) -> m [AST]
-  literalToBinderIL varName done (NumericLiteral num) =
+  literalToBinderIL varName done (NumericLiteral num@Left{}) =
     return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (unbox' int $ AST.Var Nothing varName) (AST.NumericLiteral Nothing num)) (AST.Block Nothing done) Nothing]
+  literalToBinderIL varName done (NumericLiteral num@Right{}) =
+    return [AST.IfElse Nothing (unbox' bool
+                                  (foldl (\fn a -> AST.App Nothing fn [a])
+                                    (AST.Indexer Nothing (AST.Var Nothing C.eq) (AST.Var Nothing C.dataEq))
+                                    [ AST.Indexer Nothing (AST.Var Nothing C.eqNumber) (AST.Var Nothing C.dataEq)
+                                    , AST.Var Nothing varName
+                                    , AST.NumericLiteral Nothing num
+                                    ]))
+                               (AST.Block Nothing done) Nothing]
   literalToBinderIL varName done (CharLiteral c) =
     return [AST.IfElse Nothing (AST.Binary Nothing AST.EqualTo (unbox' string $ AST.Var Nothing varName) (AST.StringLiteral Nothing (fromString [c]))) (AST.Block Nothing done) Nothing]
   literalToBinderIL varName done (StringLiteral str) =
