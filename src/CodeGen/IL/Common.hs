@@ -174,9 +174,6 @@ string = "string"
 arrayLengthFn :: Text
 arrayLengthFn = "Length"
 
-tcoLoop :: Text
-tcoLoop = "ᵗᶜloop"
-
 freshName' :: MonadSupply m => m Text
 freshName' = do
     name <- freshName

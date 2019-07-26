@@ -1,4 +1,4 @@
-module CodeGen.IL.Optimizer.TCO (tco) where
+module CodeGen.IL.Optimizer.TCO (tco, tcoLoop) where
 
 import Prelude.Compat
 
@@ -11,19 +11,22 @@ import CodeGen.IL.Common
 
 import qualified Language.PureScript.Constants as C
 
+tcoLoop :: Text
+tcoLoop = "__tco_loop"
+
 tco :: AST -> AST -> AST
 tco mn = everywhere convert where
   tcoVar :: Text -> Text
-  tcoVar arg = "ᵗ" <> arg
+  tcoVar arg = "__tco_var_" <> arg
 
   copyVar :: Text -> Text
-  copyVar arg = "ᶜ" <> arg
+  copyVar arg = "__copy_" <> arg
 
   tcoDone :: Text
-  tcoDone = "ᵗᶜdone"
+  tcoDone = "__tco_done"
   
   tcoResult :: Text
-  tcoResult = "ᵗᶜresult"
+  tcoResult = "__tco_result"
 
   convert :: AST -> AST
   convert fn@(Function ss (Just name) args _)

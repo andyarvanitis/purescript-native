@@ -30,7 +30,9 @@ import Language.PureScript.Crash
 import Language.PureScript.Names (Ident, runIdent)
 import Language.PureScript.Pretty.Common
 import Language.PureScript.PSString (PSString, decodeString, mkString)
+
 import CodeGen.IL.Common
+import CodeGen.IL.Optimizer.TCO (tcoLoop)
 
 import qualified Language.PureScript.Constants as C
 
