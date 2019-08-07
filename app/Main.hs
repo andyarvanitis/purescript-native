@@ -10,7 +10,7 @@ import Data.Aeson
 import Data.Aeson.Types
 import Data.Char
 import Data.FileEmbed (embedFile)
-import Data.List (delete, intercalate, isPrefixOf, nub, partition)
+import Data.List (delete, intercalate, isPrefixOf, nub, partition, (\\))
 import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Version
@@ -20,7 +20,7 @@ import Text.Printf
 
 import System.Environment
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getCurrentDirectory, getModificationTime)
-import System.FilePath ((</>), joinPath, searchPathSeparator, splitDirectories, takeDirectory)
+import System.FilePath ((</>), joinPath, splitDirectories, takeDirectory)
 import System.FilePath.Find
 import System.Process
 
@@ -100,11 +100,11 @@ main = do
   basePath :: [FilePath] -> FilePath
   basePath files =
     let filepath = takeDirectory (head files) in
-    joinPath $ (init $ splitDirectories filepath) ++ [outdir]
+    joinPath $ (init $ splitDirectories filepath)
   generateFiles :: [String] -> [FilePath] -> IO ()
   generateFiles opts files = do
     let baseOutpath = basePath files
-    writeRuntimeFiles baseOutpath
+    writeSupportFiles baseOutpath
     Par.mapM (generateCode opts baseOutpath) files
     return ()
   runBuildTool :: Command -> IO ()
@@ -112,33 +112,19 @@ main = do
     let command = case cmd of
                     Build -> "build"
                     Run -> "run"
-    currentDir <- getCurrentDirectory
-    files <- find always (extension ==? goSrc) currentDir
-    let fileDirs = nub $ joinPath . init <$> filter isSrc (getDir <$> files)
-    currentEnv <- getEnvironment
-    let pathDirs = maybe id (:) (lookup "GOPATH" currentEnv) $ fileDirs
-        searchPath = intercalate [searchPathSeparator] pathDirs
-        env = ("GOPATH", searchPath) : currentEnv
-    (_, _, _, p) <- createProcess (proc "go" [command, "Main"]){ env = Just env }
+    (_, _, _, p) <- createProcess (proc "go" [command, T.unpack modPrefix <> "/Main"])
     waitForProcess p
     return ()
-    where
-    getDir :: FilePath -> [FilePath]
-    getDir file =
-      let filepath = takeDirectory file in
-      init $ splitDirectories filepath
-    isSrc :: [FilePath] -> Bool
-    isSrc components = (last components) == "src"
 
 generateCode :: [String] -> FilePath -> FilePath -> IO ()
 generateCode opts baseOutpath jsonFile = do
   jsonModTime <- getModificationTime jsonFile
   let filepath = takeDirectory jsonFile
       dirparts = splitDirectories $ filepath
-      mname = (\c -> if c == '.' then '_' else c) <$> last dirparts
+      mname = last dirparts
       basedir = joinPath $ init dirparts
-      mname' = moduleNameToIL' $ T.pack mname
-      possibleFileName = basedir </> outdir </> (T.unpack mname') </> implFileName mname'
+      mname' = T.pack mname
+      possibleFileName = basedir </> (T.unpack mname') </> implFileName mname'
   exists <- doesFileExist possibleFileName
   if exists
     then do
@@ -152,7 +138,7 @@ transpile opts baseOutpath jsonFile = do
   jsonText <- T.decodeUtf8 <$> B.readFile jsonFile
   let module' = jsonToModule $ parseJson jsonText
   ((_, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToIL module' Nothing)
-  let mn = moduleNameToIL $ moduleName module'
+  let mn = moduleNameToIL' $ moduleName module'
       implementation = prettyPrintIL asts
       outpath = joinPath [baseOutpath, T.unpack mn]
       implPath = outpath </> implFileName mn
@@ -160,19 +146,33 @@ transpile opts baseOutpath jsonFile = do
   putStrLn implPath
   B.writeFile implPath $ T.encodeUtf8 (implHeader <> implementation <> implFooter)
 
-writeRuntimeFiles :: FilePath -> IO ()
-writeRuntimeFiles baseOutpath = do
-  createDirectoryIfMissing True $ baseOutpath </> "purescript"
-  let runtimeSource = baseOutpath </> "purescript" </> "purescript.go"
-  runtimeExists <- doesFileExist runtimeSource
-  when (not runtimeExists) $ do
-    B.writeFile runtimeSource $(embedFile "runtime/purescript.go")
-
-outdir :: FilePath
-outdir = "src"
+writeSupportFiles :: FilePath -> IO ()
+writeSupportFiles baseOutpath = do
+  currentDir <- getCurrentDirectory
+  let goModSource = currentDir </> "go.mod"
+  goModSourceExists <- doesFileExist goModSource
+  when (not goModSourceExists) $ do
+    let modText = $(embedFile "support/go.mod.working")
+        subdir = baseOutpath \\ currentDir
+        modText' = T.replace "/$OUTPUT" (T.pack subdir) $ T.decodeUtf8 modText
+    B.writeFile goModSource $ T.encodeUtf8 modText'
+  createDirectoryIfMissing True baseOutpath
+  let goModSource = baseOutpath </> "go.mod"
+  goModSourceExists <- doesFileExist goModSource
+  when (not goModSourceExists) $ do
+    B.writeFile goModSource $(embedFile "support/go.mod.output")
+  createDirectoryIfMissing True $ currentDir </> "purescript-native"
+  let goModSource = currentDir </> "purescript-native" </> "go.mod"
+  goModSourceExists <- doesFileExist goModSource
+  when (not goModSourceExists) $ do
+    B.writeFile goModSource $(embedFile "support/go.mod.ffi-loader")
+  let loaderSource = currentDir </> "purescript-native" </> "ffi_loader.go"
+  loaderSourceExists <- doesFileExist loaderSource
+  when (not loaderSourceExists) $ do
+    B.writeFile loaderSource $(embedFile "support/ffi-loader.go")
 
 implFileName :: Text -> FilePath
-implFileName mn = T.unpack $ mn <> ".go"
+implFileName mn = ((\c -> if c == '.' then '_' else c) <$> T.unpack mn) <> ".go"
 
 help :: String
 help = "Usage: psgo OPTIONS COREFN-FILES\n\

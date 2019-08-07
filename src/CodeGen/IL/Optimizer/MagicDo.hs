@@ -13,7 +13,7 @@ import Language.PureScript.CoreImp.Optimizer.Common hiding (isDict)
 import Language.PureScript.PSString (PSString, decodeString, mkString)
 import qualified Language.PureScript.Constants as C
 
-import CodeGen.IL.Common (moduleNameToIL', undefinedName, unusedName)
+import CodeGen.IL.Common (undefinedName, unusedName)
 import CodeGen.IL.Optimizer.Common
 
 -- | Inline type class dictionaries for >>= and return for the Eff monad

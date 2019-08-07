@@ -8,11 +8,9 @@ import Data.Text (Text)
 import Language.PureScript.CoreImp.AST
 import Language.PureScript.PSString (PSString, decodeString)
 
-import CodeGen.IL.Common (moduleNameToIL')
-
 isDict :: (Text, PSString) -> AST -> Bool
 isDict (moduleName, dictName) (Indexer _ (Var _ x) (Var _ y)) =
-  Just x == decodeString dictName && y == moduleNameToIL' moduleName
+  Just x == decodeString dictName && y == moduleName
 isDict _ _ = False
 
 isDict' :: [(Text, PSString)] -> AST -> Bool

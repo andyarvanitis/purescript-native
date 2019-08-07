@@ -265,7 +265,7 @@ inlineFnComposition = everywhereTopDownM convert where
 inlineUnsafeCoerce :: AST -> AST
 inlineUnsafeCoerce = everywhereTopDown convert where
   convert (App _ (Indexer _ (Var _ unsafeCoerceFn) (Var _ unsafeCoerce)) [ comp ])
-    | unsafeCoerceFn == C.unsafeCoerceFn && unsafeCoerce == moduleNameToIL' C.unsafeCoerce
+    | unsafeCoerceFn == C.unsafeCoerceFn && unsafeCoerce == C.unsafeCoerce
     = comp
   convert other = other
 

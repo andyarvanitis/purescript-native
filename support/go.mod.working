@@ -1,0 +1,9 @@
+module example.com/example
+
+require purescript-native/output v0.0.0
+
+replace purescript-native/output => ./$OUTPUT/
+
+require purescript-native/ffi-loader v0.0.0
+
+replace purescript-native/ffi-loader => ./purescript-native/
