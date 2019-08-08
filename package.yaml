@@ -10,7 +10,6 @@ extra-source-files:
 - README.md
 - ChangeLog.md
 - stack.yaml
-- runtime/*
 - support/*
 
 # Metadata used when publishing your package
