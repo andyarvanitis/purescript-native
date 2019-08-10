@@ -38,7 +38,6 @@ runTests = do
   setCurrentDirectory outputDir
 
   fetchPackages
-  callProcess "git" ["clone", "--depth", "1", "https://github.com/andyarvanitis/purescript-native-go-ffi.git"]
 
   let tests = filter (`notElem` skipped) passingTestCases
 
