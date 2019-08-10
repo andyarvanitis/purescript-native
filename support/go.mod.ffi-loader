@@ -1,2 +1,2 @@
-module purescript-native/ffi-loader
+module $PROJECT/purescript-native/ffi-loader
 

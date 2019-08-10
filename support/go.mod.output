@@ -1,2 +1,2 @@
-module purescript-native/output
+module $PROJECT/purescript-native/output
 

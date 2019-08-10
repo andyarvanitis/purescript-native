@@ -48,9 +48,9 @@ moduleToIL
    -- . (Monad m, MonadReader Options m, MonadSupply m, MonadError MultipleErrors m)
    . (Monad m, MonadSupply m)
   => Module Ann
-  -> Maybe AST
+  -> Text
   -> m (Text, [Text], [AST], Text, Text)
-moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
+moduleToIL (Module _ coms mn _ imps _ foreigns decls) project =
   do
     let usedNames = concatMap getNames decls
     let mnLookup = renameImports usedNames imps
@@ -62,7 +62,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
         foreigns' = moduleIdentToIL <$> foreigns
         interface = interfaceSource modName values foreigns
         imports = nub . concat $ importToIL <$> optimized'
-        implHeader = implHeaderSource modName imports ""
+        implHeader = implHeaderSource modName imports project
         implFooter = implFooterSource (runModuleName mn) foreigns
     return $ (interface, foreigns', optimized', implHeader, implFooter)
   where

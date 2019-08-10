@@ -112,7 +112,8 @@ main = do
     let command = case cmd of
                     Build -> "build"
                     Run -> "run"
-    (_, _, _, p) <- createProcess (proc "go" [command, T.unpack modPrefix <> "/Main"])
+    project <- envVar goproject
+    (_, _, _, p) <- createProcess (proc "go" [command, T.unpack $ project <> modPrefix <> "/Main"])
     waitForProcess p
     return ()
 
@@ -136,8 +137,9 @@ generateCode opts baseOutpath jsonFile = do
 transpile :: [String] -> FilePath -> FilePath -> IO ()
 transpile opts baseOutpath jsonFile = do
   jsonText <- T.decodeUtf8 <$> B.readFile jsonFile
+  project <- envVar goproject
   let module' = jsonToModule $ parseJson jsonText
-  ((_, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToIL module' Nothing)
+  ((_, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToIL module' project)
   let mn = moduleNameToIL' $ moduleName module'
       implementation = prettyPrintIL asts
       outpath = joinPath [baseOutpath, T.unpack mn]
@@ -149,36 +151,44 @@ transpile opts baseOutpath jsonFile = do
 writeSupportFiles :: FilePath -> IO ()
 writeSupportFiles baseOutpath = do
   currentDir <- getCurrentDirectory
-  let goModSource = currentDir </> "go.mod"
-  goModSourceExists <- doesFileExist goModSource
-  when (not goModSourceExists) $ do
-    let modText = $(embedFile "support/go.mod.working")
-        subdir = baseOutpath \\ currentDir
-        modText' = T.replace "/$OUTPUT" (T.pack subdir) $ T.decodeUtf8 modText
-    B.writeFile goModSource $ T.encodeUtf8 modText'
+  let outputdir = T.pack $ baseOutpath \\ currentDir
+      ffiOutpath = currentDir </> "purescript-native"
   createDirectoryIfMissing True baseOutpath
-  let goModSource = baseOutpath </> "go.mod"
-  goModSourceExists <- doesFileExist goModSource
-  when (not goModSourceExists) $ do
-    B.writeFile goModSource $(embedFile "support/go.mod.output")
-  createDirectoryIfMissing True $ currentDir </> "purescript-native"
-  let goModSource = currentDir </> "purescript-native" </> "go.mod"
-  goModSourceExists <- doesFileExist goModSource
-  when (not goModSourceExists) $ do
-    B.writeFile goModSource $(embedFile "support/go.mod.ffi-loader")
-  let loaderSource = currentDir </> "purescript-native" </> "ffi_loader.go"
-  loaderSourceExists <- doesFileExist loaderSource
-  when (not loaderSourceExists) $ do
-    B.writeFile loaderSource $(embedFile "support/ffi-loader.go")
+  createDirectoryIfMissing True ffiOutpath
+  writeModuleFile outputdir currentDir  $(embedFile "support/go.mod.working")
+  writeModuleFile outputdir baseOutpath $(embedFile "support/go.mod.output")
+  writeModuleFile outputdir ffiOutpath  $(embedFile "support/go.mod.ffi-loader")
+  writeLoaderFile ffiOutpath $(embedFile "support/ffi-loader.go")
+  where
+  writeModuleFile :: Text -> FilePath -> B.ByteString -> IO ()
+  writeModuleFile outputdir path modText = do
+    let goModSource = path </> "go.mod"
+    goModSourceExists <- doesFileExist goModSource
+    when (not goModSourceExists) $ do
+      project <- envVar goproject
+      let modText' = T.replace "/$OUTPUT/" outputdir $ T.decodeUtf8 modText
+          modText'' = T.replace "$PROJECT/" project modText'
+      B.writeFile goModSource $ T.encodeUtf8 modText''
+  writeLoaderFile :: FilePath -> B.ByteString -> IO ()
+  writeLoaderFile ffiOutpath loaderText = do
+    let loaderSource = ffiOutpath </> "ffi_loader.go"
+    loaderSourceExists <- doesFileExist loaderSource
+    when (not loaderSourceExists) $ do
+      B.writeFile loaderSource loaderText
 
 implFileName :: Text -> FilePath
 implFileName mn = ((\c -> if c == '.' then '_' else c) <$> T.unpack mn) <> ".go"
+
+envVar :: String -> IO Text
+envVar var = do
+  T.pack . maybe "" (<> "/") <$> lookupEnv var
 
 help :: String
 help = "Usage: psgo OPTIONS COREFN-FILES\n\
        \  PureScript to native (via go) compiler\n\n\
        \Available options:\n\
        \  --help                  Show this help text\n\n\
+       \  --version               Show the version number\n\n\
        \  --run                   Run the generated go code directly, without building an\n\
        \                          executable\n\
        \  --no-build              Generate go source files, but do not build an executable\n\
@@ -191,6 +201,9 @@ corefn = "corefn.json"
 
 goSrc :: String
 goSrc = ".go"
+
+goproject :: String
+goproject = "GOPROJECT"
 
 errorNoCorefnFiles :: IO ()
 errorNoCorefnFiles = do
