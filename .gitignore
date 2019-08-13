@@ -15,6 +15,7 @@ node_modules
 *.cabal
 tmp/
 .stack-work/
+stack.yaml.lock
 output
 examples/docs/docs/
 core-tests/full-core-docs.md
