@@ -16,6 +16,7 @@ pscpp.cabal
 psgo.cabal
 tmp/
 .stack-work/
+stack.yaml.lock
 output
 examples/docs/docs/
 core-tests/full-core-docs.md
