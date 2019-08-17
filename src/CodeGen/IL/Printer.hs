@@ -7,7 +7,9 @@ module CodeGen.IL.Printer
   , implHeaderSource
   , implFooterSource
   , isLiteral
+  , modLabel
   , modPrefix
+  , ffiLoader
   ) where
 
 import Prelude.Compat
@@ -445,14 +447,14 @@ implHeaderSource mn imports otherPrefix =
   "package " <> (if mn == "Main" then "main" else mn) <> "\n\n" <>
   "import . \"" <> runtime <> "\"\n" <>
   (if mn == "Main"
-      then "import _ \"" <> otherPrefix <> ffiLoader <> "\"\n"
+      then "import _ \"" <> otherPrefix <> "/" <> ffiLoader <> "\"\n"
       else "\n") <>
   "import (\n" <>
   (T.concat $ formatImport <$> imports') <> ")\n\n" <>
   "type _ = Any\n\n"
   where
   formatImport :: Text -> Text
-  formatImport s = "    \"" <> otherPrefix <> modPrefix <> "/" <> s <> "\"\n"
+  formatImport s = "    \"" <> otherPrefix <> "/" <> modPrefix <> "/" <> s <> "\"\n"
 
 implFooterSource :: Text -> [Ident] -> Text
 implFooterSource mn foreigns =
@@ -496,14 +498,17 @@ foreignMod = "Foreign"
 foreignDict :: Text
 foreignDict = "foreign"
 
+modLabel :: Text
+modLabel = "purescript-native"
+
 modPrefix :: Text
-modPrefix = "purescript-native/output"
+modPrefix = modLabel <> "/output"
 
 runtime :: Text
-runtime = "github.com/purescript-native/go-runtime"
+runtime = "github.com/" <> modLabel <> "/go-runtime"
 
 ffiLoader :: Text
-ffiLoader = "purescript-native/ffi-loader"
+ffiLoader = modLabel <> "/ffi-loader"
 
 initName :: Text -> Text
 initName s = "ₒ" <> s

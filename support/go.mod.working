@@ -1,5 +1,1 @@
-module example.com/example
-
-replace $PROJECT/purescript-native/output => ./$OUTPUT/
-
-replace $PROJECT/purescript-native/ffi-loader => ./purescript-native/
+module $PROJECT/example

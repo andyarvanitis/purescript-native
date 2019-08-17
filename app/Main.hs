@@ -112,9 +112,8 @@ main = do
     let command = case cmd of
                     Build -> "build"
                     Run -> "run"
-    project <- envVar goproject
-    (_, _, _, p) <- createProcess (proc "go" [command, T.unpack $ project <> modPrefix <> "/Main"])
-    waitForProcess p
+    project <- projectEnv
+    callProcess "go" [command, T.unpack project </> modPrefix' </> "Main"]
     return ()
 
 generateCode :: [String] -> FilePath -> FilePath -> IO ()
@@ -137,7 +136,7 @@ generateCode opts baseOutpath jsonFile = do
 transpile :: [String] -> FilePath -> FilePath -> IO ()
 transpile opts baseOutpath jsonFile = do
   jsonText <- T.decodeUtf8 <$> B.readFile jsonFile
-  project <- envVar goproject
+  project <- projectEnv
   let module' = jsonToModule $ parseJson jsonText
   ((_, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToIL module' project)
   let mn = moduleNameToIL' $ moduleName module'
@@ -152,7 +151,7 @@ writeSupportFiles :: FilePath -> IO ()
 writeSupportFiles baseOutpath = do
   currentDir <- getCurrentDirectory
   let outputdir = T.pack $ baseOutpath \\ currentDir
-      ffiOutpath = currentDir </> "purescript-native"
+      ffiOutpath = currentDir </> subdir
   createDirectoryIfMissing True baseOutpath
   createDirectoryIfMissing True ffiOutpath
   writeModuleFile outputdir currentDir  $(embedFile "support/go.mod.working")
@@ -165,10 +164,16 @@ writeSupportFiles baseOutpath = do
     let goModSource = path </> "go.mod"
     goModSourceExists <- doesFileExist goModSource
     when (not goModSourceExists) $ do
-      project <- envVar goproject
-      let modText' = T.replace "/$OUTPUT/" outputdir $ T.decodeUtf8 modText
-          modText'' = T.replace "$PROJECT/" project modText'
-      B.writeFile goModSource $ T.encodeUtf8 modText''
+      currentDir <- getCurrentDirectory
+      project <- projectEnv
+      let project' = T.unpack project
+          outputdir' = tail $ T.unpack outputdir
+          modText' = T.replace "$PROJECT" project $ T.decodeUtf8 modText
+          replaceLoader = project' </> ffiLoader' <> "=" <> currentDir </> subdir
+          replaceOutput = project' </> modPrefix' <> "=" <> currentDir </> outputdir'
+      B.writeFile goModSource $ T.encodeUtf8 modText'
+      callProcess "go" ["mod", "edit", "-replace", replaceLoader]
+      callProcess "go" ["mod", "edit", "-replace", replaceOutput]
   writeLoaderFile :: FilePath -> B.ByteString -> IO ()
   writeLoaderFile ffiOutpath loaderText = do
     let loaderSource = ffiOutpath </> "ffi_loader.go"
@@ -179,9 +184,9 @@ writeSupportFiles baseOutpath = do
 implFileName :: Text -> FilePath
 implFileName mn = ((\c -> if c == '.' then '_' else c) <$> T.unpack mn) <> ".go"
 
-envVar :: String -> IO Text
-envVar var = do
-  T.pack . maybe "" (<> "/") <$> lookupEnv var
+projectEnv :: IO Text
+projectEnv = do
+  T.pack . fromMaybe defaultProject <$> lookupEnv goproject
 
 help :: String
 help = "Usage: psgo OPTIONS COREFN-FILES\n\
@@ -204,6 +209,18 @@ goSrc = ".go"
 
 goproject :: String
 goproject = "GOPROJECT"
+
+defaultProject :: String
+defaultProject = "project.localhost"
+
+modPrefix' :: String
+modPrefix' = T.unpack modPrefix
+
+ffiLoader' :: String
+ffiLoader' = T.unpack ffiLoader
+
+subdir :: String
+subdir = T.unpack modLabel
 
 errorNoCorefnFiles :: IO ()
 errorNoCorefnFiles = do
