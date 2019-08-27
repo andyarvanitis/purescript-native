@@ -2,7 +2,7 @@
 
 This is a platform-native compiler backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane", debuggable, and portable [C++11](https://isocpp.org/wiki/faq/cpp11) (or later) or [Go](https://golang.org/) code as an intermediate language, which is then compiled to a native executable binary. This also enables easy interoperability with existing C/C++ or Go frameworks and libraries on a number of platforms.
 
-There are two utilities in the purescript-native "suite": `pscpp` and `psgo`. The source code in this branch is for `psgo`, the purescript-to-Go transpiler. For the source code of the `pscpp` purescript-to-C++ transpiler / build tool, please see the [cpp branch](https://github.com/andyarvanitis/purescript-native/tree/cpp).
+There are two utilities in the purescript-native "suite": `pscpp` and `psgo`. The source code in this branch is for `psgo`, the purescript-to-Go transpiler. For the source code of the `pscpp` purescript-to-C++ transpiler, please see the [cpp branch](https://github.com/andyarvanitis/purescript-native/tree/cpp).
 
 #### Platforms
 * Although purescript-native should work on any platform supporting PureScript and modern C++ or Go, the generated code and resulting binary executables have been tested on:
