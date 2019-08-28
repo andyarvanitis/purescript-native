@@ -13,6 +13,7 @@ import (
 	_ "github.com/purescript-native/go-ffi/purescript-functions"
 	_ "github.com/purescript-native/go-ffi/purescript-globals"
 	_ "github.com/purescript-native/go-ffi/purescript-integers"
+	_ "github.com/purescript-native/go-ffi/purescript-lazy"
 	_ "github.com/purescript-native/go-ffi/purescript-math"
 	_ "github.com/purescript-native/go-ffi/purescript-partial"
 	_ "github.com/purescript-native/go-ffi/purescript-prelude"
