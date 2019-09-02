@@ -107,8 +107,10 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) project =
   importToIL = AST.everything (++) modRef
     where
     modRef (AST.Indexer _ (AST.Var _ _) (AST.Var _ mname))
-      | not $ T.null mname = [mname]
+      | not $ T.null mname = [extract mname]
     modRef _ = []
+    extract :: Text -> Text
+    extract = T.replace "_" "." . T.dropWhileEnd (=='_')
 
   -- | Replaces the `ModuleName`s in the AST so that the generated code refers to
   -- the collision-avoiding renamed module imports.

@@ -16,7 +16,9 @@ import Language.PureScript.Names
 import qualified Language.PureScript.Constants as C
 
 moduleNameToIL :: ModuleName -> Text
-moduleNameToIL (ModuleName pns) = T.intercalate "_" (runProperName `map` pns)
+moduleNameToIL (ModuleName pns) =
+  let name = T.intercalate "_" (runProperName `map` pns)
+  in if nameIsILBuiltIn name then (name <> "_") else name
 
 moduleNameToIL' :: ModuleName -> Text
 moduleNameToIL' (ModuleName pns) = T.intercalate "." (runProperName `map` pns)
@@ -71,7 +73,18 @@ nameIsILReserved name =
 nameIsILBuiltIn :: Text -> Bool
 nameIsILBuiltIn name =
   name `elem`
-    [
+    [ "Any"
+    , "Apply"
+    , "Contains"
+    , "Dict"
+    , "EffFn"
+    , "Fn"
+    , "Foreign"
+    , "Get"
+    , "Length"
+    , "Once"
+    , "Run"
+    , "Undefined"
     ]
 
 ilAnyReserved :: [Text]
