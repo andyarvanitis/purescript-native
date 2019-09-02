@@ -8,6 +8,7 @@ import (
 	_ "github.com/purescript-native/go-ffi/purescript-assert"
 	_ "github.com/purescript-native/go-ffi/purescript-console"
 	_ "github.com/purescript-native/go-ffi/purescript-effect"
+	_ "github.com/purescript-native/go-ffi/purescript-enums"
 	_ "github.com/purescript-native/go-ffi/purescript-exceptions"
 	_ "github.com/purescript-native/go-ffi/purescript-foldable-traversable"
 	_ "github.com/purescript-native/go-ffi/purescript-functions"
