@@ -174,6 +174,7 @@ writeSupportFiles baseOutpath = do
       B.writeFile goModSource $ T.encodeUtf8 modText'
       callProcess "go" ["mod", "edit", "-replace", replaceLoader]
       callProcess "go" ["mod", "edit", "-replace", replaceOutput]
+      callProcess "go" ["clean", "-modcache"]
   writeLoaderFile :: FilePath -> B.ByteString -> IO ()
   writeLoaderFile ffiOutpath loaderText = do
     let loaderSource = ffiOutpath </> "ffi_loader.go"
