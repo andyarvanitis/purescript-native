@@ -38,12 +38,10 @@ This assumes you are running macOS (OS X) or a Unix-like system (Linux, *BSD, et
 
 1. Initialize your project with `spago init`, and install any dependencies with `spago install` (please see their instructions if you haven't used it before).
 
+1. Add the `backend = "psgo"` option to your `spago.dhall` file. That way `spago` will use the psgo backend when compiling.
+
 1. You should now be ready to build a PureScript program:
-  * As stated above, place your source file(s) in the working directory's `src` subdirectory and execute
-  
-  ```sh
-  spago build -- -g corefn && psgo
-  ```
+  * As stated above, place your source file(s) in the working directory's `src` subdirectory and execute `spago build`.
 
   * This will generate the Go source tree for your program and then build an executable binary. The resulting executable will be in your working directory and will be named `Main`. The generated source files will be under `output/`.
 
