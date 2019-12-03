@@ -62,7 +62,7 @@ runTests = do
 
     callProcess "rm" ["-rf", "output"]
     callProcess "rm" ["-rf", "Main"]
-    callProcess "spago" ["build", "--", "--codegen", "corefn"]
+    callProcess "spago" ["build"]
     callProcess "psgo" []
     --
     -- Run C++ files
@@ -114,6 +114,7 @@ fetchPackages :: IO ()
 -------------------------------------------------------------------------------
 fetchPackages = do
   callProcess "spago" ["init"]
+  callCommand "add_psgo_to_spago_config"
   mapM (callProcess "spago" . (\p -> ["install", p])) packages
   return ()
 
