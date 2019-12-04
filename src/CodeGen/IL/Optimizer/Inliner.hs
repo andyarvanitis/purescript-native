@@ -122,7 +122,7 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
 
   , inlineNonClassFunction (isModFn (C.dataFunction, C.apply)) $ \f x -> App Nothing f [x]
   , inlineNonClassFunction (isModFn (C.dataFunction, C.applyFlipped)) $ \x f -> App Nothing f [x]
-  , inlineNonClassFunction (isModFnWithDict (C.dataArray, C.unsafeIndex)) $ flip (Indexer Nothing)
+  , inlineUnsafeIndex (isModFnWithDict (C.dataArray, C.unsafeIndex)) $ flip (Indexer Nothing)
   ] ++
   [ fn | i <- [0..10], fn <- [ mkFn i, runFn i ] ] ++
   [ fn | i <- [0..10], fn <- [ mkEffFn C.controlMonadEffUncurried C.mkEffFn i, runEffFn C.controlMonadEffUncurried C.runEffFn i ] ] ++
@@ -209,6 +209,15 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
   inlineNonClassFunction p f = convert where
     convert :: AST -> AST
     convert (App _ (App _ op' [x]) [y]) | p op' = f x y
+    convert other = other
+
+  inlineUnsafeIndex :: (AST -> Bool) -> (AST -> AST -> AST) -> AST -> AST
+  inlineUnsafeIndex p _ = convert where
+    convert :: AST -> AST
+    convert (App _ (App ss op' [x]) [y@NumericLiteral{}])
+      | p op' = Indexer ss y x
+    convert (App _ (App ss op' [x]) [y])
+      | p op' = App ss (Var Nothing indexFn) [x, y]
     convert other = other
 
   isModFn :: (Text, PSString) -> AST -> Bool

@@ -81,6 +81,7 @@ nameIsILBuiltIn name =
     , "Fn"
     , "Foreign"
     , "Get"
+    , "Index"
     , "Length"
     , "Once"
     , "Run"
@@ -183,6 +184,9 @@ string = "string"
 
 arrayLengthFn :: Text
 arrayLengthFn = "Length"
+
+indexFn :: Text
+indexFn = "Index"
 
 freshName' :: MonadSupply m => m Text
 freshName' = do

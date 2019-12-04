@@ -106,6 +106,12 @@ literals = mkPattern' match'
     , prettyPrintIL' arg
     , return $ emit ")"
     ]
+  match (App _ (Var _ fn) args) | fn == indexFn = mconcat <$> sequence
+    [ return $ emit fn
+    , return $ emit "("
+    , intercalate (emit ", ") <$> forM args prettyPrintIL'
+    , return $ emit ")"
+    ]
   match (App _ (Var _ fn) args) | fn == tcoLoop = mconcat <$> sequence
     [ return $ emit fn
     , return $ emit "("
