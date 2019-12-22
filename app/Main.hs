@@ -54,7 +54,7 @@ jsonToModule :: Value -> Module Ann
 jsonToModule value =
   case parse moduleFromJSON value of
     Success (_, r) -> r
-    _ -> error "failed"                  
+    _ -> error "failed"
 
 main :: IO ()
 main = do
@@ -164,13 +164,12 @@ writeSupportFiles baseOutpath = do
     let goModSource = path </> "go.mod"
     goModSourceExists <- doesFileExist goModSource
     when (not goModSourceExists) $ do
-      currentDir <- getCurrentDirectory
       project <- projectEnv
       let project' = T.unpack project
           outputdir' = tail $ T.unpack outputdir
           modText' = T.replace "$PROJECT" project $ T.decodeUtf8 modText
-          replaceLoader = project' </> ffiLoader' <> "=" <> currentDir </> subdir
-          replaceOutput = project' </> modPrefix' <> "=" <> currentDir </> outputdir'
+          replaceLoader = project' </> ffiLoader' <> "=." </> subdir
+          replaceOutput = project' </> modPrefix' <> "=." </> outputdir'
       B.writeFile goModSource $ T.encodeUtf8 modText'
       callProcess "go" ["mod", "edit", "-replace", replaceLoader]
       callProcess "go" ["mod", "edit", "-replace", replaceOutput]
