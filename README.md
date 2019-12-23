@@ -1,5 +1,8 @@
 [![PureScript](https://raw.githubusercontent.com/purescript/purescript/master/logo.png)](http://purescript.org)
 
+This repo contains the C++ compiler backend which allowes to create shared libraries, because the exported functions are
+declared with extern "C". It was only tested for Linux.
+
 This is a platform-native compiler backend for [PureScript](https://github.com/purescript/purescript). It attempts to generate "sane", debuggable, and portable [C++11](https://isocpp.org/wiki/faq/cpp11) (or later) or [Go](https://golang.org/) code as an intermediate language, which is then compiled to a native executable binary. This also enables easy interoperability with existing C/C++ or Go frameworks and libraries on a number of platforms.
 
 There are two utilities in the purescript-native "suite": `pscpp` and `psgo`. The source code in this branch is for `pscpp`, the purescript-to-C++ transpiler. For the source code of the `psgo` purescript-to-Go transpiler / build tool, please see the [golang branch](https://github.com/andyarvanitis/purescript-native/tree/golang).

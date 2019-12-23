@@ -18,6 +18,7 @@ PURS        := purs
 PSC_PACKAGE := psc-package
 PSCPP       := pscpp
 SRC         := src
+SRCINT      := srcint
 OUTPUT      := output
 CC_SRC      := $(OUTPUT)/src
 FFI_SRC     := ffi
@@ -25,6 +26,10 @@ BIN         := main
 
 override PURSFLAGS += compile --codegen corefn
 override CXXFLAGS += --std=c++11
+
+CFLAGS += -Os -pedantic -std=c99 -Wall -fstrict-aliasing -fomit-frame-pointer
+LDFLAGS += -lm
+LDSHAREDFLAGS = -shared
 
 CXXVERSION = $(shell $(CXX) --version)
 ifneq (,$(findstring g++,$(CXXVERSION)))
@@ -34,34 +39,24 @@ endif
 DEBUG := "-DDEBUG -g"
 RELEASE := "-DNDEBUG -O3"
 
-INCLUDES := -I $(CC_SRC)
+INCLUDES := -I $(CC_SRC) 
 BIN_DIR := $(OUTPUT)/bin
 
 PACKAGE_SOURCES = $(subst \,/,$(shell $(PSC_PACKAGE) sources))
 PURESCRIPT_PKGS := $(firstword $(subst /, ,$(PACKAGE_SOURCES)))
 
+PURESCRIPT_PKG_SRCS=$(foreach d,$(PACKAGE_SOURCES),$(call rwildcard,$(firstword $(subst *, ,$(d))),*.purs))
+
 ## Not all environments support globstar (** dir pattern)
 rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
-
-unspecified:
-	@echo
-	@echo "Please specify the type of build you want: 'debug' or 'release'"
-	@echo
-	@echo "  debug   => not optimized (your app will run slower), good for"
-	@echo "             running in a source-level debugger, more (descriptive)"
-	@echo "             runtime exceptions"
-	@echo
-	@echo "  release => optimized (your app will run faster), less helpful when debugging"
-	@echo
 
 debug: codegen
 	@$(MAKE) $(BIN) CFLAGS+=$(DEBUG) CXXFLAGS+=$(DEBUG)
 
 release: codegen
-	@$(MAKE) $(BIN) CFLAGS+=$(RELEASE) CXXFLAGS+=$(RELEASE)
+	@$(MAKE) $(BIN_DIR)/$(BIN) CFLAGS+=$(RELEASE) CXXFLAGS+=$(RELEASE)
 
 .PHONY: corefn
-corefn: PURESCRIPT_PKG_SRCS=$(foreach d,$(PACKAGE_SOURCES),$(call rwildcard,$(firstword $(subst *, ,$(d))),*.purs))
 corefn: PURESCRIPT_SRCS=$(call rwildcard,$(SRC)/,*.purs)
 corefn: $(PURESCRIPT_PKGS)
 	@$(PURS) $(PURSFLAGS) --output $(OUTPUT) $(PURESCRIPT_PKG_SRCS) $(PURESCRIPT_SRCS)
@@ -75,53 +70,65 @@ $(PURESCRIPT_PKGS):
 	@echo "Getting packages using" $(PSC_PACKAGE) "..."
 	@$(PSC_PACKAGE) update
 
-SRCS := $(call rwildcard,$(CC_SRC)/,*.cpp)
-SRCS += $(call rwildcard,$(FFI_SRC)/,*.cpp)
-SRCS += $(call rwildcard,$(FFI_SRC)/,*.cc)
-SRCS += $(call rwildcard,$(FFI_SRC)/,*.mm)
-SRCS += $(call rwildcard,$(FFI_SRC)/,*.c)
-SRCS += $(call rwildcard,$(FFI_SRC)/,*.m)
+# the core modules 
+PSC_MODULES = $(shell sed -sE -e "s/--.*//g" \
+  -ne "0,/module/{s/^[[:space:]]*module[[:space:]]+([A-Za-z.]*).*/\1/p}" $(PURESCRIPT_PKG_SRCS) \
+  | sed -e "s/\./_/g" )
 
-OBJS1 = $(SRCS:.cpp=.o)
-OBJS2 = $(OBJS1:.cc=.o)
-OBJS3 = $(OBJS2:.mm=.o)
-OBJS4 = $(OBJS3:.c=.o)
-OBJS  = $(OBJS4:.m=.o)
-DEPS  = $(OBJS:.o=.d)
+APP_MODULES =  # use it for your application specific modules
+MAIN_MODULE = Main
 
-$(BIN): $(OBJS)
-	@echo "Linking" $(BIN_DIR)/$(BIN)
+PSC_SRCS := $(foreach m,$(PSC_MODULES),$(call rwildcard,$(CC_SRC)/$(m)/,*.cpp)) 
+APP_SRCS := $(foreach m,$(APP_MODULES),$(call rwildcard,$(CC_SRC)/$(m)/,*.cpp))
+FFI_SRCS := $(call rwildcard,$(FFI_SRC)/,*.cpp)
+MAIN_SRCS:= $(call rwildcard,$(CC_SRC)/$(MAIN_MODULE)/,*.cpp)  $(CC_SRC)/purescript.cpp
+
+PSC_OBJS = $(PSC_SRCS:.cpp=.o)
+APP_OBJS = $(APP_SRCS:.cpp=.o)
+FFI_OBJS = $(FFI_SRCS:.cpp=.o)
+MAIN_OBJS= $(MAIN_SRCS:.cpp=.o)
+
+PSC_LIBNAME = psc
+FFI_LIBNAME = ffi
+APP_LIBNAME = app
+PSC_LIB = $(BIN_DIR)/lib$(PSC_LIBNAME).so
+FFI_LIB = $(BIN_DIR)/lib$(FFI_LIBNAME).so
+APP_LIB = $(BIN_DIR)/lib$(APP_LIBNAME).so
+
+DEPS  = $(PSC_OBJS:.o=.d) $(APP_OBJS:.o=.d) $(FFI_OBJS:.o=.d) $(MAIN_OBJS:.o=.d)
+
+$(PSC_LIB): $(PSC_OBJS)
+	@echo "build shared lib:" $(PSC_LIB)
 	@mkdir -p $(BIN_DIR)
-	@$(CXX) $^ -o $(BIN_DIR)/$@ $(LDFLAGS)
+	@$(CXX) $^ -o $(PSC_LIB) $(LDSHAREDFLAGS)
+
+$(FFI_LIB): $(FFI_OBJS)
+	@echo "build shared lib:" $(FFI_LIB)
+	@mkdir -p $(BIN_DIR)
+	@$(CXX) $^ -o $(FFI_LIB) $(LDSHAREDFLAGS)
+
+$(BIN_DIR)/$(BIN): $(MAIN_OBJS) $(PSC_LIB) $(FFI_LIB)
+	@echo "Linking" $@
+	@mkdir -p $(BIN_DIR)
+	@$(CXX) $(MAIN_OBJS) -o $@ -L$(BIN_DIR)/ -l$(PSC_LIBNAME) -l$(FFI_LIBNAME) $(LDFLAGS)
+
+$(BIN_DIR)/$(BIN)_s: $(MAIN_OBJS) $(PSC_OBJS) $(FFI_OBJS)
+	@echo "Linking" $@
+	@mkdir -p $(BIN_DIR)
+	@$(CXX) $^ -o $@ $(LDFLAGS)
 
 -include $(DEPS)
 
 %.o: %.cpp
 	@echo "Creating" $@ "(C++)"
-	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
-
-%.o: %.cc
-	@echo "Creating" $@ "(C++)"
-	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
-
-%.o: %.mm
-	@echo "Creating" $@ "(Objective-C++)"
-	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
-
-%.o: %.c
-	@echo "Creating" $@ "(C)"
-	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
-
-%.o: %.m
-	@echo "Creating" $@ "(Objective-C)"
-	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
+	@$(CXX) $(CXXFLAGS) $(INCLUDES)  -MMD -MP -c $< -o $@ -fPIC
 
 .PHONY: all
 all: release
 
 .PHONY: clean
 clean:
-	@-rm -f $(OBJS) $(DEPS)
+	@-rm -f $(PSC_LIB) $(PSC_OBJS) $(FFI_LIB) $(FFI_OBJS) $(MAIN_OBJS) $(DEPS)
 	@-rm -rf $(OUTPUT)
 
 .PHONY: run

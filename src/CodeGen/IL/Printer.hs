@@ -106,7 +106,9 @@ literals = mkPattern' match'
   match (Function _ (Just name) [] (Block _ [Return _ ret]))
     | isLiteral ret = mconcat <$> sequence
     [ return $ emit "auto "
+    , return $ emit "PS("
     , return $ emit name
+    , return $ emit ")"
     , return $ emit "() -> const boxed& "
     , return $ emit "{\n"
     , withIndent $ do
@@ -130,7 +132,9 @@ literals = mkPattern' match'
     ]
   match (Function _ (Just name) [] ret) = mconcat <$> sequence
     [ return $ emit "auto "
+    , return $ emit "PS("
     , return $ emit name
+    , return $ emit ")"
     , return $ emit "() -> boxed "
     , prettyPrintIL' ret
     ]
@@ -150,8 +154,10 @@ literals = mkPattern' match'
     , return $ emit "()"
     ]
   match (Indexer _ prop@(Var _ name) val) = mconcat <$> sequence
-    [ prettyPrintIL' val
-    , return $ emit "::"
+    [ return $ emit "PS_"
+    , prettyPrintIL' val
+    --    , return $ emit "::"
+    , return $ emit "_"
     , prettyPrintIL' prop
     , return $ emit "()"
     ]
@@ -423,44 +429,47 @@ interfaceSource mn values foreigns =
   "#ifndef " <> mn <> "_H\n" <>
   "#define " <> mn <> "_H\n\n" <>
   "#include \"purescript.h\"\n\n" <>
-  "namespace " <> mn <> " {\n\n" <>
+  -- "namespace " <> mn <> " {\n\n" <>
+  "extern \"C\" {\n\n" <>
   "using namespace purescript;\n\n" <>
   (T.concat $ (\(export, static) ->
                 let rty = if static then "const boxed&" else "boxed" in
-                "auto " <> export <> "() -> " <> rty <> ";\n") <$> values') <> "\n" <>
-  "} // end namespace " <> mn <> "\n\n" <>
+                "auto " <> "PS_" <> mn <> "_" <> export <> "() -> " <> rty <> ";\n") <$> values') <> "\n" <>
+  -- "} // end namespace " <> mn <> "\n\n" <>
+  "} // extern \"C\"\n\n" <>
   "#endif // " <> mn <> "_H\n\n"
 
 implHeaderSource :: Text -> [Text] -> Text -> Text
 implHeaderSource mn imports interfaceImport =
   T.concat imports <> "\n"<>
   interfaceImport <> "\n\n" <>
-  "namespace " <> mn <> " {\n\n"
+  "#define PS(N) PS_" <> mn <> "_ ## N\n\n"
+  -- <> "namespace " <> mn <> " {\n\n"
 
 implFooterSource :: Text -> [Ident] -> Text
 implFooterSource mn foreigns =
   "\n\n\n" <>
-  (if null foreigns
-    then ""
-    else ("// Foreign values\n\n" <>
-          "DEFINE_FOREIGN_DICTIONARY_AND_ACCESSOR()\n\n" <>
-          (T.concat $ (\foreign' -> "auto " <>
-                                    identToIL foreign' <>
-                                    "() -> const boxed& { " <>
-                                    staticValueBegin <>
-                                    foreignDict <> "().at(" <>
-                                        (stringLiteral . mkString $ runIdent foreign') <> "); " <>
-                                    staticValueEnd <>
-                                    " };\n") <$> foreigns) <>
-          "\n")) <>
-  "} // end namespace " <> mn <>
+  -- (if null foreigns
+  --   then ""
+  --   else ("// Foreign values\n\n" <>
+  --       "DEFINE_FOREIGN_DICTIONARY_AND_ACCESSOR()\n\n" <>
+  --         (T.concat $ (\foreign' -> "auto " <>
+  --                                   identToIL foreign' <>
+  --                                   "() -> const boxed& { " <>
+  --                                   staticValueBegin <>
+  --                                   foreignDict <> "().at(" <>
+  --                                       (stringLiteral . mkString $ runIdent foreign') <> "); " <>
+  --                                       staticValueEnd <>
+  --                                   " };\n") <$> foreigns) <>
+  --          "\n")) <>
+  -- "} // end namespace " <> mn <>
   "\n\n" <>
   if mn == "Main" then mainSource else "\n"
   where
   mainSource :: Text
   mainSource = "\
     \int main(int argc, const char * argv[]) {\n\
-    \    Main::main()();\n\
+    \    PS(main)()();\n\
     \    return 0;\n\
     \}\n\n\
     \"
