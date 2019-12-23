@@ -133,4 +133,4 @@ clean:
 
 .PHONY: run
 run:
-	@$(BIN_DIR)/$(BIN) $(ARGS)
+	@LD_LIBRARY_PATH=$$(pwd)/$(BIN_DIR) $(BIN_DIR)/$(BIN) $(ARGS)
