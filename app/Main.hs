@@ -75,8 +75,8 @@ main = do
           when (not $ null files) $ do
             let filepath = takeDirectory (head files)
                 baseOutpath = joinPath $ (init $ splitDirectories filepath) ++ [outdir]
-            writeRuntimeFiles baseOutpath
-            Par.mapM (generateCode opts' baseOutpath) files
+            writeRuntimeFiles $ baseOutpath </> rtdir
+            Par.mapM (generateCode opts' $ baseOutpath </> mddir) files
             return ()
           return ()
 
@@ -87,7 +87,7 @@ generateCode opts baseOutpath jsonFile = do
       dirparts = splitDirectories $ filepath
       mname = (\c -> if c == '.' then '_' else c) <$> last dirparts
       basedir = joinPath $ init dirparts
-      possInterfaceFilename = basedir </> outdir </> mname </> interfaceFileName mname
+      possInterfaceFilename = basedir </> outdir </> mddir </> interfaceFileName mname
   exists <- doesFileExist possInterfaceFilename
   if exists
     then do
@@ -103,11 +103,10 @@ transpile opts baseOutpath jsonFile = do
   ((interface, foreigns, asts, implHeader, implFooter), _) <- runSupplyT 5 (moduleToIL module' Nothing)
   let mn = moduleNameToIL $ moduleName module'
       implementation = prettyPrintIL asts
-      outpath = joinPath [baseOutpath, T.unpack mn]
-      interfacePath = outpath </> interfaceFileName (T.unpack mn)
-      implPath = outpath </> implFileName mn
+      interfacePath = baseOutpath </> interfaceFileName (T.unpack mn)
+      implPath = baseOutpath </> implFileName mn
   putStrLn interfacePath
-  createDirectoryIfMissing True outpath
+  createDirectoryIfMissing True baseOutpath
   B.writeFile interfacePath $ T.encodeUtf8 $ conv interface
   putStrLn implPath
   B.writeFile implPath $ T.encodeUtf8 $ conv (implHeader <> implementation <> implFooter)
@@ -134,7 +133,13 @@ writeRuntimeFiles baseOutpath = do
     B.writeFile recur $(embedFile "runtime/recursion.h")
 
 outdir :: FilePath
-outdir = "src"
+outdir = "../cpp"
+
+rtdir :: FilePath
+rtdir = "runtime"
+
+mddir :: FilePath
+mddir = "modules"
 
 interfaceFileName :: String -> FilePath
 interfaceFileName mn = mn <> ".h"

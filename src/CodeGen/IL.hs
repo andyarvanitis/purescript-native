@@ -111,7 +111,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
       | not $ T.null mname = [importToIL' mname]
     modRef _ = []
   importToIL' :: Text -> Text
-  importToIL' h = "#include \"" <> h <> "/" <> h <> ".h\"\n"
+  importToIL' h = "#include \"" <> h <> ".h\"\n"
 
   -- | Replaces the `ModuleName`s in the AST so that the generated code refers to
   -- the collision-avoiding renamed module imports.
