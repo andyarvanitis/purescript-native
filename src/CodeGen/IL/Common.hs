@@ -33,9 +33,10 @@ unusedName :: Text
 unusedName = "_"
 
 properToIL :: Text -> Text
-properToIL name
-  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = name <> "_"
-  | otherwise = T.concatMap identCharToText name
+properToIL name = T.concatMap identCharToText name
+-- This is not necessary anymore because we prefix the name anyway
+--  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = name <> "_"
+--  | otherwise = T.concatMap identCharToText name
 
 -- | Test if a string is a valid AST identifier without escaping.
 identNeedsEscaping :: Text -> Bool
