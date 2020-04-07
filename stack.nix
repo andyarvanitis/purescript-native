@@ -7,11 +7,17 @@
 # LC_ALL=en_US.iso88591 stack --nix build; see e.g. https://github.com/koalaman/shellcheck/issues/324
 # 
 #
-{ pkgs ? import <nixpkgs> {}, ghc ? pkgs.ghc }:
+{ pkgs ?
+  import (builtins.fetchTarball {
+    name = "nixos-release-19.03";
+    url = https://github.com/nixos/nixpkgs/archive/34c7eb7545d155cc5b6f499b23a7cb1c96ab4d59.tar.gz;
+    sha256 = "11z6ajj108fy2q5g8y4higlcaqncrbjm3dnv17pvif6avagw4mcb";
+  }) {}
+}:
 
 pkgs.haskell.lib.buildStackProject {
   name = "default-stack-shell";
-  inherit ghc;
+  ghc = pkgs.haskell.compiler.ghc864;
   buildInputs = with pkgs; [git git-lfs gmp ncurses zlib];
   LANG = "en_US.UTF-8";
 }
