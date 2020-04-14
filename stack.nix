@@ -17,7 +17,7 @@
 
 pkgs.haskell.lib.buildStackProject {
   name = "default-stack-shell";
-  ghc = pkgs.haskell.compiler.ghc864;
+  ghc = pkgs.haskell.compiler.ghc865;
   buildInputs = with pkgs; [git git-lfs gmp ncurses zlib];
   LANG = "en_US.UTF-8";
 }
