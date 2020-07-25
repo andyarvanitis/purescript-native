@@ -15,7 +15,7 @@
 # resolver:
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
-resolver: lts-13.12
+resolver: lts-13.26
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -41,9 +41,12 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
 -  git: https://github.com/purescript/purescript
-   commit: 738aaa2f21097c7f18aa8100b16ae52316addb04
+   commit: 9cad73ed8ea7df3011032ddbd2f3de5a0c08629c
+- happy-1.19.9
+- language-javascript-0.7.0.0
 - network-3.0.1.1
-- pipes-http-1.0.5
+- these-1.0.1
+- semialign-1
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
@@ -72,3 +75,7 @@ extra-deps:
 nix:
   shell-file: stack.nix
 
+flags: 
+  these:
+    assoc: false
+    quickcheck: false
