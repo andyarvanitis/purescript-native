@@ -76,6 +76,7 @@ nameIsILBuiltIn name =
     [ "Any"
     , "Apply"
     , "Contains"
+    , "CopyDict"
     , "Dict"
     , "EffFn"
     , "Fn"
@@ -187,6 +188,9 @@ arrayLengthFn = "Length"
 
 indexFn :: Text
 indexFn = "Index"
+
+copyDictFn :: Text
+copyDictFn = "CopyDict"
 
 freshName' :: MonadSupply m => m Text
 freshName' = do
