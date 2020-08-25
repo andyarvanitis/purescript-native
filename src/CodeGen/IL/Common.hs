@@ -171,6 +171,9 @@ dictType = "Dict"
 arrayType :: Text
 arrayType = "[]" <> anyType
 
+uncurriedFnType :: Int -> Text
+uncurriedFnType i = "Fn" <> (T.pack . show $ i)
+
 int :: Text
 int = "int"
 

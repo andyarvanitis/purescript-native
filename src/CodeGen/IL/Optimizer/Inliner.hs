@@ -186,13 +186,14 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
   runFn :: Int -> AST -> AST
   runFn = runFn' C.dataFunctionUncurried C.runFn (\ss f args ->
                                                     let len = length args
-                                                        typ = mkString $ "Fn" <> (T.pack . show $ len) in
+                                                        typ = mkString $ uncurriedFnType len in
                                                     if len > 0
                                                       then App ss (App Nothing (StringLiteral Nothing typ) [f]) args
                                                       else App ss f args)
   runEffFn :: Text -> Text -> Int -> AST -> AST
   runEffFn modName fnName = runFn' modName fnName $ \ss fn acc ->
-    Function ss Nothing [] (Block ss [Return ss (App ss fn acc)])
+    let typ = mkString . uncurriedFnType $ length acc in
+    Function ss Nothing [] (Block ss [Return ss (App ss (App Nothing (StringLiteral Nothing typ) [fn]) acc)])
 
   runFn' :: Text -> Text -> (Maybe SourceSpan -> AST -> [AST] -> AST) -> Int -> AST -> AST
   runFn' modName runFnName res n = convert where
