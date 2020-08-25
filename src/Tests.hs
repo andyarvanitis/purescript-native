@@ -114,7 +114,9 @@ fetchPackages :: IO ()
 -------------------------------------------------------------------------------
 fetchPackages = do
   callProcess "spago" ["init"]
-  callCommand "add_psgo_to_spago_config"
+  callCommand "sed '$s/\\(}\\)/, backend = \"psgo\"\\1/'  < spago.dhall | dhall format > spago.tmp"
+  callCommand "mv spago.tmp spago.dhall"
+
   mapM (callProcess "spago" . (\p -> ["install", p])) packages
   return ()
 
