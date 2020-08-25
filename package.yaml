@@ -1,6 +1,6 @@
 name:                pscpp
 version:             0.1.0.0
-github:              "andyarvanitis/purescript-cpp"
+github:              "andyarvanitis/purescript-native"
 license:             BSD3
 author:              "Andy Arvanitis"
 maintainer:          "example@example.com"
@@ -9,6 +9,8 @@ copyright:           "2018 Andy Arvanitis"
 extra-source-files:
 - README.md
 - ChangeLog.md
+- stack.yaml
+- support/*
 - runtime/*.h
 - runtime/*.cpp
 
@@ -19,7 +21,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on Github at <https://github.com/andyarvanitis/purescript-cpp#readme>
+description:         Please see the README on Github at <https://github.com/andyarvanitis/purescript-native#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -35,10 +37,11 @@ dependencies:
 - safe >=0.3.9 && <0.4
 - transformers >=0.3.0 && <0.6
 - mtl >=2.1.0 && <2.3.0
-- aeson >=1.0 && <1.4
+- aeson >=1.0 && <1.5
 - directory -any
 - process -any
 - file-embed -any
+- filemanip -any
 - gitrev -any
 
 library:

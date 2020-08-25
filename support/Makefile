@@ -15,7 +15,7 @@
 # You can also edit the generated version of this file directly.
 #
 PURS        := purs
-PSC_PACKAGE := psc-package
+PACKAGE_MGR := spago
 PSCPP       := pscpp
 SRC         := src
 OUTPUT      := output
@@ -37,7 +37,7 @@ RELEASE := "-DNDEBUG -O3"
 INCLUDES := -I $(CC_SRC)
 BIN_DIR := $(OUTPUT)/bin
 
-PACKAGE_SOURCES = $(subst \,/,$(shell $(PSC_PACKAGE) sources))
+PACKAGE_SOURCES = $(subst \,/,$(shell $(PACKAGE_MGR) sources))
 PURESCRIPT_PKGS := $(firstword $(subst /, ,$(PACKAGE_SOURCES)))
 
 ## Not all environments support globstar (** dir pattern)
@@ -72,8 +72,8 @@ codegen: corefn
 	@$(PSCPP) $(PSCPPFLAGS) $(COREFN_SRCS)
 
 $(PURESCRIPT_PKGS):
-	@echo "Getting packages using" $(PSC_PACKAGE) "..."
-	@$(PSC_PACKAGE) update
+	@echo "Getting packages using" $(PACKAGE_MGR) "..."
+	@$(PACKAGE_MGR) update
 
 SRCS := $(call rwildcard,$(CC_SRC)/,*.cpp)
 SRCS += $(call rwildcard,$(FFI_SRC)/,*.cpp)

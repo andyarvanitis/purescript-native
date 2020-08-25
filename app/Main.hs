@@ -69,7 +69,7 @@ main = do
             putStrLn help
           when ("--version" `elem` opts') $ do
             let branch = $(gitBranch)
-                details | branch == "master" = "master, commit: " ++ $(gitHash)
+                details | branch == "cpp" = "cpp, commit: " ++ $(gitHash)
                         | otherwise = branch
             putStrLn $ details ++ if $(gitDirty) then " (DIRTY)" else ""
           when (not $ null files) $ do
