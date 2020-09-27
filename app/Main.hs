@@ -43,8 +43,8 @@ import CodeGen.IL.Printer
 
 import Tests
 
-data Command = Build | Run
-
+data Command = Build | Run (Maybe String)
+ 
 parseJson :: Text -> Value
 parseJson text
   | Just fileJson <- decode . L.encodeUtf8 $ L.fromStrict text = fileJson
@@ -56,10 +56,30 @@ jsonToModule value =
     Success (_, r) -> r
     _ -> error "failed"
 
+splitArgs :: [String] -> ([String], Maybe String, [String])
+splitArgs args =
+  let (opts, files) = partition (isPrefixOf "--") args
+      opts' = (map . map) toLower opts
+      (moduleName, files') =
+        if null files
+          then (Nothing, files)
+          else
+            if "--run" `elem` opts' && length (files) >= 1
+              then do
+                let file0 = head files
+                    files' = tail files
+                case file0 of
+                  "Main.main" -> (Just "Main", files')
+                  "Test.Main.main" -> (Just "Test.Main", files')
+                  _ -> (Nothing, files)
+              else (Nothing, files)
+    in (opts, moduleName, files')
+
 main :: IO ()
 main = do
   args <- getArgs
-  let (opts, files) = partition (isPrefixOf "--") args
+  -- let (opts, files) = partition (isPrefixOf "--") args
+  let (opts, moduleName, files) = splitArgs args
       opts' = (map . map) toLower opts
   if "--tests" `elem` opts'
     then runTests
@@ -81,7 +101,7 @@ main = do
             else
               processFiles opts' files
           if "--run" `elem` opts
-            then runBuildTool Run
+            then runBuildTool $ Run moduleName
             else when ("--no-build" `notElem` opts) $
                  runBuildTool Build
   return ()
@@ -109,11 +129,12 @@ main = do
     return ()
   runBuildTool :: Command -> IO ()
   runBuildTool cmd = do
-    let command = case cmd of
-                    Build -> "build"
-                    Run -> "run"
     project <- projectEnv
-    callProcess "go" [command, T.unpack project </> modPrefix' </> "Main"]
+    case cmd of
+      Build -> do
+        callProcess "go" ["build", T.unpack project </> modPrefix' </> "Main"]
+      Run moduleName -> do
+        callProcess "go" ["run", T.unpack project </> modPrefix' </> fromMaybe "Main" moduleName]
     return ()
 
 generateCode :: [String] -> FilePath -> FilePath -> IO ()
