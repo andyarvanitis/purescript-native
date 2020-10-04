@@ -18,7 +18,7 @@ import qualified Language.PureScript.Constants as C
 moduleNameToIL :: ModuleName -> Text
 moduleNameToIL (ModuleName pns) =
   let name = T.intercalate "_" (runProperName `map` pns)
-  in if nameIsILBuiltIn name then (name <> "_") else name
+  in if nameIsILBuiltIn name then (name <> moduleRenamerMarker) else name
 
 moduleNameToIL' :: ModuleName -> Text
 moduleNameToIL' (ModuleName pns) = T.intercalate "." (runProperName `map` pns)
@@ -56,9 +56,10 @@ properToIL name
 -- | Attempts to find a human-readable name for a symbol, if none has been specified returns the
 -- ordinal value.
 identCharToText :: Char -> Text
+identCharToText 'ṩ' = "ᵤṩ"
 identCharToText c | isAlphaNum c = T.singleton c
 identCharToText '_' = "_"
-identCharToText '\'' = "ʹ"
+identCharToText '\'' = "ᵖ"
 identCharToText c = "ᵤ" <> T.pack (show (ord c))
 
 moduleProperToIL :: Text -> Text
@@ -160,7 +161,7 @@ ilLiterals =
   ]
 
 withPrefix :: Text -> Text
-withPrefix s = "PS__" <> s
+withPrefix s = "Ꞌ" <> s
 
 anyType :: Text
 anyType = "Any"
@@ -198,4 +199,7 @@ copyDictFn = "CopyDict"
 freshName' :: MonadSupply m => m Text
 freshName' = do
     name <- freshName
-    return $ T.replace "$" "ᵗ" name
+    return $ T.replace "$" "ṩ" name
+
+moduleRenamerMarker :: Text
+moduleRenamerMarker = "ᴹ"

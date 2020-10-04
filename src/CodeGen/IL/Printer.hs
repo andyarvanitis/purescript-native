@@ -459,7 +459,13 @@ implHeaderSource mn imports otherPrefix =
   "type _ = Any\n\n"
   where
   formatImport :: Text -> Text
-  formatImport s = "    \"" <> otherPrefix <> "/" <> modPrefix <> "/" <> s <> "\"\n"
+  formatImport s =
+    "\t\"" <> otherPrefix <> "/" <> modPrefix <> "/" <> moduleRenamer s <> "\"\n"
+  moduleRenamer :: Text -> Text
+  moduleRenamer s
+    | (s', sfx) <- T.breakOn moduleRenamerMarker s,
+      not $ T.null sfx = s'
+  moduleRenamer s = s
 
 implFooterSource :: Text -> [Ident] -> Text
 implFooterSource mn foreigns =
@@ -487,7 +493,7 @@ implFooterSource mn foreigns =
   mainSource :: Text
   mainSource = "\
     \func main() {\n\
-    \    Run(PS__main())\n\
+    \    Run(Ꞌmain())\n\
     \}\n\n\
     \"
 
@@ -516,7 +522,7 @@ ffiLoader :: Text
 ffiLoader = modLabel <> "/ffi-loader"
 
 initName :: Text -> Text
-initName s = "ₒ" <> s
+initName s = "_" <> s <> "ᵒⁿᶜᵉ"
 
 valueName :: Text -> Text
-valueName s = "ₐ" <> s
+valueName s = "_" <> s <> "ᶠᵒʳᵉⁱᵍⁿ"
