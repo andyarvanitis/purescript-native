@@ -75,7 +75,7 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
   , binary euclideanRingNumber opDiv Divide
 
   -- , binary eqNumber opEq EqualTo
-  , binary eqNumber opNotEq NotEqualTo
+  -- , binary eqNumber opNotEq NotEqualTo
   , binary eqInt opEq EqualTo
   , binary eqInt opNotEq NotEqualTo
   , binary eqString opEq EqualTo
@@ -122,7 +122,7 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
 
   , inlineNonClassFunction (isModFn (C.dataFunction, C.apply)) $ \f x -> App Nothing f [x]
   , inlineNonClassFunction (isModFn (C.dataFunction, C.applyFlipped)) $ \x f -> App Nothing f [x]
-  , inlineNonClassFunction (isModFnWithDict (C.dataArray, C.unsafeIndex)) $ flip (Indexer Nothing)
+  , inlineUnsafeIndex (isModFnWithDict (C.dataArray, C.unsafeIndex)) $ flip (Indexer Nothing)
   ] -- ++
   -- [ fn | i <- [0..10], fn <- [ mkFn i, runFn i ] ] ++
   -- [ fn | i <- [0..10], fn <- [ mkEffFn C.controlMonadEffUncurried C.mkEffFn i, runEffFn C.controlMonadEffUncurried C.runEffFn i ] ] ++
@@ -186,13 +186,14 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
   runFn :: Int -> AST -> AST
   runFn = runFn' C.dataFunctionUncurried C.runFn (\ss f args ->
                                                     let len = length args
-                                                        typ = mkString $ "Fn" <> (T.pack . show $ len) in
+                                                        typ = mkString $ uncurriedFnType len in
                                                     if len > 0
                                                       then App ss (App Nothing (StringLiteral Nothing typ) [f]) args
                                                       else App ss f args)
   runEffFn :: Text -> Text -> Int -> AST -> AST
   runEffFn modName fnName = runFn' modName fnName $ \ss fn acc ->
-    Function ss Nothing [] (Block ss [Return ss (App ss fn acc)])
+    let typ = mkString . uncurriedFnType $ length acc in
+    Function ss Nothing [] (Block ss [Return ss (App ss (App Nothing (StringLiteral Nothing typ) [fn]) acc)])
 
   runFn' :: Text -> Text -> (Maybe SourceSpan -> AST -> [AST] -> AST) -> Int -> AST -> AST
   runFn' modName runFnName res n = convert where
@@ -209,6 +210,17 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
   inlineNonClassFunction p f = convert where
     convert :: AST -> AST
     convert (App _ (App _ op' [x]) [y]) | p op' = f x y
+    convert other = other
+
+  inlineUnsafeIndex :: (AST -> Bool) -> (AST -> AST -> AST) -> AST -> AST
+  inlineUnsafeIndex p _ = convert where
+    convert :: AST -> AST
+    convert (App _ (App ss op' [x]) [y@NumericLiteral{}])
+      | p op' = Indexer ss y x
+    convert (App _ (App ss op' [x]) [y])
+      | p op' = Indexer ss y' x
+      where
+      y' = App Nothing (StringLiteral Nothing $ mkString int) [y]
     convert other = other
 
   isModFn :: (Text, PSString) -> AST -> Bool
@@ -294,8 +306,8 @@ ringInt = (C.dataRing, C.ringInt)
 euclideanRingNumber :: forall a b. (IsString a, IsString b) => (a, b)
 euclideanRingNumber = (C.dataEuclideanRing, C.euclideanRingNumber)
 
-eqNumber :: forall a b. (IsString a, IsString b) => (a, b)
-eqNumber = (C.dataEq, C.eqNumber)
+-- eqNumber :: forall a b. (IsString a, IsString b) => (a, b)
+-- eqNumber = (C.dataEq, C.eqNumber)
 
 eqInt :: forall a b. (IsString a, IsString b) => (a, b)
 eqInt = (C.dataEq, C.eqInt)

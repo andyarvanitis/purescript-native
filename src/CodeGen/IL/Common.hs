@@ -198,6 +198,9 @@ dictType = "dict_t"
 arrayType :: Text
 arrayType = "array_t"
 
+uncurriedFnType :: Int -> Text
+uncurriedFnType i = "Fn" <> (T.pack . show $ i)
+
 int :: Text
 int = "int"
 
