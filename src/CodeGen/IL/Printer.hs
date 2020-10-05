@@ -366,8 +366,7 @@ prettyPrintIL' = A.runKleisli $ runPattern matchValue
                   , [ binary    Add                  "+"
                     , binary    Subtract             "-" ]
                   , [ binary    ShiftLeft            "<<"
-                    , binary    ShiftRight           ">>"
-                    , binary    ZeroFillShiftRight   ">>>" ]
+                    , binary    ShiftRight           ">>" ]
                   , [ binary    LessThan             "<"
                     , binary    LessThanOrEqualTo    "<="
                     , binary    GreaterThan          ">"
