@@ -117,7 +117,6 @@ inlineCommonOperators = everywhereTopDown $ applyAll $
   , binary' C.dataIntBits C.xor BitwiseXor
   , binary' C.dataIntBits C.shl ShiftLeft
   , binary' C.dataIntBits C.shr ShiftRight
-  , binary' C.dataIntBits C.zshr ZeroFillShiftRight
   , unary'  C.dataIntBits C.complement BitwiseNot
 
   , inlineNonClassFunction (isModFn (C.dataFunction, C.apply)) $ \f x -> App Nothing f [x]
