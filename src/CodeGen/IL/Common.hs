@@ -229,3 +229,6 @@ freshName' :: MonadSupply m => m Text
 freshName' = do
     name <- freshName
     return $ T.replace "$" "_var" name <> "_"
+
+moduleRenamerMarker :: Text
+moduleRenamerMarker = "__"

@@ -431,10 +431,11 @@ interfaceSource mn values foreigns =
   "} // end namespace " <> mn <> "\n\n" <>
   "#endif // " <> mn <> "_H\n\n"
 
-implHeaderSource :: Text -> [Text] -> Text -> Text
+implHeaderSource :: Text -> [(Text, Text)] -> Text -> Text
 implHeaderSource mn imports interfaceImport =
-  T.concat imports <> "\n"<>
+  (T.concat $ fst <$> imports) <> "\n"<>
   interfaceImport <> "\n\n" <>
+  (T.concat $ snd <$> imports) <> "\n"<>
   "namespace " <> mn <> " {\n\n"
 
 implFooterSource :: Text -> [Ident] -> Text

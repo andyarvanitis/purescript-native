@@ -62,7 +62,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
         foreigns' = identToIL <$> foreigns
         interface = interfaceSource modName values foreigns
         imports = nub . concat $ importToIL <$> optimized'
-        moduleHeader = importToIL' modName
+        moduleHeader = fst $ importToIL' modName
         implHeader = implHeaderSource modName imports moduleHeader
         implFooter = implFooterSource (runModuleName mn) foreigns
     return $ (interface, foreigns', optimized', implHeader, implFooter)
@@ -97,21 +97,29 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
 
     freshModuleName :: Integer -> ModuleName -> [Ident] -> ModuleName
     freshModuleName i mn'@(ModuleName pns) used =
-      let newName = ModuleName $ init pns ++ [ProperName $ runProperName (last pns) <> "_" <> T.pack (show i)]
+      let newName = ModuleName $ init pns ++ [ProperName $ runProperName (last pns) <> moduleRenamerMarker <> T.pack (show i)]
       in if Ident (runModuleName newName) `elem` used
          then freshModuleName (i + 1) mn' used
          else newName
 
   -- | Generates IL code for a module import
   --
-  importToIL :: AST -> [Text]
+  importToIL :: AST -> [(Text, Text)]
   importToIL = AST.everything (++) modRef
     where
     modRef (AST.Indexer _ (AST.Var _ _) (AST.Var _ mname))
       | not $ T.null mname = [importToIL' mname]
     modRef _ = []
-  importToIL' :: Text -> Text
-  importToIL' h = "#include \"" <> h <> "/" <> h <> ".h\"\n"
+  -- TODO: move this stuff to the Printer
+  importToIL' :: Text -> (Text, Text)
+  importToIL' h = ("#include \"" <> h' <> "/" <> h' <> ".h\"\n", rename)
+    where
+    (h', rename) = moduleRenamer h
+    moduleRenamer :: Text -> (Text, Text)
+    moduleRenamer s
+      | (s', sfx) <- T.breakOn moduleRenamerMarker s,
+        not $ T.null sfx = (s', "namespace " <> h <> " = " <> h' <> ";\n")
+    moduleRenamer s = (s, "")
 
   -- | Replaces the `ModuleName`s in the AST so that the generated code refers to
   -- the collision-avoiding renamed module imports.
