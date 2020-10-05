@@ -52,10 +52,7 @@ moduleToIL
   -> m (Text, [Text], [AST], Text, Text)
 moduleToIL (Module _ coms mn _ imps _ foreigns decls) project =
   do
-    let usedNames = concatMap getNames decls
-    let mnLookup = renameImports usedNames imps
-    let decls' = renameModules mnLookup decls
-    ilDecls <- mapM (bindToIL ModuleDecl) decls'
+    ilDecls <- mapM (bindToIL ModuleDecl) decls
     optimized <- traverse (traverse (optimize modName')) ilDecls
     let optimized' = concat optimized
         values = annotValue <$> optimized'
@@ -80,27 +77,6 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) project =
   getNames (NonRec _ ident _) = [ident]
   getNames (Rec vals) = map (snd . fst) vals
 
-  -- | Creates alternative names for each module to ensure they don't collide
-  -- with declaration names.
-  renameImports :: [Ident] -> [(Ann, ModuleName)] -> M.Map ModuleName (Ann, ModuleName)
-  renameImports = go M.empty
-    where
-    go :: M.Map ModuleName (Ann, ModuleName) -> [Ident] -> [(Ann, ModuleName)] -> M.Map ModuleName (Ann, ModuleName)
-    go acc used ((ann, mn') : mns') =
-      let mni = Ident $ runModuleName mn'
-      in if mn' /= mn && mni `elem` used
-         then let newName = freshModuleName 1 mn' used
-              in go (M.insert mn' (ann, newName) acc) (Ident (runModuleName newName) : used) mns'
-         else go (M.insert mn' (ann, mn') acc) used mns'
-    go acc _ [] = acc
-
-    freshModuleName :: Integer -> ModuleName -> [Ident] -> ModuleName
-    freshModuleName i mn'@(ModuleName pns) used =
-      let newName = ModuleName $ init pns ++ [ProperName $ runProperName (last pns) <> "_" <> T.pack (show i)]
-      in if Ident (runModuleName newName) `elem` used
-         then freshModuleName (i + 1) mn' used
-         else newName
-
   -- | Generates IL code for a module import
   --
   importToIL :: AST -> [Text]
@@ -111,25 +87,6 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) project =
     modRef _ = []
     extract :: Text -> Text
     extract = T.replace "_" "." . T.dropWhileEnd (=='_')
-
-  -- | Replaces the `ModuleName`s in the AST so that the generated code refers to
-  -- the collision-avoiding renamed module imports.
-  renameModules :: M.Map ModuleName (Ann, ModuleName) -> [Bind Ann] -> [Bind Ann]
-  renameModules mnLookup binds =
-    let (f, _, _) = everywhereOnValues id ilExpr goBinder
-    in map f binds
-    where
-    ilExpr :: Expr a -> Expr a
-    ilExpr (Var ann q) = Var ann (renameQual q)
-    ilExpr e = e
-    goBinder :: Binder a -> Binder a
-    goBinder (ConstructorBinder ann q1 q2 bs) = ConstructorBinder ann (renameQual q1) (renameQual q2) bs
-    goBinder b = b
-    renameQual :: Qualified a -> Qualified a
-    renameQual (Qualified (Just mn') a) =
-      let (_,mnSafe) = fromMaybe (internalError "Missing value in mnLookup") $ M.lookup mn' mnLookup
-      in Qualified (Just mnSafe) a
-    renameQual q = q
 
   -- |
   -- Generate code in the simplified intermediate representation for a declaration

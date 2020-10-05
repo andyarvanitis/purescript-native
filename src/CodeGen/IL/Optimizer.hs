@@ -22,10 +22,11 @@ import qualified Language.PureScript.Constants as C
 optimize :: MonadSupply m => AST -> AST -> m AST
 optimize mn il = do
     il' <- untilFixedPoint (inlineFnComposition . inlineUnsafeCoerce . inlineUnsafePartial . tidyUp) il
-    untilFixedPoint (return . ignoreUnusedResults . inlineCommonValues . inlineCommonOperators . tidyUp) . tco mn . inlineST
+    il'' <- untilFixedPoint (return . ignoreUnusedResults . inlineCommonValues . inlineCommonOperators . tidyUp) . tco mn . inlineST
       =<< untilFixedPoint (return . magicDoST)
       =<< untilFixedPoint (return . magicDoEff)
       =<< untilFixedPoint (return . magicDoEffect) il'
+    untilFixedPoint (return . collapseVarDeclarations) il''
   where
     tidyUp :: AST -> AST
     tidyUp = applyAll
@@ -54,6 +55,18 @@ collapseIfChecks = everywhere collapse where
     | prop == "otherwise" && val == "Data_Boolean" = exprs
   collapse exprs = exprs
 
+collapseVarDeclarations :: AST -> AST
+collapseVarDeclarations = everywhere collapse where
+  collapse :: AST -> AST
+  collapse (Block ss sts) = Block ss (go Nothing sts)
+  collapse s = s
+
+  go :: Maybe Text -> [AST] -> [AST]
+  go _ [] = []
+  go Nothing (decl@(VariableIntroduction _ var (Just _)) : sts) = decl : go (Just var) (go Nothing sts)
+  go (Just var') ((VariableIntroduction ss var (Just val)) : sts)
+    | var == var' = (Assignment ss (Var Nothing var) val) : go (Just var') sts
+  go var' (s:sts) = s : go var' sts
 
 ignoreUnusedResults :: AST -> AST
 ignoreUnusedResults = everywhere $ removeFromBlock go
