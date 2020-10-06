@@ -234,7 +234,7 @@ literals = mkPattern' match'
     , return $ emit "]"
     ]
   match (InstanceOf _ val ty) = mconcat <$> sequence
-    [ return $ emit "Contains("
+    [ return $ emit "Is("
     , prettyPrintIL' val
     , return $ emit ", "
     , prettyPrintIL' ty

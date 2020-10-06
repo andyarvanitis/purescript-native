@@ -84,6 +84,7 @@ nameIsILBuiltIn name =
     , "Foreign"
     , "Get"
     , "Index"
+    , "Is"
     , "Length"
     , "Once"
     , "Run"
