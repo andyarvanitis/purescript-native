@@ -12,21 +12,21 @@ import CodeGen.IL.Common
 import qualified Language.PureScript.Constants as C
 
 tcoLoop :: Text
-tcoLoop = "__tco_loop"
+tcoLoop = "ṩtco_loop"
 
 tco :: AST -> AST -> AST
 tco mn = everywhere convert where
   tcoVar :: Text -> Text
-  tcoVar arg = "__tco_var_" <> arg
+  tcoVar arg = "ṩtco_var_" <> arg
 
   copyVar :: Text -> Text
-  copyVar arg = "__copy_" <> arg
+  copyVar arg = "ṩcopy_" <> arg
 
   tcoDone :: Text
-  tcoDone = "__tco_done"
+  tcoDone = "ṩtco_done"
   
   tcoResult :: Text
-  tcoResult = "__tco_result"
+  tcoResult = "ṩtco_result"
 
   convert :: AST -> AST
   convert fn@(Function ss (Just name) args _)

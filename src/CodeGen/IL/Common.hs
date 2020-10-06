@@ -50,17 +50,17 @@ unusedName = "_"
 
 properToIL :: Text -> Text
 properToIL name
-  | nameIsILReserved name || nameIsILBuiltIn name || prefixIsReserved name = name <> "ˉ"
+  | nameIsILReserved name = "ˉ" <> name
   | otherwise = T.concatMap identCharToText name
 
 -- | Attempts to find a human-readable name for a symbol, if none has been specified returns the
 -- ordinal value.
 identCharToText :: Char -> Text
-identCharToText 'ṩ' = "ᵤṩ"
+identCharToText 'ṩ' = "_ṩ"
 identCharToText c | isAlphaNum c = T.singleton c
 identCharToText '_' = "_"
-identCharToText '\'' = "ᵖ"
-identCharToText c = "ᵤ" <> T.pack (show (ord c))
+identCharToText '\'' = "ꞌ" -- lowercase saltillo
+identCharToText c = error (show (ord c)) -- TODO: should never occur now(?)
 
 moduleProperToIL :: Text -> Text
 moduleProperToIL = T.concatMap identCharToText
@@ -126,16 +126,6 @@ ilKeywords =
   , "var"
   ]
 
--- moduleIsReserved :: Text -> Bool
--- moduleIsReserved "Main" = False
--- moduleIsReserved name = not $ T.isInfixOf "_" name
-
-prefixIsReserved :: Text -> Bool
-prefixIsReserved name =
-  any (`T.isPrefixOf` name)
-    [
-    ]
-
 ilLiterals :: [Text]
 ilLiterals =
   [ "init"
@@ -161,7 +151,7 @@ ilLiterals =
   ]
 
 withPrefix :: Text -> Text
-withPrefix s = "Ꞌ" <> s
+withPrefix s = "Ꞌ" <> s -- uppercase saltillo
 
 anyType :: Text
 anyType = "Any"
@@ -202,4 +192,4 @@ freshName' = do
     return $ T.replace "$" "ṩ" name
 
 moduleRenamerMarker :: Text
-moduleRenamerMarker = "ᴹ"
+moduleRenamerMarker = "__"

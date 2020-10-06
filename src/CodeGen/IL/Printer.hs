@@ -521,7 +521,7 @@ ffiLoader :: Text
 ffiLoader = modLabel <> "/ffi-loader"
 
 initName :: Text -> Text
-initName s = "_" <> s <> "ᵒⁿᶜᵉ"
+initName s = "ᛌ" <> s <> "_once"
 
 valueName :: Text -> Text
-valueName s = "_" <> s <> "ᶠᵒʳᵉⁱᵍⁿ"
+valueName s = "ᛧ" <> s
