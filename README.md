@@ -34,7 +34,7 @@ There are two utilities in the purescript-native "suite": `pscpp` and `psgo`. Th
 
 
 #### For more information and a Getting Started guide, please see
-* [`pscpp`](https://github.com/andyarvanitis/purescript-native/blob/master/README-cpp.md)
+* [`pscpp`](https://github.com/andyarvanitis/purescript-native/blob/cpp/README-cpp.md)
 * [`psgo`](https://github.com/andyarvanitis/purescript-native/blob/golang/README-go.md)
 
 
