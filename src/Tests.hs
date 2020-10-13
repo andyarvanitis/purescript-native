@@ -63,9 +63,8 @@ runTests = do
     callProcess "rm" ["-rf", "output"]
     callProcess "rm" ["-rf", "Main"]
     callProcess "spago" ["build"]
-    callProcess "psgo" []
     --
-    -- Run C++ files
+    -- Run executable file
     --
     outputFile <- openFile (tmp </> logpath </> logfile) AppendMode
     hPutStrLn outputFile ("\n" ++ inputFile ++ ":")
