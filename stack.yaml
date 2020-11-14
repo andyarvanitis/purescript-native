@@ -13,7 +13,7 @@ extra-deps:
 - semialign-1
 
 nix:
-  enable: true
+  enable: false
   shell-file: stack.nix
 
 flags:
