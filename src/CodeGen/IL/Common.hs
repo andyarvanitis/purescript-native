@@ -16,12 +16,12 @@ import Language.PureScript.Names
 import qualified Language.PureScript.Constants as C
 
 moduleNameToIL :: ModuleName -> Text
-moduleNameToIL (ModuleName pns) =
-  let name = T.intercalate "_" (runProperName `map` pns)
+moduleNameToIL (ModuleName mn) =
+  let name = T.replace "." "_" mn
   in if nameIsILBuiltIn name then (name <> moduleRenamerMarker) else name
 
 moduleNameToIL' :: ModuleName -> Text
-moduleNameToIL' (ModuleName pns) = T.intercalate "." (runProperName `map` pns)
+moduleNameToIL' (ModuleName mn) =  T.replace "_" "." mn
 
 -- | Convert an 'Ident' into a valid IL identifier:
 --

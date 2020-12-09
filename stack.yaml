@@ -5,7 +5,7 @@ packages:
 
 extra-deps:
 - git: https://github.com/purescript/purescript
-  commit: 4dd32c48a372bb8a5250140d19af8aa18a6358d7
+  commit: 9cad73ed8ea7df3011032ddbd2f3de5a0c08629c
 - happy-1.19.9
 - language-javascript-0.7.0.0
 - network-3.0.1.1

@@ -201,7 +201,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) project =
   -- | Generate code in the simplified intermediate representation for a reference to a
   -- variable that may have a qualified name.
   qualifiedToIL :: (a -> Ident) -> Qualified a -> AST
-  qualifiedToIL f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . moduleIdentToIL $ f a
+  qualifiedToIL f (Qualified (Just (ModuleName mn')) a) | mn' == C.prim = AST.Var Nothing . moduleIdentToIL $ f a
   qualifiedToIL f (Qualified (Just mn') a) | mn /= mn' = AST.Indexer Nothing (AST.Var Nothing . moduleIdentToIL $ f a) (AST.Var Nothing (moduleNameToIL mn'))
   qualifiedToIL f (Qualified _ a) = AST.Indexer Nothing (AST.Var Nothing . moduleIdentToIL $ f a) (AST.Var Nothing "")
 
