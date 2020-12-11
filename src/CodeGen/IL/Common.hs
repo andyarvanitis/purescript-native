@@ -13,8 +13,8 @@ import Language.PureScript.Crash
 import Language.PureScript.Names
 
 moduleNameToIL :: ModuleName -> Text
-moduleNameToIL (ModuleName pns) =
-  let name = T.intercalate "_" (runProperName `map` pns)
+moduleNameToIL (ModuleName mn) =
+  let name = T.replace "." "_" mn
   in if nameIsILBuiltIn name then (name <> "_") else name
 
 -- | Convert an 'Ident' into a valid C++ identifier:

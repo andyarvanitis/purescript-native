@@ -96,11 +96,11 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
     go acc _ [] = acc
 
     freshModuleName :: Integer -> ModuleName -> [Ident] -> ModuleName
-    freshModuleName i mn'@(ModuleName pns) used =
-      let newName = ModuleName $ init pns ++ [ProperName $ runProperName (last pns) <> moduleRenamerMarker <> T.pack (show i)]
-      in if Ident (runModuleName newName) `elem` used
+    freshModuleName i mn'@(ModuleName mname) used =
+      let newName = mname <> moduleRenamerMarker <> T.pack (show i)
+      in if Ident newName `elem` used
          then freshModuleName (i + 1) mn' used
-         else newName
+         else ModuleName newName
 
   -- | Generates IL code for a module import
   --
@@ -299,7 +299,7 @@ moduleToIL (Module _ coms mn _ imps _ foreigns decls) _ =
   -- | Generate code in the simplified intermediate representation for a reference to a
   -- variable that may have a qualified name.
   qualifiedToIL :: (a -> Ident) -> Qualified a -> AST
-  qualifiedToIL f (Qualified (Just (ModuleName [ProperName mn'])) a) | mn' == C.prim = AST.Var Nothing . identToIL $ f a
+  qualifiedToIL f (Qualified (Just (ModuleName mn')) a) | mn' == C.prim = AST.Var Nothing . identToIL $ f a
   qualifiedToIL f (Qualified (Just mn') a) | mn /= mn' = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing (moduleNameToIL mn'))
   qualifiedToIL f (Qualified _ a) = AST.Indexer Nothing (AST.Var Nothing . identToIL $ f a) (AST.Var Nothing "")
 
