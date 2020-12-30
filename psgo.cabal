@@ -1,0 +1,128 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.34.2.
+--
+-- see: https://github.com/sol/hpack
+
+name:           psgo
+version:        0.1.0.0
+description:    Please see the README on Github at <https://github.com/andyarvanitis/purescript-native#readme>
+homepage:       https://github.com/andyarvanitis/purescript-native#readme
+bug-reports:    https://github.com/andyarvanitis/purescript-native/issues
+author:         Andy Arvanitis
+maintainer:     example@example.com
+copyright:      2018 Andy Arvanitis
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+    stack.yaml
+    support/ffi-loader.go
+    support/go.mod.ffi-loader
+    support/go.mod.output
+    support/go.mod.working
+
+source-repository head
+  type: git
+  location: https://github.com/andyarvanitis/purescript-native
+
+library
+  exposed-modules:
+      CodeGen.IL
+      CodeGen.IL.Common
+      CodeGen.IL.Optimizer
+      CodeGen.IL.Optimizer.Common
+      CodeGen.IL.Optimizer.Inliner
+      CodeGen.IL.Optimizer.MagicDo
+      CodeGen.IL.Optimizer.TCO
+      CodeGen.IL.Printer
+      Tests
+  other-modules:
+      Paths_psgo
+  hs-source-dirs:
+      src
+  default-extensions: ConstraintKinds DataKinds DeriveFunctor EmptyDataDecls FlexibleContexts KindSignatures LambdaCase MultiParamTypeClasses NoImplicitPrelude PatternGuards PatternSynonyms RankNTypes RecordWildCards OverloadedStrings ScopedTypeVariables TupleSections ViewPatterns
+  build-depends:
+      aeson >=1.0 && <1.5
+    , base >=4.7 && <5
+    , base-compat >=0.6.0
+    , bytestring >=0.10.8.2 && <0.11
+    , containers
+    , directory
+    , file-embed
+    , filemanip
+    , filepath
+    , gitrev
+    , monad-parallel >=0.7.2.2 && <0.8
+    , mtl >=2.1.0 && <2.3.0
+    , pattern-arrows >=0.0.2 && <0.1
+    , process
+    , protolude >=0.1.6
+    , purescript
+    , safe >=0.3.9 && <0.4
+    , text
+    , transformers >=0.3.0 && <0.6
+  default-language: Haskell2010
+
+executable psgo
+  main-is: Main.hs
+  other-modules:
+      Paths_psgo
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=1.0 && <1.5
+    , base >=4.7 && <5
+    , base-compat >=0.6.0
+    , bytestring >=0.10.8.2 && <0.11
+    , containers
+    , directory
+    , file-embed
+    , filemanip
+    , filepath
+    , gitrev
+    , monad-parallel >=0.7.2.2 && <0.8
+    , mtl >=2.1.0 && <2.3.0
+    , pattern-arrows >=0.0.2 && <0.1
+    , process
+    , protolude >=0.1.6
+    , psgo
+    , purescript
+    , safe >=0.3.9 && <0.4
+    , text
+    , transformers >=0.3.0 && <0.6
+  default-language: Haskell2010
+
+test-suite psgo-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_psgo
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=1.0 && <1.5
+    , base >=4.7 && <5
+    , base-compat >=0.6.0
+    , bytestring >=0.10.8.2 && <0.11
+    , containers
+    , directory
+    , file-embed
+    , filemanip
+    , filepath
+    , gitrev
+    , monad-parallel >=0.7.2.2 && <0.8
+    , mtl >=2.1.0 && <2.3.0
+    , pattern-arrows >=0.0.2 && <0.1
+    , process
+    , protolude >=0.1.6
+    , psgo
+    , purescript
+    , safe >=0.3.9 && <0.4
+    , text
+    , transformers >=0.3.0 && <0.6
+  default-language: Haskell2010

@@ -12,8 +12,6 @@ cabal.sandbox.config
 .test_modules/
 bower_components/
 node_modules
-pscpp.cabal
-psgo.cabal
 tmp/
 .stack-work/
 stack.yaml.lock
