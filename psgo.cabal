@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.2.
+-- This file has been generated from package.yaml by hpack version 0.34.5.
 --
 -- see: https://github.com/sol/hpack
 
@@ -43,7 +43,24 @@ library
       Paths_psgo
   hs-source-dirs:
       src
-  default-extensions: ConstraintKinds DataKinds DeriveFunctor EmptyDataDecls FlexibleContexts KindSignatures LambdaCase MultiParamTypeClasses NoImplicitPrelude PatternGuards PatternSynonyms RankNTypes RecordWildCards OverloadedStrings ScopedTypeVariables TupleSections ViewPatterns
+  default-extensions:
+      ConstraintKinds
+      DataKinds
+      DeriveFunctor
+      EmptyDataDecls
+      FlexibleContexts
+      KindSignatures
+      LambdaCase
+      MultiParamTypeClasses
+      NoImplicitPrelude
+      PatternGuards
+      PatternSynonyms
+      RankNTypes
+      RecordWildCards
+      OverloadedStrings
+      ScopedTypeVariables
+      TupleSections
+      ViewPatterns
   build-depends:
       aeson >=1.0 && <1.5
     , base >=4.7 && <5
@@ -60,7 +77,7 @@ library
     , pattern-arrows >=0.0.2 && <0.1
     , process
     , protolude >=0.1.6
-    , purescript
+    , purescript >=0.13.0 && <0.14.0
     , safe >=0.3.9 && <0.4
     , text
     , transformers >=0.3.0 && <0.6
@@ -90,7 +107,7 @@ executable psgo
     , process
     , protolude >=0.1.6
     , psgo
-    , purescript
+    , purescript >=0.13.0 && <0.14.0
     , safe >=0.3.9 && <0.4
     , text
     , transformers >=0.3.0 && <0.6
@@ -121,7 +138,7 @@ test-suite psgo-test
     , process
     , protolude >=0.1.6
     , psgo
-    , purescript
+    , purescript >=0.13.0 && <0.14.0
     , safe >=0.3.9 && <0.4
     , text
     , transformers >=0.3.0 && <0.6
