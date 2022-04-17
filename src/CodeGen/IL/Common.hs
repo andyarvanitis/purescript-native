@@ -57,6 +57,7 @@ properToIL name
 -- ordinal value.
 identCharToText :: Char -> Text
 identCharToText 'ṩ' = "_ṩ"
+identCharToText '$' = "_ṩ"
 identCharToText c | isAlphaNum c = T.singleton c
 identCharToText '_' = "_"
 identCharToText '\'' = "ꞌ" -- lowercase saltillo
