@@ -44,7 +44,7 @@ import CodeGen.IL.Printer
 import Tests
 
 data Command = Build | Run (Maybe String)
- 
+
 parseJson :: Text -> Value
 parseJson text
   | Just fileJson <- decode . L.encodeUtf8 $ L.fromStrict text = fileJson
@@ -54,7 +54,7 @@ jsonToModule :: Value -> Module Ann
 jsonToModule value =
   case parse moduleFromJSON value of
     Success (_, r) -> r
-    _ -> error "failed"
+    _ -> error "Failed parsing corefn. Psgo currently supports purescript <= 0.13.8"
 
 splitArgs :: [String] -> ([String], Maybe String, [String])
 splitArgs args =
